@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>🐾 Dog Groomer CRM</title>
+<title>🐾 Home Paw Grooming</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --green:#16a34a;--green-lt:#dcfce7;--green-md:#4ade80;--green-dk:#15803d;
   --red:#fee2e2;--red-t:#991b1b;--amber:#fef3c7;--amb-t:#92400e;
-  --blue-lt:#eff6ff;--blue-t:#1e40af;
+  --blue-lt:#eff6ff;--blue-t:#1e40af;--purple-lt:#f3e8ff;--purple-t:#6b21a8;
   --bg:#f9fafb;--surface:#fff;--border:#e5e7eb;
   --text:#111827;--muted:#6b7280;--subtle:#f3f4f6;
   --r:8px;--rl:12px;--sh:0 1px 3px rgba(0,0,0,.08);
@@ -19,7 +19,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .nav{background:var(--surface);border-bottom:1px solid var(--border);height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 1.25rem;position:sticky;top:0;z-index:100;box-shadow:var(--sh)}
 .nav-brand{font-weight:600;font-size:15px}
 .nav-tabs{display:flex;gap:2px;background:var(--subtle);border-radius:var(--r);padding:3px}
-.nav-tab{padding:5px 13px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted);transition:all .15s;white-space:nowrap}
+.nav-tab{padding:5px 11px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:500;color:var(--muted);transition:all .15s;white-space:nowrap}
 .nav-tab.active{background:var(--surface);color:var(--text);box-shadow:var(--sh)}
 .page{max-width:960px;margin:0 auto;padding:1.25rem}
 .sec{display:none}.sec.active{display:block}
@@ -30,7 +30,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .btn-b{background:#1d4ed8;color:#fff}.btn-b:hover{background:#1e40af}
 .btn-sm{padding:4px 10px;font-size:12px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--sh)}
-.toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px}
 .toolbar-title{font-size:16px;font-weight:600}
 
 /* CLIENTS */
@@ -41,32 +41,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .del-btn{position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;background:var(--red);color:var(--red-t);border:none;cursor:pointer;font-size:10px;font-weight:700;opacity:0;transition:opacity .15s;display:flex;align-items:center;justify-content:center;z-index:2}
 .dog-av{width:36px;height:36px;border-radius:50%;background:var(--green-lt);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
 .dog-hd{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.dog-nm{font-weight:600;font-size:14px}
-.dog-br{font-size:11px;color:var(--muted)}
+.dog-nm{font-weight:600;font-size:14px}.dog-br{font-size:11px;color:var(--muted)}
 .dog-mt{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
 .badge{display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:600}
 .bl{background:var(--red);color:var(--red-t)}.bm{background:var(--amber);color:var(--amb-t)}.bs{background:var(--green-lt);color:var(--green-dk)}
+.bxl{background:#f3e8ff;color:#6b21a8}.bxs{background:#e0f2fe;color:#0369a1}
 .wa-lnk{color:var(--green);text-decoration:none;font-weight:500}
 
 /* MODAL */
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;align-items:center;justify-content:center;padding:1rem}
 .overlay.open{display:flex}
-.modal{background:var(--surface);border-radius:16px;padding:1.5rem;width:100%;max-width:500px;max-height:88vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+.modal{background:var(--surface);border-radius:16px;padding:1.5rem;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.15)}
 .modal-title{font-size:16px;font-weight:600;margin-bottom:1.25rem}
 .fg{display:flex;flex-direction:column;gap:4px}
 .fg.full{grid-column:1/-1}
 .fg label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
-.fg input,.fg select,.fg textarea{padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle);color:var(--text);width:100%;transition:border-color .15s}
+.fg input,.fg select,.fg textarea{padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle);color:var(--text);width:100%;transition:border-color .15s;font-family:inherit}
 .fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--green);background:#fff}
-.fg textarea{resize:vertical;min-height:64px}
+.fg textarea{resize:vertical;min-height:60px}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .form-actions{display:flex;gap:8px;margin-top:1.25rem;flex-wrap:wrap}
 
 /* DETAIL */
 .det-hero{display:flex;align-items:center;gap:12px;margin-bottom:1.25rem}
 .det-av{width:48px;height:48px;border-radius:50%;background:var(--green-lt);display:flex;align-items:center;justify-content:center;font-size:22px}
-.det-nm{font-size:17px;font-weight:600}
-.det-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.det-nm{font-size:17px;font-weight:600}.det-sub{font-size:12px;color:var(--muted);margin-top:2px}
 .det-sec{margin-bottom:.9rem}
 .det-lbl{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
 .det-row{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px}
@@ -93,15 +92,48 @@ tbody tr:hover{background:var(--subtle)}
 .cal-hdrs{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:5px}
 .cal-dh{text-align:center;font-size:10px;font-weight:600;color:var(--muted);padding:3px;text-transform:uppercase;letter-spacing:.05em}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
-.cal-cell{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);min-height:90px;padding:6px;cursor:pointer;transition:border-color .15s;position:relative}
+.cal-cell{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);min-height:100px;padding:6px;cursor:pointer;transition:border-color .15s;position:relative}
 .cal-cell:hover{border-color:var(--green-md)}
 .cal-cell.today{border-color:var(--green);border-width:2px}
 .cal-dt{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:3px}
 .cal-cell.today .cal-dt{color:var(--green)}
-.cal-appt{background:var(--green-lt);color:var(--green-dk);border-radius:4px;padding:2px 5px;font-size:10px;font-weight:500;margin-bottom:2px;display:flex;align-items:center;gap:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cal-appt:hover{background:var(--green-md)}
+.cal-appt{border-radius:4px;padding:2px 5px;font-size:10px;font-weight:500;margin-bottom:2px;display:flex;align-items:center;gap:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-appt:hover{opacity:.8}
 .cal-add{position:absolute;bottom:4px;right:4px;width:18px;height:18px;border-radius:50%;background:var(--green-lt);color:var(--green);border:none;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;font-weight:700;line-height:1}
 .cal-cell:hover .cal-add{opacity:1}
+
+/* ROSTER */
+.groomer-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:1.5rem}
+.groomer-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;position:relative;transition:border-color .15s}
+.groomer-card:hover{border-color:var(--green-md)}
+.groomer-card:hover .del-btn{opacity:1}
+.groomer-av{width:42px;height:42px;border-radius:50%;background:var(--green-lt);display:flex;align-items:center;justify-content:center;font-size:20px}
+.groomer-nm{font-weight:600;font-size:14px;margin-top:6px}
+.groomer-days{font-size:11px;color:var(--muted);margin-top:3px}
+.day-sched{margin-top:1.25rem}
+.day-sched-title{font-size:13px;font-weight:600;margin-bottom:.75rem;color:var(--text)}
+.sched-row{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.sched-row:last-child{border-bottom:none}
+.sched-time{font-size:12px;font-weight:600;color:var(--green);min-width:90px;flex-shrink:0}
+.sched-info{flex:1}
+.sched-dog{font-size:13px;font-weight:600}
+.sched-detail{font-size:11px;color:var(--muted);margin-top:2px}
+.sched-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.sched-tag{font-size:10px;padding:1px 7px;border-radius:10px;font-weight:500}
+.dur-badge{background:var(--green-lt);color:var(--green-dk);font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600}
+.groomer-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.capacity-bar{height:4px;border-radius:2px;background:var(--border);margin-top:6px;overflow:hidden}
+.capacity-fill{height:100%;border-radius:2px;background:var(--green);transition:width .3s}
+.capacity-fill.warn{background:#f59e0b}
+.capacity-fill.over{background:#ef4444}
+
+/* ADDONS */
+.addon-row{display:flex;flex-direction:column;gap:8px;padding:10px;background:var(--subtle);border-radius:var(--r);border:1px solid var(--border)}
+.addon-item{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
+.addon-item input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--green)}
+.addon-label{flex:1}
+.addon-time{font-size:11px;color:var(--muted);background:var(--border);padding:1px 7px;border-radius:10px}
+.duration-preview{background:var(--green-lt);border:1px solid var(--green-md);border-radius:var(--r);padding:8px 12px;font-size:13px;color:var(--green-dk);font-weight:500;margin-top:4px;display:flex;justify-content:space-between;align-items:center}
 
 /* ROUTE */
 .route-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;margin-bottom:1rem;box-shadow:var(--sh)}
@@ -120,8 +152,7 @@ tbody tr:hover{background:var(--subtle)}
 .stop-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
 .stop-row:last-child{border-bottom:none}
 .stop-n{width:26px;height:26px;border-radius:50%;background:var(--green-lt);color:var(--green-dk);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.stop-info{flex:1}
-.stop-nm{font-size:13px;font-weight:600}
+.stop-info{flex:1}.stop-nm{font-size:13px;font-weight:600}
 .stop-det{font-size:11px;color:var(--muted);margin-top:2px}
 .stop-links{display:flex;gap:5px;margin-top:5px;flex-wrap:wrap}
 .stop-lnk{font-size:11px;padding:2px 9px;border:1px solid var(--border);border-radius:20px;text-decoration:none;color:var(--green);background:var(--green-lt)}
@@ -136,6 +167,8 @@ tbody tr:hover{background:var(--subtle)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .empty{text-align:center;padding:2.5rem 1rem;color:var(--muted);font-size:13px}
 .empty-icon{font-size:30px;display:block;margin-bottom:8px}
+.date-nav{display:flex;align-items:center;gap:10px;margin-bottom:1rem}
+.date-nav input[type=date]{padding:6px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface)}
 </style>
 </head>
 <body>
@@ -147,21 +180,25 @@ tbody tr:hover{background:var(--subtle)}
 </script>
 
 <nav class="nav">
-  <div class="nav-brand">🐾 Groomer CRM</div>
+  <div class="nav-brand">🐾 Home Paw Grooming</div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="sw('clients')" id="tab-clients">🐕 Clients</button>
     <button class="nav-tab" onclick="sw('history')" id="tab-history">📋 History</button>
     <button class="nav-tab" onclick="sw('calendar')" id="tab-calendar">📅 Calendar</button>
+    <button class="nav-tab" onclick="sw('roster')" id="tab-roster">👥 Roster</button>
     <button class="nav-tab" onclick="sw('route')" id="tab-route">🗺️ Route</button>
   </div>
 </nav>
 
 <div class="page">
+
+  <!-- CLIENTS -->
   <div class="sec active" id="sec-clients">
     <div class="toolbar"><span class="toolbar-title">Dog clients</span><button class="btn btn-p" onclick="openAdd()">+ Add client</button></div>
     <div class="dog-grid" id="dog-grid"><div class="loading"><span class="spin"></span>Loading…</div></div>
   </div>
 
+  <!-- HISTORY -->
   <div class="sec" id="sec-history">
     <div class="toolbar"><span class="toolbar-title">Grooming history</span></div>
     <div class="filter-bar">
@@ -175,6 +212,7 @@ tbody tr:hover{background:var(--subtle)}
     </div>
   </div>
 
+  <!-- CALENDAR -->
   <div class="sec" id="sec-calendar">
     <div class="cal-nav">
       <button class="btn btn-g btn-sm" onclick="calPrev()">← Prev</button>
@@ -185,6 +223,25 @@ tbody tr:hover{background:var(--subtle)}
     <div class="cal-grid" id="cal-grid"></div>
   </div>
 
+  <!-- ROSTER -->
+  <div class="sec" id="sec-roster">
+    <div class="toolbar">
+      <span class="toolbar-title">Groomers roster</span>
+      <button class="btn btn-p" onclick="openAddGroomer()">+ Add groomer</button>
+    </div>
+    <div class="groomer-grid" id="groomer-grid"><div class="loading"><span class="spin"></span>Loading…</div></div>
+    <div class="day-sched">
+      <div class="date-nav">
+        <span style="font-size:14px;font-weight:600">Daily schedule —</span>
+        <input type="date" id="roster-date" onchange="renderRoster()"/>
+        <button class="btn btn-g btn-sm" onclick="setRosterToday()">Today</button>
+        <button class="btn btn-g btn-sm" onclick="setRosterTomorrow()">Tomorrow</button>
+      </div>
+      <div id="roster-schedule"></div>
+    </div>
+  </div>
+
+  <!-- ROUTE -->
   <div class="sec" id="sec-route">
     <div class="route-box">
       <div class="route-lbl">Who to groom?</div>
@@ -198,9 +255,10 @@ tbody tr:hover{background:var(--subtle)}
     </div>
     <div id="route-result"></div>
   </div>
+
 </div>
 
-<!-- ADD/EDIT -->
+<!-- ADD/EDIT DOG -->
 <div class="overlay" id="ov-add">
   <div class="modal">
     <div class="modal-title" id="add-title">Add dog client</div>
@@ -209,9 +267,18 @@ tbody tr:hover{background:var(--subtle)}
       <div class="fg"><label>Breed</label><input id="f-breed" placeholder="Poodle"/></div>
       <div class="fg"><label>Owner *</label><input id="f-owner" placeholder="Sarah"/></div>
       <div class="fg"><label>WhatsApp</label><input id="f-wa" placeholder="08xxxxxxxxxx"/></div>
-      <div class="fg full"><label>Address</label><input id="f-addr" placeholder="Jl. Kemang Raya No.10, Jak-Sel"/></div>
+      <div class="fg full"><label>Address</label><input id="f-addr" placeholder="Jl. Kemang Raya No.10"/></div>
       <div class="fg"><label>Area</label><input id="f-area" placeholder="Kemang"/></div>
-      <div class="fg"><label>Size</label><select id="f-size"><option value="">Select…</option><option>Small</option><option>Medium</option><option>Large</option></select></div>
+      <div class="fg"><label>Size</label>
+        <select id="f-size">
+          <option value="">Select…</option>
+          <option value="XS">XS (toy breeds)</option>
+          <option value="S">S (small)</option>
+          <option value="M">M (medium)</option>
+          <option value="L">L (large)</option>
+          <option value="XL">XL (giant)</option>
+        </select>
+      </div>
       <div class="fg"><label>Coat</label><select id="f-coat"><option value="">Select…</option><option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option></select></div>
       <div class="fg full"><label>Preferences / notes</label><textarea id="f-prefs" placeholder="e.g. Anxious around clippers. Lion cut."></textarea></div>
       <div class="fg"><label>Emoji</label><input id="f-emoji" placeholder="🐶" style="max-width:70px"/></div>
@@ -226,12 +293,12 @@ tbody tr:hover{background:var(--subtle)}
 <!-- DETAIL -->
 <div class="overlay" id="ov-detail"><div class="modal" id="detail-content"></div></div>
 
-<!-- DELETE -->
+<!-- DELETE DOG -->
 <div class="overlay" id="ov-del">
   <div class="modal" style="max-width:330px;text-align:center">
     <div style="font-size:34px;margin-bottom:9px">🗑️</div>
     <div class="modal-title">Delete this dog?</div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:1.25rem">Permanently delete <strong id="del-name"></strong> and all visit history. Cannot be undone.</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:1.25rem">Permanently delete <strong id="del-name"></strong> and all visit history.</p>
     <div style="display:flex;gap:8px;justify-content:center">
       <button class="btn btn-d" onclick="confirmDel()">Yes, delete</button>
       <button class="btn btn-g" onclick="cm('ov-del')">Cancel</button>
@@ -239,15 +306,38 @@ tbody tr:hover{background:var(--subtle)}
   </div>
 </div>
 
-<!-- APPOINTMENT -->
+<!-- APPOINTMENT MODAL -->
 <div class="overlay" id="ov-appt">
-  <div class="modal" style="max-width:360px">
+  <div class="modal" style="max-width:420px">
     <div class="modal-title">Schedule appointment</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:1rem" id="appt-date-lbl"></div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      <div class="fg"><label>Dog *</label><select id="appt-dog"><option value="">Select dog…</option></select></div>
-      <div class="fg"><label>Time</label><input type="time" id="appt-time" value="09:00"/></div>
-      <div class="fg"><label>Service note</label><input id="appt-note" placeholder="e.g. Full groom, lion cut"/></div>
+      <div class="fg"><label>Dog *</label><select id="appt-dog" onchange="calcDuration()"><option value="">Select dog…</option></select></div>
+      <div class="fg"><label>Groomer</label><select id="appt-groomer"><option value="">Unassigned</option></select></div>
+      <div class="fg"><label>Start time</label><input type="time" id="appt-time" value="09:00" onchange="calcDuration()"/></div>
+      <div class="fg"><label>Add-on services</label>
+        <div class="addon-row">
+          <label class="addon-item">
+            <input type="checkbox" id="addon-cut" onchange="calcDuration()"/>
+            <span class="addon-label">✂️ Cut short (botak)</span>
+            <span class="addon-time">+30 min</span>
+          </label>
+          <label class="addon-item">
+            <input type="checkbox" id="addon-styling" onchange="calcDuration()"/>
+            <span class="addon-label">💅 Styling</span>
+            <span class="addon-time">+45 min</span>
+          </label>
+          <label class="addon-item">
+            <input type="checkbox" id="addon-medicated" onchange="calcDuration()"/>
+            <span class="addon-label">🧴 Medicated shampoo (anti-jamur / anti-kutu)</span>
+            <span class="addon-time">no extra time</span>
+          </label>
+        </div>
+      </div>
+      <div class="duration-preview" id="duration-preview">
+        <span>Select a dog to see duration</span>
+      </div>
+      <div class="fg"><label>Service note</label><input id="appt-note" placeholder="e.g. Lion cut, be gentle"/></div>
     </div>
     <div class="form-actions">
       <button class="btn btn-p" onclick="saveAppt()">Save appointment</button>
@@ -256,55 +346,126 @@ tbody tr:hover{background:var(--subtle)}
   </div>
 </div>
 
+<!-- ADD GROOMER -->
+<div class="overlay" id="ov-groomer">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title" id="groomer-modal-title">Add groomer</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="fg"><label>Name *</label><input id="g-name" placeholder="e.g. Rina"/></div>
+      <div class="fg"><label>Phone / WhatsApp</label><input id="g-phone" placeholder="08xxxxxxxxxx"/></div>
+      <div class="fg"><label>Emoji / avatar</label><input id="g-emoji" placeholder="👤" style="max-width:70px"/></div>
+      <div class="fg"><label>Working days</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px" id="day-picker">
+          <button type="button" class="day-btn on" data-day="Mon">Mon</button>
+          <button type="button" class="day-btn on" data-day="Tue">Tue</button>
+          <button type="button" class="day-btn on" data-day="Wed">Wed</button>
+          <button type="button" class="day-btn on" data-day="Thu">Thu</button>
+          <button type="button" class="day-btn on" data-day="Fri">Fri</button>
+          <button type="button" class="day-btn on" data-day="Sat">Sat</button>
+          <button type="button" class="day-btn" data-day="Sun">Sun</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-p" onclick="saveGroomer()" id="groomer-save-btn">Save groomer</button>
+      <button class="btn btn-g" onclick="cm('ov-groomer')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.day-btn{padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:transparent;cursor:pointer;font-size:12px;color:var(--muted);font-family:inherit}
+.day-btn.on{background:var(--green-lt);color:var(--green-dk);border-color:var(--green-md);font-weight:500}
+</style>
+
 <script>
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
-let dogs=[], visits=[], appts=[], editId=null, delId=null, apptDate=null;
+let dogs=[], visits=[], appts=[], groomers=[];
+let editId=null, delId=null, apptDate=null, editGroomerId=null;
 let calStart = weekStart(new Date());
 
-function weekStart(d) {
-  const x=new Date(d), day=x.getDay(), diff=x.getDate()-day+(day===0?-6:1);
-  x.setDate(diff); x.setHours(0,0,0,0); return x;
-}
+/* GROOMER COLORS for calendar */
+const GROOMER_COLORS = ['#dcfce7','#dbeafe','#fef3c7','#f3e8ff','#ffe4e6','#e0f2fe'];
+const GROOMER_TEXT   = ['#15803d','#1e40af','#92400e','#6b21a8','#9f1239','#0369a1'];
+
+function weekStart(d){const x=new Date(d),day=x.getDay(),diff=x.getDate()-day+(day===0?-6:1);x.setDate(diff);x.setHours(0,0,0,0);return x}
 function iso(d){return d.toISOString().split('T')[0]}
 function fmtD(d){return new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})}
 function cm(id){document.getElementById(id).classList.remove('open')}
 function om(id){document.getElementById(id).classList.add('open')}
 
-function sw(tab) {
+/* Duration calculator */
+function sizeDuration(size){
+  if(!size) return 60;
+  if(size==='XS'||size==='S') return 60;
+  if(size==='M'||size==='L') return 90;
+  if(size==='XL') return 120;
+  return 60;
+}
+function addTime(time, mins){
+  const [h,m]=time.split(':').map(Number);
+  const total=h*60+m+mins;
+  return `${String(Math.floor(total/60)).padStart(2,'0')}:${String(total%60).padStart(2,'0')}`;
+}
+function calcDuration(){
+  const dogId=document.getElementById('appt-dog').value;
+  const dog=dogs.find(d=>d.id===dogId);
+  const startTime=document.getElementById('appt-time').value||'09:00';
+  const cut=document.getElementById('addon-cut').checked;
+  const styling=document.getElementById('addon-styling').checked;
+  let mins=sizeDuration(dog?.size);
+  if(cut) mins+=30;
+  if(styling) mins+=45;
+  const endTime=addTime(startTime,mins);
+  const hrs=Math.floor(mins/60), rem=mins%60;
+  const durStr=hrs>0?(rem>0?`${hrs}h ${rem}min`:`${hrs}h`):`${mins}min`;
+  const addons=[cut?'Cut short':null,styling?'Styling':null,document.getElementById('addon-medicated').checked?'Medicated shampoo':null].filter(Boolean);
+  document.getElementById('duration-preview').innerHTML=`
+    <span>⏱ ${durStr} (${startTime} → ${endTime})</span>
+    <span style="font-size:11px;color:var(--green-dk)">${dog?dog.size+' dog':'?'} ${addons.length?'+ '+addons.join(', '):''}</span>`;
+}
+
+function sw(tab){
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
   document.getElementById('sec-'+tab).classList.add('active');
   if(tab==='history') renderHist();
   if(tab==='calendar') renderCal();
+  if(tab==='roster'){renderGroomerCards();renderRoster();}
   if(tab==='route') renderChips();
 }
 
-async function loadAll() {
-  const [dr,vr,ar] = await Promise.all([
+async function loadAll(){
+  const [dr,vr,ar,gr] = await Promise.all([
     db.from('dogs').select('*').order('created_at',{ascending:false}),
     db.from('visits').select('*,dogs(name,emoji,owner,area,size)').order('visited_at',{ascending:false}),
-    db.from('appointments').select('*,dogs(name,emoji,area,address,wa,size,prefs,owner)').order('appt_date').order('appt_time')
+    db.from('appointments').select('*,dogs(name,emoji,area,address,wa,size,prefs,owner),groomers(name,emoji)').order('appt_date').order('appt_time'),
+    db.from('groomers').select('*').order('created_at',{ascending:true})
   ]);
-  dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[];
+  dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[]; groomers=gr.data||[];
   renderDogs();
-  const opts=dogs.map(d=>`<option value="${d.id}">${d.emoji||'🐶'} ${d.name}</option>`).join('');
-  document.getElementById('hd').innerHTML='<option value="">All dogs</option>'+opts;
-  document.getElementById('appt-dog').innerHTML='<option value="">Select dog…</option>'+opts;
+  const dogOpts=dogs.map(d=>`<option value="${d.id}">${d.emoji||'🐶'} ${d.name} (${d.size||'?'})</option>`).join('');
+  document.getElementById('hd').innerHTML='<option value="">All dogs</option>'+dogOpts;
+  document.getElementById('appt-dog').innerHTML='<option value="">Select dog…</option>'+dogOpts;
+  const grOpts=groomers.map(g=>`<option value="${g.id}">${g.emoji||'👤'} ${g.name}</option>`).join('');
+  document.getElementById('appt-groomer').innerHTML='<option value="">Unassigned</option>'+grOpts;
 }
 
+/* CLIENTS */
 function renderDogs(){
   const g=document.getElementById('dog-grid');
   if(!dogs.length){g.innerHTML='<div class="empty"><span class="empty-icon">🐾</span>No clients yet!</div>';return}
   g.innerHTML=dogs.map(d=>{
     const vc=visits.filter(v=>v.dog_id===d.id).length;
+    const szBadge=d.size==='XL'?'bxl':d.size==='L'?'bl':d.size==='M'?'bm':d.size==='XS'?'bxs':'bs';
     return `<div class="dog-card" onclick="openDet('${d.id}')">
       <button class="del-btn" onclick="event.stopPropagation();askDel('${d.id}','${d.name.replace(/'/g,"\\'")}')">✕</button>
       <div class="dog-hd">
         <div class="dog-av">${d.emoji||'🐶'}</div>
         <div style="flex:1;padding-right:18px"><div class="dog-nm">${d.name}</div><div class="dog-br">${d.breed||'—'}</div></div>
-        ${d.size?`<span class="badge ${d.size==='Large'?'bl':d.size==='Medium'?'bm':'bs'}">${d.size}</span>`:''}
+        ${d.size?`<span class="badge ${szBadge}">${d.size}</span>`:''}
       </div>
       <div class="dog-mt">
         <div>👤 ${d.owner||'—'}</div>
@@ -361,7 +522,6 @@ function openAdd(){
   document.getElementById('f-size').value=''; document.getElementById('f-coat').value='';
   om('ov-add');
 }
-
 function openEdit(id){
   const d=dogs.find(x=>x.id===id); if(!d) return;
   editId=id; cm('ov-detail');
@@ -379,7 +539,6 @@ function openEdit(id){
   document.getElementById('f-emoji').value=d.emoji||'';
   om('ov-add');
 }
-
 async function saveDog(){
   const name=document.getElementById('f-name').value.trim();
   const owner=document.getElementById('f-owner').value.trim();
@@ -388,14 +547,12 @@ async function saveDog(){
   if(editId){await db.from('dogs').update(p).eq('id',editId)}else{await db.from('dogs').insert(p)}
   cm('ov-add'); await loadAll();
 }
-
 async function addVisit(dogId){
   const inp=document.getElementById('vn-'+dogId);
   const note=inp.value.trim(); if(!note) return;
   await db.from('visits').insert({dog_id:dogId,note,visited_at:new Date().toISOString().split('T')[0]});
   inp.value=''; await loadAll(); cm('ov-detail'); openDet(dogId);
 }
-
 function askDel(id,name){delId=id;document.getElementById('del-name').textContent=name;om('ov-del')}
 async function confirmDel(){
   if(!delId) return;
@@ -420,14 +577,18 @@ function renderHist(){
     <td style="white-space:nowrap">${fmtD(v.visited_at)}</td>
     <td>${v.note||'—'}</td>
     <td>${v.dogs?.area||'—'}</td>
-    <td>${v.dogs?.size?`<span class="badge ${v.dogs.size==='Large'?'bl':v.dogs.size==='Medium'?'bm':'bs'}">${v.dogs.size}</span>`:'—'}</td>
+    <td>${v.dogs?.size?`<span class="badge ${v.dogs.size==='XL'?'bxl':v.dogs.size==='L'?'bl':v.dogs.size==='M'?'bm':'bs'}">${v.dogs.size}</span>`:'—'}</td>
   </tr>`).join('');
 }
 
 /* CALENDAR */
 function calPrev(){calStart.setDate(calStart.getDate()-7);renderCal()}
 function calNext(){calStart.setDate(calStart.getDate()+7);renderCal()}
-
+function groomerColor(gid,bg=true){
+  const idx=groomers.findIndex(g=>g.id===gid);
+  if(idx<0) return bg?'var(--green-lt)':'var(--green-dk)';
+  return bg?GROOMER_COLORS[idx%GROOMER_COLORS.length]:GROOMER_TEXT[idx%GROOMER_TEXT.length];
+}
 function renderCal(){
   const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   document.getElementById('cal-hdrs').innerHTML=days.map(d=>`<div class="cal-dh">${d}</div>`).join('');
@@ -444,36 +605,174 @@ function renderCal(){
     const da=appts.filter(a=>a.appt_date===isoD);
     html+=`<div class="cal-cell${isToday?' today':''}" onclick="openAppt('${isoD}')">
       <div class="cal-dt">${d.getDate()}</div>
-      ${da.map(a=>`<div class="cal-appt" onclick="event.stopPropagation();delAppt('${a.id}')" title="Click to remove">
-        ${a.appt_time?.slice(0,5)||''} ${a.dogs?.emoji||'🐶'} ${a.dogs?.name||'?'}
-      </div>`).join('')}
+      ${da.map(a=>{
+        const bg=groomerColor(a.groomer_id,true);
+        const tc=groomerColor(a.groomer_id,false);
+        const dur=a.duration_mins?Math.round(a.duration_mins/60*10)/10+'h':'';
+        return `<div class="cal-appt" style="background:${bg};color:${tc}" onclick="event.stopPropagation();delAppt('${a.id}')" title="${a.dogs?.name}: ${a.appt_note||''} — click to remove">
+          ${a.appt_time?.slice(0,5)||''} ${a.dogs?.emoji||'🐶'} ${a.dogs?.name||'?'} ${dur?'('+dur+')':''}
+        </div>`;
+      }).join('')}
       <button class="cal-add" onclick="event.stopPropagation();openAppt('${isoD}')">+</button>
     </div>`;
   }
   document.getElementById('cal-grid').innerHTML=html;
 }
-
 function openAppt(dateISO){
   apptDate=dateISO;
   const d=new Date(dateISO);
   document.getElementById('appt-date-lbl').textContent=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   document.getElementById('appt-dog').value='';
+  document.getElementById('appt-groomer').value='';
   document.getElementById('appt-time').value='09:00';
   document.getElementById('appt-note').value='';
+  document.getElementById('addon-cut').checked=false;
+  document.getElementById('addon-styling').checked=false;
+  document.getElementById('addon-medicated').checked=false;
+  document.getElementById('duration-preview').innerHTML='<span>Select a dog to see duration</span>';
   om('ov-appt');
 }
-
 async function saveAppt(){
   const dogId=document.getElementById('appt-dog').value;
   if(!dogId){alert('Please select a dog.');return}
-  await db.from('appointments').insert({dog_id:dogId,appt_date:apptDate,appt_time:document.getElementById('appt-time').value,appt_note:document.getElementById('appt-note').value.trim()});
+  const dog=dogs.find(d=>d.id===dogId);
+  const cut=document.getElementById('addon-cut').checked;
+  const styling=document.getElementById('addon-styling').checked;
+  const medicated=document.getElementById('addon-medicated').checked;
+  let dur=sizeDuration(dog?.size);
+  if(cut) dur+=30;
+  if(styling) dur+=45;
+  const groomerId=document.getElementById('appt-groomer').value||null;
+  await db.from('appointments').insert({
+    dog_id:dogId,
+    groomer_id:groomerId,
+    appt_date:apptDate,
+    appt_time:document.getElementById('appt-time').value,
+    appt_note:document.getElementById('appt-note').value.trim(),
+    addon_cut:cut,
+    addon_styling:styling?'yes':'',
+    addon_medicated:medicated,
+    duration_mins:dur
+  });
   cm('ov-appt'); await loadAll(); renderCal();
 }
-
 async function delAppt(id){
   if(!confirm('Remove this appointment?')) return;
   await db.from('appointments').delete().eq('id',id);
   await loadAll(); renderCal();
+}
+
+/* ROSTER */
+function renderGroomerCards(){
+  const g=document.getElementById('groomer-grid');
+  if(!groomers.length){g.innerHTML='<div class="empty"><span class="empty-icon">👥</span>No groomers yet. Add your team!</div>';return}
+  g.innerHTML=groomers.map((gr,i)=>{
+    const bg=GROOMER_COLORS[i%GROOMER_COLORS.length];
+    const tc=GROOMER_TEXT[i%GROOMER_TEXT.length];
+    return `<div class="groomer-card">
+      <button class="del-btn" onclick="deleteGroomer('${gr.id}')">✕</button>
+      <div class="groomer-av" style="background:${bg};color:${tc};font-size:20px">${gr.emoji||'👤'}</div>
+      <div class="groomer-nm">${gr.name}</div>
+      <div class="groomer-days">${gr.working_days||'Mon-Sat'}</div>
+      ${gr.phone?`<div style="font-size:12px;color:var(--muted);margin-top:4px">📱 ${gr.phone}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function setRosterToday(){
+  document.getElementById('roster-date').value=iso(new Date());
+  renderRoster();
+}
+function setRosterTomorrow(){
+  const t=new Date(); t.setDate(t.getDate()+1);
+  document.getElementById('roster-date').value=iso(t);
+  renderRoster();
+}
+function renderRoster(){
+  const dateVal=document.getElementById('roster-date').value;
+  if(!dateVal) return;
+  const dayAppts=appts.filter(a=>a.appt_date===dateVal).sort((a,b)=>a.appt_time>b.appt_time?1:-1);
+  const dateLabel=new Date(dateVal).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const rs=document.getElementById('roster-schedule');
+  if(!dayAppts.length){
+    rs.innerHTML=`<div style="color:var(--muted);font-size:13px;padding:1rem 0">No appointments scheduled for ${dateLabel}.</div>`;
+    return;
+  }
+  // group by groomer
+  const byGroomer={};
+  dayAppts.forEach(a=>{
+    const key=a.groomer_id||'unassigned';
+    if(!byGroomer[key]) byGroomer[key]=[];
+    byGroomer[key].push(a);
+  });
+  let html=`<div style="font-size:13px;color:var(--muted);margin-bottom:.75rem">${dateLabel}</div>`;
+  Object.entries(byGroomer).forEach(([gid,gappts])=>{
+    const gr=gid==='unassigned'?null:groomers.find(g=>g.id===gid);
+    const gi=groomers.findIndex(g=>g.id===gid);
+    const bg=gi>=0?GROOMER_COLORS[gi%GROOMER_COLORS.length]:'var(--subtle)';
+    const tc=gi>=0?GROOMER_TEXT[gi%GROOMER_TEXT.length]:'var(--muted)';
+    const totalMins=gappts.reduce((s,a)=>s+(a.duration_mins||60),0);
+    const totalHrs=Math.round(totalMins/60*10)/10;
+    const pct=Math.min(100,Math.round(totalMins/360*100));
+    html+=`<div class="card" style="padding:1rem;margin-bottom:1rem">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:.75rem">
+        <div style="width:34px;height:34px;border-radius:50%;background:${bg};color:${tc};display:flex;align-items:center;justify-content:center;font-size:16px">${gr?gr.emoji||'👤':'👤'}</div>
+        <div>
+          <div style="font-weight:600;font-size:14px">${gr?gr.name:'Unassigned'}</div>
+          <div style="font-size:11px;color:var(--muted)">${gappts.length} dog${gappts.length!==1?'s':''} · ${totalHrs}h scheduled</div>
+        </div>
+      </div>
+      <div class="capacity-bar"><div class="capacity-fill ${pct>83?'over':pct>66?'warn':''}" style="width:${pct}%"></div></div>
+      <div style="font-size:10px;color:var(--muted);margin-top:3px;margin-bottom:.75rem">${pct}% of 6h capacity</div>
+      ${gappts.map(a=>{
+        const dog=dogs.find(d=>d.id===a.dog_id)||a.dogs;
+        const dur=a.duration_mins||60;
+        const endT=addTime(a.appt_time?.slice(0,5)||'09:00',dur);
+        const addons=[a.addon_cut?'Cut short':null,a.addon_styling?'Styling':null,a.addon_medicated?'Medicated shampoo':null].filter(Boolean);
+        return `<div class="sched-row">
+          <div class="sched-time">${a.appt_time?.slice(0,5)||'?'} → ${endT}</div>
+          <div class="sched-info">
+            <div class="sched-dog">${a.dogs?.emoji||dog?.emoji||'🐶'} ${a.dogs?.name||dog?.name||'?'} <span class="dur-badge">${Math.floor(dur/60)>0?Math.floor(dur/60)+'h':''} ${dur%60>0?dur%60+'min':''}</span></div>
+            <div class="sched-detail">👤 ${a.dogs?.owner||'—'} · 📍 ${a.dogs?.address||a.dogs?.area||'—'}</div>
+            ${addons.length?`<div class="sched-tags">${addons.map(ad=>`<span class="sched-tag" style="background:var(--amber);color:var(--amb-t)">${ad}</span>`).join('')}</div>`:''}
+            ${a.appt_note?`<div class="sched-detail" style="margin-top:3px">📝 ${a.appt_note}</div>`:''}
+            ${a.dogs?.wa?`<div style="margin-top:4px"><a class="wa-lnk" href="https://wa.me/62${a.dogs.wa.replace(/^0/,'')}" target="_blank" style="font-size:12px">💬 WhatsApp owner</a></div>`:''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  });
+  rs.innerHTML=html;
+}
+
+/* GROOMER CRUD */
+function openAddGroomer(){
+  editGroomerId=null;
+  document.getElementById('groomer-modal-title').textContent='Add groomer';
+  document.getElementById('groomer-save-btn').textContent='Save groomer';
+  document.getElementById('g-name').value='';
+  document.getElementById('g-phone').value='';
+  document.getElementById('g-emoji').value='';
+  document.querySelectorAll('.day-btn').forEach(b=>{
+    b.classList.toggle('on',b.dataset.day!=='Sun');
+  });
+  om('ov-groomer');
+}
+document.addEventListener('click',e=>{
+  if(e.target.classList.contains('day-btn')) e.target.classList.toggle('on');
+});
+async function saveGroomer(){
+  const name=document.getElementById('g-name').value.trim();
+  if(!name){alert('Groomer name required.');return}
+  const days=[...document.querySelectorAll('.day-btn.on')].map(b=>b.dataset.day).join(',');
+  const p={name,phone:document.getElementById('g-phone').value.trim(),emoji:document.getElementById('g-emoji').value.trim()||'👤',working_days:days};
+  await db.from('groomers').insert(p);
+  cm('ov-groomer'); await loadAll(); renderGroomerCards();
+}
+async function deleteGroomer(id){
+  if(!confirm('Remove this groomer?')) return;
+  await db.from('groomers').delete().eq('id',id);
+  await loadAll(); renderGroomerCards();
 }
 
 /* ROUTE */
@@ -482,13 +781,11 @@ function renderChips(){
     `<button class="chip" onclick="toggleChip('${d.id}',this)">${d.emoji||'🐶'} ${d.name}</button>`
   ).join('');
 }
-
 function toggleChip(id,el){
   el.classList.toggle('on');
   const sel=[...document.querySelectorAll('.chip.on')].map(c=>c.textContent.trim().split(' ').slice(1).join(' '));
   document.getElementById('route-input').value=sel.length?`I want to groom ${sel.join(', ')} tomorrow.`:'';
 }
-
 function loadFromCal(){
   const tom=new Date(); tom.setDate(tom.getDate()+1);
   const isoT=iso(tom);
@@ -502,7 +799,6 @@ function loadFromCal(){
     if(names.includes(cname)) c.classList.add('on'); else c.classList.remove('on');
   });
 }
-
 function buildMapsUrl(stops){
   const a=stops.map(s=>encodeURIComponent(s.address));
   if(!a.length) return null;
@@ -512,15 +808,12 @@ function buildMapsUrl(stops){
   if(wps) u+=`&waypoints=${wps}`;
   return u;
 }
-
 async function optimizeRoute(){
   const input=document.getElementById('route-input').value.trim();
   if(!input){alert('Please describe who to groom.');return}
   const rd=document.getElementById('route-result');
   rd.innerHTML='<div class="loading"><span class="spin"></span>Planning your motorcycle route…</div>';
-
   const dogList=dogs.map(d=>`- ${d.name} (${d.breed||'mixed'}, ${d.size||'?'}, area:${d.area||'?'}, address:${d.address||'?'}, owner:${d.owner}, WA:${d.wa||'n/a'}, prefs:"${d.prefs||'none'}")`).join('\n');
-
   try {
     const resp=await fetch("https://api.anthropic.com/v1/messages",{
       method:"POST",
@@ -528,18 +821,8 @@ async function optimizeRoute(){
       body:JSON.stringify({
         model:"claude-sonnet-4-20250514",
         max_tokens:1024,
-        messages:[{role:"user",content:`You are a route optimizer for a mobile dog grooming service in Jakarta, Indonesia. Groomer uses MOTORCYCLE, NO toll roads (no tol).
-
-Clients:
-${dogList}
-
-Request: "${input}"
-
-1. Find the dogs mentioned by name.
-2. Optimize route for motorcycle avoiding tolls. Group nearby areas: Sudirman/Kuningan=Central; Kemang/Tebet/Pancoran=South; Kelapa Gading/Sunter=North; Grogol/Kebon Jeruk=West; Cibubur/Kramat Jati=East.
-3. Schedule times from 9:00 AM unless stated. Large=60min, Medium=45min, Small=30min, travel buffer=20min (motorcycle, no toll).
-4. Return ONLY this exact JSON (no markdown, no backticks, no extra text):
-{"summary":"one sentence","stops":[{"order":1,"dog":"Name","owner":"Owner","area":"Area","address":"Full address","wa":"number","time":"09:00","duration":"60 min","note":"grooming reminder"}],"total_time":"X hrs","tip":"Jakarta motorcycle tip"}`}]
+        messages:[{role:"user",content:`You are a route optimizer for a mobile dog grooming service in Jakarta, Indonesia. Groomer uses MOTORCYCLE, NO toll roads.
+Clients:\n${dogList}\nRequest: "${input}"\n1. Find dogs mentioned.\n2. Optimize motorcycle route (no tolls). Group: Sudirman/Kuningan=Central; Kemang/Tebet/Pancoran=South; Kelapa Gading/Sunter=North; Grogol/Kebon Jeruk=West; Cibubur/Kramat Jati=East.\n3. Times from 9:00 AM. Large/XL=90-120min, Medium=90min, Small/XS=60min, travel=20min.\n4. Return ONLY valid JSON (no markdown):\n{"summary":"one sentence","stops":[{"order":1,"dog":"Name","owner":"Owner","area":"Area","address":"Full address","wa":"number","time":"09:00","duration":"60 min","note":"grooming note"}],"total_time":"X hrs","tip":"Jakarta motorcycle tip"}`}]
       })
     });
     if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||resp.status)}
@@ -551,10 +834,7 @@ Request: "${input}"
     const mapsUrl=buildMapsUrl(json.stops);
     rd.innerHTML=`
       <div class="sum-bar"><span>📅 ${dateStr}</span><span>🏍️ No tolls · ⏱ ${json.total_time}</span></div>
-      ${mapsUrl?`<div class="maps-banner">
-        <div><div class="maps-t">🗺️ Open full route in Google Maps</div><div class="maps-s">${json.stops.length} stops · Motorcycle · No tolls · Live traffic</div></div>
-        <a class="btn-maps" href="${mapsUrl}" target="_blank">Open in Maps →</a>
-      </div>`:''}
+      ${mapsUrl?`<div class="maps-banner"><div><div class="maps-t">🗺️ Open full route in Google Maps</div><div class="maps-s">${json.stops.length} stops · Motorcycle · No tolls · Live traffic</div></div><a class="btn-maps" href="${mapsUrl}" target="_blank">Open in Maps →</a></div>`:''}
       <div class="card" style="padding:1rem">
         <div style="font-size:12px;color:var(--muted);margin-bottom:.9rem">✨ ${json.summary}</div>
         ${json.stops.map(s=>`<div class="stop-row">
@@ -578,6 +858,8 @@ Request: "${input}"
   }
 }
 
+/* INIT */
+document.getElementById('roster-date').value=iso(new Date());
 loadAll();
 </script>
 </body>
