@@ -6,53 +6,41 @@
 <title>🐾 Dog Groomer CRM</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  /* ── CONFIG: paste your keys below ── */
   :root {
-    --teal: #1D9E75;
-    --teal-light: #E1F5EE;
-    --teal-mid: #5DCAA5;
-    --teal-dark: #0F6E56;
-    --amber: #FAEEDA;
-    --amber-text: #854F0B;
-    --coral: #FAECE7;
-    --coral-text: #993C1D;
-    --bg: #F8F9FA;
-    --surface: #FFFFFF;
-    --border: #E5E7EB;
-    --text: #111827;
-    --text-muted: #6B7280;
-    --radius: 10px;
-    --radius-lg: 14px;
+    --teal: #1D9E75; --teal-light: #E1F5EE; --teal-mid: #5DCAA5; --teal-dark: #0F6E56;
+    --amber: #FAEEDA; --amber-text: #854F0B; --coral: #FAECE7; --coral-text: #993C1D;
+    --red: #FEE2E2; --red-text: #991B1B;
+    --bg: #F8F9FA; --surface: #FFFFFF; --border: #E5E7EB; --text: #111827; --text-muted: #6B7280;
+    --radius: 10px; --radius-lg: 14px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-
-  /* NAV */
   .nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1.5rem; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 50; }
-  .nav-logo { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .nav-logo { font-size: 18px; font-weight: 600; }
   .nav-tabs { display: flex; gap: 4px; }
   .nav-tab { padding: 6px 16px; border-radius: 8px; border: none; background: transparent; cursor: pointer; font-size: 14px; color: var(--text-muted); transition: all 0.15s; }
   .nav-tab.active { background: var(--teal-light); color: var(--teal-dark); font-weight: 500; }
   .nav-tab:hover:not(.active) { background: var(--bg); }
-
-  /* LAYOUT */
   .container { max-width: 900px; margin: 0 auto; padding: 1.5rem; }
   .section { display: none; }
   .section.active { display: block; }
-
-  /* BUTTONS */
   .btn { padding: 8px 18px; border-radius: var(--radius); border: none; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.15s; }
   .btn-primary { background: var(--teal); color: white; }
   .btn-primary:hover { background: var(--teal-dark); }
   .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
   .btn-ghost:hover { background: var(--bg); }
+  .btn-danger { background: var(--red); color: var(--red-text); border: 1px solid #FECACA; }
+  .btn-danger:hover { background: #FECACA; }
   .btn-sm { padding: 5px 12px; font-size: 13px; }
-
-  /* CARDS */
+  .btn-maps { background: #1a73e8; color: white; border: none; border-radius: var(--radius); padding: 10px 20px; font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+  .btn-maps:hover { background: #1558b0; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; }
   .dog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 1rem; }
-  .dog-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.1rem; cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s; }
+  .dog-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.1rem; cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s; position: relative; }
   .dog-card:hover { border-color: var(--teal-mid); box-shadow: 0 2px 12px rgba(29,158,117,0.1); }
+  .dog-card:hover .delete-btn { opacity: 1; }
+  .delete-btn { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; border-radius: 50%; background: var(--red); color: var(--red-text); border: none; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.15s; z-index: 5; font-weight: 700; }
+  .delete-btn:hover { background: #FECACA; }
   .dog-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
   .dog-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--teal-light); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
   .dog-name { font-weight: 600; font-size: 15px; }
@@ -63,12 +51,8 @@
   .badge-large { background: var(--coral); color: var(--coral-text); }
   .badge-medium { background: var(--amber); color: var(--amber-text); }
   .badge-small { background: var(--teal-light); color: var(--teal-dark); }
-
-  /* TOOLBAR */
   .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
   .toolbar-title { font-size: 16px; font-weight: 600; }
-
-  /* FORM / MODAL */
   .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; align-items: center; justify-content: center; padding: 1rem; }
   .overlay.open { display: flex; }
   .modal { background: var(--surface); border-radius: var(--radius-lg); padding: 1.5rem; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; }
@@ -77,18 +61,10 @@
   .form-group { display: flex; flex-direction: column; gap: 5px; }
   .form-group.full { grid-column: 1 / -1; }
   .form-group label { font-size: 13px; color: var(--text-muted); font-weight: 500; }
-  .form-group input, .form-group select, .form-group textarea {
-    padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius);
-    font-size: 14px; background: var(--bg); color: var(--text); width: 100%;
-    transition: border-color 0.15s;
-  }
-  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
-    outline: none; border-color: var(--teal); background: white;
-  }
+  .form-group input, .form-group select, .form-group textarea { padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; background: var(--bg); color: var(--text); width: 100%; transition: border-color 0.15s; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--teal); background: white; }
   .form-group textarea { resize: vertical; min-height: 72px; }
-  .form-actions { display: flex; gap: 8px; margin-top: 1.25rem; }
-
-  /* DETAIL MODAL */
+  .form-actions { display: flex; gap: 8px; margin-top: 1.25rem; flex-wrap: wrap; }
   .detail-hero { display: flex; align-items: center; gap: 14px; margin-bottom: 1.25rem; }
   .detail-avatar { width: 54px; height: 54px; border-radius: 50%; background: var(--teal-light); display: flex; align-items: center; justify-content: center; font-size: 28px; }
   .detail-name { font-size: 20px; font-weight: 600; }
@@ -101,17 +77,13 @@
   .visit-pill { background: var(--teal-light); color: var(--teal-dark); padding: 5px 10px; border-radius: 8px; font-size: 13px; margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
   .wa-link { color: var(--teal); text-decoration: none; font-weight: 500; }
   .wa-link:hover { text-decoration: underline; }
-
-  /* ADD VISIT */
   .add-visit-row { display: flex; gap: 8px; margin-top: 8px; }
   .add-visit-row input { flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; }
-
-  /* ROUTE */
   .route-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1rem; }
   .route-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
   .route-textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; min-height: 90px; resize: none; font-family: inherit; background: var(--bg); transition: border-color 0.15s; }
   .route-textarea:focus { outline: none; border-color: var(--teal); background: white; }
-  .route-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+  .route-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .chip { padding: 5px 13px; font-size: 13px; border: 1px solid var(--border); border-radius: 20px; background: transparent; cursor: pointer; color: var(--text-muted); transition: all 0.12s; }
   .chip.on { background: var(--teal-light); color: var(--teal-dark); border-color: var(--teal-mid); font-weight: 500; }
@@ -122,7 +94,7 @@
   .stop-info { flex: 1; }
   .stop-name { font-size: 14px; font-weight: 600; }
   .stop-detail { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-  .stop-links { display: flex; gap: 6px; margin-top: 6px; }
+  .stop-links { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
   .stop-link { font-size: 12px; padding: 3px 10px; border: 1px solid var(--border); border-radius: 20px; text-decoration: none; color: var(--teal); background: var(--teal-light); }
   .stop-time { text-align: right; flex-shrink: 0; }
   .stop-time-val { font-size: 14px; font-weight: 600; color: var(--teal); }
@@ -132,18 +104,19 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .empty { text-align: center; padding: 3rem 1rem; color: var(--text-muted); font-size: 14px; }
   .empty-icon { font-size: 36px; display: block; margin-bottom: 10px; }
-  .summary-bar { background: var(--teal); color: white; border-radius: var(--radius); padding: 10px 16px; font-size: 14px; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+  .summary-bar { background: var(--teal); color: white; border-radius: var(--radius); padding: 10px 16px; font-size: 14px; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .maps-banner { background: #e8f0fe; border: 1px solid #c5d5f8; border-radius: var(--radius); padding: 14px 16px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .maps-banner-text { font-size: 14px; font-weight: 600; color: #1a3c6b; }
+  .maps-banner-sub { font-size: 12px; color: #4a6fa5; margin-top: 3px; }
 </style>
 </head>
 <body>
 
-<!-- ─── PASTE YOUR KEYS HERE ─── -->
 <script>
-  const SUPABASE_URL   = "https://cwqrpslypcjgjuxagglc.supabase.co";
-  const SUPABASE_ANON  = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
-  const ANTHROPIC_KEY  = "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";
+  const SUPABASE_URL  = "https://cwqrpslypcjgjuxagglc.supabase.co";
+  const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
+  const ANTHROPIC_KEY = "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";
 </script>
-<!-- ──────────────────────────── -->
 
 <nav class="nav">
   <div class="nav-logo">🐾 Groomer CRM</div>
@@ -154,8 +127,6 @@
 </nav>
 
 <div class="container">
-
-  <!-- CLIENTS -->
   <div class="section active" id="sec-clients">
     <div class="toolbar">
       <span class="toolbar-title">Dog clients</span>
@@ -166,7 +137,6 @@
     </div>
   </div>
 
-  <!-- ROUTE -->
   <div class="section" id="sec-route">
     <div class="route-box">
       <div class="route-label">Who to groom tomorrow?</div>
@@ -179,7 +149,6 @@
     </div>
     <div id="route-result"></div>
   </div>
-
 </div>
 
 <!-- ADD / EDIT MODAL -->
@@ -216,15 +185,26 @@
   <div class="modal" id="detail-modal-content"></div>
 </div>
 
+<!-- DELETE CONFIRM MODAL -->
+<div class="overlay" id="delete-overlay">
+  <div class="modal" style="max-width:360px;text-align:center">
+    <div style="font-size:40px;margin-bottom:12px">🗑️</div>
+    <div class="modal-title">Delete this dog?</div>
+    <p style="font-size:14px;color:var(--text-muted);margin-bottom:1.5rem">
+      This will permanently delete <strong id="delete-dog-name"></strong> and all their visit history. This cannot be undone.
+    </p>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button class="btn btn-danger" onclick="confirmDelete()">Yes, delete</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('delete-overlay').classList.remove('open')">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
+let dogs = [], selectedChips = new Set(), editingId = null, deletingId = null;
 
-let dogs = [];
-let selectedChips = new Set();
-let editingId = null;
-
-/* ── TABS ── */
 function switchTab(tab) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -233,7 +213,6 @@ function switchTab(tab) {
   if (tab === 'route') renderChips();
 }
 
-/* ── LOAD DOGS ── */
 async function loadDogs() {
   const { data, error } = await db.from('dogs').select('*, visits(*)').order('created_at', { ascending: false });
   if (error) { console.error(error); return; }
@@ -249,9 +228,10 @@ function renderDogs() {
   }
   grid.innerHTML = dogs.map(d => `
     <div class="dog-card" onclick="openDetail('${d.id}')">
+      <button class="delete-btn" title="Delete" onclick="event.stopPropagation(); askDelete('${d.id}', '${d.name.replace(/'/g,"\\'")}')">✕</button>
       <div class="dog-header">
         <div class="dog-avatar">${d.emoji || '🐶'}</div>
-        <div style="flex:1">
+        <div style="flex:1;padding-right:20px">
           <div class="dog-name">${d.name}</div>
           <div class="dog-breed">${d.breed || '—'}</div>
         </div>
@@ -267,7 +247,20 @@ function renderDogs() {
   `).join('');
 }
 
-/* ── DOG DETAIL ── */
+function askDelete(id, name) {
+  deletingId = id;
+  document.getElementById('delete-dog-name').textContent = name;
+  document.getElementById('delete-overlay').classList.add('open');
+}
+
+async function confirmDelete() {
+  if (!deletingId) return;
+  await db.from('dogs').delete().eq('id', deletingId);
+  document.getElementById('delete-overlay').classList.remove('open');
+  deletingId = null;
+  await loadDogs();
+}
+
 async function openDetail(id) {
   const d = dogs.find(x => x.id === id);
   if (!d) return;
@@ -302,9 +295,9 @@ async function openDetail(id) {
         <button class="btn btn-primary btn-sm" onclick="addVisit('${d.id}')">+ Log visit</button>
       </div>
     </div>
-    <div class="form-actions" style="margin-top:0.5rem">
+    <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeDetailModal()">Close</button>
-      <button class="btn btn-ghost btn-sm" style="color:#dc2626;border-color:#dc2626" onclick="deleteDog('${d.id}')">🗑 Delete</button>
+      <button class="btn btn-danger btn-sm" onclick="closeDetailModal(); askDelete('${d.id}', '${d.name.replace(/'/g,"\\'")}')">🗑 Delete dog</button>
     </div>
   `;
   document.getElementById('detail-overlay').classList.add('open');
@@ -312,27 +305,6 @@ async function openDetail(id) {
 
 function closeDetailModal() { document.getElementById('detail-overlay').classList.remove('open'); }
 
-async function addVisit(dogId) {
-  const inp = document.getElementById('visit-note-' + dogId);
-  const note = inp.value.trim();
-  if (!note) return;
-  const today = new Date().toISOString().split('T')[0];
-  const { error } = await db.from('visits').insert({ dog_id: dogId, note, visited_at: today });
-  if (error) { alert('Error saving visit.'); return; }
-  inp.value = '';
-  await loadDogs();
-  closeDetailModal();
-  openDetail(dogId);
-}
-
-async function deleteDog(id) {
-  if (!confirm('Delete this dog client? This cannot be undone.')) return;
-  await db.from('dogs').delete().eq('id', id);
-  closeDetailModal();
-  await loadDogs();
-}
-
-/* ── ADD / EDIT MODAL ── */
 function openAddModal() {
   editingId = null;
   document.getElementById('add-modal-title').textContent = 'Add dog client';
@@ -389,7 +361,19 @@ async function saveDog() {
   await loadDogs();
 }
 
-/* ── ROUTE OPTIMIZER ── */
+async function addVisit(dogId) {
+  const inp = document.getElementById('visit-note-' + dogId);
+  const note = inp.value.trim();
+  if (!note) return;
+  const today = new Date().toISOString().split('T')[0];
+  const { error } = await db.from('visits').insert({ dog_id: dogId, note, visited_at: today });
+  if (error) { alert('Error saving visit.'); return; }
+  inp.value = '';
+  await loadDogs();
+  closeDetailModal();
+  openDetail(dogId);
+}
+
 function renderChips() {
   document.getElementById('chips').innerHTML = dogs.map(d => `
     <button class="chip ${selectedChips.has(d.id) ? 'on' : ''}" onclick="toggleChip('${d.id}', this)">
@@ -405,15 +389,27 @@ function toggleChip(id, el) {
   if (names.length) document.getElementById('route-input').value = `I want to groom ${names.join(', ')} tomorrow.`;
 }
 
+function buildMapsUrl(stops) {
+  const addrs = stops.map(s => encodeURIComponent(s.address));
+  if (addrs.length === 0) return null;
+  if (addrs.length === 1) return `https://www.google.com/maps/dir/?api=1&destination=${addrs[0]}&travelmode=driving&avoid=tolls`;
+  const origin = addrs[0];
+  const dest = addrs[addrs.length - 1];
+  const wps = addrs.slice(1, -1).join('|');
+  let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&travelmode=driving&avoid=tolls`;
+  if (wps) url += `&waypoints=${wps}`;
+  return url;
+}
+
 async function optimizeRoute() {
   const input = document.getElementById('route-input').value.trim();
   if (!input) { alert('Please describe who you want to groom tomorrow.'); return; }
   const resultDiv = document.getElementById('route-result');
-  resultDiv.innerHTML = '<div class="loading"><span class="spinner"></span> Planning your optimal route…</div>';
+  resultDiv.innerHTML = '<div class="loading"><span class="spinner"></span> Planning your motorcycle route…</div>';
 
   const dogList = dogs.map(d => `- ${d.name} (${d.breed || 'mixed'}, ${d.size || 'unknown size'}, area: ${d.area || 'unknown'}, address: ${d.address || 'unknown'}, owner: ${d.owner}, WA: ${d.wa || 'n/a'}, prefs: "${d.prefs || 'none'}")`).join('\n');
 
-  const prompt = `You are a route optimizer for a mobile dog grooming service in Jakarta, Indonesia.
+  const prompt = `You are a route optimizer for a mobile dog grooming service in Jakarta, Indonesia. The groomer travels by MOTORCYCLE and CANNOT use toll roads (no tol).
 
 Client database:
 ${dogList}
@@ -421,11 +417,11 @@ ${dogList}
 Groomer's request: "${input}"
 
 Instructions:
-1. Identify which dogs from the database are mentioned in the request.
-2. Create an optimized route minimizing travel (Jakarta areas: Sudirman/Kuningan/Semanggi = Central; Kemang/Tebet/Pancoran/Mampang = South; Kelapa Gading/Sunter/Cempaka Putih = North; Grogol/Taman Anggrek/Kebon Jeruk = West; Cibubur/Kramat Jati = East).
-3. Assign appointment times starting at 9:00 AM unless specified (Large dog = 60 min, Medium = 45 min, Small = 30 min, travel buffer = 15 min between stops).
-4. Respond ONLY with valid JSON, no markdown fences:
-{"date":"Tomorrow","summary":"one sentence summary","stops":[{"order":1,"dog":"Name","owner":"Owner","area":"Area","address":"Full address","wa":"number","time":"09:00","duration":"60 min","note":"key grooming reminder"}],"total_time":"X hours","tip":"one practical tip"}`;
+1. Identify which dogs are mentioned in the request.
+2. Optimize the route for motorcycle travel avoiding tolls in Jakarta. Group nearby areas (Sudirman/Kuningan/Semanggi=Central; Kemang/Tebet/Pancoran/Mampang=South; Kelapa Gading/Sunter=North; Grogol/Kebon Jeruk=West; Cibubur/Kramat Jati=East).
+3. Assign times starting 9:00 AM unless specified. Large=60min, Medium=45min, Small=30min, travel buffer=20min (motorcycle non-toll).
+4. Respond ONLY with valid JSON, no markdown:
+{"date":"Tomorrow","summary":"one sentence","stops":[{"order":1,"dog":"Name","owner":"Owner","area":"Area","address":"Full address","wa":"number","time":"09:00","duration":"60 min","note":"key grooming note"}],"total_time":"X hours","tip":"practical Jakarta motorcycle tip"}`;
 
   try {
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
@@ -439,12 +435,23 @@ Instructions:
 
     const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
     const dateStr = tomorrow.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' });
+    const mapsUrl = buildMapsUrl(json.stops);
 
     resultDiv.innerHTML = `
       <div class="summary-bar">
         <span>📅 ${dateStr}</span>
-        <span>⏱ Total: ${json.total_time}</span>
+        <span>🏍️ No tolls · ⏱ ${json.total_time}</span>
       </div>
+
+      ${mapsUrl ? `
+      <div class="maps-banner">
+        <div>
+          <div class="maps-banner-text">🗺️ Open full route in Google Maps</div>
+          <div class="maps-banner-sub">${json.stops.length} stops · Motorcycle-friendly · No tolls · Live traffic</div>
+        </div>
+        <a class="btn-maps" href="${mapsUrl}" target="_blank">Open in Maps →</a>
+      </div>` : ''}
+
       <div class="card">
         <div style="font-size:14px;color:var(--text-muted);margin-bottom:1rem">✨ ${json.summary}</div>
         ${json.stops.map(s => `
@@ -456,7 +463,7 @@ Instructions:
               <div class="stop-detail">✂️ ${s.note}</div>
               <div class="stop-links">
                 ${s.wa ? `<a class="stop-link" href="https://wa.me/62${s.wa.replace(/^0/,'')}" target="_blank">💬 WhatsApp</a>` : ''}
-                <a class="stop-link" href="https://maps.google.com/?q=${encodeURIComponent(s.address)}" target="_blank">🗺 Maps</a>
+                <a class="stop-link" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.address)}&travelmode=driving&avoid=tolls" target="_blank">🏍️ Navigate here</a>
               </div>
             </div>
             <div class="stop-time">
@@ -469,12 +476,11 @@ Instructions:
       </div>
     `;
   } catch(e) {
-    resultDiv.innerHTML = '<div class="empty"><span class="empty-icon">⚠️</span>Something went wrong. Check your API keys and try again.</div>';
+    resultDiv.innerHTML = '<div class="empty"><span class="empty-icon">⚠️</span>Something went wrong. Try again.</div>';
     console.error(e);
   }
 }
 
-/* ── INIT ── */
 loadDogs();
 </script>
 </body>
