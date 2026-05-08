@@ -4,7 +4,6 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🐾 Dog Groomer CRM</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --green:#16a34a;--green-lt:#dcfce7;--green-md:#4ade80;--green-dk:#15803d;
@@ -186,11 +185,7 @@ tbody tr:hover{background:var(--subtle)}
 </head>
 <body>
 
-<script>
-  const SUPABASE_URL  = "https://cwqrpslypcjgjuxagglc.supabase.co";
-  const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
-  const ANTHROPIC_KEY = "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";
-</script>
+
 
 <!-- AUTH SCREEN -->
 <div id="auth-screen">
@@ -367,7 +362,12 @@ tbody tr:hover{background:var(--subtle)}
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+const SUPABASE_URL  = "https://cwqrpslypcjgjuxagglc.supabase.co";
+const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
+const ANTHROPIC_KEY = "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";
+const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 let dogs=[], visits=[], appts=[], editId=null, delId=null, apptDate=null;
 let calStart = weekStart(new Date());
