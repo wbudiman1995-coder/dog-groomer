@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🐾 Book a Grooming Session</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --green:#16a34a;--green-lt:#dcfce7;--green-md:#4ade80;--green-dk:#15803d;
+  --red:#fee2e2;--red-t:#991b1b;--border:#e5e7eb;--bg:#f9fafb;
+  --surface:#fff;--text:#111827;--muted:#6b7280;--subtle:#f3f4f6;
+  --r:8px;--rl:12px;--sh:0 1px 3px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
+
+/* AUTH */
+#auth-screen{display:none;position:fixed;inset:0;z-index:999;background:#0f1a12;align-items:center;justify-content:center;padding:1rem}
+#auth-screen.show{display:flex}
+.auth-box{width:100%;max-width:380px}
+.auth-paw{font-size:48px;display:block;text-align:center;margin-bottom:1rem;animation:paw-in .5s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes paw-in{from{transform:scale(0) rotate(-20deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
+.auth-title{font-size:24px;font-weight:700;color:#fff;text-align:center;letter-spacing:-.5px;margin-bottom:4px}
+.auth-sub{font-size:13px;color:#4ade80;text-align:center;margin-bottom:1.5rem;opacity:.8}
+.auth-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:1.5rem;backdrop-filter:blur(12px)}
+.auth-tabs{display:flex;background:rgba(255,255,255,.07);border-radius:8px;padding:3px;margin-bottom:1.25rem}
+.auth-tab{flex:1;padding:7px;text-align:center;border:none;background:transparent;color:rgba(255,255,255,.5);font-size:13px;font-weight:500;cursor:pointer;border-radius:6px;transition:all .15s}
+.auth-tab.active{background:rgba(255,255,255,.12);color:#fff}
+.auth-fg{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.auth-fg label{font-size:11px;font-weight:600;color:#86efac;text-transform:uppercase;letter-spacing:.05em}
+.auth-fg input{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:10px 12px;font-size:14px;color:#fff;transition:border-color .2s;width:100%}
+.auth-fg input:focus{outline:none;border-color:#4ade80}
+.auth-fg input::placeholder{color:rgba(255,255,255,.3)}
+.auth-btn{width:100%;padding:12px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s}
+.auth-btn:hover{background:#15803d}
+.auth-btn:disabled{opacity:.5;cursor:not-allowed}
+.auth-err{background:#fee2e2;color:#991b1b;border-radius:6px;padding:8px 12px;font-size:12px;margin-top:10px;display:none}
+.auth-err.show{display:block}
+.auth-ok{background:#dcfce7;color:#15803d;border-radius:6px;padding:8px 12px;font-size:12px;margin-top:10px;display:none}
+.auth-ok.show{display:block}
+
+/* NAV */
+.nav{background:var(--surface);border-bottom:1px solid var(--border);height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 1.25rem;position:sticky;top:0;z-index:100;box-shadow:var(--sh)}
+.nav-brand{font-weight:600;font-size:15px}
+.nav-tabs{display:flex;gap:2px;background:var(--subtle);border-radius:var(--r);padding:3px}
+.nav-tab{padding:5px 13px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted);transition:all .15s}
+.nav-tab.active{background:var(--surface);color:var(--text);box-shadow:var(--sh)}
+.logout-btn{background:transparent;border:1px solid rgba(22,163,74,.4);color:var(--green);border-radius:6px;padding:4px 11px;font-size:12px;font-weight:500;cursor:pointer}
+.logout-btn:hover{background:var(--green-lt)}
+
+/* PAGE */
+.page{max-width:680px;margin:0 auto;padding:1.25rem}
+.sec{display:none}.sec.active{display:block}
+.section-title{font-size:16px;font-weight:600;margin-bottom:1rem}
+
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--sh);padding:1.25rem;margin-bottom:1rem}
+.btn{padding:7px 15px;border-radius:var(--r);border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:5px}
+.btn-p{background:var(--green);color:#fff}.btn-p:hover{background:var(--green-dk)}
+.btn-g{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-g:hover{background:var(--subtle)}
+.btn-d{background:var(--red);color:var(--red-t);border:1px solid #fca5a5}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn-full{width:100%;justify-content:center;padding:12px}
+
+/* FORM */
+.fg{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.fg label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.fg input,.fg select,.fg textarea{padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle);color:var(--text);width:100%}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--green);background:#fff}
+
+/* BOOKING STEPS */
+.steps{display:flex;gap:0;margin-bottom:1.5rem;background:var(--subtle);border-radius:var(--rl);padding:4px}
+.step{flex:1;text-align:center;padding:8px 4px;border-radius:8px;font-size:12px;font-weight:500;color:var(--muted);transition:all .2s}
+.step.active{background:var(--surface);color:var(--green);box-shadow:var(--sh)}
+.step.done{color:var(--green)}
+
+/* GROOMER CARDS */
+.groomer-pick{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1rem}
+.groomer-opt{border:2px solid var(--border);border-radius:var(--rl);padding:1rem;cursor:pointer;transition:all .15s;background:var(--surface)}
+.groomer-opt:hover{border-color:var(--green-md)}
+.groomer-opt.selected{border-color:var(--green);background:var(--green-lt)}
+.groomer-opt-name{font-weight:600;font-size:14px;margin-bottom:4px}
+.groomer-opt-areas{font-size:11px;color:var(--muted)}
+.groomer-opt-off{opacity:.4;cursor:not-allowed}
+
+/* TIME SLOTS */
+.slots{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:1rem}
+.slot{border:1px solid var(--border);border-radius:var(--r);padding:8px;text-align:center;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;background:var(--surface)}
+.slot:hover{border-color:var(--green-md)}
+.slot.selected{border-color:var(--green);background:var(--green-lt);color:var(--green-dk)}
+.slot.taken{opacity:.35;cursor:not-allowed;background:var(--subtle)}
+
+/* DOG CARDS */
+.dog-pick{display:flex;flex-direction:column;gap:8px;margin-bottom:1rem}
+.dog-opt{border:2px solid var(--border);border-radius:var(--rl);padding:.75rem;cursor:pointer;transition:all .15s;background:var(--surface);display:flex;align-items:center;gap:10px}
+.dog-opt:hover{border-color:var(--green-md)}
+.dog-opt.selected{border-color:var(--green);background:var(--green-lt)}
+.dog-av{width:32px;height:32px;border-radius:50%;background:var(--green-lt);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.dog-info{flex:1}
+.dog-nm{font-weight:600;font-size:13px}
+.dog-br{font-size:11px;color:var(--muted)}
+
+/* APPT CARDS */
+.appt-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;margin-bottom:8px}
+.appt-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.appt-date{font-weight:600;font-size:14px}
+.appt-badge{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600}
+.badge-pending{background:#fef3c7;color:#92400e}
+.badge-confirmed{background:var(--green-lt);color:var(--green-dk)}
+.appt-detail{font-size:12px;color:var(--muted)}
+
+/* PROFILE */
+.profile-av{width:56px;height:56px;border-radius:50%;background:var(--green-lt);display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:.75rem}
+
+/* MISC */
+.loading{text-align:center;padding:2.5rem;color:var(--muted)}
+.spin{display:inline-block;width:17px;height:17px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:2rem;color:var(--muted);font-size:13px}
+.empty-icon{font-size:28px;display:block;margin-bottom:8px}
+.divider{border:none;border-top:1px solid var(--border);margin:1rem 0}
+.success-box{background:var(--green-lt);border:1px solid var(--green-md);border-radius:var(--rl);padding:1.5rem;text-align:center}
+.err-box{background:var(--red);color:var(--red-t);border-radius:var(--r);padding:9px 12px;font-size:12px;margin-top:8px;display:none}
+.err-box.show{display:block}
+.cal-grid-mini{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:1rem}
+.cal-mini-hd{text-align:center;font-size:10px;font-weight:600;color:var(--muted);padding:3px}
+.cal-mini-cell{text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;color:var(--muted);transition:all .15s;border:1px solid transparent}
+.cal-mini-cell:hover{background:var(--green-lt);color:var(--green-dk)}
+.cal-mini-cell.selected{background:var(--green);color:#fff}
+.cal-mini-cell.today{border-color:var(--green);color:var(--green)}
+.cal-mini-cell.disabled{opacity:.3;cursor:not-allowed;pointer-events:none}
+.cal-mini-cell.has-slots{position:relative}
+.cal-mini-cell.has-slots::after{content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--green)}
+.cal-nav-mini{display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem}
+.cal-nav-mini span{font-size:13px;font-weight:600}
+</style>
+</head>
+<body>
+
+<script>
+const SUPABASE_URL="https://cwqrpslypcjgjuxagglc.supabase.co";
+const SUPABASE_ANON="sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
+const AREAS=['Jakarta Barat','Jakarta Utara','Jakarta Selatan','Jakarta Pusat','Jakarta Timur','Tangerang','Bekasi'];
+const SLOTS=['08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00'];
+</script>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <span class="auth-paw">🐾</span>
+    <div class="auth-title">Book a Grooming</div>
+    <div class="auth-sub">Mobile dog grooming · Jakarta</div>
+    <div class="auth-card">
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Sign in</button>
+        <button class="auth-tab" id="tab-signup" onclick="switchAuthTab('signup')">Sign up</button>
+      </div>
+      <!-- LOGIN -->
+      <div id="login-form">
+        <div class="auth-fg"><label>Email</label><input type="email" id="login-email" placeholder="you@email.com" autocomplete="email"/></div>
+        <div class="auth-fg"><label>Password</label><input type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doCustomerLogin()"/></div>
+        <button class="auth-btn" id="login-btn" onclick="doCustomerLogin()">Sign in</button>
+        <div class="auth-err" id="login-err"></div>
+      </div>
+      <!-- SIGNUP -->
+      <div id="signup-form" style="display:none">
+        <div class="auth-fg"><label>Your name</label><input type="text" id="su-name" placeholder="Sarah"/></div>
+        <div class="auth-fg"><label>Email</label><input type="email" id="su-email" placeholder="you@email.com" autocomplete="email"/></div>
+        <div class="auth-fg"><label>Password</label><input type="password" id="su-pass" placeholder="Min 6 characters"/></div>
+        <div class="auth-fg"><label>Phone (WhatsApp)</label><input type="tel" id="su-phone" placeholder="08xxxxxxxxxx"/></div>
+        <div class="auth-fg"><label>Your area</label>
+          <select id="su-area">
+            <option value="">Select area…</option>
+            <option>Jakarta Barat</option><option>Jakarta Utara</option><option>Jakarta Selatan</option>
+            <option>Jakarta Pusat</option><option>Jakarta Timur</option><option>Tangerang</option><option>Bekasi</option>
+          </select>
+        </div>
+        <button class="auth-btn" id="signup-btn" onclick="doSignup()">Create account</button>
+        <div class="auth-err" id="signup-err"></div>
+        <div class="auth-ok" id="signup-ok"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<nav class="nav">
+  <div class="nav-brand">🐾 My Grooming</div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <div class="nav-tabs">
+      <button class="nav-tab active" id="ctab-book" onclick="csw('book')">📅 Book</button>
+      <button class="nav-tab" id="ctab-appts" onclick="csw('appts')">🗓️ My Appointments</button>
+      <button class="nav-tab" id="ctab-dogs" onclick="csw('dogs')">🐾 My Dogs</button>
+      <button class="nav-tab" id="ctab-profile" onclick="csw('profile')">👤 Profile</button>
+    </div>
+    <button class="logout-btn" onclick="doCustomerLogout()">Sign out</button>
+  </div>
+</nav>
+
+<div class="page">
+
+  <!-- BOOK -->
+  <div class="sec active" id="sec-book">
+    <div class="steps">
+      <div class="step active" id="step1-lbl">1 · Date</div>
+      <div class="step" id="step2-lbl">2 · Groomer</div>
+      <div class="step" id="step3-lbl">3 · Time</div>
+      <div class="step" id="step4-lbl">4 · Dog</div>
+      <div class="step" id="step5-lbl">5 · Confirm</div>
+    </div>
+    <div id="book-step1" class="card">
+      <div class="section-title">Pick a date</div>
+      <div class="cal-nav-mini">
+        <button class="btn btn-g btn-sm" onclick="miniCalPrev()">←</button>
+        <span id="mini-cal-title"></span>
+        <button class="btn btn-g btn-sm" onclick="miniCalNext()">→</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px">
+        <div class="cal-mini-hd">Mon</div><div class="cal-mini-hd">Tue</div><div class="cal-mini-hd">Wed</div>
+        <div class="cal-mini-hd">Thu</div><div class="cal-mini-hd">Fri</div><div class="cal-mini-hd">Sat</div><div class="cal-mini-hd">Sun</div>
+      </div>
+      <div class="cal-grid-mini" id="mini-cal-grid"></div>
+      <div id="step1-err" class="err-box">Please select a date.</div>
+      <button class="btn btn-p btn-full" style="margin-top:.5rem" onclick="goStep(2)">Next →</button>
+    </div>
+
+    <div id="book-step2" class="card" style="display:none">
+      <div class="section-title">Choose a groomer</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:.75rem" id="step2-date-lbl"></div>
+      <div class="groomer-pick" id="groomer-pick"></div>
+      <div id="step2-err" class="err-box">Please select a groomer.</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-g" onclick="goStep(1)">← Back</button>
+        <button class="btn btn-p" onclick="goStep(3)">Next →</button>
+      </div>
+    </div>
+
+    <div id="book-step3" class="card" style="display:none">
+      <div class="section-title">Pick a time</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:.75rem" id="step3-lbl2"></div>
+      <div class="slots" id="time-slots"></div>
+      <div id="step3-err" class="err-box">Please select a time slot.</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-g" onclick="goStep(2)">← Back</button>
+        <button class="btn btn-p" onclick="goStep(4)">Next →</button>
+      </div>
+    </div>
+
+    <div id="book-step4" class="card" style="display:none">
+      <div class="section-title">Which dog?</div>
+      <div class="dog-pick" id="dog-pick"></div>
+      <button class="btn btn-g btn-sm" onclick="showAddDogInline()" id="add-dog-inline-btn">+ Add a dog</button>
+      <div id="add-dog-inline" style="display:none;margin-top:1rem;padding:1rem;background:var(--subtle);border-radius:var(--rl)">
+        <div class="fg"><label>Dog name *</label><input id="nd-name" placeholder="Buddy"/></div>
+        <div class="fg"><label>Breed</label><input id="nd-breed" placeholder="Poodle"/></div>
+        <div class="fg"><label>Size</label>
+          <select id="nd-size"><option value="">Select…</option><option>Small</option><option>Medium</option><option>Large</option></select>
+        </div>
+        <div class="fg"><label>Notes for groomer</label><input id="nd-prefs" placeholder="e.g. Anxious, prefers short cut"/></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-p btn-sm" onclick="saveNewDogInline()">Save dog</button>
+          <button class="btn btn-g btn-sm" onclick="document.getElementById('add-dog-inline').style.display='none'">Cancel</button>
+        </div>
+      </div>
+      <div id="step4-err" class="err-box" style="margin-top:8px">Please select a dog.</div>
+      <div style="display:flex;gap:8px;margin-top:1rem">
+        <button class="btn btn-g" onclick="goStep(3)">← Back</button>
+        <button class="btn btn-p" onclick="goStep(5)">Next →</button>
+      </div>
+    </div>
+
+    <div id="book-step5" class="card" style="display:none">
+      <div class="section-title">Confirm booking</div>
+      <div id="booking-summary" style="margin-bottom:1.25rem"></div>
+      <div class="fg"><label>Notes for groomer (optional)</label>
+        <textarea id="booking-note" placeholder="e.g. Please use fragrance-free shampoo" style="min-height:60px"></textarea>
+      </div>
+      <div id="step5-err" class="err-box"></div>
+      <div style="display:flex;gap:8px;margin-top:.5rem">
+        <button class="btn btn-g" onclick="goStep(4)">← Back</button>
+        <button class="btn btn-p btn-full" onclick="confirmBooking()" id="confirm-btn">Confirm booking</button>
+      </div>
+    </div>
+
+    <div id="book-success" style="display:none" class="success-box">
+      <div style="font-size:36px;margin-bottom:.75rem">🎉</div>
+      <div style="font-size:17px;font-weight:600;color:var(--green-dk);margin-bottom:.5rem">Booking confirmed!</div>
+      <div style="font-size:13px;color:var(--green-dk);margin-bottom:1.25rem" id="success-detail"></div>
+      <button class="btn btn-p" onclick="resetBooking()">Book another</button>
+    </div>
+  </div>
+
+  <!-- MY APPOINTMENTS -->
+  <div class="sec" id="sec-appts">
+    <div class="section-title">My appointments</div>
+    <div id="appts-list"><div class="loading"><span class="spin"></span>Loading…</div></div>
+  </div>
+
+  <!-- MY DOGS -->
+  <div class="sec" id="sec-dogs">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <div class="section-title" style="margin:0">My dogs</div>
+      <button class="btn btn-p btn-sm" onclick="showDogForm()">+ Add dog</button>
+    </div>
+    <div id="dogs-list"><div class="loading"><span class="spin"></span>Loading…</div></div>
+    <div id="dog-form" class="card" style="display:none;margin-top:1rem">
+      <div style="font-weight:600;margin-bottom:1rem" id="dog-form-title">Add a dog</div>
+      <div class="fg"><label>Name *</label><input id="df-name" placeholder="Buddy"/></div>
+      <div class="fg"><label>Breed</label><input id="df-breed" placeholder="Poodle"/></div>
+      <div class="fg"><label>Size</label>
+        <select id="df-size"><option value="">Select…</option><option>Small</option><option>Medium</option><option>Large</option></select>
+      </div>
+      <div class="fg"><label>Coat type</label>
+        <select id="df-coat"><option value="">Select…</option><option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option></select>
+      </div>
+      <div class="fg"><label>Notes / preferences</label><textarea id="df-prefs" placeholder="e.g. Anxious around clippers, prefers lion cut" style="min-height:60px"></textarea></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-p" onclick="saveDog()" id="dog-save-btn">Save</button>
+        <button class="btn btn-g" onclick="hideDogForm()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROFILE -->
+  <div class="sec" id="sec-profile">
+    <div class="card">
+      <div class="profile-av">👤</div>
+      <div style="font-size:16px;font-weight:600;margin-bottom:.25rem" id="profile-name-disp">—</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:1.25rem" id="profile-email-disp">—</div>
+      <hr class="divider"/>
+      <div class="fg"><label>Name</label><input id="pf-name" placeholder="Your name"/></div>
+      <div class="fg"><label>Phone (WhatsApp)</label><input id="pf-phone" placeholder="08xxxxxxxxxx"/></div>
+      <div class="fg"><label>Area</label>
+        <select id="pf-area">
+          <option value="">Select area…</option>
+          <option>Jakarta Barat</option><option>Jakarta Utara</option><option>Jakarta Selatan</option>
+          <option>Jakarta Pusat</option><option>Jakarta Timur</option><option>Tangerang</option><option>Bekasi</option>
+        </select>
+      </div>
+      <div class="fg"><label>Address</label><input id="pf-address" placeholder="Jl. contoh No.1"/></div>
+      <button class="btn btn-p" onclick="saveProfile()">Save profile</button>
+      <div id="profile-ok" style="display:none;font-size:12px;color:var(--green);margin-top:8px">✓ Saved!</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const {createClient}=supabase;
+const db=createClient(SUPABASE_URL,SUPABASE_ANON);
+let currentUser=null, customerProfile=null, customerDogs=[], customerAppts=[];
+let groomers=[], allSchedules=[];
+let selDate=null, selGroomerId=null, selTime=null, selDogId=null;
+let miniCalBase=new Date(), editDogId=null;
+
+function iso(d){return d.toISOString().split('T')[0]}
+function fmtDate(d){return new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
+
+/* AUTH */
+function switchAuthTab(tab){
+  document.getElementById('tab-login').classList.toggle('active',tab==='login');
+  document.getElementById('tab-signup').classList.toggle('active',tab==='signup');
+  document.getElementById('login-form').style.display=tab==='login'?'block':'none';
+  document.getElementById('signup-form').style.display=tab==='signup'?'block':'none';
+}
+
+async function doCustomerLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-pass').value;
+  const err=document.getElementById('login-err');
+  const btn=document.getElementById('login-btn');
+  if(!email||!pass){showAuthErr('login-err','Please fill in all fields.');return}
+  btn.disabled=true; btn.textContent='Signing in…';
+  err.classList.remove('show');
+  const {error}=await db.auth.signInWithPassword({email,password:pass});
+  if(error){showAuthErr('login-err',error.message==='Invalid login credentials'?'Wrong email or password.':error.message);btn.disabled=false;btn.textContent='Sign in';}
+}
+
+async function doSignup(){
+  const name=document.getElementById('su-name').value.trim();
+  const email=document.getElementById('su-email').value.trim();
+  const pass=document.getElementById('su-pass').value;
+  const phone=document.getElementById('su-phone').value.trim();
+  const area=document.getElementById('su-area').value;
+  const btn=document.getElementById('signup-btn');
+  if(!name||!email||!pass){showAuthErr('signup-err','Name, email and password are required.');return}
+  if(pass.length<6){showAuthErr('signup-err','Password must be at least 6 characters.');return}
+  btn.disabled=true; btn.textContent='Creating account…';
+  const {data,error}=await db.auth.signUp({email,password:pass});
+  if(error){showAuthErr('signup-err',error.message);btn.disabled=false;btn.textContent='Create account';return}
+  if(data.user){
+    await db.from('customer_profiles').upsert({id:data.user.id,name,phone,area,address:''});
+  }
+  document.getElementById('signup-err').classList.remove('show');
+  const ok=document.getElementById('signup-ok');
+  ok.textContent='Account created! Please check your email to confirm, then sign in.';
+  ok.classList.add('show');
+  btn.disabled=false; btn.textContent='Create account';
+}
+
+function showAuthErr(id,msg){
+  const el=document.getElementById(id);
+  el.textContent=msg; el.classList.add('show');
+}
+
+async function doCustomerLogout(){await db.auth.signOut();}
+
+async function initCustomerAuth(){
+  const {data:{session}}=await db.auth.getSession();
+  if(session){await onLogin(session.user);}
+  else{document.getElementById('auth-screen').classList.add('show');}
+  db.auth.onAuthStateChange(async(_,session)=>{
+    if(session){await onLogin(session.user);}
+    else{currentUser=null;document.getElementById('auth-screen').classList.add('show');}
+  });
+}
+
+async function onLogin(user){
+  currentUser=user;
+  document.getElementById('auth-screen').classList.remove('show');
+  await Promise.all([loadCustomerData(),loadGroomers()]);
+  renderMiniCal();
+}
+
+/* DATA */
+async function loadCustomerData(){
+  const uid=currentUser.id;
+  const [pr,dr,ar]=await Promise.all([
+    db.from('customer_profiles').select('*').eq('id',uid).single(),
+    db.from('dogs').select('*').eq('customer_id',uid).order('created_at'),
+    db.from('appointments').select('*,dogs(name,emoji,breed,size),groomers(name)').eq('customer_id',uid).order('appt_date',{ascending:false})
+  ]);
+  customerProfile=pr.data;
+  customerDogs=dr.data||[];
+  customerAppts=ar.data||[];
+  if(customerProfile){
+    document.getElementById('profile-name-disp').textContent=customerProfile.name||'—';
+    document.getElementById('profile-email-disp').textContent=currentUser.email||'—';
+    document.getElementById('pf-name').value=customerProfile.name||'';
+    document.getElementById('pf-phone').value=customerProfile.phone||'';
+    document.getElementById('pf-area').value=customerProfile.area||'';
+    document.getElementById('pf-address').value=customerProfile.address||'';
+  }
+}
+
+async function loadGroomers(){
+  const today=new Date(); today.setHours(0,0,0,0);
+  const future=new Date(today); future.setDate(future.getDate()+60);
+  const [gr,sr]=await Promise.all([
+    db.from('groomers').select('*').order('created_at'),
+    db.from('groomer_schedules').select('*').gte('date',iso(today)).lte('date',iso(future)).eq('is_off',false)
+  ]);
+  groomers=gr.data||[];
+  allSchedules=sr.data||[];
+}
+
+/* TABS */
+function csw(tab){
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
+  document.getElementById('ctab-'+tab).classList.add('active');
+  document.getElementById('sec-'+tab).classList.add('active');
+  if(tab==='appts') renderAppts();
+  if(tab==='dogs') renderDogs();
+  if(tab==='profile') {}
+}
+
+/* MINI CALENDAR */
+function miniCalPrev(){miniCalBase.setMonth(miniCalBase.getMonth()-1);renderMiniCal();}
+function miniCalNext(){miniCalBase.setMonth(miniCalBase.getMonth()+1);renderMiniCal();}
+
+function renderMiniCal(){
+  const today=new Date(); today.setHours(0,0,0,0);
+  const y=miniCalBase.getFullYear(), m=miniCalBase.getMonth();
+  document.getElementById('mini-cal-title').textContent=new Date(y,m,1).toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  const firstDay=new Date(y,m,1).getDay();
+  const offset=firstDay===0?6:firstDay-1;
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  let html='';
+  for(let i=0;i<offset;i++) html+='<div></div>';
+  for(let d=1;d<=daysInMonth;d++){
+    const date=new Date(y,m,d); date.setHours(0,0,0,0);
+    const ds=iso(date);
+    const isPast=date<today;
+    const isToday=date.getTime()===today.getTime();
+    const isSel=selDate===ds;
+    const hasGroomers=allSchedules.some(s=>s.date===ds);
+    html+=`<div class="cal-mini-cell${isPast?' disabled':''}${isToday?' today':''}${isSel?' selected':''}${hasGroomers&&!isPast?' has-slots':''}" onclick="selectDate('${ds}')">${d}</div>`;
+  }
+  document.getElementById('mini-cal-grid').innerHTML=html;
+}
+
+function selectDate(ds){
+  selDate=ds; selGroomerId=null; selTime=null; selDogId=null;
+  renderMiniCal();
+}
+
+/* BOOKING STEPS */
+function goStep(n){
+  if(n===2&&!selDate){document.getElementById('step1-err').classList.add('show');return;}
+  document.getElementById('step1-err').classList.remove('show');
+  if(n===3&&!selGroomerId){document.getElementById('step2-err').classList.add('show');return;}
+  document.getElementById('step2-err').classList.remove('show');
+  if(n===4&&!selTime){document.getElementById('step3-err').classList.add('show');return;}
+  document.getElementById('step3-err').classList.remove('show');
+  if(n===5&&!selDogId){document.getElementById('step4-err').classList.add('show');return;}
+  document.getElementById('step4-err').classList.remove('show');
+
+  for(let i=1;i<=5;i++){
+    document.getElementById('book-step'+i).style.display=i===n?'block':'none';
+    const lbl=document.getElementById('step'+i+'-lbl');
+    lbl.classList.toggle('active',i===n);
+    lbl.classList.toggle('done',i<n);
+  }
+  if(n===2) renderGroomerPick();
+  if(n===3) renderTimeSlots();
+  if(n===4) renderDogPick();
+  if(n===5) renderBookingSummary();
+}
+
+function renderGroomerPick(){
+  const sc=allSchedules.filter(s=>s.date===selDate);
+  const lbl=document.getElementById('step2-date-lbl');
+  lbl.textContent=fmtDate(selDate);
+  const html=groomers.map(g=>{
+    const gs=sc.find(s=>s.groomer_id===g.id);
+    const available=!!gs&&!gs.is_off;
+    const areas=gs?.areas||[];
+    return `<div class="groomer-opt${selGroomerId===g.id?' selected':''}${!available?' groomer-opt-off':''}" onclick="${available?`selectGroomer('${g.id}')`:''}" >
+      <div class="groomer-opt-name">✂️ ${g.name}</div>
+      <div class="groomer-opt-areas">${available?'📍 '+areas.join(', '):'Not available this day'}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('groomer-pick').innerHTML=html||'<div class="empty">No groomers set up yet.</div>';
+}
+
+function selectGroomer(id){
+  selGroomerId=id; selTime=null;
+  renderGroomerPick();
+}
+
+async function renderTimeSlots(){
+  const lbl=document.getElementById('step3-lbl2');
+  const g=groomers.find(x=>x.id===selGroomerId);
+  lbl.textContent=`${g?.name||'Groomer'} · ${fmtDate(selDate)}`;
+  const {data:taken}=await db.from('appointments').select('appt_time').eq('appt_date',selDate).eq('groomer_id',selGroomerId);
+  const takenTimes=(taken||[]).map(a=>a.appt_time?.slice(0,5));
+  document.getElementById('time-slots').innerHTML=SLOTS.map(t=>
+    `<div class="slot${takenTimes.includes(t)?' taken':selTime===t?' selected':''}" onclick="${takenTimes.includes(t)?'':``selectTime('${t}')``}">${t}</div>`
+  ).join('');
+}
+
+function selectTime(t){
+  selTime=t;
+  renderTimeSlots();
+}
+
+function renderDogPick(){
+  const html=customerDogs.map(d=>
+    `<div class="dog-opt${selDogId===d.id?' selected':''}" onclick="selectDog('${d.id}')">
+      <div class="dog-av">${d.emoji||'🐶'}</div>
+      <div class="dog-info"><div class="dog-nm">${d.name}</div><div class="dog-br">${d.breed||'—'} · ${d.size||'—'}</div></div>
+    </div>`
+  ).join('');
+  document.getElementById('dog-pick').innerHTML=html||'<div class="empty" style="padding:1rem">No dogs yet. Add one below!</div>';
+}
+
+function selectDog(id){selDogId=id;renderDogPick();}
+
+function renderBookingSummary(){
+  const g=groomers.find(x=>x.id===selGroomerId);
+  const d=customerDogs.find(x=>x.id===selDogId);
+  document.getElementById('booking-summary').innerHTML=`
+    <div style="background:var(--subtle);border-radius:var(--rl);padding:1rem;font-size:13px;display:flex;flex-direction:column;gap:6px">
+      <div>📅 <strong>${fmtDate(selDate)}</strong></div>
+      <div>⏰ <strong>${selTime}</strong></div>
+      <div>✂️ <strong>${g?.name||'—'}</strong></div>
+      <div>🐾 <strong>${d?.name||'—'}</strong> (${d?.breed||'—'}, ${d?.size||'—'})</div>
+    </div>`;
+}
+
+async function confirmBooking(){
+  const btn=document.getElementById('confirm-btn');
+  btn.disabled=true; btn.textContent='Booking…';
+  const note=document.getElementById('booking-note').value.trim();
+  const {error}=await db.from('appointments').insert({
+    dog_id:selDogId,
+    groomer_id:selGroomerId,
+    customer_id:currentUser.id,
+    appt_date:selDate,
+    appt_time:selTime,
+    appt_note:note,
+    status:'pending'
+  });
+  if(error){
+    document.getElementById('step5-err').textContent=error.message;
+    document.getElementById('step5-err').classList.add('show');
+    btn.disabled=false; btn.textContent='Confirm booking';
+    return;
+  }
+  const g=groomers.find(x=>x.id===selGroomerId);
+  const d=customerDogs.find(x=>x.id===selDogId);
+  document.getElementById('success-detail').textContent=`${d?.name} · ${selTime} · ${g?.name} · ${fmtDate(selDate)}`;
+  for(let i=1;i<=5;i++) document.getElementById('book-step'+i).style.display='none';
+  document.getElementById('book-success').style.display='block';
+  await loadCustomerData();
+}
+
+function resetBooking(){
+  selDate=null; selGroomerId=null; selTime=null; selDogId=null;
+  document.getElementById('book-success').style.display='none';
+  document.getElementById('booking-note').value='';
+  for(let i=1;i<=5;i++){
+    const el=document.getElementById('book-step'+i);
+    el.style.display=i===1?'block':'none';
+    document.getElementById('step'+i+'-lbl').classList.toggle('active',i===1);
+    document.getElementById('step'+i+'-lbl').classList.remove('done');
+  }
+  renderMiniCal();
+}
+
+/* APPOINTMENTS */
+function renderAppts(){
+  const el=document.getElementById('appts-list');
+  if(!customerAppts.length){el.innerHTML='<div class="empty"><span class="empty-icon">🗓️</span>No appointments yet.</div>';return}
+  el.innerHTML=customerAppts.map(a=>`
+    <div class="appt-card">
+      <div class="appt-hd">
+        <div class="appt-date">📅 ${a.appt_date} · ${a.appt_time?.slice(0,5)||''}</div>
+        <span class="appt-badge ${a.status==='confirmed'?'badge-confirmed':'badge-pending'}">${a.status||'pending'}</span>
+      </div>
+      <div class="appt-detail">🐾 ${a.dogs?.name||'—'} · ✂️ ${a.groomers?.name||'—'}</div>
+      ${a.appt_note?`<div class="appt-detail" style="margin-top:3px">📝 ${a.appt_note}</div>`:''}
+    </div>`).join('');
+}
+
+/* DOGS */
+function renderDogs(){
+  const el=document.getElementById('dogs-list');
+  if(!customerDogs.length){el.innerHTML='<div class="empty"><span class="empty-icon">🐾</span>No dogs added yet.</div>';return}
+  el.innerHTML=customerDogs.map(d=>`
+    <div class="appt-card" style="display:flex;align-items:center;gap:10px">
+      <div class="dog-av">${d.emoji||'🐶'}</div>
+      <div style="flex:1">
+        <div style="font-weight:600">${d.name}</div>
+        <div style="font-size:12px;color:var(--muted)">${d.breed||'—'} · ${d.size||'—'} · ${d.coat||'—'}</div>
+        ${d.prefs?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${d.prefs}</div>`:''}
+      </div>
+      <button class="btn btn-g btn-sm" onclick="showDogForm('${d.id}')">Edit</button>
+    </div>`).join('');
+}
+
+function showDogForm(id){
+  editDogId=id||null;
+  const form=document.getElementById('dog-form');
+  form.style.display='block';
+  if(id){
+    const d=customerDogs.find(x=>x.id===id);
+    document.getElementById('dog-form-title').textContent='Edit dog';
+    document.getElementById('dog-save-btn').textContent='Update';
+    document.getElementById('df-name').value=d?.name||'';
+    document.getElementById('df-breed').value=d?.breed||'';
+    document.getElementById('df-size').value=d?.size||'';
+    document.getElementById('df-coat').value=d?.coat||'';
+    document.getElementById('df-prefs').value=d?.prefs||'';
+  } else {
+    document.getElementById('dog-form-title').textContent='Add a dog';
+    document.getElementById('dog-save-btn').textContent='Save';
+    ['df-name','df-breed','df-prefs'].forEach(i=>document.getElementById(i).value='');
+    document.getElementById('df-size').value='';
+    document.getElementById('df-coat').value='';
+  }
+  form.scrollIntoView({behavior:'smooth'});
+}
+
+function hideDogForm(){document.getElementById('dog-form').style.display='none';}
+
+async function saveDog(){
+  const name=document.getElementById('df-name').value.trim();
+  if(!name){alert('Dog name required.');return}
+  const p={name,breed:document.getElementById('df-breed').value.trim(),size:document.getElementById('df-size').value,coat:document.getElementById('df-coat').value,prefs:document.getElementById('df-prefs').value.trim(),emoji:'🐶',customer_id:currentUser.id};
+  if(editDogId){await db.from('dogs').update(p).eq('id',editDogId);}
+  else{await db.from('dogs').insert(p);}
+  hideDogForm(); await loadCustomerData(); renderDogs();
+}
+
+function showAddDogInline(){
+  document.getElementById('add-dog-inline').style.display='block';
+  document.getElementById('add-dog-inline-btn').style.display='none';
+}
+
+async function saveNewDogInline(){
+  const name=document.getElementById('nd-name').value.trim();
+  if(!name){alert('Dog name required.');return}
+  const {data}=await db.from('dogs').insert({name,breed:document.getElementById('nd-breed').value.trim(),size:document.getElementById('nd-size').value,prefs:document.getElementById('nd-prefs').value.trim(),emoji:'🐶',customer_id:currentUser.id}).select().single();
+  await loadCustomerData();
+  document.getElementById('add-dog-inline').style.display='none';
+  document.getElementById('add-dog-inline-btn').style.display='inline-flex';
+  if(data){selDogId=data.id;}
+  renderDogPick();
+}
+
+/* PROFILE */
+async function saveProfile(){
+  const p={name:document.getElementById('pf-name').value.trim(),phone:document.getElementById('pf-phone').value.trim(),area:document.getElementById('pf-area').value,address:document.getElementById('pf-address').value.trim()};
+  await db.from('customer_profiles').upsert({id:currentUser.id,...p});
+  document.getElementById('profile-name-disp').textContent=p.name||'—';
+  const ok=document.getElementById('profile-ok');
+  ok.style.display='block';
+  setTimeout(()=>ok.style.display='none',2500);
+}
+
+initCustomerAuth();
+</script>
+</body>
+</html>
