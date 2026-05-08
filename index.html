@@ -164,7 +164,22 @@ tbody tr:hover{background:var(--subtle)}
 @keyframes dot{0%,60%,100%{transform:scale(1);opacity:.4}30%{transform:scale(1.3);opacity:1}}
 .logout-btn{background:transparent;border:1px solid rgba(22,163,74,.4);color:var(--green);border-radius:6px;padding:4px 11px;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s}
 .logout-btn:hover{background:var(--green-lt)}
-.auth-bg{position:absolute;inset:0;overflow:hidden;z-index:0}
+/* GROOMERS */
+.groomer-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;margin-bottom:10px}
+.groomer-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
+.groomer-nm{font-size:15px;font-weight:600}
+.groomer-actions{display:flex;gap:6px}
+.sched-week{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:.5rem}
+.sched-day{background:var(--subtle);border:1px solid var(--border);border-radius:6px;padding:5px;text-align:center;cursor:pointer;transition:all .15s;min-height:64px}
+.sched-day:hover{border-color:var(--green-md)}
+.sched-day.has-sched{background:var(--green-lt);border-color:var(--green-md)}
+.sched-day.is-off{background:var(--red);border-color:#fca5a5;opacity:.7}
+.sched-dn{font-size:10px;font-weight:600;color:var(--muted);margin-bottom:2px}
+.sched-dd{font-size:11px;font-weight:600;color:var(--text)}
+.sched-areas-pills{font-size:9px;color:var(--green-dk);margin-top:2px;line-height:1.3}
+
+.logout-btn{background:transparent;border:1px solid rgba(22,163,74,.4);color:var(--green);border-radius:6px;padding:4px 11px;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s}
+.logout-btn:hover{background:var(--green-lt)}
 .auth-bg-circle{position:absolute;border-radius:50%;opacity:.06}
 .auth-content{position:relative;z-index:1}
 </style>
@@ -204,6 +219,7 @@ tbody tr:hover{background:var(--subtle)}
     <button class="nav-tab" onclick="sw('history')" id="tab-history">📋 History</button>
     <button class="nav-tab" onclick="sw('calendar')" id="tab-calendar">📅 Calendar</button>
     <button class="nav-tab" onclick="sw('route')" id="tab-route">🗺️ Route</button>
+    <button class="nav-tab" onclick="sw('groomers')" id="tab-groomers">👥 Groomers</button>
   </div>
   <button class="logout-btn" onclick="doLogout()">Sign out</button>
   </div>
@@ -250,6 +266,12 @@ tbody tr:hover{background:var(--subtle)}
       <div class="chips" id="chips"></div>
     </div>
     <div id="route-result"></div>
+  </div>
+
+  <!-- GROOMERS -->
+  <div class="sec" id="sec-groomers">
+    <div class="toolbar"><span class="toolbar-title">Groomers</span><button class="btn btn-p" onclick="openAddGroomer()">+ Add groomer</button></div>
+    <div id="groomers-list"><div class="loading"><span class="spin"></span>Loading…</div></div>
   </div>
 </div>
 
@@ -309,8 +331,43 @@ tbody tr:hover{background:var(--subtle)}
   </div>
 </div>
 
+<!-- GROOMER ADD/EDIT -->
+<div class="overlay" id="ov-groomer">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title" id="groomer-modal-title">Add groomer</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="fg"><label>Name *</label><input id="g-name" placeholder="e.g. Groomer 1"/></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-p" onclick="saveGroomer()" id="groomer-save-btn">Save</button>
+      <button class="btn btn-g" onclick="cm('ov-groomer')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- GROOMER SCHEDULE -->
+<div class="overlay" id="ov-sched">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title" id="sched-title">Set schedule</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:1rem" id="sched-groomer-lbl"></div>
+    <div class="fg" style="margin-bottom:10px"><label>Date</label><input type="date" id="sched-date"/></div>
+    <div class="fg" style="margin-bottom:10px">
+      <label>Areas covered this day</label>
+      <div id="sched-areas" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>
+    </div>
+    <div class="fg" style="margin-bottom:10px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="sched-off" style="width:14px;height:14px"/> Day off
+      </label>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-p" onclick="saveSched()">Save schedule</button>
+      <button class="btn btn-g" onclick="cm('ov-sched')">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
-const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 let dogs=[], visits=[], appts=[], editId=null, delId=null, apptDate=null;
 let calStart = weekStart(new Date());
@@ -332,6 +389,7 @@ function sw(tab) {
   if(tab==='history') renderHist();
   if(tab==='calendar') renderCal();
   if(tab==='route') renderChips();
+  if(tab==='groomers') loadGroomers();
 }
 
 async function loadAll() {
@@ -629,6 +687,112 @@ Request: "${input}"
     rd.innerHTML=`<div class="empty"><span class="empty-icon">⚠️</span>Error: ${e.message}</div>`;
     console.error(e);
   }
+}
+
+/* GROOMERS */
+const AREAS=['Jakarta Barat','Jakarta Utara','Jakarta Selatan','Jakarta Pusat','Jakarta Timur','Tangerang','Bekasi'];
+let groomers=[], schedules=[], editGroomerId=null, schedGroomerId=null;
+
+async function loadGroomers(){
+  const today=new Date(); today.setHours(0,0,0,0);
+  const weekEnd=new Date(today); weekEnd.setDate(weekEnd.getDate()+6);
+  const [gr,sr]=await Promise.all([
+    db.from('groomers').select('*').order('created_at'),
+    db.from('groomer_schedules').select('*').gte('date',iso(today)).lte('date',iso(weekEnd))
+  ]);
+  groomers=gr.data||[]; schedules=sr.data||[];
+  renderGroomers();
+}
+
+function renderGroomers(){
+  const el=document.getElementById('groomers-list');
+  if(!groomers.length){el.innerHTML='<div class="empty"><span class="empty-icon">👥</span>No groomers yet. Add one!</div>';return}
+  const today=new Date(); today.setHours(0,0,0,0);
+  el.innerHTML=groomers.map(g=>{
+    const days=[];
+    for(let i=0;i<7;i++){
+      const d=new Date(today); d.setDate(d.getDate()+i);
+      const ds=iso(d);
+      const sc=schedules.find(s=>s.groomer_id===g.id&&s.date===ds);
+      const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      const dn=dayNames[d.getDay()];
+      days.push(`<div class="sched-day${sc?.is_off?' is-off':sc?' has-sched':''}" onclick="openSched('${g.id}','${ds}')">
+        <div class="sched-dn">${dn}</div>
+        <div class="sched-dd">${d.getDate()}</div>
+        ${sc?.is_off?'<div class="sched-areas-pills">Off</div>':sc?.areas?.length?`<div class="sched-areas-pills">${sc.areas.map(a=>a.replace('Jakarta ','')).join(', ')}</div>`:'<div style="font-size:9px;color:var(--muted);margin-top:2px">tap to set</div>'}
+      </div>`);
+    }
+    return `<div class="groomer-card">
+      <div class="groomer-hd">
+        <div class="groomer-nm">✂️ ${g.name}</div>
+        <div class="groomer-actions">
+          <button class="btn btn-g btn-sm" onclick="openEditGroomer('${g.id}')">✏️ Edit</button>
+          <button class="btn btn-d btn-sm" onclick="deleteGroomer('${g.id}','${g.name.replace(/'/g,"\\'")}')">Delete</button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px">This week's schedule — tap a day to set areas</div>
+      <div class="sched-week">${days.join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+function openAddGroomer(){
+  editGroomerId=null;
+  document.getElementById('groomer-modal-title').textContent='Add groomer';
+  document.getElementById('groomer-save-btn').textContent='Save';
+  document.getElementById('g-name').value='';
+  om('ov-groomer');
+  setTimeout(()=>document.getElementById('g-name').focus(),200);
+}
+
+function openEditGroomer(id){
+  const g=groomers.find(x=>x.id===id); if(!g) return;
+  editGroomerId=id;
+  document.getElementById('groomer-modal-title').textContent='Edit groomer';
+  document.getElementById('groomer-save-btn').textContent='Update';
+  document.getElementById('g-name').value=g.name||'';
+  om('ov-groomer');
+}
+
+async function saveGroomer(){
+  const name=document.getElementById('g-name').value.trim();
+  if(!name){alert('Name required.');return}
+  if(editGroomerId){
+    await db.from('groomers').update({name}).eq('id',editGroomerId);
+  } else {
+    await db.from('groomers').insert({name});
+  }
+  cm('ov-groomer'); await loadGroomers();
+}
+
+async function deleteGroomer(id,name){
+  if(!confirm(`Delete ${name}? This also removes their schedule.`)) return;
+  await db.from('groomers').delete().eq('id',id);
+  await loadGroomers();
+}
+
+function openSched(groomerId,dateStr){
+  schedGroomerId=groomerId;
+  const g=groomers.find(x=>x.id===groomerId);
+  const sc=schedules.find(s=>s.groomer_id===groomerId&&s.date===dateStr);
+  document.getElementById('sched-groomer-lbl').textContent=`${g?.name||'Groomer'} — ${new Date(dateStr+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}`;
+  document.getElementById('sched-date').value=dateStr;
+  document.getElementById('sched-off').checked=sc?.is_off||false;
+  const selAreas=sc?.areas||[];
+  document.getElementById('sched-areas').innerHTML=AREAS.map(a=>
+    `<button class="chip${selAreas.includes(a)?' on':''}" onclick="this.classList.toggle('on')">${a}</button>`
+  ).join('');
+  om('ov-sched');
+}
+
+async function saveSched(){
+  const date=document.getElementById('sched-date').value;
+  const isOff=document.getElementById('sched-off').checked;
+  const areas=[...document.querySelectorAll('#sched-areas .chip.on')].map(c=>c.textContent.trim());
+  await db.from('groomer_schedules').upsert({
+    groomer_id:schedGroomerId, date, areas, is_off:isOff
+  },{onConflict:'groomer_id,date'});
+  cm('ov-sched'); await loadGroomers();
 }
 
 /* AUTH */
