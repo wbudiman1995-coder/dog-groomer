@@ -136,6 +136,37 @@ tbody tr:hover{background:var(--subtle)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .empty{text-align:center;padding:2.5rem 1rem;color:var(--muted);font-size:13px}
 .empty-icon{font-size:30px;display:block;margin-bottom:8px}
+
+/* AUTH SCREEN */
+#auth-screen{display:none;position:fixed;inset:0;z-index:999;background:#0f1a12;align-items:center;justify-content:center;padding:1rem}
+#auth-screen.show{display:flex}
+.auth-box{width:100%;max-width:380px}
+.auth-paw{font-size:48px;display:block;text-align:center;margin-bottom:1.25rem;animation:paw-in .5s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes paw-in{from{transform:scale(0) rotate(-20deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
+.auth-title{font-size:26px;font-weight:700;color:#fff;text-align:center;letter-spacing:-.5px;margin-bottom:4px}
+.auth-sub{font-size:13px;color:#4ade80;text-align:center;margin-bottom:2rem;opacity:.8}
+.auth-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:1.75rem;backdrop-filter:blur(12px)}
+.auth-fg{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.auth-fg label{font-size:11px;font-weight:600;color:#86efac;text-transform:uppercase;letter-spacing:.06em}
+.auth-fg input{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:11px 13px;font-size:14px;color:#fff;transition:border-color .2s}
+.auth-fg input:focus{outline:none;border-color:#4ade80;background:rgba(255,255,255,.1)}
+.auth-fg input::placeholder{color:rgba(255,255,255,.3)}
+.auth-btn{width:100%;padding:12px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-top:4px;transition:background .15s,transform .1s}
+.auth-btn:hover{background:#15803d}
+.auth-btn:active{transform:scale(.98)}
+.auth-btn:disabled{opacity:.5;cursor:not-allowed}
+.auth-err{background:#fee2e2;color:#991b1b;border-radius:6px;padding:9px 12px;font-size:12px;margin-top:10px;display:none}
+.auth-err.show{display:block}
+.auth-dots{display:flex;gap:3px;justify-content:center;align-items:center;height:18px}
+.auth-dots span{width:6px;height:6px;border-radius:50%;background:#86efac;animation:dot .9s ease-in-out infinite}
+.auth-dots span:nth-child(2){animation-delay:.2s}
+.auth-dots span:nth-child(3){animation-delay:.4s}
+@keyframes dot{0%,60%,100%{transform:scale(1);opacity:.4}30%{transform:scale(1.3);opacity:1}}
+.logout-btn{background:transparent;border:1px solid rgba(22,163,74,.4);color:var(--green);border-radius:6px;padding:4px 11px;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s}
+.logout-btn:hover{background:var(--green-lt)}
+.auth-bg{position:absolute;inset:0;overflow:hidden;z-index:0}
+.auth-bg-circle{position:absolute;border-radius:50%;opacity:.06}
+.auth-content{position:relative;z-index:1}
 </style>
 </head>
 <body>
@@ -146,13 +177,35 @@ tbody tr:hover{background:var(--subtle)}
   const ANTHROPIC_KEY = "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";
 </script>
 
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <div class="auth-bg">
+    <div class="auth-bg-circle" style="width:500px;height:500px;background:#16a34a;top:-200px;right:-150px"></div>
+    <div class="auth-bg-circle" style="width:300px;height:300px;background:#4ade80;bottom:-100px;left:-80px"></div>
+  </div>
+  <div class="auth-box auth-content">
+    <span class="auth-paw">🐾</span>
+    <div class="auth-title">Groomer CRM</div>
+    <div class="auth-sub">Jakarta mobile dog grooming</div>
+    <div class="auth-card">
+      <div class="auth-fg"><label>Email</label><input type="email" id="auth-email" placeholder="you@email.com" autocomplete="email"/></div>
+      <div class="auth-fg"><label>Password</label><input type="password" id="auth-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+      <button class="auth-btn" id="auth-btn" onclick="doLogin()">Sign in</button>
+      <div class="auth-err" id="auth-err"></div>
+    </div>
+  </div>
+</div>
+
 <nav class="nav">
   <div class="nav-brand">🐾 Groomer CRM</div>
+  <div style="display:flex;align-items:center;gap:10px">
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="sw('clients')" id="tab-clients">🐕 Clients</button>
     <button class="nav-tab" onclick="sw('history')" id="tab-history">📋 History</button>
     <button class="nav-tab" onclick="sw('calendar')" id="tab-calendar">📅 Calendar</button>
     <button class="nav-tab" onclick="sw('route')" id="tab-route">🗺️ Route</button>
+  </div>
+  <button class="logout-btn" onclick="doLogout()">Sign out</button>
   </div>
 </nav>
 
@@ -578,7 +631,55 @@ Request: "${input}"
   }
 }
 
-loadAll();
+/* AUTH */
+async function initAuth(){
+  const {data:{session}} = await db.auth.getSession();
+  if(session){ showApp(); }
+  else { document.getElementById('auth-screen').classList.add('show'); setTimeout(()=>document.getElementById('auth-email').focus(),300); }
+  db.auth.onAuthStateChange((_,session)=>{
+    if(session){ showApp(); } else { showLogin(); }
+  });
+}
+
+function showApp(){
+  document.getElementById('auth-screen').classList.remove('show');
+  loadAll();
+}
+
+function showLogin(){
+  document.getElementById('auth-screen').classList.add('show');
+  document.getElementById('auth-email').value='';
+  document.getElementById('auth-pass').value='';
+  document.getElementById('auth-err').classList.remove('show');
+  setTimeout(()=>document.getElementById('auth-email').focus(),300);
+}
+
+async function doLogin(){
+  const email=document.getElementById('auth-email').value.trim();
+  const pass=document.getElementById('auth-pass').value;
+  const btn=document.getElementById('auth-btn');
+  const err=document.getElementById('auth-err');
+  if(!email||!pass){showErr('Please enter your email and password.');return}
+  btn.disabled=true;
+  btn.innerHTML='<span class="auth-dots"><span></span><span></span><span></span></span>';
+  err.classList.remove('show');
+  const {error}=await db.auth.signInWithPassword({email,password:pass});
+  if(error){
+    showErr(error.message==='Invalid login credentials'?'Wrong email or password. Try again.':error.message);
+    btn.disabled=false; btn.textContent='Sign in';
+  }
+}
+
+async function doLogout(){
+  await db.auth.signOut();
+}
+
+function showErr(msg){
+  const err=document.getElementById('auth-err');
+  err.textContent=msg; err.classList.add('show');
+}
+
+initAuth();
 </script>
 </body>
 </html>
