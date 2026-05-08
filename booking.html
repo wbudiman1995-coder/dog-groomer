@@ -546,9 +546,11 @@ async function renderTimeSlots(){
   lbl.textContent=`${g?.name||'Groomer'} · ${fmtDate(selDate)}`;
   const {data:taken}=await db.from('appointments').select('appt_time').eq('appt_date',selDate).eq('groomer_id',selGroomerId);
   const takenTimes=(taken||[]).map(a=>a.appt_time?.slice(0,5));
-  document.getElementById('time-slots').innerHTML=SLOTS.map(t=>
-    `<div class="slot${takenTimes.includes(t)?' taken':selTime===t?' selected':''}" onclick="${takenTimes.includes(t)?'':``selectTime('${t}')``}">${t}</div>`
-  ).join('');
+  document.getElementById('time-slots').innerHTML=SLOTS.map(t=>{
+    const cls=takenTimes.includes(t)?' taken':selTime===t?' selected':'';
+    const click=takenTimes.includes(t)?'':'selectTime(\''+t+'\')';
+    return '<div class="slot'+cls+'" onclick="'+click+'">'+t+'</div>';
+  }).join('');
 }
 
 function selectTime(t){
