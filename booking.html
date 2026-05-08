@@ -369,7 +369,18 @@ async function doSignup(){
   showMsg('s-ok','Account created! Check your email to confirm, then sign in.');
   btn.disabled=false;btn.textContent='Create account';
 }
-async function doLogout(){await db.auth.signOut();}
+async function doLogout(){
+  await db.auth.signOut();
+  currentUser=null; myDogs=[]; myAppts=[];
+  document.getElementById('auth-screen').classList.add('show');
+  document.getElementById('main-nav').style.display='none';
+  document.getElementById('main-page').style.display='none';
+  document.getElementById('l-email').value='';
+  document.getElementById('l-pass').value='';
+  document.getElementById('l-err').classList.remove('show');
+  document.getElementById('l-btn').disabled=false;
+  document.getElementById('l-btn').textContent='Sign in';
+}
 function showMsg(id,msg){const el=document.getElementById(id);el.textContent=msg;el.classList.add('show');}
 async function initAuth(){
   document.getElementById('auth-screen').classList.add('show');
@@ -411,6 +422,11 @@ function csw(tab){
   document.getElementById('sec-'+tab).classList.add('active');
   if(tab==='appts') renderAppts();
   if(tab==='dogs') renderDogs();
+  if(tab==='book'){
+    // always init step 1 fresh when entering book tab
+    resetBookingUI();
+    goStep(1);
+  }
 }
 function renderDogs(){
   const c=document.getElementById('dogs-container');
@@ -422,11 +438,18 @@ function renderDogs(){
   c.innerHTML=html;
 }
 function startBookingFor(dogId){
-  selDogId=dogId;selDate=null;selArea=null;selGroomerId=null;selTime=null;
-  csw('book');resetBookingUI();
-  document.getElementById('si-1').classList.remove('active');
+  selDogId=dogId; selDate=null; selArea=null; selGroomerId=null; selTime=null;
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
+  document.getElementById('ctab-book').classList.add('active');
+  document.getElementById('sec-book').classList.add('active');
+  resetBookingUI();
+  // mark step 1 done, go to step 2
   document.getElementById('si-1').classList.add('done');
-  goStep(2);
+  for(let i=1;i<=6;i++) document.getElementById('bs-'+i).style.display='none';
+  document.getElementById('bs-2').style.display='block';
+  document.getElementById('si-2').classList.add('active');
+  renderCal();
 }
 function openDogForm(id,fromBooking){
   bookingFromDogs=fromBooking;editDogId=id;
@@ -446,11 +469,37 @@ function openDogForm(id,fromBooking){
 async function saveDog(){
   const name=document.getElementById('df-name').value.trim();
   if(!name){alert('Dog name is required.');return}
-  const p={name,breed:document.getElementById('df-breed').value.trim(),size:document.getElementById('df-size').value,coat:document.getElementById('df-coat').value,gender:document.getElementById('df-gender').value,age:document.getElementById('df-age').value.trim(),prefs:document.getElementById('df-prefs').value.trim(),emoji:'🐶',customer_id:currentUser.id};
+  const btn=document.getElementById('dog-save-btn');
+  btn.disabled=true; btn.textContent='Saving...';
+  // only include columns that exist — strip gender/age if they cause errors
+  const p={name,breed:document.getElementById('df-breed').value.trim(),size:document.getElementById('df-size').value,coat:document.getElementById('df-coat').value,prefs:document.getElementById('df-prefs').value.trim(),emoji:'🐶',customer_id:currentUser.id};
+  // try adding gender/age — if columns don't exist Supabase will error
+  const gender=document.getElementById('df-gender').value;
+  const age=document.getElementById('df-age').value.trim();
+  if(gender) p.gender=gender;
+  if(age) p.age=age;
   let newId=editDogId;
-  if(editDogId){await db.from('dogs').update(p).eq('id',editDogId);}
-  else{const {data}=await db.from('dogs').insert(p).select().single();newId=data?.id;}
-  closeModal('ov-dog');await loadData();
+  let error;
+  if(editDogId){
+    const r=await db.from('dogs').update(p).eq('id',editDogId);
+    error=r.error;
+  } else {
+    const r=await db.from('dogs').insert(p).select().single();
+    error=r.error; newId=r.data?.id;
+  }
+  btn.disabled=false; btn.textContent=editDogId?'Update':'Save dog';
+  if(error){
+    // retry without gender/age if column missing
+    if(error.message&&error.message.includes('column')){
+      delete p.gender; delete p.age;
+      if(editDogId){await db.from('dogs').update(p).eq('id',editDogId);}
+      else{const r=await db.from('dogs').insert(p).select().single();newId=r.data?.id;}
+    } else {
+      alert('Error saving dog: '+error.message); return;
+    }
+  }
+  closeModal('ov-dog'); await loadData();
+  renderDogs();
   if(bookingFromDogs&&newId){selDogId=newId;renderDogPickList();}
 }
 async function deleteDog(){
