@@ -188,6 +188,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div class="auth-fg"><label>Password</label><input type="password" id="l-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
         <button class="auth-submit" id="l-btn" onclick="doLogin()">Sign in</button>
         <div class="auth-msg err" id="l-err"></div>
+        <div id="b-forgot-link" onclick="sendResetEmail()" style="display:none;margin-top:10px;font-size:12px;color:#4ade80;cursor:pointer;text-align:center;text-decoration:underline">Forgot password? Send reset link</div>
       </div>
       <div id="form-signup" style="display:none">
         <div class="auth-fg"><label>Your name</label><input type="text" id="s-name" placeholder="Sarah"/></div>
@@ -353,9 +354,24 @@ async function doLogin(){
   const email=document.getElementById('l-email').value.trim(),pass=document.getElementById('l-pass').value;
   const btn=document.getElementById('l-btn'),err=document.getElementById('l-err');
   if(!email||!pass){showMsg('l-err','Please fill in all fields.');return}
-  btn.disabled=true;btn.textContent='Signing in...';err.classList.remove('show');
+  btn.disabled=true;btn.innerHTML='Signing in...';err.classList.remove('show');
+  document.getElementById('b-forgot-link').style.display='none';
   const {error}=await db.auth.signInWithPassword({email,password:pass});
-  if(error){showMsg('l-err',error.message==='Invalid login credentials'?'Wrong email or password.':error.message);btn.disabled=false;btn.textContent='Sign in';}
+  if(error){
+    const isWrong=error.message==='Invalid login credentials';
+    showMsg('l-err',isWrong?'Wrong email or password.':error.message);
+    if(isWrong) document.getElementById('b-forgot-link').style.display='block';
+    btn.disabled=false;btn.innerHTML='Sign in';
+  }
+}
+async function sendResetEmail(){
+  const email=document.getElementById('l-email').value.trim();
+  const link=document.getElementById('b-forgot-link');
+  if(!email){showMsg('l-err','Enter your email above first.');return}
+  link.textContent='Sending…';
+  const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:'https://homepawgrooming.vercel.app/booking.html'});
+  if(error){showMsg('l-err',error.message);link.textContent='Forgot password? Send reset link';}
+  else{link.textContent='✓ Reset link sent! Check your email.';link.style.color='#86efac';link.onclick=null;}
 }
 async function doSignup(){
   const name=document.getElementById('s-name').value.trim(),email=document.getElementById('s-email').value.trim(),pass=document.getElementById('s-pass').value,phone=document.getElementById('s-phone').value.trim(),area=document.getElementById('s-area').value;
