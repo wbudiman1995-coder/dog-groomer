@@ -393,16 +393,23 @@ function sw(tab) {
 }
 
 async function loadAll() {
-  const [dr,vr,ar] = await Promise.all([
-    db.from('dogs').select('*').order('created_at',{ascending:false}),
-    db.from('visits').select('*,dogs(name,emoji,owner,area,size)').order('visited_at',{ascending:false}),
-    db.from('appointments').select('*,dogs(name,emoji,area,address,wa,size,prefs,owner)').order('appt_date').order('appt_time')
-  ]);
-  dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[];
-  renderDogs();
-  const opts=dogs.map(d=>`<option value="${d.id}">${d.emoji||'🐶'} ${d.name}</option>`).join('');
-  document.getElementById('hd').innerHTML='<option value="">All dogs</option>'+opts;
-  document.getElementById('appt-dog').innerHTML='<option value="">Select dog…</option>'+opts;
+  try {
+    const [dr,vr,ar] = await Promise.all([
+      db.from('dogs').select('*').order('created_at',{ascending:false}),
+      db.from('visits').select('*,dogs(name,emoji,owner,area,size)').order('visited_at',{ascending:false}),
+      db.from('appointments').select('*,dogs(name,emoji,area,address,wa,size,prefs,owner)').order('appt_date').order('appt_time')
+    ]);
+    if(dr.error) throw dr.error;
+    if(vr.error) throw vr.error;
+    dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[];
+    renderDogs();
+    const opts=dogs.map(d=>`<option value="${d.id}">${d.emoji||'🐶'} ${d.name}</option>`).join('');
+    document.getElementById('hd').innerHTML='<option value="">All dogs</option>'+opts;
+    document.getElementById('appt-dog').innerHTML='<option value="">Select dog2026</option>'+opts;
+  } catch(e) {
+    console.error('loadAll error:',e);
+    document.getElementById('dog-grid').innerHTML=`<div class="empty"><span class="empty-icon">⚠️</span>Error: ${e.message}</div>`;
+  }
 }
 
 function renderDogs(){
@@ -797,9 +804,10 @@ async function saveSched(){
 
 /* AUTH */
 async function initAuth(){
+  document.getElementById('auth-screen').classList.add('show');
   const {data:{session}} = await db.auth.getSession();
   if(session){ showApp(); }
-  else { document.getElementById('auth-screen').classList.add('show'); setTimeout(()=>document.getElementById('auth-email').focus(),300); }
+  else { setTimeout(()=>document.getElementById('auth-email').focus(),300); }
   db.auth.onAuthStateChange((_,session)=>{
     if(session){ showApp(); } else { showLogin(); }
   });
