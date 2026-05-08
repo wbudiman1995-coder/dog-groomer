@@ -185,7 +185,7 @@ const SLOTS=['08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12
 </div>
 
 <!-- MAIN APP -->
-<nav class="nav">
+<nav class="nav" id="main-nav" style="display:none">
   <div class="nav-brand">🐾 My Grooming</div>
   <div style="display:flex;align-items:center;gap:8px">
     <div class="nav-tabs">
@@ -198,7 +198,7 @@ const SLOTS=['08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12
   </div>
 </nav>
 
-<div class="page">
+<div class="page" id="main-page" style="display:none">
 
   <!-- BOOK -->
   <div class="sec active" id="sec-book">
@@ -407,18 +407,30 @@ function showAuthErr(id,msg){
 async function doCustomerLogout(){await db.auth.signOut();}
 
 async function initCustomerAuth(){
+  // Always show login screen first while we check session
+  document.getElementById('auth-screen').classList.add('show');
+  document.getElementById('main-nav').style.display='none';
+  document.getElementById('main-page').style.display='none';
+
   const {data:{session}}=await db.auth.getSession();
   if(session){await onLogin(session.user);}
-  else{document.getElementById('auth-screen').classList.add('show');}
+
   db.auth.onAuthStateChange(async(_,session)=>{
     if(session){await onLogin(session.user);}
-    else{currentUser=null;document.getElementById('auth-screen').classList.add('show');}
+    else{
+      currentUser=null;
+      document.getElementById('auth-screen').classList.add('show');
+      document.getElementById('main-nav').style.display='none';
+      document.getElementById('main-page').style.display='none';
+    }
   });
 }
 
 async function onLogin(user){
   currentUser=user;
   document.getElementById('auth-screen').classList.remove('show');
+  document.getElementById('main-nav').style.display='flex';
+  document.getElementById('main-page').style.display='block';
   await Promise.all([loadCustomerData(),loadGroomers()]);
   renderMiniCal();
 }
