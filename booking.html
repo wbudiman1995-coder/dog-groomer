@@ -221,6 +221,7 @@ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
       <button class="nav-tab active" onclick="sw('dogs')" id="tab-dogs">🐕 My Dogs</button>
       <button class="nav-tab" onclick="sw('book')" id="tab-book">📅 Book</button>
       <button class="nav-tab" onclick="sw('appointments')" id="tab-appointments">🗓️ Appointments</button>
+      <button class="nav-tab" onclick="sw('profile')" id="tab-profile">👤 My Profile</button>
     </div>
     <button class="btn btn-g btn-sm" onclick="doSignOut()">Sign out</button>
   </nav>
@@ -245,6 +246,38 @@ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
     <div class="sec" id="sec-appointments">
       <div style="font-size:16px;font-weight:600;margin-bottom:1rem">My appointments</div>
       <div id="appt-list"><div class="loading"><span class="spin"></span>Loading…</div></div>
+    </div>
+
+
+    <!-- PROFILE -->
+    <div class="sec" id="sec-profile">
+      <div style="font-size:16px;font-weight:600;margin-bottom:1rem">My profile</div>
+
+      <!-- Customer info -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;margin-bottom:1rem">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.9rem;display:flex;align-items:center;gap:6px">
+          👤 Personal information
+        </div>
+        <div class="form-grid">
+          <div class="fg"><label>Full name</label><input id="p-name" placeholder="Sarah"/></div>
+          <div class="fg"><label>WhatsApp</label><input id="p-wa" placeholder="08xxxxxxxxxx"/></div>
+          <div class="fg full"><label>Address</label><input id="p-addr" placeholder="Jl. Kemang Raya No.10, Jakarta Selatan"/></div>
+          <div class="fg"><label>Area</label><input id="p-area" placeholder="e.g. Kemang"/></div>
+          <div class="fg"><label>Email</label><input id="p-email" disabled style="background:#f0e8dd;color:var(--muted)"/></div>
+        </div>
+        <div style="margin-top:1rem">
+          <button class="btn btn-p" onclick="saveProfile()">💾 Save profile</button>
+          <span id="p-saved" style="font-size:12px;color:var(--green-dk);margin-left:.75rem;display:none">✓ Saved!</span>
+        </div>
+      </div>
+
+      <!-- Dogs section -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.9rem">
+          🐕 My dogs
+        </div>
+        <div class="dog-grid" id="profile-dog-grid"></div>
+      </div>
     </div>
 
   </div>
@@ -457,6 +490,7 @@ async function loadMyData(){
   userProfile=pr.data;myDogs=dr.data||[];myAppts=ar.data||[];allGroomers=gr.data||[];
   renderWelcome();
   renderMyDogs();
+  loadProfileForm();
 }
 
 function renderWelcome(){
@@ -474,6 +508,7 @@ function sw(tab){
   document.getElementById('tab-'+tab).classList.add('active');
   document.getElementById('sec-'+tab).classList.add('active');
   if(tab==='appointments')renderAppts();
+  if(tab==='profile'){loadProfileForm();}
   if(tab==='book')startBooking();
 }
 
@@ -632,8 +667,8 @@ function renderStep2(){
           <div class="svc-name">${addonLabels[k]}</div>
           <div class="svc-dur">${addonDur[k]}${PRICES[k]?` · +${fmtRp(PRICES[k][sz])}`:'  · Gratis'}</div>
         </div>`).join('')}
-      <div class="svc-option">
-        <input type="checkbox" checked disabled/>
+      <div class="svc-option${bk.services.addons.includes('parfume')?' selected':''}" onclick="toggleAddon('parfume')">
+        <input type="checkbox" ${bk.services.addons.includes('parfume')?'checked':''}/>
         <div class="svc-name">Parfume</div>
         <div class="svc-dur">Gratis</div>
       </div>
@@ -1048,6 +1083,61 @@ async function changeAppt(id){
     price:a.price_total||0
   };
   sw('book');
+}
+
+
+// ── PROFILE ──────────────────────────────────────────────────
+function renderProfileDogs(){
+  const g=document.getElementById('profile-dog-grid');
+  if(!g)return;
+  let html=myDogs.map(d=>`
+    <div class="dog-card" onclick="editDog('${d.id}')">
+      <div class="dog-av">${d.emoji||'🐶'}</div>
+      <div class="dog-nm">${d.name}</div>
+      <div class="dog-br">${d.breed||'—'}</div>
+      ${sizeBadge(d.size)}
+      <div style="display:flex;gap:6px;justify-content:center;margin-top:.75rem">
+        <button class="btn btn-p btn-sm" onclick="event.stopPropagation();bookForDog('${d.id}')">📅 Book</button>
+        <button class="btn btn-g btn-sm" onclick="event.stopPropagation();editDog('${d.id}')">✏️ Edit</button>
+      </div>
+    </div>`).join('');
+  html+=`<div class="dog-card add-card" onclick="openAddDog()">
+    <div style="font-size:28px;margin-bottom:6px">+</div>
+    <div style="font-size:13px;font-weight:500">Add dog</div>
+  </div>`;
+  g.innerHTML=html;
+}
+
+function loadProfileForm(){
+  if(!currentUser)return;
+  document.getElementById('p-email').value=currentUser.email||'';
+  if(userProfile){
+    document.getElementById('p-name').value=userProfile.name||'';
+    document.getElementById('p-wa').value=userProfile.phone||'';
+    document.getElementById('p-addr').value=userProfile.address||'';
+    document.getElementById('p-area').value=userProfile.area||'';
+  }
+  renderProfileDogs();
+}
+
+async function saveProfile(){
+  if(!currentUser)return;
+  const p={
+    id:currentUser.id,
+    name:document.getElementById('p-name').value.trim(),
+    phone:document.getElementById('p-wa').value.trim(),
+    address:document.getElementById('p-addr').value.trim(),
+    area:document.getElementById('p-area').value.trim()
+  };
+  const{error}=await db.from('customer_profiles').upsert(p);
+  if(error){alert('Error saving: '+error.message);return;}
+  userProfile={...userProfile,...p};
+  // Show saved confirmation
+  const saved=document.getElementById('p-saved');
+  saved.style.display='inline';
+  setTimeout(()=>{saved.style.display='none';},2000);
+  // Update welcome bar
+  renderWelcome();
 }
 
 // ── INIT ─────────────────────────────────────────────────────
