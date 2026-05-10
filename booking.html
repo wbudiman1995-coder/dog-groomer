@@ -4,656 +4,1053 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🐾 Home Paw Grooming</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{--green:#16a34a;--green-lt:#dcfce7;--green-md:#4ade80;--green-dk:#15803d;--red:#fee2e2;--red-t:#991b1b;--border:#e5e7eb;--bg:#f9fafb;--surface:#fff;--text:#111827;--muted:#6b7280;--subtle:#f3f4f6;--r:8px;--rl:14px;--sh:0 1px 4px rgba(0,0,0,.08)}
+:root{
+  /* Home Paw brand palette — from poster */
+  --brown:#3d1f0d;         /* deep dark brown */
+  --brown-lt:#f9d9a8;      /* light orange card bg */
+  --brown-md:#e8822a;      /* orange accent */
+  --green:#e8822a;--green-lt:#fdefd8;--green-dk:#c46d1a;
+  --red:#fee2e2;--red-t:#991b1b;--amber:#fef3c7;--amb-t:#92400e;
+  --blue-lt:#eff6ff;--blue-t:#1e40af;
+  --bg:#f5ead8;            /* warm cream */
+  --surface:#fffdf9;       /* off-white */
+  --border:#e8d5b7;        /* warm beige border */
+  --text:#3d1f0d;          /* dark brown */
+  --muted:#8b6347;         /* medium warm brown */
+  --subtle:#fdf3e7;        /* very light cream */
+  --r:8px;--rl:14px;--sh:0 1px 3px rgba(61,31,13,.1);
+}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
-#auth-screen{display:none;position:fixed;inset:0;z-index:999;background:#0a1a0d;align-items:center;justify-content:center;padding:1rem}
-#auth-screen.show{display:flex}
-.auth-blob{position:absolute;border-radius:50%;filter:blur(80px);opacity:.15;pointer-events:none}
-.auth-inner{position:relative;z-index:1;width:100%;max-width:400px}
-.auth-logo{text-align:center;margin-bottom:1.5rem}
-.auth-logo-icon{font-size:52px;display:block;margin-bottom:.5rem;animation:pop .5s cubic-bezier(.34,1.56,.64,1) both}
-@keyframes pop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
-.auth-logo-title{font-size:20px;font-weight:700;color:#fff;letter-spacing:-.5px}
-.auth-logo-brand{font-size:24px;font-weight:800;color:#4ade80;letter-spacing:-.5px;margin-top:2px}
-.auth-logo-sub{font-size:12px;color:#86efac;opacity:.8;margin-top:4px}
-.auth-card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:1.75rem;backdrop-filter:blur(16px)}
-.auth-tabs{display:flex;background:rgba(0,0,0,.25);border-radius:10px;padding:3px;margin-bottom:1.5rem;gap:2px}
-.auth-tab{flex:1;padding:8px;text-align:center;border:none;background:transparent;color:rgba(255,255,255,.45);font-size:13px;font-weight:600;cursor:pointer;border-radius:8px;transition:all .2s}
-.auth-tab.active{background:var(--green);color:#fff}
-.auth-fg{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
-.auth-fg label{font-size:11px;font-weight:600;color:#86efac;text-transform:uppercase;letter-spacing:.06em}
-.auth-fg input,.auth-fg select{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:11px 13px;font-size:14px;color:#fff;transition:border-color .2s;width:100%}
-.auth-fg input:focus,.auth-fg select:focus{outline:none;border-color:#4ade80;background:rgba(255,255,255,.1)}
-.auth-fg input::placeholder{color:rgba(255,255,255,.25)}
-.auth-fg select option{background:#1a2e1d;color:#fff}
-.auth-submit{width:100%;padding:13px;background:var(--green);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:4px;transition:all .15s}
-.auth-submit:hover{background:var(--green-dk)}
-.auth-submit:disabled{opacity:.45;cursor:not-allowed}
-.auth-msg{border-radius:8px;padding:9px 13px;font-size:12px;margin-top:10px;display:none}
-.auth-msg.show{display:block}
-.auth-msg.err{background:#fee2e2;color:#991b1b}
-.auth-msg.ok{background:#dcfce7;color:#15803d}
-.nav{background:var(--surface);border-bottom:1px solid var(--border);height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 1.25rem;position:sticky;top:0;z-index:100;box-shadow:var(--sh)}
-.nav-brand{font-weight:700;font-size:15px}
-.nav-right{display:flex;align-items:center;gap:8px}
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem;background:linear-gradient(160deg,#3d1f0d 0%,#e8822a 100%)}
+.auth-box{background:#fffdf9;border-radius:24px;padding:2rem;width:100%;max-width:370px;box-shadow:0 8px 40px rgba(61,31,13,.2)}
+.auth-logo{text-align:center;font-size:40px;margin-bottom:.3rem}
+.auth-brand{text-align:center;font-size:20px;font-weight:700;color:var(--brown);margin-bottom:.15rem}
+.auth-tagline{text-align:center;font-size:12px;color:var(--muted);margin-bottom:1.5rem}
+.auth-fg{display:flex;flex-direction:column;gap:5px;margin-bottom:.75rem}
+.auth-fg label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.auth-fg input{padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:14px;background:var(--subtle);width:100%;transition:border-color .15s}
+.auth-fg input:focus{outline:none;border-color:var(--brown);background:#fff}
+.auth-btn{width:100%;padding:11px;border:none;border-radius:var(--r);background:var(--brown);color:#fff;font-size:14px;font-weight:600;cursor:pointer;margin-top:.25rem}
+.auth-btn:hover{background:#6b3418}
+.auth-err{background:var(--red);color:var(--red-t);border-radius:var(--r);padding:8px 11px;font-size:12px;margin-bottom:.75rem;display:none}
+.auth-ok{background:var(--green-lt);color:var(--green-dk);border-radius:var(--r);padding:8px 11px;font-size:12px;margin-bottom:.75rem;display:none}
+.auth-link{text-align:center;font-size:12px;color:var(--muted);margin-top:.75rem}
+.auth-link a{color:var(--brown);text-decoration:none;font-weight:500}
+.auth-switch{text-align:center;font-size:13px;color:var(--muted);margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)}
+.auth-switch a{color:var(--brown);font-weight:600;text-decoration:none}
+.nav{background:var(--surface);border-bottom:1px solid var(--border);height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 1.25rem;position:sticky;top:0;z-index:100;box-shadow:var(--sh)}
+.nav-brand{font-weight:700;font-size:15px;color:var(--brown)}
 .nav-tabs{display:flex;gap:2px;background:var(--subtle);border-radius:var(--r);padding:3px}
-.nav-tab{padding:5px 12px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);transition:all .15s;white-space:nowrap}
+.nav-tab{padding:5px 12px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:500;color:var(--muted);transition:all .15s;white-space:nowrap}
 .nav-tab.active{background:var(--surface);color:var(--text);box-shadow:var(--sh)}
-.signout-btn{font-size:12px;color:var(--muted);background:transparent;border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer}
-.signout-btn:hover{border-color:var(--green);color:var(--green)}
-.page{max-width:640px;margin:0 auto;padding:1.25rem}
+.page{max-width:700px;margin:0 auto;padding:1.25rem}
 .sec{display:none}.sec.active{display:block}
-.btn{padding:8px 16px;border-radius:var(--r);border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;display:inline-flex;align-items:center;gap:5px}
-.btn-p{background:var(--green);color:#fff}.btn-p:hover{background:var(--green-dk)}
+.welcome-bar{background:linear-gradient(135deg,var(--brown) 0%,var(--brown-md) 100%);color:#fff;border-radius:var(--rl);padding:1rem 1.25rem;margin-bottom:1.25rem}.welcome-name{font-size:16px;font-weight:600}
+.welcome-sub{font-size:12px;opacity:.85;margin-top:3px}
+.btn{padding:7px 16px;border-radius:var(--r);border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:5px}
+.btn-p{background:var(--brown);color:#fff}.btn-p:hover{background:#6b3418}
 .btn-g{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-g:hover{background:var(--subtle);color:var(--text)}
 .btn-d{background:var(--red);color:var(--red-t);border:1px solid #fca5a5}
-.btn-sm{padding:5px 11px;font-size:12px}
-.btn-full{width:100%;justify-content:center;padding:13px;font-size:14px}
-.fg{display:flex;flex-direction:column;gap:5px;margin-bottom:13px}
-.fg label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
-.fg input,.fg select,.fg textarea{padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle);color:var(--text);width:100%;transition:border-color .15s}
-.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--green);background:#fff}
-.fg textarea{resize:vertical;min-height:70px}
-.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem}
-.sec-title{font-size:17px;font-weight:700}
-.loading{text-align:center;padding:3rem;color:var(--muted)}
-.spin{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
-@keyframes spin{to{transform:rotate(360deg)}}
-.empty{text-align:center;padding:2.5rem 1rem;color:var(--muted)}
-.empty-icon{font-size:32px;display:block;margin-bottom:10px}
-.err-inline{background:var(--red);color:var(--red-t);border-radius:7px;padding:9px 12px;font-size:12px;margin-top:8px;display:none}
-.err-inline.show{display:block}
-.dogs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-bottom:1.25rem}
-.dog-card{background:var(--surface);border:2px solid var(--border);border-radius:var(--rl);padding:1rem;transition:border-color .15s,box-shadow .15s}
-.dog-card:hover{border-color:var(--green-md);box-shadow:0 2px 12px rgba(22,163,74,.1)}
-.dog-card-av{width:40px;height:40px;border-radius:50%;background:var(--green-lt);display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:.6rem}
-.dog-card-name{font-weight:700;font-size:14px;margin-bottom:4px}
-.dog-card-meta{font-size:11px;color:var(--muted);line-height:1.6}
-.dog-card-actions{display:flex;gap:5px;margin-top:.75rem}
-.add-dog-card{background:var(--subtle);border:2px dashed var(--border);border-radius:var(--rl);padding:1rem;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;min-height:150px;color:var(--muted)}
-.add-dog-card:hover{border-color:var(--green-md);color:var(--green);background:var(--green-lt)}
-.add-dog-card-icon{font-size:28px;margin-bottom:6px}
-.add-dog-card-lbl{font-size:13px;font-weight:600}
-.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:1rem}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn-green{background:var(--green);color:#fff}.btn-green:hover{background:var(--green-dk)}
+.dog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.dog-card{background:var(--surface);border:2px solid var(--border);border-radius:var(--rl);padding:1rem;cursor:pointer;position:relative;transition:all .15s;text-align:center}
+.dog-card:hover,.dog-card.selected{border-color:var(--brown);box-shadow:0 2px 12px rgba(124,63,30,.15)}
+.dog-card.selected{background:var(--brown-lt)}
+.dog-card.add-card{border-style:dashed;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:130px}
+.dog-card.add-card:hover{border-color:var(--brown-md);color:var(--brown)}
+.dog-av{width:44px;height:44px;border-radius:50%;background:var(--brown-lt);display:flex;align-items:center;justify-content:center;font-size:20px;margin:0 auto .5rem}
+.dog-nm{font-weight:600;font-size:14px}
+.dog-br{font-size:11px;color:var(--muted);margin-top:2px}
+.badge{display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:600;margin-top:4px}
+.bl{background:var(--red);color:var(--red-t)}.bm{background:var(--amber);color:var(--amb-t)}.bs{background:var(--green-lt);color:var(--green-dk)}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;align-items:center;justify-content:center;padding:1rem}
 .overlay.open{display:flex}
-.modal{background:var(--surface);border-radius:18px;padding:1.5rem;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.18)}
-.modal-title{font-size:16px;font-weight:700;margin-bottom:1.25rem}
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.form-grid .full{grid-column:1/-1}
-.modal-actions{display:flex;gap:8px;margin-top:1.25rem;flex-wrap:wrap}
-.steps-bar{display:flex;align-items:center;margin-bottom:1.5rem;padding:.75rem 1rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--sh)}
-.step-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative}
-.step-item:not(:last-child)::after{content:'';position:absolute;right:0;top:12px;width:50%;height:2px;background:var(--border);z-index:0;left:50%}
-.step-item.done:not(:last-child)::after{background:var(--green-md)}
-.step-dot{width:26px;height:26px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--muted);background:var(--surface);position:relative;z-index:1;transition:all .2s}
-.step-item.active .step-dot{border-color:var(--green);color:var(--green);background:var(--green-lt)}
-.step-item.done .step-dot{border-color:var(--green);background:var(--green);color:#fff}
-.step-lbl{font-size:10px;font-weight:600;color:var(--muted);text-align:center;white-space:nowrap}
-.step-item.active .step-lbl{color:var(--green)}
-.step-item.done .step-lbl{color:var(--green-dk)}
-.step-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--sh)}
-.step-title{font-size:16px;font-weight:700;margin-bottom:.25rem}
-.step-sub{font-size:12px;color:var(--muted);margin-bottom:1.25rem}
-.step-nav{display:flex;gap:8px;margin-top:1.25rem}
-.dog-pick-list{display:flex;flex-direction:column;gap:8px;margin-bottom:1rem}
-.dog-pick-item{display:flex;align-items:center;gap:12px;padding:.75rem 1rem;border:2px solid var(--border);border-radius:var(--rl);cursor:pointer;transition:all .15s}
-.dog-pick-item:hover{border-color:var(--green-md)}
-.dog-pick-item.selected{border-color:var(--green);background:var(--green-lt)}
-.dog-pick-av{width:36px;height:36px;border-radius:50%;background:var(--green-lt);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
-.dog-pick-info{flex:1}
-.dog-pick-name{font-weight:700;font-size:13px}
-.dog-pick-meta{font-size:11px;color:var(--muted)}
-.dog-pick-check{width:20px;height:20px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px}
-.dog-pick-item.selected .dog-pick-check{background:var(--green);border-color:var(--green);color:#fff}
-.cal-wrap{margin-bottom:1rem}
-.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
-.cal-nav-title{font-size:14px;font-weight:600}
-.cal-hdrs{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px}
-.cal-hdr{text-align:center;font-size:10px;font-weight:600;color:var(--muted);padding:4px}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
-.cal-day{text-align:center;padding:9px 4px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;border:2px solid transparent;color:var(--muted);position:relative}
-.cal-day:hover:not(.disabled):not(.empty){background:var(--green-lt);color:var(--green-dk)}
-.cal-day.today{color:var(--green);font-weight:700}
-.cal-day.selected{background:var(--green);color:#fff}
-.cal-day.disabled{opacity:.3;cursor:not-allowed}
-.cal-day.has-slot::after{content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--green)}
-.cal-day.selected::after{background:#fff}
-.area-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:1rem}
-.area-chip{padding:10px 14px;border:2px solid var(--border);border-radius:var(--rl);cursor:pointer;transition:all .15s;background:var(--surface);text-align:center}
-.area-chip:hover:not(.area-unavail){border-color:var(--green-md)}
-.area-chip.selected{border-color:var(--green);background:var(--green-lt)}
-.area-chip.area-unavail{opacity:.35;cursor:not-allowed}
-.area-chip-name{font-size:13px;font-weight:600}
-.area-chip.selected .area-chip-name{color:var(--green-dk)}
-.area-chip-sub{font-size:10px;color:var(--muted);margin-top:2px}
-.groomer-list{display:flex;flex-direction:column;gap:8px;margin-bottom:1rem}
-.groomer-item{display:flex;align-items:center;gap:12px;padding:.9rem 1rem;border:2px solid var(--border);border-radius:var(--rl);cursor:pointer;transition:all .15s}
-.groomer-item:hover:not(.unavailable){border-color:var(--green-md)}
-.groomer-item.selected{border-color:var(--green);background:var(--green-lt)}
-.groomer-item.unavailable{opacity:.4;cursor:not-allowed}
-.groomer-av{width:38px;height:38px;border-radius:50%;background:var(--subtle);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;border:1px solid var(--border)}
-.groomer-info{flex:1}
-.groomer-name{font-weight:700;font-size:13px}
-.groomer-areas{font-size:11px;color:var(--muted);margin-top:2px}
-.groomer-check{width:20px;height:20px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px}
-.groomer-item.selected .groomer-check{background:var(--green);border-color:var(--green);color:#fff}
-.slots-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:1rem}
-.slot{padding:9px 4px;border:1.5px solid var(--border);border-radius:8px;text-align:center;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;background:var(--surface)}
-.slot:hover:not(.taken){border-color:var(--green-md);background:var(--green-lt)}
-.slot.selected{border-color:var(--green);background:var(--green);color:#fff;font-weight:700}
-.slot.taken{opacity:.3;cursor:not-allowed;background:var(--subtle);text-decoration:line-through}
-.summary-rows{background:var(--subtle);border-radius:var(--rl);padding:1rem;display:flex;flex-direction:column;gap:8px;margin-bottom:1.25rem}
-.summary-row{display:flex;align-items:flex-start;gap:10px;font-size:13px}
-.summary-icon{font-size:15px;flex-shrink:0;width:20px;text-align:center;margin-top:1px}
-.summary-lbl{color:var(--muted);font-size:11px;font-weight:600;min-width:60px;padding-top:1px}
-.summary-val{font-weight:600;flex:1}
-.appt-list{display:flex;flex-direction:column;gap:10px}
-.appt-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--sh)}
-.appt-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-.appt-date{font-weight:700;font-size:14px}
-.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700}
-.badge-pending{background:#fef3c7;color:#92400e}
-.badge-confirmed{background:var(--green-lt);color:var(--green-dk)}
-.badge-done{background:var(--subtle);color:var(--muted)}
-.appt-meta{font-size:12px;color:var(--muted);line-height:1.7}
-.success-box{text-align:center;padding:2rem 1.5rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--sh)}
-.success-icon{font-size:48px;display:block;margin-bottom:1rem;animation:pop .5s cubic-bezier(.34,1.56,.64,1) both}
-.success-title{font-size:20px;font-weight:700;color:var(--green-dk);margin-bottom:.5rem}
-.success-detail{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:1.25rem}
-.wa-note{background:var(--green-lt);border:1px solid var(--green-md);border-radius:var(--r);padding:.75rem 1rem;font-size:12px;color:var(--green-dk);margin-bottom:1.25rem;text-align:left}
-.sect-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:1rem 0 .5rem}
+.modal{background:var(--surface);border-radius:20px;padding:1.5rem;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+.modal-title{font-size:16px;font-weight:600;margin-bottom:1.25rem}
+.fg{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.fg label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.fg input,.fg select,.fg textarea{padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle);color:var(--text);width:100%;transition:border-color .15s}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--brown);background:#fff}
+.fg textarea{resize:vertical;min-height:60px}
+.form-actions{display:flex;gap:8px;margin-top:1.25rem;flex-wrap:wrap}
+
+/* BOOKING STEPS */
+.step-bar{display:flex;gap:4px;margin-bottom:1.25rem;flex-wrap:wrap}
+.step{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;background:var(--subtle);color:var(--muted)}
+.step.active{background:var(--brown);color:#fff}
+.step.done{background:var(--green-lt);color:var(--green-dk)}
+.step-panel{display:none}.step-panel.active{display:block}
+.step-title{font-size:15px;font-weight:600;margin-bottom:1rem}
+
+/* SERVICES */
+.svc-block{margin-bottom:.75rem}
+.svc-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.svc-option{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r);margin-bottom:6px;cursor:pointer;transition:all .15s}
+.svc-option:hover{border-color:var(--brown-md)}
+.svc-option.selected{border-color:var(--brown);background:var(--brown-lt)}
+.svc-option input[type=radio],.svc-option input[type=checkbox]{accent-color:var(--brown);width:16px;height:16px;flex-shrink:0}
+.svc-name{font-size:13px;font-weight:500;flex:1}
+.svc-dur{font-size:11px;color:var(--muted)}
+.dur-badge{background:var(--brown-lt);color:var(--brown);padding:3px 9px;border-radius:20px;font-size:12px;font-weight:600;margin-top:.5rem;display:inline-block}
+
+/* CALENDAR PICKER */
+.month-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
+.month-title{font-size:14px;font-weight:600}
+.date-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.date-dh{text-align:center;font-size:10px;font-weight:600;color:var(--muted);padding:3px;text-transform:uppercase}
+.date-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:var(--r);font-size:13px;cursor:pointer;border:1.5px solid transparent;transition:all .12s}
+.date-cell:hover:not(.disabled):not(.empty-cell){background:var(--brown-lt);border-color:var(--brown-md)}
+.date-cell.selected{background:var(--brown);color:#fff;border-color:var(--brown)}
+.date-cell.today{border-color:var(--brown-md);font-weight:600}
+.date-cell.disabled{color:#d1d5db;cursor:not-allowed}
+.date-cell.has-slots{position:relative}
+.date-cell.has-slots::after{content:'';position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--green)}
+.date-cell.empty-cell{cursor:default}
+
+/* TIME SLOTS */
+.slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px}
+.slot{padding:9px;border:1.5px solid var(--border);border-radius:var(--r);text-align:center;cursor:pointer;transition:all .12s;font-size:13px;font-weight:500}
+.slot:hover{border-color:var(--brown-md);background:var(--brown-lt)}
+.slot.selected{border-color:var(--brown);background:var(--brown);color:#fff}
+.slot.taken{background:var(--subtle);color:#d1d5db;cursor:not-allowed;border-color:var(--border)}
+
+/* APPOINTMENTS LIST */
+.appt-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;margin-bottom:.75rem;position:relative}
+.appt-status{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:600}
+.st-pending{background:var(--amber);color:var(--amb-t)}
+.st-confirmed{background:var(--blue-lt);color:var(--blue-t)}
+.st-done{background:var(--green-lt);color:var(--green-dk)}
+
+/* RECEIPT */
+.receipt{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;max-width:420px;margin:0 auto}
+.receipt-header{background:var(--brown);padding:1.1rem;text-align:center;color:#fff}
+.receipt-brand{font-size:18px;font-weight:700;letter-spacing:.5px}
+.receipt-tagline{font-size:10px;opacity:.8;margin-top:2px;text-transform:uppercase;letter-spacing:1.5px}
+.receipt-section{padding:.9rem 1.1rem;border-bottom:1px solid var(--border)}
+.receipt-section:last-child{border-bottom:none}
+.receipt-lbl{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.receipt-row{display:flex;justify-content:space-between;align-items:flex-start;padding:3px 0;font-size:12px}
+.receipt-row .lft{color:var(--muted)}
+.receipt-row .rgt{font-weight:500;text-align:right;max-width:220px}
+.receipt-svc-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px}
+.receipt-svc-row:last-child{border-bottom:none}
+.receipt-total{display:flex;justify-content:space-between;padding:8px 0;font-size:15px;font-weight:600}
+.receipt-total .rgt{color:var(--brown)}
+
+.loading{text-align:center;padding:2.5rem;color:var(--muted)}
+.spin{display:inline-block;width:17px;height:17px;border:2px solid var(--border);border-top-color:var(--brown-md);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:2.5rem 1rem;color:var(--muted);font-size:13px}
+.empty-icon{font-size:30px;display:block;margin-bottom:8px}
 </style>
 </head>
 <body>
 
-<div id="auth-screen">
-  <div class="auth-blob" style="width:600px;height:600px;background:#16a34a;top:-200px;right:-200px"></div>
-  <div class="auth-blob" style="width:400px;height:400px;background:#4ade80;bottom:-150px;left:-150px"></div>
-  <div class="auth-inner">
-    <div class="auth-logo">
-      <span class="auth-logo-icon">🐾</span>
-      <div class="auth-logo-title">Welcome to</div>
-      <div class="auth-logo-brand">Home Paw Grooming</div>
-      <div class="auth-logo-sub">Mobile dog grooming · Jakarta</div>
+<script>
+const SUPABASE_URL  = "https://cwqrpslypcjgjuxagglc.supabase.co";
+const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
+</script>
+
+<!-- AUTH -->
+<div id="screen-auth">
+  <div class="auth-wrap" id="view-login">
+    <div class="auth-box">
+      <div class="auth-logo">🐾</div>
+      <div class="auth-brand">Home Paw Grooming</div>
+      <div class="auth-tagline">happy grooming starts at home</div>
+      <div class="auth-err" id="login-err"></div>
+      <div class="auth-fg"><label>Email</label><input id="l-email" type="email" placeholder="your@email.com" autocomplete="email"/></div>
+      <div class="auth-fg"><label>Password</label><input id="l-pass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+      <button class="auth-btn" onclick="doLogin()">Sign in</button>
+      <div class="auth-link"><a href="#" onclick="showView('view-forgot');return false">Forgot password?</a></div>
+      <div class="auth-switch">Don't have an account? <a href="#" onclick="showView('view-signup');return false">Sign up</a></div>
     </div>
-    <div class="auth-card">
-      <div class="auth-tabs">
-        <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Sign in</button>
-        <button class="auth-tab" id="tab-signup" onclick="switchTab('signup')">Create account</button>
-      </div>
-      <div id="form-login">
-        <div class="auth-fg"><label>Email</label><input type="email" id="l-email" placeholder="your@email.com" autocomplete="email"/></div>
-        <div class="auth-fg"><label>Password</label><input type="password" id="l-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
-        <button class="auth-submit" id="l-btn" onclick="doLogin()">Sign in</button>
-        <div class="auth-msg err" id="l-err"></div>
-        <div id="b-forgot-link" onclick="sendResetEmail()" style="display:none;margin-top:10px;font-size:12px;color:#4ade80;cursor:pointer;text-align:center;text-decoration:underline">Forgot password? Send reset link</div>
-      </div>
-      <div id="form-signup" style="display:none">
-        <div class="auth-fg"><label>Your name</label><input type="text" id="s-name" placeholder="Sarah"/></div>
-        <div class="auth-fg"><label>Email</label><input type="email" id="s-email" placeholder="your@email.com"/></div>
-        <div class="auth-fg"><label>Password</label><input type="password" id="s-pass" placeholder="Min 6 characters"/></div>
-        <div class="auth-fg"><label>WhatsApp number</label><input type="tel" id="s-phone" placeholder="08xxxxxxxxxx"/></div>
-        <div class="auth-fg"><label>Your area</label>
-          <select id="s-area"><option value="">Select area…</option><option>Jakarta Barat</option><option>Jakarta Utara</option><option>Jakarta Selatan</option><option>Jakarta Pusat</option><option>Jakarta Timur</option><option>Tangerang</option><option>Bekasi</option></select>
-        </div>
-        <button class="auth-submit" id="s-btn" onclick="doSignup()">Create account</button>
-        <div class="auth-msg err" id="s-err"></div>
-        <div class="auth-msg ok" id="s-ok"></div>
-      </div>
+  </div>
+
+  <div class="auth-wrap" id="view-signup" style="display:none">
+    <div class="auth-box">
+      <div class="auth-logo">🐾</div>
+      <div class="auth-brand">Create account</div>
+      <div class="auth-tagline">Join Home Paw Grooming</div>
+      <div class="auth-err" id="signup-err"></div>
+      <div class="auth-fg"><label>Full name</label><input id="su-name" placeholder="Sarah"/></div>
+      <div class="auth-fg"><label>Email</label><input id="su-email" type="email" placeholder="your@email.com"/></div>
+      <div class="auth-fg"><label>Password</label><input id="su-pass" type="password" placeholder="Min. 6 characters"/></div>
+      <div class="auth-fg"><label>WhatsApp</label><input id="su-wa" placeholder="08xxxxxxxxxx"/></div>
+      <div class="auth-fg"><label>Area</label><input id="su-area" placeholder="e.g. Kemang"/></div>
+      <button class="auth-btn" onclick="doSignup()">Create account</button>
+      <div class="auth-switch">Already have an account? <a href="#" onclick="showView('view-login');return false">Sign in</a></div>
+    </div>
+  </div>
+
+  <div class="auth-wrap" id="view-forgot" style="display:none">
+    <div class="auth-box">
+      <div class="auth-logo">🔑</div>
+      <div class="auth-brand">Reset password</div>
+      <div class="auth-tagline">We'll send a reset link to your email</div>
+      <div class="auth-err" id="forgot-err"></div>
+      <div class="auth-ok" id="forgot-ok">Reset link sent! Check your email.</div>
+      <div class="auth-fg"><label>Email</label><input id="f-email" type="email" placeholder="your@email.com"/></div>
+      <button class="auth-btn" onclick="doForgot()">Send reset link</button>
+      <div class="auth-switch"><a href="#" onclick="showView('view-login');return false">← Back to login</a></div>
+    </div>
+  </div>
+
+  <div class="auth-wrap" id="view-reset" style="display:none">
+    <div class="auth-box">
+      <div class="auth-logo">🔒</div>
+      <div class="auth-brand">Set new password</div>
+      <div class="auth-tagline">Choose a strong new password</div>
+      <div class="auth-err" id="reset-err"></div>
+      <div class="auth-fg"><label>New password</label><input id="r-pass" type="password" placeholder="Min. 6 characters"/></div>
+      <div class="auth-fg"><label>Confirm</label><input id="r-pass2" type="password" placeholder="Repeat password"/></div>
+      <button class="auth-btn" onclick="doReset()">Update password</button>
     </div>
   </div>
 </div>
 
-<nav class="nav" id="main-nav" style="display:none">
-  <div class="nav-brand">🐾 Home Paw Grooming</div>
-  <div class="nav-right">
+<!-- APP -->
+<div id="screen-app" style="display:none">
+  <nav class="nav">
+    <div class="nav-brand">🐾 Home Paw</div>
     <div class="nav-tabs">
-      <button class="nav-tab active" id="ctab-dogs" onclick="csw('dogs')">🐾 My Dogs</button>
-      <button class="nav-tab" id="ctab-book" onclick="csw('book')">📅 Book</button>
-      <button class="nav-tab" id="ctab-appts" onclick="csw('appts')">🗓️ Appointments</button>
+      <button class="nav-tab active" onclick="sw('dogs')" id="tab-dogs">🐕 My Dogs</button>
+      <button class="nav-tab" onclick="sw('book')" id="tab-book">📅 Book</button>
+      <button class="nav-tab" onclick="sw('appointments')" id="tab-appointments">🗓️ Appointments</button>
     </div>
-    <button class="signout-btn" onclick="doLogout()">Sign out</button>
-  </div>
-</nav>
+    <button class="btn btn-g btn-sm" onclick="doSignOut()">Sign out</button>
+  </nav>
+  <div class="page">
 
-<div class="page" id="main-page" style="display:none">
-  <div class="sec active" id="sec-dogs">
-    <!-- Welcome banner -->
-    <div id="welcome-banner" style="background:linear-gradient(135deg,#0f5132 0%,#16a34a 100%);border-radius:16px;padding:1.5rem 1.75rem;margin-bottom:1.5rem;color:#fff;position:relative;overflow:hidden">
-      <div style="position:absolute;right:-20px;top:-20px;font-size:100px;opacity:.08;line-height:1">🐾</div>
-      <div style="font-size:11px;font-weight:600;color:#86efac;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Home Paw Grooming</div>
-      <div style="font-size:22px;font-weight:700;margin-bottom:4px" id="welcome-name">Welcome back! 👋</div>
-      <div style="font-size:14px;color:#bbf7d0;margin-bottom:1.25rem" id="welcome-sub">Are you ready to book a new appointment?</div>
-      <button class="btn" style="background:#fff;color:var(--green);font-weight:700;font-size:13px;padding:9px 20px" onclick="csw('book');goStep(1)">📅 Book a session</button>
-    </div>
-    <div class="sec-hd"><div class="sec-title">My Dogs</div></div>
-    <div id="dogs-container"><div class="loading"><span class="spin"></span>Loading…</div></div>
-  </div>
-
-  <div class="sec" id="sec-book">
-    <div class="steps-bar" id="steps-bar">
-      <div class="step-item active" id="si-1"><div class="step-dot">1</div><div class="step-lbl">Dog</div></div>
-      <div class="step-item" id="si-2"><div class="step-dot">2</div><div class="step-lbl">Date</div></div>
-      <div class="step-item" id="si-3"><div class="step-dot">3</div><div class="step-lbl">Area</div></div>
-      <div class="step-item" id="si-4"><div class="step-dot">4</div><div class="step-lbl">Groomer</div></div>
-      <div class="step-item" id="si-5"><div class="step-dot">5</div><div class="step-lbl">Time</div></div>
-      <div class="step-item" id="si-6"><div class="step-dot">6</div><div class="step-lbl">Confirm</div></div>
-    </div>
-    <div class="step-card" id="bs-1">
-      <div class="step-title">Which dog?</div>
-      <div class="step-sub">Select the dog you want to groom</div>
-      <div class="dog-pick-list" id="dog-pick-list"></div>
-      <button class="btn btn-g btn-sm" onclick="openDogForm(null,true)">+ Register a new dog</button>
-      <div class="err-inline" id="err-1">Please select a dog.</div>
-      <div class="step-nav"><button class="btn btn-p btn-full" onclick="goStep(2)">Next →</button></div>
-    </div>
-    <div class="step-card" id="bs-2" style="display:none">
-      <div class="step-title">Pick a date</div>
-      <div class="step-sub">Choose your preferred grooming day</div>
-      <div class="cal-wrap">
-        <div class="cal-nav">
-          <button class="btn btn-g btn-sm" onclick="calPrev()">←</button>
-          <span class="cal-nav-title" id="cal-title"></span>
-          <button class="btn btn-g btn-sm" onclick="calNext()">→</button>
-        </div>
-        <div class="cal-hdrs"><div class="cal-hdr">Mon</div><div class="cal-hdr">Tue</div><div class="cal-hdr">Wed</div><div class="cal-hdr">Thu</div><div class="cal-hdr">Fri</div><div class="cal-hdr">Sat</div><div class="cal-hdr">Sun</div></div>
-        <div class="cal-grid" id="cal-grid"></div>
+    <!-- MY DOGS -->
+    <div class="sec active" id="sec-dogs">
+      <div id="welcome-bar" class="welcome-bar" style="display:none">
+        <div class="welcome-name" id="welcome-name"></div>
+        <div class="welcome-sub">Welcome back! Ready to book a grooming session?</div>
       </div>
-      <div class="err-inline" id="err-2">Please select a date.</div>
-      <div class="step-nav"><button class="btn btn-g" onclick="goStep(1)">← Back</button><button class="btn btn-p" onclick="goStep(3)">Next →</button></div>
+      <div class="dog-grid" id="my-dog-grid"><div class="loading"><span class="spin"></span>Loading…</div></div>
     </div>
-    <div class="step-card" id="bs-3" style="display:none">
-      <div class="step-title">Select location</div>
-      <div class="step-sub" id="s3-sub">Where should we come to you?</div>
-      <div class="area-grid" id="area-grid"></div>
-      <div class="err-inline" id="err-3">Please select an area.</div>
-      <div class="step-nav"><button class="btn btn-g" onclick="goStep(2)">← Back</button><button class="btn btn-p" onclick="goStep(4)">Next →</button></div>
-    </div>
-    <div class="step-card" id="bs-4" style="display:none">
-      <div class="step-title">Choose a groomer</div>
-      <div class="step-sub" id="s4-sub">Available groomers for your date and area</div>
-      <div class="groomer-list" id="groomer-list"></div>
-      <div class="err-inline" id="err-4">Please select a groomer.</div>
-      <div class="step-nav"><button class="btn btn-g" onclick="goStep(3)">← Back</button><button class="btn btn-p" onclick="goStep(5)">Next →</button></div>
-    </div>
-    <div class="step-card" id="bs-5" style="display:none">
-      <div class="step-title">Pick a time</div>
-      <div class="step-sub" id="s5-sub">Select an available slot</div>
-      <div class="slots-grid" id="slots-grid"></div>
-      <div class="err-inline" id="err-5">Please select a time slot.</div>
-      <div class="step-nav"><button class="btn btn-g" onclick="goStep(4)">← Back</button><button class="btn btn-p" onclick="goStep(6)">Next →</button></div>
-    </div>
-    <div class="step-card" id="bs-6" style="display:none">
-      <div class="step-title">Confirm booking</div>
-      <div class="step-sub">Review your details before confirming</div>
-      <div class="summary-rows" id="booking-summary"></div>
-      <div class="fg"><label>Notes for groomer (optional)</label><textarea id="booking-note" placeholder="e.g. Please use fragrance-free shampoo, he is scared of the dryer"></textarea></div>
-      <div class="wa-note">💬 You will receive a WhatsApp reminder 1 day before your appointment.</div>
-      <div class="err-inline" id="err-6"></div>
-      <div class="step-nav"><button class="btn btn-g" onclick="goStep(5)">← Back</button><button class="btn btn-p btn-full" id="confirm-btn" onclick="confirmBooking()">Confirm booking</button></div>
-    </div>
-    <div id="book-success" style="display:none">
-      <div class="success-box">
-        <span class="success-icon">🎉</span>
-        <div class="success-title">Booking confirmed!</div>
-        <div class="success-detail" id="success-detail"></div>
-        <div class="wa-note" style="margin:0 auto 1.25rem;max-width:340px">💬 A WhatsApp reminder will be sent to <strong id="success-wa"></strong> 1 day before your appointment.</div>
-        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-          <button class="btn btn-p" onclick="resetBooking()">Book another session</button>
-          <button class="btn btn-g" onclick="csw('appts')">View appointments</button>
-        </div>
-      </div>
-    </div>
-  </div>
 
-  <div class="sec" id="sec-appts">
-    <div class="sec-hd"><div class="sec-title">My Appointments</div></div>
-    <div id="appts-container"><div class="loading"><span class="spin"></span>Loading…</div></div>
+    <!-- BOOK -->
+    <div class="sec" id="sec-book">
+      <div class="step-bar" id="step-bar"></div>
+      <div id="step-content"></div>
+    </div>
+
+    <!-- APPOINTMENTS -->
+    <div class="sec" id="sec-appointments">
+      <div style="font-size:16px;font-weight:600;margin-bottom:1rem">My appointments</div>
+      <div id="appt-list"><div class="loading"><span class="spin"></span>Loading…</div></div>
+    </div>
+
   </div>
 </div>
 
+<!-- DOG FORM -->
 <div class="overlay" id="ov-dog">
   <div class="modal">
-    <div class="modal-title" id="dog-modal-title">Add a dog</div>
-    <div class="form-grid">
-      <div class="fg full"><label>Dog name *</label><input id="df-name" placeholder="Buddy"/></div>
-      <div class="fg"><label>Breed</label><input id="df-breed" placeholder="Poodle"/></div>
-      <div class="fg"><label>Size *</label><select id="df-size"><option value="">Select…</option><option>Small</option><option>Medium</option><option>Large</option></select></div>
-      <div class="fg"><label>Coat type</label><select id="df-coat"><option value="">Select…</option><option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option></select></div>
-      <div class="fg"><label>Gender</label><select id="df-gender"><option value="">Select…</option><option>Male</option><option>Female</option></select></div>
-      <div class="fg"><label>Age</label><input id="df-age" placeholder="e.g. 2 years or Jan 2022"/></div>
-      <div class="fg full"><label>Notes / preferences for groomer</label><textarea id="df-prefs" placeholder="e.g. Anxious around clippers. Prefers lion cut. Sensitive skin."></textarea></div>
+    <div class="modal-title" id="dog-modal-title">Add dog</div>
+    <div class="fg"><label>Dog name *</label><input id="d-name" placeholder="Buddy"/></div>
+    <div class="fg"><label>Breed</label><input id="d-breed" placeholder="Poodle"/></div>
+    <div class="fg"><label>Size *</label>
+      <select id="d-size">
+        <option value="">Select size…</option>
+        <option value="XS">XS (&lt;5kg)</option>
+        <option value="S">S (5–10kg)</option>
+        <option value="M">M (11–15kg)</option>
+        <option value="L">L (16–25kg)</option>
+      </select>
     </div>
-    <div class="modal-actions">
+    <div class="fg"><label>Coat</label>
+      <select id="d-coat">
+        <option value="">Select…</option>
+        <option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option>
+      </select>
+    </div>
+    <div class="fg"><label>Gender</label>
+      <select id="d-gender"><option value="">Select…</option><option>Male</option><option>Female</option></select>
+    </div>
+    <div class="fg"><label>Age</label><input id="d-age" placeholder="e.g. 2 years"/></div>
+    <div class="fg"><label>Notes / preferences</label><textarea id="d-prefs" placeholder="e.g. Anxious around clippers"></textarea></div>
+    <div class="form-actions">
       <button class="btn btn-p" onclick="saveDog()" id="dog-save-btn">Save dog</button>
-      <button class="btn btn-g" onclick="closeModal('ov-dog')">Cancel</button>
-      <button class="btn btn-d btn-sm" id="dog-del-btn" style="display:none;margin-left:auto" onclick="deleteDog()">Delete</button>
+      <button class="btn btn-g" onclick="cm('ov-dog')">Cancel</button>
     </div>
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- RECEIPT MODAL -->
+<div class="overlay" id="ov-receipt">
+  <div class="modal" style="max-width:460px">
+    <div id="receipt-content"></div>
+    <div style="display:flex;gap:8px;margin-top:1rem;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="downloadReceipt()">⬇️ Download PDF</button>
+      <button class="btn btn-green" id="gcal-btn" onclick="addToGCal()">📅 Add to Google Calendar</button>
+      <button class="btn btn-g" onclick="cm('ov-receipt');sw('appointments')">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
-const SUPABASE_URL="https://cwqrpslypcjgjuxagglc.supabase.co";
-const SUPABASE_ANON="sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
-const AREAS=['Jakarta Barat','Jakarta Utara','Jakarta Selatan','Jakarta Pusat','Jakarta Timur','Tangerang','Bekasi'];
-const SLOTS=['08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00'];
 const {createClient}=supabase;
 const db=createClient(SUPABASE_URL,SUPABASE_ANON);
-let currentUser=null,profile=null,myDogs=[],myAppts=[],allGroomers=[],allSchedules=[];
-let selDogId=null,selDate=null,selArea=null,selGroomerId=null,selTime=null;
-let calBase=new Date(),editDogId=null,bookingFromDogs=false;
+let currentUser=null, userProfile=null, myDogs=[], myAppts=[], allGroomers=[], editDogId=null;
+
+// Booking state
+let bk={step:1,dog:null,date:null,area:null,groomer:null,time:null,services:{base:'basic',styling:null,addons:[]},duration:0,price:0};
+let calPickerMonth=new Date();
+let changeApptId=null;
+
+// Pricing table
+const PRICES={
+  base:{XS:120000,S:140000,M:190000,L:250000},
+  styling:{XS:100000,S:100000,M:120000,L:140000},
+  botak:{XS:60000,S:60000,M:70000,L:80000},
+  dematting:{XS:50000,S:50000,M:50000,L:50000},
+  deshedding:{XS:50000,S:50000,M:50000,L:50000},
+  antifungal:{XS:50000,S:50000,M:55000,L:60000},
+  antikutu:{XS:25000,S:25000,M:30000,L:35000},
+  whitening:{XS:15000,S:15000,M:20000,L:25000}
+};
+const DURATION={
+  base:{XS:60,S:60,M:90,L:120},
+  styling:{XS:30,S:30,M:30,L:30},
+  botak:{XS:15,S:15,M:15,L:15},
+  dematting:{XS:15,S:15,M:15,L:15},
+  deshedding:{XS:15,S:15,M:15,L:30}
+};
+
+function calcDuration(size,styling,addons){
+  if(!size)return 60;
+  let d=DURATION.base[size]||60;
+  if(styling==='styling')d+=DURATION.styling[size]||30;
+  if(styling==='botak')d+=DURATION.botak[size]||15;
+  if(addons.includes('dematting'))d+=DURATION.dematting[size]||15;
+  if(addons.includes('deshedding'))d+=DURATION.deshedding[size]||15;
+  return d;
+}
+
+function calcPrice(size,styling,addons){
+  if(!size)return 0;
+  let p=PRICES.base[size]||0;
+  if(styling==='styling')p+=PRICES.styling[size]||0;
+  if(styling==='botak')p+=PRICES.botak[size]||0;
+  addons.forEach(a=>{if(PRICES[a])p+=PRICES[a][size]||0;});
+  return p;
+}
+
+function fmtRp(n){return'Rp '+n.toLocaleString('id-ID')}
 function iso(d){return d.toISOString().split('T')[0]}
-function fmtDate(ds){return new Date(ds+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
-function openModal(id){document.getElementById(id).classList.add('open')}
-function closeModal(id){document.getElementById(id).classList.remove('open')}
-function switchTab(t){['login','signup'].forEach(x=>{document.getElementById('tab-'+x).classList.toggle('active',x===t);document.getElementById('form-'+x).style.display=x===t?'block':'none';})}
-async function doLogin(){
-  const email=document.getElementById('l-email').value.trim(),pass=document.getElementById('l-pass').value;
-  const btn=document.getElementById('l-btn'),err=document.getElementById('l-err');
-  if(!email||!pass){showMsg('l-err','Please fill in all fields.');return}
-  btn.disabled=true;btn.innerHTML='Signing in...';err.classList.remove('show');
-  document.getElementById('b-forgot-link').style.display='none';
-  const {error}=await db.auth.signInWithPassword({email,password:pass});
-  if(error){
-    const isWrong=error.message==='Invalid login credentials';
-    showMsg('l-err',isWrong?'Wrong email or password.':error.message);
-    if(isWrong) document.getElementById('b-forgot-link').style.display='block';
-    btn.disabled=false;btn.innerHTML='Sign in';
-  }
-}
-async function sendResetEmail(){
-  const email=document.getElementById('l-email').value.trim();
-  const link=document.getElementById('b-forgot-link');
-  if(!email){showMsg('l-err','Enter your email above first.');return}
-  link.textContent='Sending…';
-  const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:'https://homepawgrooming.vercel.app/booking.html'});
-  if(error){showMsg('l-err',error.message);link.textContent='Forgot password? Send reset link';}
-  else{link.textContent='✓ Reset link sent! Check your email.';link.style.color='#86efac';link.onclick=null;}
-}
-async function doSignup(){
-  const name=document.getElementById('s-name').value.trim(),email=document.getElementById('s-email').value.trim(),pass=document.getElementById('s-pass').value,phone=document.getElementById('s-phone').value.trim(),area=document.getElementById('s-area').value;
-  const btn=document.getElementById('s-btn');
-  if(!name||!email||!pass){showMsg('s-err','Name, email and password required.');return}
-  if(pass.length<6){showMsg('s-err','Password must be at least 6 characters.');return}
-  btn.disabled=true;btn.textContent='Creating account...';
-  const {data,error}=await db.auth.signUp({email,password:pass});
-  if(error){showMsg('s-err',error.message);btn.disabled=false;btn.textContent='Create account';return}
-  if(data.user) await db.from('customer_profiles').upsert({id:data.user.id,name,phone,area,address:''});
-  showMsg('s-ok','Account created! Check your email to confirm, then sign in.');
-  btn.disabled=false;btn.textContent='Create account';
-}
-async function doLogout(){
-  await db.auth.signOut();
-  currentUser=null; myDogs=[]; myAppts=[];
-  document.getElementById('auth-screen').classList.add('show');
-  document.getElementById('main-nav').style.display='none';
-  document.getElementById('main-page').style.display='none';
-  document.getElementById('l-email').value='';
-  document.getElementById('l-pass').value='';
-  document.getElementById('l-err').classList.remove('show');
-  document.getElementById('l-btn').disabled=false;
-  document.getElementById('l-btn').textContent='Sign in';
-}
-function showMsg(id,msg){const el=document.getElementById(id);el.textContent=msg;el.classList.add('show');}
-async function initAuth(){
-  document.getElementById('auth-screen').classList.add('show');
-  const {data:{session}}=await db.auth.getSession();
-  if(session) await onLogin(session.user);
-  db.auth.onAuthStateChange(async(_,session)=>{
-    if(session){await onLogin(session.user);}
-    else{currentUser=null;document.getElementById('auth-screen').classList.add('show');document.getElementById('main-nav').style.display='none';document.getElementById('main-page').style.display='none';}
+function fmtDate(d){return new Date(d+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
+function cm(id){document.getElementById(id).classList.remove('open')}
+function om(id){document.getElementById(id).classList.add('open')}
+function sizeBadge(s){if(!s)return'';const cl=s==='L'?'bl':s==='M'?'bm':'bs';return`<span class="badge ${cl}">${s}</span>`}
+
+// ── AUTH ─────────────────────────────────────────────────────
+function showView(id){
+  ['view-login','view-signup','view-forgot','view-reset'].forEach(v=>{
+    document.getElementById(v).style.display=v===id?'flex':'none';
   });
 }
-async function onLogin(user){
-  currentUser=user;
-  document.getElementById('auth-screen').classList.remove('show');
-  document.getElementById('main-nav').style.display='flex';
-  document.getElementById('main-page').style.display='block';
-  await loadData();
-  // personalise welcome banner after profile loads
-  const firstName=(profile?.name||'').split(' ')[0]||'there';
-  document.getElementById('welcome-name').textContent='Welcome back, '+firstName+'! 👋';
-  document.getElementById('welcome-sub').textContent='Are you ready to book a new appointment?';
+function showApp(){
+  document.getElementById('screen-auth').style.display='none';
+  document.getElementById('screen-app').style.display='block';
+  loadMyData();
 }
-async function loadData(){
-  const uid=currentUser.id,today=iso(new Date()),future=new Date();
-  future.setDate(future.getDate()+60);
-  const [pr,dr,ar,gr,sr]=await Promise.all([
-    db.from('customer_profiles').select('*').eq('id',uid).single(),
-    db.from('dogs').select('*').eq('customer_id',uid).order('created_at'),
-    db.from('appointments').select('*,dogs(name,size,breed),groomers(name)').eq('customer_id',uid).order('appt_date',{ascending:false}),
-    db.from('groomers').select('*').order('created_at'),
-    db.from('groomer_schedules').select('*').gte('date',today).lte('date',iso(future)).eq('is_off',false)
+function showAuth(view){
+  document.getElementById('screen-app').style.display='none';
+  document.getElementById('screen-auth').style.display='block';
+  showView(view||'view-login');
+}
+
+async function initAuth(){
+  const hash=window.location.hash;
+  if(hash.includes('type=recovery')){
+    window.history.replaceState({},document.title,window.location.pathname);
+    showAuth('view-reset');
+    return;
+  }
+  const {data:{session}}=await db.auth.getSession();
+  if(session){currentUser=session.user;showApp();}
+  else{showAuth('view-login');}
+}
+
+db.auth.onAuthStateChange((event,session)=>{
+  if(event==='PASSWORD_RECOVERY'){
+    window.history.replaceState({},document.title,window.location.pathname);
+    showAuth('view-reset');
+  } else if(event==='SIGNED_IN'&&session){
+    currentUser=session.user;
+    showApp();
+  } else if(event==='SIGNED_OUT'){
+    currentUser=null;userProfile=null;myDogs=[];myAppts=[];
+    showAuth('view-login');
+  }
+});
+
+async function doLogin(){
+  const email=document.getElementById('l-email').value.trim();
+  const pass=document.getElementById('l-pass').value;
+  const err=document.getElementById('login-err');
+  err.style.display='none';
+  if(!email||!pass){err.textContent='Please enter email and password.';err.style.display='block';return}
+  const {error}=await db.auth.signInWithPassword({email,password:pass});
+  if(error){err.textContent=error.message;err.style.display='block';}
+}
+
+async function doSignup(){
+  const name=document.getElementById('su-name').value.trim();
+  const email=document.getElementById('su-email').value.trim();
+  const pass=document.getElementById('su-pass').value;
+  const wa=document.getElementById('su-wa').value.trim();
+  const area=document.getElementById('su-area').value.trim();
+  const err=document.getElementById('signup-err');
+  err.style.display='none';
+  if(!name||!email||!pass){err.textContent='Name, email and password required.';err.style.display='block';return}
+  if(pass.length<6){err.textContent='Password must be at least 6 characters.';err.style.display='block';return}
+  const {data,error}=await db.auth.signUp({email,password:pass,options:{data:{name}}});
+  if(error){err.textContent=error.message;err.style.display='block';return}
+  if(data.user){
+    await db.from('customer_profiles').upsert({id:data.user.id,name,phone:wa,area});
+  }
+}
+
+async function doForgot(){
+  const email=document.getElementById('f-email').value.trim();
+  const err=document.getElementById('forgot-err');
+  const ok=document.getElementById('forgot-ok');
+  err.style.display='none';ok.style.display='none';
+  if(!email){err.textContent='Please enter your email.';err.style.display='block';return}
+  const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+window.location.pathname});
+  if(error){err.textContent=error.message;err.style.display='block';}
+  else{ok.style.display='block';}
+}
+
+async function doReset(){
+  const p1=document.getElementById('r-pass').value;
+  const p2=document.getElementById('r-pass2').value;
+  const err=document.getElementById('reset-err');
+  err.style.display='none';
+  if(p1.length<6){err.textContent='Password must be at least 6 characters.';err.style.display='block';return}
+  if(p1!==p2){err.textContent='Passwords do not match.';err.style.display='block';return}
+  const {error}=await db.auth.updateUser({password:p1});
+  if(error){err.textContent=error.message;err.style.display='block';}
+  else{alert('Password updated!');await db.auth.signOut();}
+}
+
+async function doSignOut(){await db.auth.signOut();}
+
+// ── DATA ─────────────────────────────────────────────────────
+async function loadMyData(){
+  if(!currentUser)return;
+  const [pr,dr,ar,gr]=await Promise.all([
+    db.from('customer_profiles').select('*').eq('id',currentUser.id).single(),
+    db.from('dogs').select('*').eq('customer_id',currentUser.id).order('created_at'),
+    db.from('appointments').select('*,dogs(name,emoji,breed,size,area,address),groomers(name)')
+      .eq('customer_id',currentUser.id).order('appt_date',{ascending:false}),
+    db.from('groomers').select('*').order('created_at')
   ]);
-  profile=pr.data;myDogs=dr.data||[];myAppts=ar.data||[];allGroomers=gr.data||[];allSchedules=sr.data||[];
-  renderDogs();
+  userProfile=pr.data;myDogs=dr.data||[];myAppts=ar.data||[];allGroomers=gr.data||[];
+  renderWelcome();
+  renderMyDogs();
 }
-function csw(tab){
+
+function renderWelcome(){
+  const wb=document.getElementById('welcome-bar');
+  const wn=document.getElementById('welcome-name');
+  const name=userProfile?.name||currentUser?.email||'there';
+  wn.textContent='Welcome back, '+name+'! 👋';
+  wb.style.display='block';
+}
+
+// ── TABS ─────────────────────────────────────────────────────
+function sw(tab){
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
-  document.getElementById('ctab-'+tab).classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
   document.getElementById('sec-'+tab).classList.add('active');
-  if(tab==='appts') renderAppts();
-  if(tab==='dogs') renderDogs();
-  if(tab==='book'){
-    // always init step 1 fresh when entering book tab
-    resetBookingUI();
-    goStep(1);
-  }
+  if(tab==='appointments')renderAppts();
+  if(tab==='book')startBooking();
 }
-function renderDogs(){
-  const c=document.getElementById('dogs-container');
-  let html='<div class="dogs-grid">';
-  if(myDogs.length){
-    html+=myDogs.map(d=>`<div class="dog-card"><div class="dog-card-av">🐶</div><div class="dog-card-name">${d.name}</div><div class="dog-card-meta">${d.breed||'—'}<br>${d.size||'—'}${d.coat?' · '+d.coat:''}<br>${d.gender||''}${d.age?' · '+d.age:''}${d.prefs?'<br><em style="color:#9ca3af">'+d.prefs+'</em>':''}</div><div class="dog-card-actions"><button class="btn btn-g btn-sm" onclick="openDogForm('${d.id}',false)">Edit</button><button class="btn btn-p btn-sm" onclick="startBookingFor('${d.id}')">Book</button></div></div>`).join('');
-  }
-  html+=`<div class="add-dog-card" onclick="openDogForm(null,false)"><div class="add-dog-card-icon">➕</div><div class="add-dog-card-lbl">Add a dog</div></div></div>`;
-  c.innerHTML=html;
+
+// ── MY DOGS ──────────────────────────────────────────────────
+function renderMyDogs(){
+  const g=document.getElementById('my-dog-grid');
+  let html=myDogs.map(d=>`
+    <div class="dog-card" onclick="editDog('${d.id}')">
+      <div class="dog-av">${d.emoji||'🐶'}</div>
+      <div class="dog-nm">${d.name}</div>
+      <div class="dog-br">${d.breed||'—'}</div>
+      ${sizeBadge(d.size)}
+      <div style="display:flex;gap:6px;justify-content:center;margin-top:.75rem">
+        <button class="btn btn-p btn-sm" onclick="event.stopPropagation();bookForDog('${d.id}')">📅 Book</button>
+        <button class="btn btn-g btn-sm" onclick="event.stopPropagation();editDog('${d.id}')">✏️ Edit</button>
+      </div>
+    </div>`).join('');
+  html+=`<div class="dog-card add-card" onclick="openAddDog()">
+    <div style="font-size:28px;margin-bottom:6px">+</div>
+    <div style="font-size:13px;font-weight:500">Add dog</div>
+  </div>`;
+  g.innerHTML=html;
 }
-function startBookingFor(dogId){
-  selDogId=dogId; selDate=null; selArea=null; selGroomerId=null; selTime=null;
-  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
-  document.getElementById('ctab-book').classList.add('active');
-  document.getElementById('sec-book').classList.add('active');
-  resetBookingUI();
-  // mark step 1 done, go to step 2
-  document.getElementById('si-1').classList.add('done');
-  for(let i=1;i<=6;i++) document.getElementById('bs-'+i).style.display='none';
-  document.getElementById('bs-2').style.display='block';
-  document.getElementById('si-2').classList.add('active');
-  renderCal();
+
+function openAddDog(){
+  editDogId=null;
+  document.getElementById('dog-modal-title').textContent='Add dog';
+  document.getElementById('dog-save-btn').textContent='Save dog';
+  ['d-name','d-breed','d-age','d-prefs'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('d-size').value='';
+  document.getElementById('d-coat').value='';
+  document.getElementById('d-gender').value='';
+  om('ov-dog');
 }
-function openDogForm(id,fromBooking){
-  bookingFromDogs=fromBooking;editDogId=id;
-  const d=id?myDogs.find(x=>x.id===id):null;
-  document.getElementById('dog-modal-title').textContent=d?'Edit dog':'Add a dog';
-  document.getElementById('dog-save-btn').textContent=d?'Update':'Save dog';
-  document.getElementById('dog-del-btn').style.display=d?'inline-flex':'none';
-  document.getElementById('df-name').value=d?.name||'';
-  document.getElementById('df-breed').value=d?.breed||'';
-  document.getElementById('df-size').value=d?.size||'';
-  document.getElementById('df-coat').value=d?.coat||'';
-  document.getElementById('df-gender').value=d?.gender||'';
-  document.getElementById('df-age').value=d?.age||'';
-  document.getElementById('df-prefs').value=d?.prefs||'';
-  openModal('ov-dog');
+
+function editDog(id){
+  const d=myDogs.find(x=>x.id===id);if(!d)return;
+  editDogId=id;
+  document.getElementById('dog-modal-title').textContent='Edit dog';
+  document.getElementById('dog-save-btn').textContent='Update';
+  document.getElementById('d-name').value=d.name||'';
+  document.getElementById('d-breed').value=d.breed||'';
+  document.getElementById('d-size').value=d.size||'';
+  document.getElementById('d-coat').value=d.coat||'';
+  document.getElementById('d-gender').value=d.gender||'';
+  document.getElementById('d-age').value=d.age||'';
+  document.getElementById('d-prefs').value=d.prefs||'';
+  om('ov-dog');
 }
+
 async function saveDog(){
-  const name=document.getElementById('df-name').value.trim();
-  if(!name){alert('Dog name is required.');return}
-  const btn=document.getElementById('dog-save-btn');
-  btn.disabled=true; btn.textContent='Saving...';
-  // only include columns that exist — strip gender/age if they cause errors
-  const p={name,breed:document.getElementById('df-breed').value.trim(),size:document.getElementById('df-size').value,coat:document.getElementById('df-coat').value,prefs:document.getElementById('df-prefs').value.trim(),emoji:'🐶',customer_id:currentUser.id};
-  // try adding gender/age — if columns don't exist Supabase will error
-  const gender=document.getElementById('df-gender').value;
-  const age=document.getElementById('df-age').value.trim();
-  if(gender) p.gender=gender;
-  if(age) p.age=age;
-  let newId=editDogId;
-  let error;
-  if(editDogId){
-    const r=await db.from('dogs').update(p).eq('id',editDogId);
-    error=r.error;
-  } else {
-    const r=await db.from('dogs').insert(p).select().single();
-    error=r.error; newId=r.data?.id;
-  }
-  btn.disabled=false; btn.textContent=editDogId?'Update':'Save dog';
-  if(error){
-    // retry without gender/age if column missing
-    if(error.message&&error.message.includes('column')){
-      delete p.gender; delete p.age;
-      if(editDogId){await db.from('dogs').update(p).eq('id',editDogId);}
-      else{const r=await db.from('dogs').insert(p).select().single();newId=r.data?.id;}
-    } else {
-      alert('Error saving dog: '+error.message); return;
-    }
-  }
-  closeModal('ov-dog'); await loadData();
-  renderDogs();
-  if(bookingFromDogs&&newId){selDogId=newId;renderDogPickList();}
-}
-async function deleteDog(){
-  if(!editDogId) return;
-  if(!confirm('Delete this dog?')) return;
-  await db.from('dogs').delete().eq('id',editDogId);
-  closeModal('ov-dog');await loadData();
-}
-function resetBookingUI(){
-  for(let i=1;i<=6;i++){document.getElementById('bs-'+i).style.display='none';const si=document.getElementById('si-'+i);si.classList.remove('active','done');}
-  document.getElementById('book-success').style.display='none';
-  document.getElementById('steps-bar').style.display='flex';
-}
-function goStep(n){
-  if(n>1&&!selDogId){showErr(1,'Please select a dog.');goStep(1);return;}
-  if(n>2&&!selDate){showErr(2,'Please select a date.');goStep(2);return;}
-  if(n>3&&!selArea){showErr(3,'Please select an area.');goStep(3);return;}
-  if(n>4&&!selGroomerId){showErr(4,'Please select a groomer.');goStep(4);return;}
-  if(n>5&&!selTime){showErr(5,'Please select a time.');goStep(5);return;}
-  for(let i=1;i<=6;i++){document.getElementById('err-'+i)?.classList.remove('show');}
-  for(let i=1;i<=6;i++){
-    document.getElementById('bs-'+i).style.display=i===n?'block':'none';
-    const si=document.getElementById('si-'+i);
-    si.classList.remove('active','done');
-    if(i===n) si.classList.add('active');
-    if(i<n) si.classList.add('done');
-  }
-  if(n===1) renderDogPickList();
-  if(n===2) renderCal();
-  if(n===3) renderAreaGrid();
-  if(n===4) renderGroomerList();
-  if(n===5) renderTimeSlots();
-  if(n===6) renderSummary();
-}
-function showErr(step,msg){const el=document.getElementById('err-'+step);if(el){el.textContent=msg;el.classList.add('show');}}
-function renderDogPickList(){
-  const c=document.getElementById('dog-pick-list');
-  if(!myDogs.length){c.innerHTML='<div class="empty"><span class="empty-icon">🐾</span>No dogs yet. Add one first!</div>';return;}
-  c.innerHTML=myDogs.map(d=>`<div class="dog-pick-item${selDogId===d.id?' selected':''}" onclick="pickDog('${d.id}')"><div class="dog-pick-av">🐶</div><div class="dog-pick-info"><div class="dog-pick-name">${d.name}</div><div class="dog-pick-meta">${d.breed||'—'} · ${d.size||'—'}</div></div><div class="dog-pick-check">${selDogId===d.id?'✓':''}</div></div>`).join('');
-}
-function pickDog(id){selDogId=id;renderDogPickList();}
-function calPrev(){calBase.setMonth(calBase.getMonth()-1);renderCal();}
-function calNext(){calBase.setMonth(calBase.getMonth()+1);renderCal();}
-function renderCal(){
-  const today=new Date();today.setHours(0,0,0,0);
-  const y=calBase.getFullYear(),m=calBase.getMonth();
-  document.getElementById('cal-title').textContent=new Date(y,m,1).toLocaleDateString('en-GB',{month:'long',year:'numeric'});
-  const first=new Date(y,m,1).getDay(),offset=first===0?6:first-1,days=new Date(y,m+1,0).getDate();
-  let html='';
-  for(let i=0;i<offset;i++) html+='<div class="cal-day empty"></div>';
-  for(let d=1;d<=days;d++){
-    const date=new Date(y,m,d);date.setHours(0,0,0,0);
-    const ds=iso(date),past=date<today,isToday=date.getTime()===today.getTime();
-    const hasSched=allSchedules.some(s=>s.date===ds);
-    const isSel=selDate===ds;
-    html+='<div class="cal-day'+(past?' disabled':'')+(isToday?' today':'')+(isSel?' selected':'')+(hasSched&&!past?' has-slot':'')+'" onclick="'+(past?'':'selectDate(\''+ds+'\')')+'">'+''+d+'</div>';
-  }
-  document.getElementById('cal-grid').innerHTML=html;
-}
-function selectDate(ds){selDate=ds;selArea=null;selGroomerId=null;selTime=null;renderCal();}
-function renderAreaGrid(){
-  const sched=allSchedules.filter(s=>s.date===selDate);
-  const availAreas=new Set(sched.flatMap(s=>s.areas||[]));
-  document.getElementById('s3-sub').textContent=selDate?fmtDate(selDate)+' — where should we come?':'Select your area';
-  document.getElementById('area-grid').innerHTML=AREAS.map(a=>{
-    const avail=availAreas.has(a);
-    return '<div class="area-chip'+(selArea===a?' selected':'')+(avail?'':' area-unavail')+'" onclick="'+(avail?'pickArea(\''+a+'\')':'')+'" ><div class="area-chip-name">'+a+'</div><div class="area-chip-sub">'+(avail?'Available':'Not available this day')+'</div></div>';
-  }).join('');
-}
-function pickArea(a){selArea=a;selGroomerId=null;selTime=null;renderAreaGrid();}
-function renderGroomerList(){
-  const sched=allSchedules.filter(s=>s.date===selDate);
-  document.getElementById('s4-sub').textContent=(selArea||'')+(selDate?' · '+fmtDate(selDate):'');
-  const html=allGroomers.map(g=>{
-    const gs=sched.find(s=>s.groomer_id===g.id);
-    const avail=gs&&(gs.areas||[]).includes(selArea);
-    return '<div class="groomer-item'+(selGroomerId===g.id?' selected':'')+(avail?'':' unavailable')+'" onclick="'+(avail?'pickGroomer(\''+g.id+'\')':'')+'" ><div class="groomer-av">✂️</div><div class="groomer-info"><div class="groomer-name">'+g.name+'</div><div class="groomer-areas">'+(avail?'Available in '+selArea:'Not available for this date and area')+'</div></div><div class="groomer-check">'+(selGroomerId===g.id?'✓':'')+'</div></div>';
-  }).join('');
-  document.getElementById('groomer-list').innerHTML=html||'<div class="empty">No groomers available.</div>';
-}
-function pickGroomer(id){selGroomerId=id;selTime=null;renderGroomerList();}
-async function renderTimeSlots(){
-  const g=allGroomers.find(x=>x.id===selGroomerId);
-  document.getElementById('s5-sub').textContent=(g?.name||'Groomer')+(selDate?' · '+fmtDate(selDate):'');
-  const {data:taken}=await db.from('appointments').select('appt_time').eq('appt_date',selDate).eq('groomer_id',selGroomerId);
-  const takenTimes=(taken||[]).map(a=>a.appt_time?.slice(0,5));
-  document.getElementById('slots-grid').innerHTML=SLOTS.map(t=>{
-    const isTaken=takenTimes.includes(t),isSel=selTime===t;
-    return '<div class="slot'+(isTaken?' taken':isSel?' selected':'')+'" onclick="'+(isTaken?'':'pickTime(\''+t+'\')')+'">'+t+'</div>';
-  }).join('');
-}
-function pickTime(t){selTime=t;document.querySelectorAll('.slot').forEach(s=>{s.classList.remove('selected');if(s.textContent===t)s.classList.add('selected');});}
-function renderSummary(){
-  const dog=myDogs.find(x=>x.id===selDogId),groomer=allGroomers.find(x=>x.id===selGroomerId);
-  document.getElementById('booking-summary').innerHTML=
-    '<div class="summary-row"><span class="summary-icon">🐾</span><span class="summary-lbl">Dog</span><span class="summary-val">'+( dog?.name||'—')+' <span style="font-weight:400;color:var(--muted)">'+(dog?.breed||'')+' · '+(dog?.size||'')+'</span></span></div>'+
-    '<div class="summary-row"><span class="summary-icon">📅</span><span class="summary-lbl">Date</span><span class="summary-val">'+(selDate?fmtDate(selDate):'—')+'</span></div>'+
-    '<div class="summary-row"><span class="summary-icon">📍</span><span class="summary-lbl">Area</span><span class="summary-val">'+(selArea||'—')+'</span></div>'+
-    '<div class="summary-row"><span class="summary-icon">✂️</span><span class="summary-lbl">Groomer</span><span class="summary-val">'+(groomer?.name||'—')+'</span></div>'+
-    '<div class="summary-row"><span class="summary-icon">⏰</span><span class="summary-lbl">Time</span><span class="summary-val">'+(selTime||'—')+'</span></div>';
-}
-async function confirmBooking(){
-  const btn=document.getElementById('confirm-btn');
-  btn.disabled=true;btn.textContent='Confirming...';
-  const note=document.getElementById('booking-note').value.trim();
-  const {error}=await db.from('appointments').insert({dog_id:selDogId,groomer_id:selGroomerId,customer_id:currentUser.id,appt_date:selDate,appt_time:selTime,appt_note:note,status:'pending'});
-  if(error){document.getElementById('err-6').textContent=error.message;document.getElementById('err-6').classList.add('show');btn.disabled=false;btn.textContent='Confirm booking';return;}
-  const dog=myDogs.find(x=>x.id===selDogId),groomer=allGroomers.find(x=>x.id===selGroomerId);
-  document.getElementById('success-detail').innerHTML='<strong>'+dog?.name+'</strong> · '+selTime+' · '+groomer?.name+'<br>'+fmtDate(selDate)+' · '+selArea;
-  document.getElementById('success-wa').textContent=profile?.phone||'your registered number';
-  document.getElementById('steps-bar').style.display='none';
-  for(let i=1;i<=6;i++) document.getElementById('bs-'+i).style.display='none';
-  document.getElementById('book-success').style.display='block';
-  await loadData();
-}
-function resetBooking(){
-  selDogId=null;selDate=null;selArea=null;selGroomerId=null;selTime=null;
-  document.getElementById('booking-note').value='';
-  document.getElementById('confirm-btn').disabled=false;
-  document.getElementById('confirm-btn').textContent='Confirm booking';
-  resetBookingUI();goStep(1);
-}
-function renderAppts(){
-  const c=document.getElementById('appts-container');
-  if(!myAppts.length){c.innerHTML='<div class="empty"><span class="empty-icon">🗓️</span>No appointments yet.<br><button class="btn btn-p" style="margin-top:.75rem" onclick="csw(\'book\')">Book a session</button></div>';return;}
-  const now=new Date();now.setHours(0,0,0,0);
-  const upcoming=myAppts.filter(a=>new Date(a.appt_date+'T00:00:00')>=now);
-  const past=myAppts.filter(a=>new Date(a.appt_date+'T00:00:00')<now);
-  const card=a=>{
-    const sc=a.status==='confirmed'?'badge-confirmed':a.status==='done'?'badge-done':'badge-pending';
-    const sl=a.status==='confirmed'?'Confirmed':a.status==='done'?'Done':'Pending';
-    return '<div class="appt-card"><div class="appt-top"><div class="appt-date">📅 '+a.appt_date+' · '+(a.appt_time?.slice(0,5)||'')+'</div><span class="badge '+sc+'">'+sl+'</span></div><div class="appt-meta">🐾 '+(a.dogs?.name||'—')+' ('+(a.dogs?.size||'—')+')<br>✂️ '+(a.groomers?.name||'—')+(a.appt_note?'<br>📝 '+a.appt_note:'')+'</div></div>';
+  const name=document.getElementById('d-name').value.trim();
+  const size=document.getElementById('d-size').value;
+  if(!name||!size){alert('Dog name and size are required.');return}
+  const p={name,size,
+    breed:document.getElementById('d-breed').value.trim(),
+    coat:document.getElementById('d-coat').value,
+    gender:document.getElementById('d-gender').value,
+    age:document.getElementById('d-age').value.trim(),
+    prefs:document.getElementById('d-prefs').value.trim(),
+    emoji:'🐶',
+    customer_id:currentUser.id
   };
-  let html='';
-  if(upcoming.length) html+='<div class="sect-label">Upcoming</div><div class="appt-list">'+upcoming.map(card).join('')+'</div>';
-  if(past.length) html+='<div class="sect-label">Past</div><div class="appt-list">'+past.map(card).join('')+'</div>';
+  if(editDogId){await db.from('dogs').update(p).eq('id',editDogId);}
+  else{await db.from('dogs').insert(p);}
+  cm('ov-dog');await loadMyData();
+}
+
+function bookForDog(dogId){
+  bk={step:1,dog:null,date:null,area:null,groomer:null,time:null,services:{base:'basic',styling:null,addons:[]},duration:0,price:0};
+  changeApptId=null;
+  sw('book');
+  // Pre-select dog
+  const d=myDogs.find(x=>x.id===dogId);
+  if(d){bk.dog=d;bk.step=2;}
+  renderStep();
+}
+
+// ── BOOKING FLOW ─────────────────────────────────────────────
+const STEPS=['Dog','Service','Date','Groomer','Time','Confirm'];
+
+function startBooking(){
+  if(!bk.dog)bk.step=1;
+  renderStep();
+}
+
+function renderStepBar(){
+  document.getElementById('step-bar').innerHTML=STEPS.map((s,i)=>{
+    const n=i+1;
+    let cls='step';
+    if(n===bk.step)cls+=' active';
+    else if(n<bk.step)cls+=' done';
+    return`<div class="${cls}">${n<bk.step?'✓ ':''} ${s}</div>`;
+  }).join('');
+}
+
+function renderStep(){
+  renderStepBar();
+  const c=document.getElementById('step-content');
+  switch(bk.step){
+    case 1: c.innerHTML=renderStep1();break;
+    case 2: c.innerHTML=renderStep2();break;
+    case 3: c.innerHTML=renderStep3();calPickerMonth=bk.date?new Date(bk.date+'T00:00:00'):new Date();renderCalPicker();break;
+    case 4: c.innerHTML=renderStep4();break;
+    case 5: renderStep5(c);break;
+    case 6: c.innerHTML=renderStep6();break;
+  }
+}
+
+function renderStep1(){
+  if(!myDogs.length)return`<div class="empty"><span class="empty-icon">🐕</span>Add a dog first in the My Dogs tab!</div>`;
+  return`<div class="step-title">Select your dog</div>
+    <div class="dog-grid">${myDogs.map(d=>`
+      <div class="dog-card${bk.dog?.id===d.id?' selected':''}" onclick="selectDog('${d.id}')">
+        <div class="dog-av">${d.emoji||'🐶'}</div>
+        <div class="dog-nm">${d.name}</div>
+        <div class="dog-br">${d.breed||'—'}</div>
+        ${sizeBadge(d.size)}
+      </div>`).join('')}
+    </div>`;
+}
+
+function selectDog(id){
+  bk.dog=myDogs.find(x=>x.id===id);
+  bk.step=2;renderStep();
+}
+
+function renderStep2(){
+  const sz=bk.dog?.size||'M';
+  const addons=['dematting','deshedding','antifungal','antikutu','whitening'];
+  const addonLabels={dematting:'Dematting',deshedding:'Deshedding',antifungal:'Anti Fungal',antikutu:'Anti Kutu',whitening:'Whitening Shampoo'};
+  const addonDur={dematting:'+15 min',deshedding:sz==='L'?'+30 min':'+15 min',antifungal:'—',antikutu:'—',whitening:'—'};
+  return`<div class="step-title">Select services for ${bk.dog?.name}</div>
+    <div class="svc-block">
+      <div class="svc-lbl">Base service (required)</div>
+      <div class="svc-option selected"><input type="radio" checked disabled/><div class="svc-name">Basic Grooming</div><div class="svc-dur">${DURATION.base[sz]} min · ${fmtRp(PRICES.base[sz])}</div></div>
+    </div>
+    <div class="svc-block">
+      <div class="svc-lbl">Styling (optional — pick one)</div>
+      ${['styling','botak'].map(k=>`
+        <div class="svc-option${bk.services.styling===k?' selected':''}" onclick="selectStyling('${k}')">
+          <input type="radio" ${bk.services.styling===k?'checked':''} onchange="selectStyling('${k}')"/>
+          <div class="svc-name">${k==='styling'?'Styling / Cukur Pendek':'Shaving / Cukur Botak'}</div>
+          <div class="svc-dur">+${DURATION[k][sz]} min · +${fmtRp(PRICES[k][sz])}</div>
+        </div>`).join('')}
+      <div class="svc-option${!bk.services.styling?' selected':''}" onclick="selectStyling(null)">
+        <input type="radio" ${!bk.services.styling?'checked':''}/>
+        <div class="svc-name">None</div><div class="svc-dur">—</div>
+      </div>
+    </div>
+    <div class="svc-block">
+      <div class="svc-lbl">Add-ons (optional)</div>
+      ${addons.map(k=>`
+        <div class="svc-option${bk.services.addons.includes(k)?' selected':''}" onclick="toggleAddon('${k}')">
+          <input type="checkbox" ${bk.services.addons.includes(k)?'checked':''}/>
+          <div class="svc-name">${addonLabels[k]}</div>
+          <div class="svc-dur">${addonDur[k]}${PRICES[k]?` · +${fmtRp(PRICES[k][sz])}`:'  · Gratis'}</div>
+        </div>`).join('')}
+      <div class="svc-option">
+        <input type="checkbox" checked disabled/>
+        <div class="svc-name">Parfume</div>
+        <div class="svc-dur">Gratis</div>
+      </div>
+    </div>
+    <div style="margin-top:.75rem">
+      <span class="dur-badge" id="dur-badge">⏱ ${calcDuration(sz,bk.services.styling,bk.services.addons)} min total</span>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-p" onclick="bk.step=3;renderStep()">Next →</button>
+      <button class="btn btn-g" onclick="bk.step=1;renderStep()">← Back</button>
+    </div>`;
+}
+
+function selectStyling(val){
+  bk.services.styling=val;
+  updateDurBadge();
+  document.querySelectorAll('.svc-option').forEach(el=>{
+    const inp=el.querySelector('input[type=radio]');
+    if(inp&&!inp.disabled){
+      const v=el.getAttribute('onclick')?.match(/'([^']+)'/)?.[1]||null;
+      const sel=v===val||(val===null&&el.textContent.includes('None'));
+      el.classList.toggle('selected',sel);
+      inp.checked=sel;
+    }
+  });
+}
+
+function toggleAddon(key){
+  const idx=bk.services.addons.indexOf(key);
+  if(idx>-1)bk.services.addons.splice(idx,1);
+  else bk.services.addons.push(key);
+  updateDurBadge();
+  // Re-render to sync UI
+  const step2=document.getElementById('step-content');
+  if(step2)step2.innerHTML=renderStep2();
+}
+
+function updateDurBadge(){
+  const sz=bk.dog?.size||'M';
+  const d=calcDuration(sz,bk.services.styling,bk.services.addons);
+  const badge=document.getElementById('dur-badge');
+  if(badge)badge.textContent=`⏱ ${d} min total`;
+}
+
+function renderStep3(){
+  return`<div class="step-title">Pick a date</div>
+    <div class="month-nav">
+      <button class="btn btn-g btn-sm" onclick="calPickerMonth.setMonth(calPickerMonth.getMonth()-1);renderCalPicker()">←</button>
+      <span class="month-title" id="picker-month-title"></span>
+      <button class="btn btn-g btn-sm" onclick="calPickerMonth.setMonth(calPickerMonth.getMonth()+1);renderCalPicker()">→</button>
+    </div>
+    <div id="date-picker-grid"></div>
+    <div class="form-actions" style="margin-top:1rem">
+      <button class="btn btn-g" onclick="bk.step=2;renderStep()">← Back</button>
+    </div>`;
+}
+
+function renderCalPicker(){
+  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const y=calPickerMonth.getFullYear(), m=calPickerMonth.getMonth();
+  document.getElementById('picker-month-title').textContent=
+    calPickerMonth.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  const firstDay=new Date(y,m,1).getDay();
+  const offset=firstDay===0?6:firstDay-1;
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const today=new Date();today.setHours(0,0,0,0);
+  let html=`<div class="date-grid">${days.map(d=>`<div class="date-dh">${d}</div>`).join('')}`;
+  for(let i=0;i<offset;i++)html+=`<div class="date-cell empty-cell"></div>`;
+  for(let day=1;day<=daysInMonth;day++){
+    const d=new Date(y,m,day);
+    const isoD=iso(d);
+    const isPast=d<today;
+    const isSel=isoD===bk.date;
+    const isToday=d.getTime()===today.getTime();
+    html+=`<div class="date-cell${isPast?' disabled':''} ${isSel?' selected':''} ${isToday?' today':''}" onclick="${isPast?'':'selectDate(\''+isoD+'\')'}">${day}</div>`;
+  }
+  html+=`</div>`;
+  document.getElementById('date-picker-grid').innerHTML=html;
+}
+
+async function selectDate(isoD){
+  bk.date=isoD;bk.area=null;bk.groomer=null;bk.time=null;
+  bk.step=4;renderStep();
+}
+
+async function renderStep4(){
+  // Load groomer schedules for selected date
+  const {data:scheds}=await db.from('groomer_schedules')
+    .select('*,groomers(id,name,emoji,phone)')
+    .eq('date',bk.date).eq('is_off',false);
+
+  if(!scheds||!scheds.length){
+    return`<div class="step-title">Choose groomer</div>
+      <div class="empty"><span class="empty-icon">😕</span>No groomers available on this date.<br>Please pick another date.</div>
+      <div class="form-actions"><button class="btn btn-g" onclick="bk.step=3;renderStep()">← Back</button></div>`;
+  }
+
+  // Get unique areas
+  const areas=[...new Set(scheds.flatMap(s=>s.areas||[]))].sort();
+  const c=document.getElementById('step-content');
+
+  let html=`<div class="step-title">Choose groomer for ${fmtDate(bk.date)}</div>`;
+
+  if(areas.length){
+    html+=`<div class="fg" style="margin-bottom:1rem">
+      <label>Area</label>
+      <select id="area-select" onchange="filterGroomersByArea(${JSON.stringify(scheds).replace(/"/g,'&quot;')})">
+        <option value="">All areas</option>
+        ${areas.map(a=>`<option value="${a}" ${a===bk.area?'selected':''}>${a}</option>`).join('')}
+      </select>
+    </div>`;
+  }
+
+  html+=`<div id="groomer-options">${renderGroomerOptions(scheds)}</div>
+    <div class="form-actions">
+      <button class="btn btn-g" onclick="bk.step=3;renderStep()">← Back</button>
+    </div>`;
   c.innerHTML=html;
 }
+
+function renderGroomerOptions(scheds){
+  const filtered=bk.area?scheds.filter(s=>(s.areas||[]).includes(bk.area)):scheds;
+  if(!filtered.length)return`<div class="empty" style="padding:1rem">No groomers in this area.</div>`;
+  return filtered.map(s=>{
+    const gr=s.groomers;if(!gr)return'';
+    const sel=bk.groomer?.id===gr.id;
+    return`<div class="svc-option${sel?' selected':''}" onclick="selectGroomer('${gr.id}','${gr.name}','${gr.emoji||'✂️'}')">
+      <div style="font-size:20px">${gr.emoji||'✂️'}</div>
+      <div class="svc-name">${gr.name}</div>
+      <div class="svc-dur">${(s.areas||[]).join(', ')||'All areas'}</div>
+    </div>`;
+  }).join('');
+}
+
+function filterGroomersByArea(scheds){
+  bk.area=document.getElementById('area-select').value||null;
+  document.getElementById('groomer-options').innerHTML=renderGroomerOptions(scheds);
+}
+
+function selectGroomer(id,name,emoji){
+  bk.groomer={id,name,emoji};
+  bk.step=5;renderStep();
+}
+
+async function renderStep5(container){
+  const sz=bk.dog?.size||'M';
+  bk.duration=calcDuration(sz,bk.services.styling,bk.services.addons);
+  bk.price=calcPrice(sz,bk.services.styling,bk.services.addons);
+
+  // Load existing appointments for that day + groomer to block slots
+  const {data:takenAppts}=await db.from('appointments')
+    .select('appt_time,duration_mins')
+    .eq('appt_date',bk.date)
+    .eq('groomer_id',bk.groomer.id);
+
+  // Build blocked ranges
+  const blocked=[];
+  (takenAppts||[]).forEach(a=>{
+    if(!a.appt_time)return;
+    const [hh,mm]=a.appt_time.split(':').map(Number);
+    const start=hh*60+mm;
+    const end=start+(a.duration_mins||60)+30; // +30 travel buffer
+    blocked.push({start,end});
+  });
+
+  // Generate slots 08:30–18:00 in 30-min increments
+  const slots=[];
+  for(let t=8*60+30;t+bk.duration<=18*60;t+=30){
+    const hh=Math.floor(t/60);
+    const mm=t%60;
+    const timeStr=`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+    const end=t+bk.duration;
+    const isTaken=blocked.some(b=>t<b.end&&end>b.start);
+    // Skip if date is today and time is past
+    let isPast=false;
+    const now=new Date();
+    const today=iso(now);
+    if(bk.date===today&&(hh<now.getHours()||(hh===now.getHours()&&mm<=now.getMinutes())))isPast=true;
+    slots.push({time:timeStr,taken:isTaken||isPast});
+  }
+
+  container.innerHTML=`<div class="step-title">Pick a time slot</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">Duration: ${bk.duration} min · ${bk.groomer.emoji} ${bk.groomer.name}</div>
+    ${slots.length?`<div class="slot-grid">${slots.map(s=>`
+      <div class="slot${s.taken?' taken':bk.time===s.time?' selected':''}" onclick="${s.taken?'':'selectTime(\''+s.time+'\')'}">
+        ${s.time}
+      </div>`).join('')}</div>`:'<div class="empty">No slots available for this duration.</div>'}
+    <div class="form-actions" style="margin-top:1rem">
+      <button class="btn btn-g" onclick="bk.step=4;renderStep()">← Back</button>
+    </div>`;
+}
+
+function selectTime(time){
+  bk.time=time;
+  bk.step=6;renderStep();
+}
+
+function renderStep6(){
+  const sz=bk.dog?.size||'M';
+  bk.duration=calcDuration(sz,bk.services.styling,bk.services.addons);
+  bk.price=calcPrice(sz,bk.services.styling,bk.services.addons);
+  const endTime=calcEndTime(bk.time,bk.duration);
+  const services=buildServiceList(sz);
+
+  return`<div class="step-title">Confirm booking</div>
+    <div style="background:var(--subtle);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;margin-bottom:1rem">
+      <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Dog</span><span>${bk.dog?.emoji||'🐶'} ${bk.dog?.name} (${sz})</span></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Date</span><span>${fmtDate(bk.date)}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Time</span><span>${bk.time} – ${endTime}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Groomer</span><span>${bk.groomer?.emoji||'✂️'} ${bk.groomer?.name}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Services</span><span style="text-align:right;max-width:200px">${services.map(s=>s.name).join(', ')}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;font-weight:600"><span>Total</span><span style="color:var(--brown)">${fmtRp(bk.price)}</span></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-p" onclick="confirmBooking()">✅ Confirm booking</button>
+      <button class="btn btn-g" onclick="bk.step=5;renderStep()">← Back</button>
+    </div>`;
+}
+
+function calcEndTime(startTime,durMins){
+  if(!startTime)return'—';
+  const [hh,mm]=startTime.split(':').map(Number);
+  const total=hh*60+mm+(durMins||60);
+  return`${String(Math.floor(total/60)).padStart(2,'0')}:${String(total%60).padStart(2,'0')}`;
+}
+
+function buildServiceList(sz){
+  const list=[{name:'Basic Grooming',dur:DURATION.base[sz],price:PRICES.base[sz]}];
+  if(bk.services.styling==='styling')list.push({name:'Styling',dur:DURATION.styling[sz],price:PRICES.styling[sz]});
+  if(bk.services.styling==='botak')list.push({name:'Shaving/Botak',dur:DURATION.botak[sz],price:PRICES.botak[sz]});
+  bk.services.addons.forEach(a=>{
+    const labels={dematting:'Dematting',deshedding:'Deshedding',antifungal:'Anti Fungal',antikutu:'Anti Kutu',whitening:'Whitening Shampoo'};
+    if(labels[a])list.push({name:labels[a],dur:DURATION[a]?.[sz]||0,price:PRICES[a]?.[sz]||0});
+  });
+  list.push({name:'Parfume',dur:0,price:0,free:true});
+  return list;
+}
+
+async function confirmBooking(){
+  if(!currentUser||!bk.dog||!bk.date||!bk.time||!bk.groomer)return;
+  const sz=bk.dog.size||'M';
+  const services=buildServiceList(sz);
+  const serviceBase=bk.services.styling||'basic';
+  const serviceAddons=bk.services.addons;
+
+  const payload={
+    dog_id:bk.dog.id,
+    customer_id:currentUser.id,
+    groomer_id:bk.groomer.id,
+    appt_date:bk.date,
+    appt_time:bk.time,
+    duration_mins:bk.duration,
+    price_total:bk.price,
+    service_base:serviceBase,
+    service_addon:serviceAddons,
+    status:'pending'
+  };
+
+  if(changeApptId){
+    await db.from('appointments').update(payload).eq('id',changeApptId);
+  } else {
+    const {data}=await db.from('appointments').insert(payload).select().single();
+    if(data)changeApptId=data.id;
+  }
+
+  await loadMyData();
+  showReceipt();
+}
+
+function showReceipt(){
+  const sz=bk.dog?.size||'M';
+  const services=buildServiceList(sz);
+  const endTime=calcEndTime(bk.time,bk.duration);
+  const dog=bk.dog;
+  const profile=userProfile;
+
+  let svcRows=services.map(s=>`
+    <div class="receipt-svc-row">
+      <div><div style="font-size:12px;font-weight:500">${s.name}</div>${s.dur?`<div style="font-size:10px;color:var(--muted)">${s.dur} min</div>`:''}</div>
+      <div style="font-size:12px;font-weight:500">${s.free?'Gratis':fmtRp(s.price)}</div>
+    </div>`).join('');
+
+  document.getElementById('receipt-content').innerHTML=`
+    <div class="receipt" id="printable-receipt">
+      <div class="receipt-header">
+        <div class="receipt-brand">🐾 HOME PAW</div>
+        <div class="receipt-tagline">happy grooming starts at home</div>
+      </div>
+      <div class="receipt-section">
+        <div class="receipt-lbl">Booking info</div>
+        <div class="receipt-row"><span class="lft">Tanggal</span><span class="rgt">${fmtDate(bk.date)}</span></div>
+        <div class="receipt-row"><span class="lft">Jam</span><span class="rgt">${bk.time} – ${endTime}</span></div>
+        <div class="receipt-row"><span class="lft">Groomer</span><span class="rgt">${bk.groomer?.emoji||'✂️'} ${bk.groomer?.name}</span></div>
+        <div class="receipt-row"><span class="lft">Status</span><span class="rgt" style="color:var(--amb-t)">Pending confirmation</span></div>
+      </div>
+      <div class="receipt-section">
+        <div class="receipt-lbl">Info pelanggan</div>
+        <div class="receipt-row"><span class="lft">Owner</span><span class="rgt">${profile?.name||currentUser?.email||'—'}</span></div>
+        <div class="receipt-row"><span class="lft">Nama anjing</span><span class="rgt">${dog?.emoji||'🐶'} ${dog?.name}</span></div>
+        <div class="receipt-row"><span class="lft">Ras / ukuran</span><span class="rgt">${dog?.breed||'—'} · ${sz}</span></div>
+        ${profile?.address?`<div class="receipt-row"><span class="lft">Alamat</span><span class="rgt">${profile.address}</span></div>`:''}
+      </div>
+      <div class="receipt-section">
+        <div class="receipt-lbl">Layanan</div>
+        ${svcRows}
+      </div>
+      <div class="receipt-section">
+        <div class="receipt-row"><span class="lft" style="color:var(--muted)">Total durasi</span><span class="rgt">${bk.duration} menit</span></div>
+        <div class="receipt-total"><span>Total</span><span class="rgt">${fmtRp(bk.price)}</span></div>
+      </div>
+      <div class="receipt-section" style="text-align:center">
+        <div style="font-size:12px;color:var(--muted)">Terima kasih sudah mempercayakan perawatan anjing Anda 🐾</div>
+        <div style="font-size:12px;font-weight:600;color:var(--brown);margin-top:3px">Home Paw Grooming</div>
+      </div>
+    </div>`;
+  om('ov-receipt');
+}
+
+async function downloadReceipt(){
+  // Simple print-to-PDF approach
+  const content=document.getElementById('printable-receipt');
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>Receipt - Home Paw Grooming</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,sans-serif;padding:20px;background:#fff}
+    .receipt{max-width:420px;margin:0 auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}
+    .receipt-header{background:#7c3f1e;padding:1.1rem;text-align:center;color:#fff}
+    .receipt-brand{font-size:18px;font-weight:700}
+    .receipt-tagline{font-size:10px;opacity:.8;text-transform:uppercase;letter-spacing:1.5px;margin-top:2px}
+    .receipt-section{padding:.9rem 1.1rem;border-bottom:1px solid #e5e7eb}
+    .receipt-lbl{font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+    .receipt-row{display:flex;justify-content:space-between;padding:3px 0;font-size:12px}
+    .receipt-svc-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e5e7eb;font-size:12px}
+    .receipt-total{display:flex;justify-content:space-between;padding:8px 0;font-size:15px;font-weight:600}
+  </style></head><body>${content.outerHTML}<script>window.onload=function(){window.print();}<\/script></body></html>`);
+  win.document.close();
+}
+
+function addToGCal(){
+  if(!bk.date||!bk.time)return;
+  const [hh,mm]=bk.time.split(':').map(Number);
+  const startDT=bk.date.replace(/-/g,'')+'T'+String(hh).padStart(2,'0')+String(mm).padStart(2,'0')+'00';
+  const totalMins=hh*60+mm+bk.duration;
+  const endH=Math.floor(totalMins/60), endM=totalMins%60;
+  const endDT=bk.date.replace(/-/g,'')+'T'+String(endH).padStart(2,'0')+String(endM).padStart(2,'0')+'00';
+  const title=encodeURIComponent(`Grooming ${bk.dog?.name} - Home Paw`);
+  const details=encodeURIComponent(`Groomer: ${bk.groomer?.name}\nLayanan: ${buildServiceList(bk.dog?.size||'M').map(s=>s.name).join(', ')}\nTotal: ${fmtRp(bk.price)}`);
+  const loc=encodeURIComponent(userProfile?.address||'');
+  const url=`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDT}/${endDT}&details=${details}&location=${loc}`;
+  window.open(url,'_blank');
+}
+
+// ── APPOINTMENTS ─────────────────────────────────────────────
+async function renderAppts(){
+  if(!currentUser)return;
+  const {data}=await db.from('appointments')
+    .select('*,dogs(name,emoji,breed,size),groomers(name,emoji)')
+    .eq('customer_id',currentUser.id)
+    .order('appt_date',{ascending:false});
+
+  const list=document.getElementById('appt-list');
+  if(!data||!data.length){list.innerHTML='<div class="empty"><span class="empty-icon">📭</span>No appointments yet.</div>';return}
+
+  const now=new Date();
+  const upcoming=data.filter(a=>new Date(a.appt_date+'T23:59:59')>=now);
+  const past=data.filter(a=>new Date(a.appt_date+'T23:59:59')<now);
+
+  function apptCard(a,isUpcoming){
+    const endTime=calcEndTime(a.appt_time?.slice(0,5),a.duration_mins);
+    const statusCls={'pending':'st-pending','confirmed':'st-confirmed','done':'st-done'}[a.status||'pending']||'st-pending';
+    const statusLbl={'pending':'Pending','confirmed':'Confirmed','done':'Done'}[a.status||'pending']||'Pending';
+    return`<div class="appt-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+        <div style="font-size:13px;font-weight:600">${fmtDate(a.appt_date)}</div>
+        <span class="appt-status ${statusCls}">${statusLbl}</span>
+      </div>
+      <div style="font-size:13px;margin-bottom:4px">${a.dogs?.emoji||'🐶'} <strong>${a.dogs?.name||'—'}</strong> · ${a.dogs?.size||'—'}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">⏰ ${a.appt_time?.slice(0,5)||'—'} – ${endTime} · ${a.groomers?.emoji||'✂️'} ${a.groomers?.name||'—'}</div>
+      ${a.price_total?`<div style="font-size:12px;font-weight:600;color:var(--brown)">${fmtRp(a.price_total)}</div>`:''}
+      ${isUpcoming&&a.status!=='done'?`<div style="display:flex;gap:6px;margin-top:.75rem">
+        <button class="btn btn-p btn-sm" onclick="changeAppt('${a.id}')">✏️ Change booking</button>
+      </div>`:''}
+    </div>`;
+  }
+
+  let html='';
+  if(upcoming.length){html+=`<div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem">Upcoming</div>${upcoming.map(a=>apptCard(a,true)).join('')}`;}
+  if(past.length){html+=`<div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:1rem 0 .5rem">Past</div>${past.map(a=>apptCard(a,false)).join('')}`;}
+  list.innerHTML=html;
+}
+
+async function changeAppt(id){
+  // Load appointment and pre-fill booking state
+  const {data:a}=await db.from('appointments').select('*,dogs(*)').eq('id',id).single();
+  if(!a)return;
+  changeApptId=id;
+  const dog=myDogs.find(d=>d.id===a.dog_id)||a.dogs;
+  bk={
+    step:1,
+    dog:dog,
+    date:a.appt_date,
+    area:null,
+    groomer:null,
+    time:a.appt_time?.slice(0,5)||null,
+    services:{
+      base:'basic',
+      styling:a.service_base&&a.service_base!=='basic'?a.service_base:null,
+      addons:a.service_addon||[]
+    },
+    duration:a.duration_mins||60,
+    price:a.price_total||0
+  };
+  sw('book');
+}
+
+// ── INIT ─────────────────────────────────────────────────────
 initAuth();
 </script>
 </body>
