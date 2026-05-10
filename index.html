@@ -617,6 +617,11 @@ function sw(tab){
   document.getElementById('sec-'+tab).classList.add('active');
   if(tab==='history')renderHist();
   if(tab==='calendar')renderCal();
+  if(tab==='invoice'){
+    const di=document.getElementById('inv-date');
+    if(di&&!di.value)di.value=iso(new Date());
+    invUpdatePrices();
+  }
 }
 
 // ── CLIENTS ──────────────────────────────────────────────────
@@ -1018,6 +1023,7 @@ async function deleteGroomer(id){
 
 
 // ── INVOICE ──────────────────────────────────────────────────
+let invSource='manual';
 const INV_PRICES={
   base:{XS:120000,S:140000,M:190000,L:250000},
   styling:{XS:100000,S:100000,M:120000,L:140000},
@@ -1188,17 +1194,7 @@ function invDownloadPDF(){
 initRemDate();
 initAuth();
 // Patch sw to init invoice tab on first open
-const _swOrig=sw;
-function sw(tab){
-  _swOrig(tab);
-  if(tab==='invoice'){
-    // Set default date
-    const di=document.getElementById('inv-date');
-    if(di&&!di.value)di.value=iso(new Date());
-    // Default to manual if no appts
-    if(!invSource)invSetSource('manual');
-  }
-}
+
 </script>
 </body>
 </html>
