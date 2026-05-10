@@ -724,6 +724,10 @@ async function loadAll(){
   dataLoaded=true;
   renderDogs();
   renderGroomers();
+  // Load bank settings so invoice preview always uses current bank details
+  db.from('business_settings').select('*').eq('id',1).maybeSingle().then(({data})=>{
+    if(data) bankSettings=data;
+  });
   const dogOpts=dogs.map(d=>`<option value="${d.id}">${d.emoji||'🐶'} ${d.name}${d.customer_id?' (customer)':''}</option>`).join('');
   const hdEl=document.getElementById('hd');
   const apptDogEl=document.getElementById('appt-dog');
@@ -1422,9 +1426,9 @@ function invPreview(){
 
       <div style="padding:.9rem 1.4rem;border-bottom:1px solid #e8d5b7;background:#fdf3e7">
         <div style="font-size:10px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Pembayaran</div>
-        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">No. Rekening</span><span style="font-weight:700;color:#3d1f0d;font-family:monospace;letter-spacing:.5px">770055777787</span></div>
-        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Bank</span><span style="font-weight:500;color:#3d1f0d">Krom Bank</span></div>
-        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Atas nama</span><span style="font-weight:500;color:#3d1f0d">Xavier Fidelia Ali</span></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">No. Rekening</span><span style="font-weight:700;color:#3d1f0d;font-family:monospace;letter-spacing:.5px">${bankSettings.bank_account||'—'}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Bank</span><span style="font-weight:500;color:#3d1f0d">${bankSettings.bank_name||'—'}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Atas nama</span><span style="font-weight:500;color:#3d1f0d">${bankSettings.bank_holder||'—'}</span></div>
       </div>
 
       <div style="padding:.9rem 1.4rem;text-align:center">
