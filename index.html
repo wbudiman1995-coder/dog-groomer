@@ -1361,41 +1361,42 @@ function invPreview(){
 }
 
 async function invFillCodes(ownerName,breed,sz){
-  // Look up customer ID and dog code from DB, and count sessions for this dog
   try{
-    // Find matching dog by breed+size or owner name
+    // Match from already-loaded dogs array first (fast, no extra DB call)
     let matchDog=null;
     if(ownerName){
-      const{data:d1}=await db.from('dogs')
-        .select('id,dog_code,owner,customer_id')
-        .ilike('owner',ownerName).limit(1).single();
-      if(d1)matchDog=d1;
+      matchDog=dogs.find(d=>d.owner&&d.owner.toLowerCase()===ownerName.toLowerCase());
     }
     if(!matchDog&&breed&&sz){
-      const{data:d2}=await db.from('dogs')
-        .select('id,dog_code,owner,customer_id')
-        .ilike('breed',breed).eq('size',sz).limit(1).single();
-      if(d2)matchDog=d2;
+      matchDog=dogs.find(d=>d.breed&&d.breed.toLowerCase()===breed.toLowerCase()&&d.size===sz);
+    }
+    // If not in loaded list, query DB (handles customer-added dogs)
+    if(!matchDog&&ownerName){
+      const{data:d1}=await db.from('dogs').select('id,dog_code,owner,customer_id').ilike('owner',ownerName).limit(1).maybeSingle();
+      if(d1)matchDog=d1;
     }
 
     if(matchDog){
-      // Dog code
+      // Set dog code
       const dogCodeEl=document.getElementById('inv-dog-code-display');
       if(dogCodeEl)dogCodeEl.textContent=matchDog.dog_code||'—';
 
-      // Customer code
-      if(matchDog.customer_id){
-        const{data:cp}=await db.from('customer_profiles')
-          .select('customer_code').eq('id',matchDog.customer_id).single();
-        const custEl=document.getElementById('inv-cust-id-display');
-        if(custEl&&cp)custEl.textContent=cp.customer_code||'—';
+      // Customer code — from customer_profiles if customer-added
+      const custEl=document.getElementById('inv-cust-id-display');
+      if(custEl){
+        if(matchDog.customer_id){
+          const{data:cp}=await db.from('customer_profiles').select('customer_code').eq('id',matchDog.customer_id).maybeSingle();
+          custEl.textContent=cp?.customer_code||'—';
+        } else {
+          // Admin-added dog — use dog's own code as customer ref
+          custEl.textContent=matchDog.dog_code?matchDog.dog_code.replace('DOG','CUS'):'—';
+        }
       }
 
-      // Session count (visits for this dog)
-      const{count}=await db.from('visits')
-        .select('id',{count:'exact',head:true}).eq('dog_id',matchDog.id);
+      // Session count = number of past visits for this dog
+      const{count}=await db.from('visits').select('id',{count:'exact',head:true}).eq('dog_id',matchDog.id);
       const sessEl=document.getElementById('inv-session-num-display');
-      if(sessEl)sessEl.textContent=count!=null?`#${count+1}`:'—';
+      if(sessEl)sessEl.textContent=count!=null?`#${count+1}`:'#1';
     }
   }catch(e){console.warn('invFillCodes:',e);}
 }
