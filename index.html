@@ -134,6 +134,8 @@ tbody tr:hover{background:var(--subtle)}
 .sched-day{min-width:32px;font-weight:600;font-size:11px;color:var(--muted)}
 .sched-area{flex:1;padding:4px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--subtle)}
 .sched-off{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;white-space:nowrap}
+
+.inv-svc-row{transition:background .12s}
 .loading{text-align:center;padding:2.5rem;color:var(--muted)}
 .spin{display:inline-block;width:17px;height:17px;border:2px solid var(--border);border-top-color:var(--primary-md);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -197,6 +199,7 @@ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
       <button class="nav-tab" onclick="sw('calendar')" id="tab-calendar">📅 Calendar</button>
       <button class="nav-tab" onclick="sw('reminders')" id="tab-reminders">🔔 Reminders</button>
       <button class="nav-tab" onclick="sw('groomers')" id="tab-groomers">✂️ Groomers</button>
+      <button class="nav-tab" onclick="sw('invoice')" id="tab-invoice">🧾 Invoice</button>
     </div>
     <button class="btn btn-g btn-sm" onclick="doSignOut()">Sign out</button>
   </nav>
@@ -264,6 +267,125 @@ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
         <button class="btn btn-p" onclick="openGroomerAdd()">+ Add groomer</button>
       </div>
       <div class="groomer-grid" id="groomer-grid"><div class="loading"><span class="spin"></span>Loading…</div></div>
+    </div>
+
+
+    <!-- INVOICE -->
+    <div class="sec" id="sec-invoice">
+      <div class="toolbar"><span class="toolbar-title">Buat invoice</span></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;align-items:start">
+
+        <!-- LEFT: form -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem">
+
+          <div style="display:flex;gap:6px;margin-bottom:1.25rem">
+            <button class="btn btn-p btn-sm" id="inv-src-appt-btn" onclick="invSetSource('appointment')">📅 Dari appointment</button>
+            <button class="btn btn-g btn-sm" id="inv-src-manual-btn" onclick="invSetSource('manual')">✍️ Manual</button>
+          </div>
+
+          <div id="inv-appt-picker" style="display:none;margin-bottom:1rem">
+            <div class="fg">
+              <label>Pilih appointment</label>
+              <select id="inv-appt-select" onchange="loadInvFromAppt()">
+                <option value="">Pilih appointment…</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 1. Nama -->
+          <div class="fg" style="margin-bottom:.75rem">
+            <label>1. Nama</label>
+            <input id="inv-owner" placeholder="e.g. Sarah" oninput="invPreview()"/>
+          </div>
+
+          <!-- 2. Jenis anjing -->
+          <div class="fg" style="margin-bottom:.75rem">
+            <label>2. Jenis anjing</label>
+            <input id="inv-breed" placeholder="e.g. Poodle, Golden Retriever" oninput="invPreview()"/>
+          </div>
+
+          <!-- 3. Size -->
+          <div class="fg" style="margin-bottom:.75rem">
+            <label>3. Size</label>
+            <select id="inv-size" onchange="invUpdatePrices();invPreview()">
+              <option value="">Pilih size…</option>
+              <option value="XS">XS (&lt;5kg)</option>
+              <option value="S">S (5–10kg)</option>
+              <option value="M">M (11–15kg)</option>
+              <option value="L">L (16–25kg)</option>
+            </select>
+          </div>
+
+          <!-- 4. Service Type -->
+          <div style="margin-bottom:.75rem">
+            <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">4. Service Type</div>
+
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500">Layanan utama (wajib)</div>
+            <div style="background:var(--primary-lt);border-radius:var(--r);padding:9px 12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
+              <span style="font-size:13px;font-weight:500">Basic Grooming</span>
+              <span id="inv-base-price" style="font-size:12px;font-weight:600;color:var(--primary)"></span>
+            </div>
+
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500">Styling (pilih satu)</div>
+            <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:.6rem">
+              <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r);cursor:pointer;font-size:13px">
+                <input type="radio" name="inv-styling" value="styling" onchange="invPreview()"/> Styling / Cukur Pendek
+                <span id="inv-styling-price" style="font-size:11px;color:var(--muted);margin-left:auto"></span>
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r);cursor:pointer;font-size:13px">
+                <input type="radio" name="inv-styling" value="botak" onchange="invPreview()"/> Shaving / Cukur Botak
+                <span id="inv-botak-price" style="font-size:11px;color:var(--muted);margin-left:auto"></span>
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r);cursor:pointer;font-size:13px">
+                <input type="radio" name="inv-styling" value="" checked onchange="invPreview()"/> Tidak ada
+              </label>
+            </div>
+
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500">Add-on (opsional)</div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r);cursor:pointer;font-size:13px">
+                <input type="checkbox" id="inv-dematting" onchange="invPreview()"/> Dematting
+                <span id="inv-dematting-price" style="font-size:11px;color:var(--muted);margin-left:auto"></span>
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r);cursor:pointer;font-size:13px">
+                <input type="checkbox" id="inv-deshedding" onchange="invPreview()"/> Deshedding
+                <span id="inv-deshedding-price" style="font-size:11px;color:var(--muted);margin-left:auto"></span>
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r);cursor:pointer;font-size:13px">
+                <input type="checkbox" id="inv-antifungal" onchange="invPreview()"/> Anti Fungal
+                <span id="inv-antifungal-price" style="font-size:11px;color:var(--muted);margin-left:auto"></span>
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r);cursor:pointer;font-size:13px">
+                <input type="checkbox" id="inv-antikutu" onchange="invPreview()"/> Anti Kutu
+                <span id="inv-antikutu-price" style="font-size:11px;color:var(--muted);margin-left:auto"></span>
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r);cursor:pointer;font-size:13px">
+                <input type="checkbox" id="inv-whitening" onchange="invPreview()"/> Whitening Shampoo
+                <span id="inv-whitening-price" style="font-size:11px;color:var(--muted);margin-left:auto"></span>
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r);cursor:pointer;font-size:13px">
+                <input type="checkbox" id="inv-parfume" onchange="invPreview()"/> Parfume
+                <span style="font-size:11px;color:var(--muted);margin-left:auto">Gratis</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 5. Total Harga -->
+          <div style="background:var(--primary-lt);border-radius:var(--r);padding:12px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+            <span style="font-size:13px;font-weight:600">5. Total Harga</span>
+            <span id="inv-total-display" style="font-size:16px;font-weight:700;color:var(--primary-md)">Rp 0</span>
+          </div>
+
+          <button class="btn btn-p" onclick="invDownloadPDF()" style="width:100%">⬇️ Download PDF</button>
+        </div>
+
+        <!-- RIGHT: preview -->
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem">Preview invoice</div>
+          <div id="inv-preview-box"><div class="empty" style="padding:2rem"><span class="empty-icon">🧾</span>Isi form untuk melihat preview</div></div>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -402,7 +524,8 @@ db.auth.onAuthStateChange((event,session)=>{
   if(event==='PASSWORD_RECOVERY'){
     window.history.replaceState({},document.title,window.location.pathname);
     showAuth('view-reset');
-  } else if(event==='SIGNED_IN'&&session){
+  } else if(event==='SIGNED_IN'&&session&&!dataLoaded){
+    // Only fire showApp if not already loaded (prevents double-fire on page load)
     showApp();
   } else if(event==='SIGNED_OUT'){
     dataLoaded=false;
@@ -451,21 +574,39 @@ async function doSignOut(){
 
 // ── DATA ──────────────────────────────────────────────────────
 async function loadAll(){
-  const [dr,vr,ar,gr]=await Promise.all([
-    db.from('dogs').select('*').order('created_at',{ascending:false}),
-    db.from('visits').select('*,dogs(name,emoji,owner,area,size)').order('visited_at',{ascending:false}),
-    db.from('appointments')
-      .select('*,dogs(name,emoji,area,address,wa,size,prefs,owner,customer_id,breed),customer_profiles(name,phone),groomers(name,phone)')
-      .order('appt_date').order('appt_time'),
-    db.from('groomers').select('*').order('created_at')
-  ]);
-  dogs=dr.data||[];visits=vr.data||[];appts=ar.data||[];groomers=gr.data||[];
+  try{
+    const [dr,vr,ar,gr]=await Promise.all([
+      db.from('dogs').select('*').order('created_at',{ascending:false}),
+      db.from('visits').select('*,dogs(name,emoji,owner,area,size)').order('visited_at',{ascending:false}),
+      db.from('appointments')
+        .select('*,dogs(name,emoji,area,address,wa,size,prefs,owner,customer_id,breed),customer_profiles(name,phone),groomers(name,phone)')
+        .order('appt_date').order('appt_time'),
+      db.from('groomers').select('*').order('created_at')
+    ]);
+    dogs=dr.data||[];
+    visits=vr.data||[];
+    if(ar.error){
+      console.warn('Appointments join issue, retrying:',ar.error.message);
+      const ar2=await db.from('appointments')
+        .select('*,dogs(name,emoji,area,address,wa,size,prefs,owner,customer_id,breed),groomers(name,phone)')
+        .order('appt_date').order('appt_time');
+      appts=ar2.data||[];
+    } else {
+      appts=ar.data||[];
+    }
+    groomers=gr.data||[];
+  }catch(e){
+    console.error('loadAll failed:',e);
+    dogs=[];visits=[];appts=[];groomers=[];
+  }
   dataLoaded=true;
   renderDogs();
   renderGroomers();
   const dogOpts=dogs.map(d=>`<option value="${d.id}">${d.emoji||'🐶'} ${d.name}${d.customer_id?' (customer)':''}</option>`).join('');
-  document.getElementById('hd').innerHTML='<option value="">All dogs</option>'+dogOpts;
-  document.getElementById('appt-dog').innerHTML='<option value="">Select dog…</option>'+dogOpts;
+  const hdEl=document.getElementById('hd');
+  const apptDogEl=document.getElementById('appt-dog');
+  if(hdEl)hdEl.innerHTML='<option value="">All dogs</option>'+dogOpts;
+  if(apptDogEl)apptDogEl.innerHTML='<option value="">Select dog…</option>'+dogOpts;
 }
 
 // ── TABS ──────────────────────────────────────────────────────
@@ -875,9 +1016,189 @@ async function deleteGroomer(id){
   await loadAll();
 }
 
+
+// ── INVOICE ──────────────────────────────────────────────────
+const INV_PRICES={
+  base:{XS:120000,S:140000,M:190000,L:250000},
+  styling:{XS:100000,S:100000,M:120000,L:140000},
+  botak:{XS:60000,S:60000,M:70000,L:80000},
+  dematting:{XS:50000,S:50000,M:50000,L:50000},
+  deshedding:{XS:50000,S:50000,M:50000,L:50000},
+  antifungal:{XS:50000,S:50000,M:55000,L:60000},
+  antikutu:{XS:25000,S:25000,M:30000,L:35000},
+  whitening:{XS:15000,S:15000,M:20000,L:25000}
+};
+const INV_DUR={
+  base:{XS:60,S:60,M:90,L:120},
+  styling:{XS:30,S:30,M:30,L:30},
+  botak:{XS:15,S:15,M:15,L:15},
+  dematting:{XS:15,S:15,M:15,L:15},
+  deshedding:{XS:15,S:15,M:15,L:30}
+};
+
+function invFmtRp(n){return'Rp '+n.toLocaleString('id-ID')}
+function invCalcEnd(t,dur){
+  if(!t)return'—';
+  const[hh,mm]=t.split(':').map(Number);
+  const tot=hh*60+mm+dur;
+  return String(Math.floor(tot/60)).padStart(2,'0')+':'+String(tot%60).padStart(2,'0');
+}
+function invFmtDate(d){
+  if(!d)return'—';
+  return new Date(d+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+}
+
+function invSetSource(src){
+  document.getElementById('inv-src-appt-btn').className='btn btn-sm '+(src==='appointment'?'btn-p':'btn-g');
+  document.getElementById('inv-src-manual-btn').className='btn btn-sm '+(src==='manual'?'btn-p':'btn-g');
+  document.getElementById('inv-appt-picker').style.display=src==='appointment'?'block':'none';
+  if(src==='appointment'){
+    const sel=document.getElementById('inv-appt-select');
+    sel.innerHTML='<option value="">Pilih appointment…</option>'+
+      appts.map(a=>{
+        const dogName=a.dogs?.name||'?';
+        const ownerName=a.dogs?.owner||a.customer_profiles?.name||'?';
+        return`<option value="${a.id}">${a.appt_date} — ${a.dogs?.emoji||'🐶'} ${dogName} (${ownerName})</option>`;
+      }).join('');
+  } else {
+    // Clear for manual
+    document.getElementById('inv-owner').value='';
+    document.getElementById('inv-breed').value='';
+    document.getElementById('inv-size').value='';
+    document.querySelectorAll('input[name="inv-styling"]').forEach(r=>{r.checked=r.value===''});
+    ['inv-dematting','inv-deshedding','inv-antifungal','inv-antikutu','inv-whitening','inv-parfume'].forEach(id=>{
+      const el=document.getElementById(id);if(el)el.checked=false;
+    });
+    document.getElementById('inv-total-display').textContent='Rp 0';
+    document.getElementById('inv-preview-box').innerHTML='<div class="empty" style="padding:2rem"><span class="empty-icon">🧾</span>Isi form untuk melihat preview</div>';
+    invUpdatePrices();
+  }
+}
+
+function loadInvFromAppt(){
+  const id=document.getElementById('inv-appt-select').value;
+  if(!id)return;
+  const a=appts.find(x=>x.id===id);if(!a)return;
+  const d=a.dogs||{};
+  document.getElementById('inv-owner').value=d.owner||a.customer_profiles?.name||'';
+  document.getElementById('inv-breed').value=d.breed||'';
+  document.getElementById('inv-size').value=d.size||'';
+  const base=a.service_base||'';
+  document.querySelectorAll('input[name="inv-styling"]').forEach(r=>{r.checked=r.value===base;});
+  const addons=a.service_addon||[];
+  ['dematting','deshedding','antifungal','antikutu','whitening','parfume'].forEach(k=>{
+    const el=document.getElementById('inv-'+k);
+    if(el)el.checked=addons.includes(k);
+  });
+  invUpdatePrices();
+  invPreview();
+}
+
+function invUpdatePrices(){
+  const sz=document.getElementById('inv-size').value;
+  const ids=['base','styling','botak','dematting','deshedding','antifungal','antikutu','whitening'];
+  ids.forEach(k=>{
+    const el=document.getElementById('inv-'+k+'-price');
+    if(!el)return;
+    if(!sz){el.textContent='';return;}
+    el.textContent=invFmtRp(INV_PRICES[k]?.[sz]||0);
+  });
+}
+
+function invGetServices(){
+  const sz=document.getElementById('inv-size').value||'M';
+  const svcs=[{name:'Basic Grooming',dur:INV_DUR.base[sz],price:INV_PRICES.base[sz]}];
+  const styling=document.querySelector('input[name="inv-styling"]:checked')?.value||'';
+  if(styling==='styling')svcs.push({name:'Styling / Cukur Pendek',dur:INV_DUR.styling[sz],price:INV_PRICES.styling[sz]});
+  if(styling==='botak')svcs.push({name:'Shaving / Cukur Botak',dur:INV_DUR.botak[sz],price:INV_PRICES.botak[sz]});
+  const addonMap={
+    'inv-dematting':{name:'Dematting',dur:INV_DUR.dematting[sz],price:INV_PRICES.dematting[sz]},
+    'inv-deshedding':{name:'Deshedding',dur:INV_DUR.deshedding[sz],price:INV_PRICES.deshedding[sz]},
+    'inv-antifungal':{name:'Anti Fungal',dur:0,price:INV_PRICES.antifungal[sz]},
+    'inv-antikutu':{name:'Anti Kutu',dur:0,price:INV_PRICES.antikutu[sz]},
+    'inv-whitening':{name:'Whitening Shampoo',dur:0,price:INV_PRICES.whitening[sz]},
+    'inv-parfume':{name:'Parfume',dur:0,price:0,free:true}
+  };
+  Object.entries(addonMap).forEach(([id,s])=>{
+    if(document.getElementById(id)?.checked)svcs.push(s);
+  });
+  return svcs;
+}
+
+function invPreview(){
+  const owner=document.getElementById('inv-owner').value.trim();
+  const breed=document.getElementById('inv-breed').value.trim();
+  const sz=document.getElementById('inv-size').value;
+  const svcs=invGetServices();
+  const totalPrice=svcs.reduce((s,x)=>s+(x.price||0),0);
+  const totalDur=svcs.reduce((s,x)=>s+(x.dur||0),0);
+
+  // Update total display live
+  document.getElementById('inv-total-display').textContent=invFmtRp(totalPrice);
+
+  if(!owner&&!breed&&!sz){
+    document.getElementById('inv-preview-box').innerHTML='<div class="empty" style="padding:2rem"><span class="empty-icon">🧾</span>Isi form untuk melihat preview</div>';
+    return;
+  }
+
+  document.getElementById('inv-preview-box').innerHTML=`
+    <div id="printable-invoice" style="background:#fffdf9;border:1px solid #e8d5b7;border-radius:12px;overflow:hidden;font-family:-apple-system,sans-serif">
+      <div style="background:#3d1f0d;padding:1rem;text-align:center;color:#fff">
+        <div style="font-size:17px;font-weight:700">🐾 HOME PAW</div>
+        <div style="font-size:10px;opacity:.75;margin-top:2px;text-transform:uppercase;letter-spacing:1.5px">happy grooming starts at home</div>
+      </div>
+      <div style="padding:.9rem 1.1rem;border-bottom:1px solid #e8d5b7">
+        <div style="font-size:10px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Info pelanggan</div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Nama</span><span style="font-weight:600">${owner||'—'}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Jenis anjing</span><span style="font-weight:500">${breed||'—'}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Size</span><span style="font-weight:500">${sz||'—'}</span></div>
+      </div>
+      <div style="padding:.9rem 1.1rem;border-bottom:1px solid #e8d5b7">
+        <div style="font-size:10px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Service Type</div>
+        ${svcs.map(s=>`
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0e4ce;font-size:13px">
+            <span style="font-weight:500">${s.name}</span>
+            <span style="font-weight:600">${s.free?'Gratis':invFmtRp(s.price)}</span>
+          </div>`).join('')}
+      </div>
+      <div style="padding:.9rem 1.1rem;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:14px;font-weight:600">Total Harga</span>
+        <span style="font-size:18px;font-weight:700;color:#e8822a">${invFmtRp(totalPrice)}</span>
+      </div>
+      <div style="padding:.5rem 1.1rem 1rem;text-align:center;border-top:1px solid #e8d5b7">
+        <div style="font-size:11px;color:#8b6347">Terima kasih sudah mempercayakan perawatan anjing Anda</div>
+        <div style="font-size:12px;font-weight:600;color:#e8822a;margin-top:2px">🐾 Home Paw Grooming</div>
+      </div>
+    </div>`;
+}
+
+function invDownloadPDF(){
+  const box=document.getElementById('printable-invoice');
+  if(!box){alert('Isi form terlebih dahulu.');return}
+  const win=window.open('','_blank');
+  win.document.write('<!DOCTYPE html><html><head><title>Invoice - Home Paw Grooming</title>'
+    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,sans-serif;background:#fff;padding:20px}'
+    +'@media print{body{padding:0}}</style></head><body>'
+    +box.outerHTML
+    +'<script>window.onload=function(){window.print();}<\/script></body></html>');
+  win.document.close();
+}
+
 // ── INIT ─────────────────────────────────────────────────────
 initRemDate();
 initAuth();
+// Patch sw to init invoice tab on first open
+const _swOrig=sw;
+function sw(tab){
+  _swOrig(tab);
+  if(tab==='invoice'){
+    // Set default date
+    const di=document.getElementById('inv-date');
+    if(di&&!di.value)di.value=iso(new Date());
+    // Default to manual if no appts
+    if(!invSource)invSetSource('manual');
+  }
+}
 </script>
 </body>
 </html>
