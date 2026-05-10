@@ -200,6 +200,8 @@ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
       <button class="nav-tab" onclick="sw('reminders')" id="tab-reminders">🔔 Reminders</button>
       <button class="nav-tab" onclick="sw('groomers')" id="tab-groomers">✂️ Groomers</button>
       <button class="nav-tab" onclick="sw('invoice')" id="tab-invoice">🧾 Invoice</button>
+      <button class="nav-tab" onclick="sw('database')" id="tab-database">🗃️ Database</button>
+      <button class="nav-tab" onclick="sw('financial')" id="tab-financial">💰 Financial</button>
     </div>
     <button class="btn btn-g btn-sm" onclick="doSignOut()">Sign out</button>
   </nav>
@@ -382,6 +384,7 @@ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
               <div class="fg">
                 <label>Interval</label>
                 <select id="inv-interval" onchange="invPreview()">
+                  <option value="none">Belum dijadwalkan</option>
                   <option value="7">Tiap 1 minggu</option>
                   <option value="14">Tiap 2 minggu</option>
                   <option value="28">Tiap 4 minggu</option>
@@ -428,9 +431,10 @@ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
             </div>
           </div>
 
-          <div style="display:flex;gap:8px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-p" onclick="invDownloadPDF()" style="flex:1">⬇️ Download PDF</button>
             <button class="btn btn-g" id="inv-save-btn" onclick="invSaveAppointments()" style="flex:1" title="Simpan semua sesi ke kalender">📅 Simpan ke kalender</button>
+            <button class="btn btn-g" onclick="invSaveToDB()" style="flex:1">💾 Simpan invoice</button>
           </div>
           <div id="inv-save-result" style="font-size:12px;margin-top:6px;color:var(--muted)"></div>
         </div>
@@ -443,6 +447,69 @@ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
       </div>
     </div>
 
+
+    <!-- DATABASE -->
+    <div class="sec" id="sec-database">
+      <div class="toolbar">
+        <span class="toolbar-title">Customer database</span>
+        <input id="db-search" placeholder="🔍 Cari nama, WA, area…" oninput="renderDatabase()" style="padding:7px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface);min-width:200px"/>
+      </div>
+      <div id="db-content"><div class="loading"><span class="spin"></span>Loading…</div></div>
+    </div>
+
+    <!-- FINANCIAL -->
+    <div class="sec" id="sec-financial">
+      <div class="toolbar"><span class="toolbar-title">Financial</span></div>
+
+      <!-- Summary cards -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.25rem">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;text-align:center">
+          <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Total invoiced</div>
+          <div style="font-size:20px;font-weight:700;color:var(--text)" id="fin-total-invoiced">Rp 0</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;text-align:center">
+          <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Sudah dibayar</div>
+          <div style="font-size:20px;font-weight:700;color:var(--primary-md)" id="fin-total-paid">Rp 0</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;text-align:center">
+          <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Belum dibayar</div>
+          <div style="font-size:20px;font-weight:700;color:#991b1b" id="fin-total-unpaid">Rp 0</div>
+        </div>
+      </div>
+
+      <!-- Invoice list -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);margin-bottom:1.25rem">
+        <div style="padding:.9rem 1.1rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;font-weight:600">Invoice list</span>
+          <select id="fin-filter" onchange="renderFinancial()" style="padding:5px 9px;border:1px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--surface)">
+            <option value="all">Semua</option>
+            <option value="unpaid">Belum dibayar</option>
+            <option value="paid">Sudah dibayar</option>
+          </select>
+        </div>
+        <div id="fin-invoice-list"><div class="loading" style="padding:1.5rem"><span class="spin"></span>Loading…</div></div>
+      </div>
+
+      <!-- Bank details editor -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem">
+        <div style="font-size:13px;font-weight:600;margin-bottom:1rem">🏦 Detail rekening</div>
+        <div class="form-grid" style="margin-bottom:1rem">
+          <div class="fg"><label>Nama bank</label><input id="bank-name" placeholder="Krom Bank"/></div>
+          <div class="fg"><label>No. rekening</label><input id="bank-account" placeholder="770055777787"/></div>
+          <div class="fg full"><label>Atas nama</label><input id="bank-holder" placeholder="Xavier Fidelia Ali"/></div>
+        </div>
+        <button class="btn btn-p" onclick="saveBankDetails()">💾 Simpan detail rekening</button>
+        <span id="bank-saved" style="font-size:12px;color:var(--primary-md);margin-left:.75rem;display:none">✓ Tersimpan!</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- CUSTOMER DETAIL MODAL -->
+<div class="overlay" id="ov-customer">
+  <div class="modal" style="max-width:620px">
+    <div id="customer-detail-content"></div>
   </div>
 </div>
 
@@ -677,6 +744,8 @@ function sw(tab){
     if(di&&!di.value)di.value=iso(new Date());
     invUpdatePrices();
   }
+  if(tab==='database')renderDatabase();
+  if(tab==='financial')loadFinancial();
 }
 
 // ── CLIENTS ──────────────────────────────────────────────────
@@ -1121,6 +1190,7 @@ function setDiscType(t){
 
 function invGetIntervalDays(){
   const sel=document.getElementById('inv-interval').value;
+  if(sel==='none') return null;
   if(sel==='custom'){
     const v=parseInt(document.getElementById('inv-custom-days')?.value)||7;
     return v;
@@ -1257,9 +1327,11 @@ function invPreview(){
   if(totalEl)totalEl.textContent=invFmtRp(total);
 
   // Sessions info
-  if(sessInfo&&sessions>1&&startDate){
+  if(sessInfo&&sessions>1&&startDate&&intervalDays){
     const dates=Array.from({length:sessions},(_,i)=>invAddDays(startDate,i*intervalDays));
     sessInfo.textContent=`${sessions} sesi: ${dates.map(d=>new Date(d+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric',month:'short'})).join(' · ')}`;
+  } else if(sessInfo&&sessions>1&&!intervalDays){
+    sessInfo.textContent=`${sessions} sesi — jadwal akan ditentukan kemudian`;
   } else if(sessInfo){sessInfo.textContent='';}
 
   if(!owner&&!breed&&!sz){
@@ -1269,7 +1341,7 @@ function invPreview(){
 
   // Build sessions schedule for preview
   let scheduleHTML='';
-  if(sessions>1&&startDate){
+  if(sessions>1&&startDate&&intervalDays){
     const dates=Array.from({length:sessions},(_,i)=>invAddDays(startDate,i*intervalDays));
     scheduleHTML=`<div style="padding:.9rem 1.1rem;border-bottom:1px solid #e8d5b7">
       <div style="font-size:10px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Jadwal sesi</div>
@@ -1277,6 +1349,10 @@ function invPreview(){
         <span style="color:#8b6347">Sesi ${i+1}</span>
         <span style="font-weight:500">${new Date(d+'T00:00:00').toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</span>
       </div>`).join('')}
+    </div>`;
+  } else if(sessions>1&&!intervalDays){
+    scheduleHTML=`<div style="padding:.75rem 1.4rem;border-bottom:1px solid #e8d5b7;background:#fdf3e7">
+      <div style="font-size:12px;color:#8b6347;font-style:italic">📋 ${sessions} sesi — jadwal akan ditentukan kemudian</div>
     </div>`;
   }
 
@@ -1434,7 +1510,7 @@ async function invSaveAppointments(){
   const dur=svcs.reduce((s,x)=>s+(x.dur||0),0);
 
   const rows=Array.from({length:sessions},(_,i)=>{
-    const apptDate=invAddDays(startDate,i*intervalDays);
+    const apptDate=intervalDays&&startDate?invAddDays(startDate,i*intervalDays):null;
     return{
       dog_id:matchDog?.id||null,
       appt_date:apptDate,
@@ -1457,6 +1533,170 @@ async function invSaveAppointments(){
     await loadAll();
   }
 }
+
+// ── DATABASE ─────────────────────────────────────────────────
+function renderDatabase(){
+  const search=(document.getElementById('db-search')?.value||'').toLowerCase();
+  const el=document.getElementById('db-content');
+  if(!el)return;
+  const customerMap={};
+  dogs.filter(d=>!d.customer_id).forEach(d=>{
+    const key='admin_'+(d.owner||'').toLowerCase();
+    if(!customerMap[key])customerMap[key]={type:'admin',name:d.owner||'—',wa:d.wa||'',area:d.area||'',address:d.address||'',customer_code:'—',dogs:[]};
+    customerMap[key].dogs.push(d);
+  });
+  dogs.filter(d=>!!d.customer_id).forEach(d=>{
+    const key='cust_'+d.customer_id;
+    if(!customerMap[key])customerMap[key]={type:'customer',customerId:d.customer_id,name:'—',wa:'',area:'',address:'',customer_code:'—',dogs:[]};
+    customerMap[key].dogs.push(d);
+  });
+  let rows=Object.values(customerMap);
+  if(search) rows=rows.filter(c=>c.name.toLowerCase().includes(search)||c.wa.includes(search)||c.area.toLowerCase().includes(search)||c.dogs.some(d=>(d.name||'').toLowerCase().includes(search)));
+  if(!rows.length){el.innerHTML='<div class="empty"><span class="empty-icon">🗃️</span>No customers found.</div>';return;}
+  const fmtRp=n=>'Rp '+(n||0).toLocaleString('id-ID');
+  el.innerHTML='<div class="tbl-wrap"><table><thead><tr><th>Nama</th><th>Dog(s)</th><th>WhatsApp</th><th>Area</th><th>Appts</th><th>Type</th><th></th></tr></thead><tbody>'+
+    rows.map((c,i)=>{
+      const dogNames=c.dogs.map(d=>(d.emoji||'🐶')+' '+d.name).join(', ')||'—';
+      const apptCount=appts.filter(a=>c.dogs.some(d=>d.id===a.dog_id)).length;
+      const key='dbrow_'+i;
+      window['_dbrow_'+i]=c;
+      return '<tr style="cursor:pointer" onclick="openCustomerDetail(\''+key+'\')"><td><strong>'+c.name+'</strong></td><td style="font-size:12px">'+dogNames+'</td><td>'+(c.wa?'<a class="wa-lnk" href="https://wa.me/62'+c.wa.replace(/^0/,'')+'" target="_blank" onclick="event.stopPropagation()">'+c.wa+'</a>':'—')+'</td><td>'+( c.area||'—')+'</td><td style="text-align:center">'+apptCount+'</td><td><span class="badge '+(c.type==='customer'?'bc':'bs')+'">'+(c.type==='customer'?'Portal':'Admin')+'</span></td><td><button class="btn btn-g btn-sm" onclick="event.stopPropagation();openCustomerDetail(\''+key+'\')">→</button></td></tr>';
+    }).join('')+'</tbody></table></div>';
+}
+
+async function openCustomerDetail(key){
+  const c=window[key];
+  if(!c)return;
+  const el=document.getElementById('customer-detail-content');
+  if(!el)return;
+  const dogIds=c.dogs.map(d=>d.id).filter(Boolean);
+  let custInvoices=[];
+  if(dogIds.length){
+    const{data:invData}=await db.from('invoices').select('*').in('dog_id',dogIds).order('created_at',{ascending:false});
+    custInvoices=invData||[];
+  }
+  const custAppts=appts.filter(a=>c.dogs.some(d=>d.id===a.dog_id));
+  window._currentCustKey=key;
+  el.innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem"><div style="width:44px;height:44px;border-radius:50%;background:var(--primary-lt);display:flex;align-items:center;justify-content:center;font-size:20px">👤</div><div style="flex:1"><div style="font-size:16px;font-weight:600">'+c.name+'</div><div style="font-size:11px;color:var(--muted)">'+(c.type==='customer'?'Customer portal':'Admin-added')+'</div></div><button class="btn btn-g btn-sm" onclick="cm(\'ov-customer\')">✕ Close</button></div>'
+  +'<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem">Info pelanggan</div>'
+  +'<div class="form-grid" style="margin-bottom:1rem"><div class="fg"><label>Nama</label><input id="cd-name" value="'+c.name+'"/></div><div class="fg"><label>WhatsApp</label><input id="cd-wa" value="'+c.wa+'"/></div><div class="fg full"><label>Alamat</label><input id="cd-addr" value="'+c.address+'"/></div><div class="fg"><label>Area</label><input id="cd-area" value="'+c.area+'"/></div></div>'
+  +'<div style="margin-bottom:1.25rem"><button class="btn btn-p btn-sm" onclick="saveCustomerFromDetail()">💾 Simpan perubahan</button><span id="cd-saved" style="font-size:12px;color:var(--primary-md);margin-left:.75rem;display:none">✓ Tersimpan!</span></div>'
+  +'<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem">Dogs ('+c.dogs.length+')</div>'
+  +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1.25rem">'+c.dogs.map(d=>'<div style="background:var(--primary-lt);border-radius:var(--r);padding:7px 11px;font-size:12px"><strong>'+(d.emoji||'🐶')+' '+d.name+'</strong> · '+(d.breed||'—')+' · '+(d.size||'—')+(d.dog_code?' <span style="font-size:10px;color:var(--muted);font-family:monospace">'+d.dog_code+'</span>':'')+'</div>').join('')+'</div>'
+  +'<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem">Appointments ('+custAppts.length+')</div>'
+  +(custAppts.length?'<div class="tbl-wrap" style="margin-bottom:1.25rem"><table><thead><tr><th>Date</th><th>Dog</th><th>Time</th><th>Status</th></tr></thead><tbody>'+custAppts.map(a=>'<tr><td>'+( a.appt_date||'—')+'</td><td>'+(a.dogs?.emoji||'🐶')+' '+(a.dogs?.name||'—')+'</td><td>'+(a.appt_time?.slice(0,5)||'—')+'</td><td><span class="badge '+(a.status==='done'?'bs':a.status==='confirmed'?'bc':'bm')+'">'+(a.status||'pending')+'</span></td></tr>').join('')+'</tbody></table></div>':'<div style="font-size:12px;color:var(--muted);margin-bottom:1.25rem">Belum ada appointment.</div>')
+  +'<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem">Invoices ('+custInvoices.length+')</div>'
+  +(custInvoices.length?'<div class="tbl-wrap"><table><thead><tr><th>Invoice #</th><th>Tanggal</th><th>Sesi</th><th>Total</th><th>Status</th></tr></thead><tbody>'+custInvoices.map(inv=>'<tr><td style="font-family:monospace;font-size:12px">'+(inv.invoice_number||'—')+'</td><td style="font-size:12px">'+(inv.created_at?.slice(0,10)||'—')+'</td><td style="text-align:center">'+(inv.sessions||1)+'</td><td style="font-weight:600">Rp '+(inv.total||0).toLocaleString('id-ID')+'</td><td><span class="badge '+(inv.status==='paid'?'bs':'bm')+'">'+(inv.status==='paid'?'Paid':'Unpaid')+'</span></td></tr>').join('')+'</tbody></table></div>':'<div style="font-size:12px;color:var(--muted)">Belum ada invoice.</div>');
+  om('ov-customer');
+}
+
+async function saveCustomerFromDetail(){
+  const c=window[window._currentCustKey];
+  if(!c)return;
+  const name=document.getElementById('cd-name').value.trim();
+  const wa=document.getElementById('cd-wa').value.trim();
+  const addr=document.getElementById('cd-addr').value.trim();
+  const area=document.getElementById('cd-area').value.trim();
+  const updates=[];
+  for(const dog of c.dogs){
+    if(c.type==='admin') updates.push(db.from('dogs').update({owner:name,wa,address:addr,area}).eq('id',dog.id));
+  }
+  if(c.type==='customer'&&c.customerId) updates.push(db.from('customer_profiles').update({name,phone:wa,address:addr,area}).eq('id',c.customerId));
+  await Promise.all(updates);
+  await loadAll();
+  const saved=document.getElementById('cd-saved');
+  if(saved){saved.style.display='inline';setTimeout(()=>{saved.style.display='none';},2000);}
+}
+
+// ── FINANCIAL ────────────────────────────────────────────────
+let savedInvoices=[];
+let bankSettings={bank_name:'Krom Bank',bank_account:'770055777787',bank_holder:'Xavier Fidelia Ali'};
+
+async function loadFinancial(){
+  const[invRes,bankRes]=await Promise.all([
+    db.from('invoices').select('*').order('created_at',{ascending:false}),
+    db.from('business_settings').select('*').eq('id',1).maybeSingle()
+  ]);
+  savedInvoices=invRes.data||[];
+  if(bankRes.data){
+    bankSettings=bankRes.data;
+    const bn=document.getElementById('bank-name');
+    const ba=document.getElementById('bank-account');
+    const bh=document.getElementById('bank-holder');
+    if(bn)bn.value=bankSettings.bank_name||'';
+    if(ba)ba.value=bankSettings.bank_account||'';
+    if(bh)bh.value=bankSettings.bank_holder||'';
+  }
+  renderFinancial();
+}
+
+function renderFinancial(){
+  const filter=document.getElementById('fin-filter')?.value||'all';
+  let rows=[...savedInvoices];
+  if(filter==='paid') rows=rows.filter(i=>i.status==='paid');
+  if(filter==='unpaid') rows=rows.filter(i=>i.status!=='paid');
+  const fmtRp=n=>'Rp '+(n||0).toLocaleString('id-ID');
+  const totalInvoiced=savedInvoices.reduce((s,i)=>s+(i.total||0),0);
+  const totalPaid=savedInvoices.filter(i=>i.status==='paid').reduce((s,i)=>s+(i.total||0),0);
+  document.getElementById('fin-total-invoiced').textContent=fmtRp(totalInvoiced);
+  document.getElementById('fin-total-paid').textContent=fmtRp(totalPaid);
+  document.getElementById('fin-total-unpaid').textContent=fmtRp(totalInvoiced-totalPaid);
+  const el=document.getElementById('fin-invoice-list');
+  if(!rows.length){el.innerHTML='<div class="empty" style="padding:1.5rem"><span class="empty-icon">🧾</span>Belum ada invoice tersimpan.</div>';return;}
+  el.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
+    +'<th style="background:var(--subtle);padding:9px 13px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">Invoice #</th>'
+    +'<th style="background:var(--subtle);padding:9px 13px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">Customer</th>'
+    +'<th style="background:var(--subtle);padding:9px 13px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">Tanggal</th>'
+    +'<th style="background:var(--subtle);padding:9px 13px;text-align:center;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">Sesi</th>'
+    +'<th style="background:var(--subtle);padding:9px 13px;text-align:right;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">Total</th>'
+    +'<th style="background:var(--subtle);padding:9px 13px;text-align:center;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">Status</th>'
+    +'</tr></thead><tbody>'
+    +rows.map(inv=>'<tr style="border-bottom:1px solid var(--border)">'
+      +'<td style="padding:9px 13px;font-family:monospace;font-size:12px">'+(inv.invoice_number||'—')+'</td>'
+      +'<td style="padding:9px 13px"><strong>'+(inv.owner_name||'—')+'</strong><br><span style="font-size:11px;color:var(--muted)">'+(inv.breed||'')+' '+(inv.dog_size?'· '+inv.dog_size:'')+'</span></td>'
+      +'<td style="padding:9px 13px;font-size:12px;white-space:nowrap">'+(inv.created_at?.slice(0,10)||'—')+'</td>'
+      +'<td style="padding:9px 13px;text-align:center">'+(inv.sessions||1)+'</td>'
+      +'<td style="padding:9px 13px;text-align:right;font-weight:600">'+fmtRp(inv.total)+'</td>'
+      +'<td style="padding:9px 13px;text-align:center"><button onclick="toggleInvPaid(\''+inv.id+'\',\''+inv.status+'\')" class="badge '+(inv.status==='paid'?'bs':'bm')+'" style="border:none;cursor:pointer;padding:3px 10px;font-size:11px">'+(inv.status==='paid'?'✓ Paid':'Unpaid')+'</button></td>'
+      +'</tr>').join('')
+    +'</tbody></table>';
+}
+
+async function toggleInvPaid(id,currentStatus){
+  const newStatus=currentStatus==='paid'?'unpaid':'paid';
+  await db.from('invoices').update({status:newStatus}).eq('id',id);
+  await loadFinancial();
+}
+
+async function saveBankDetails(){
+  const bank_name=document.getElementById('bank-name').value.trim();
+  const bank_account=document.getElementById('bank-account').value.trim();
+  const bank_holder=document.getElementById('bank-holder').value.trim();
+  await db.from('business_settings').upsert({id:1,bank_name,bank_account,bank_holder,updated_at:new Date().toISOString()});
+  bankSettings={bank_name,bank_account,bank_holder};
+  const saved=document.getElementById('bank-saved');
+  if(saved){saved.style.display='inline';setTimeout(()=>{saved.style.display='none';},2000);}
+}
+
+// ── SAVE INVOICE TO DB ────────────────────────────────────────
+async function invSaveToDB(){
+  const owner=document.getElementById('inv-owner')?.value.trim();
+  const breed=document.getElementById('inv-breed')?.value.trim();
+  const sz=document.getElementById('inv-size')?.value;
+  const res=document.getElementById('inv-save-result');
+  if(!owner||!sz){res.textContent='Isi nama dan size terlebih dahulu.';res.style.color='#991b1b';return;}
+  const{svcs,subtotalPerSession,subtotalAll,discAmt,total}=invCalcTotals();
+  const sessions=Math.max(1,parseInt(document.getElementById('inv-sessions')?.value)||1);
+  const discVal=parseFloat(document.getElementById('inv-discount')?.value)||0;
+  const invNum='HPG-'+new Date().toISOString().slice(2,10).replace(/-/g,'')+'-'+String(Math.floor(Math.random()*900)+100);
+  const matchDog=dogs.find(d=>d.owner?.toLowerCase()===owner.toLowerCase())||dogs.find(d=>d.breed?.toLowerCase()===breed?.toLowerCase()&&d.size===sz)||null;
+  const payload={invoice_number:invNum,dog_id:matchDog?.id||null,owner_name:owner,breed:breed||'',dog_size:sz,services:svcs,subtotal:subtotalPerSession,sessions,discount_type:invDiscType,discount_value:discVal,discount_amount:Math.round(discAmt),total:Math.round(total),status:'unpaid'};
+  res.textContent='Menyimpan…';res.style.color='var(--muted)';
+  const{error}=await db.from('invoices').insert(payload);
+  if(error){res.textContent='Gagal: '+error.message;res.style.color='#991b1b';}
+  else{res.textContent='Invoice '+invNum+' tersimpan!';res.style.color='#16a34a';}
+}
+
 
 // ── INIT ─────────────────────────────────────────────────────
 initRemDate();
