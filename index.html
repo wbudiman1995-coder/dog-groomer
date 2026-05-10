@@ -1280,39 +1280,124 @@ function invPreview(){
     </div>`;
   }
 
+  const invNum='HPG-'+new Date().toISOString().slice(2,10).replace(/-/g,'')+'-'+String(Math.floor(Math.random()*900)+100);
+  const invDate=new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});
+
   document.getElementById('inv-preview-box').innerHTML=`
-    <div id="printable-invoice" style="background:#fffdf9;border:1px solid #e8d5b7;border-radius:12px;overflow:hidden;font-family:-apple-system,sans-serif">
-      <div style="background:#3d1f0d;padding:1rem;text-align:center;color:#fff">
-        <div style="font-size:17px;font-weight:700">🐾 HOME PAW</div>
-        <div style="font-size:10px;opacity:.75;margin-top:2px;text-transform:uppercase;letter-spacing:1.5px">happy grooming starts at home</div>
+    <div id="printable-invoice" style="background:#fffdf9;border:1px solid #e8d5b7;border-radius:14px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+
+      <div style="background:#3d1f0d;padding:1.1rem 1.4rem;display:flex;align-items:center;gap:14px">
+        <img src="data:image/png;base64,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" style="width:58px;height:58px;object-fit:contain;border-radius:10px;background:#f5ead8;padding:3px;flex-shrink:0" alt="Home Paw"/>
+        <div style="flex:1">
+          <div style="font-size:18px;font-weight:800;color:#f5ead8;letter-spacing:.5px;line-height:1.1">HOME PAW</div>
+          <div style="font-size:10px;font-weight:600;color:#c97d4e;letter-spacing:1px;margin-top:1px">GROOMING</div>
+          <div style="font-size:10px;color:#8b6347;margin-top:1px">happy grooming starts at home</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:10px;color:#8b6347;text-transform:uppercase;letter-spacing:.05em">Invoice</div>
+          <div style="font-size:12px;font-weight:700;color:#f9d9a8;font-family:monospace">${invNum}</div>
+          <div style="font-size:10px;color:#8b6347;margin-top:2px">${invDate}</div>
+        </div>
       </div>
-      <div style="padding:.9rem 1.1rem;border-bottom:1px solid #e8d5b7">
-        <div style="font-size:10px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Info pelanggan</div>
-        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Nama</span><span style="font-weight:600">${owner||'—'}</span></div>
-        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Jenis anjing</span><span style="font-weight:500">${breed||'—'}</span></div>
-        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Size</span><span style="font-weight:500">${sz||'—'}</span></div>
+
+      <div style="background:#f9d9a8;padding:8px 1.4rem;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;border-bottom:1px solid #e8d5b7">
+        <div>
+          <div style="font-size:9px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.05em">Customer</div>
+          <div style="font-size:12px;font-weight:700;color:#3d1f0d;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${owner||'—'}</div>
+        </div>
+        <div>
+          <div style="font-size:9px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.05em">Customer ID</div>
+          <div style="font-size:11px;font-weight:600;color:#3d1f0d;margin-top:1px;font-family:monospace" id="inv-cust-id-display">—</div>
+        </div>
+        <div>
+          <div style="font-size:9px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.05em">Dog Code</div>
+          <div style="font-size:11px;font-weight:600;color:#3d1f0d;margin-top:1px;font-family:monospace" id="inv-dog-code-display">—</div>
+        </div>
+        <div>
+          <div style="font-size:9px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.05em">Sesi ke-</div>
+          <div style="font-size:12px;font-weight:700;color:#3d1f0d;margin-top:1px" id="inv-session-num-display">—</div>
+        </div>
       </div>
-      <div style="padding:.9rem 1.1rem;border-bottom:1px solid #e8d5b7">
-        <div style="font-size:10px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Service Type</div>
-        ${svcs.map(s=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0e4ce;font-size:12px">
-          <span style="font-weight:500">${s.name}</span>
-          <span style="font-weight:600">${s.free?'Gratis':invFmtRp(s.price)}</span>
+
+      <div style="padding:.9rem 1.4rem;border-bottom:1px solid #e8d5b7">
+        <div style="font-size:10px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Info anjing</div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Jenis anjing</span><span style="font-weight:500;color:#3d1f0d">${breed||'—'}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Size</span><span style="font-weight:500;color:#3d1f0d">${sz||'—'}</span></div>
+      </div>
+
+      <div style="padding:.9rem 1.4rem;border-bottom:1px solid #e8d5b7">
+        <div style="font-size:10px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Service Type</div>
+        ${svcs.map(s=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0e4ce;font-size:13px">
+          <span style="color:#3d1f0d">${s.name}</span>
+          <span style="font-weight:600;color:#3d1f0d">${s.free?'Gratis':invFmtRp(s.price)}</span>
         </div>`).join('')}
       </div>
+
       ${scheduleHTML}
-      <div style="padding:.9rem 1.1rem;border-bottom:1px solid #e8d5b7">
+
+      <div style="padding:.9rem 1.4rem;border-bottom:1px solid #e8d5b7">
         <div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;color:#8b6347"><span>Subtotal per sesi</span><span>${invFmtRp(subtotalPerSession)}</span></div>
         ${sessions>1?`<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;color:#8b6347"><span>× ${sessions} sesi</span><span>${invFmtRp(subtotalAll)}</span></div>`:''}
         ${discAmt>0?`<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;color:#991b1b"><span>${invDiscType==='pct'?`Diskon ${discVal}%`:'Diskon'}</span><span>- ${invFmtRp(discAmt)}</span></div>`:''}
-        <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:15px;font-weight:700;border-top:1px solid #e8d5b7;margin-top:4px">
-          <span>Total Harga</span><span style="color:#e8822a">${invFmtRp(total)}</span>
+        <div style="display:flex;justify-content:space-between;padding:7px 0 2px;font-size:16px;font-weight:700;border-top:1px solid #e8d5b7;margin-top:5px">
+          <span style="color:#3d1f0d">Total Harga</span><span style="color:#e8822a">${invFmtRp(total)}</span>
         </div>
       </div>
-      <div style="padding:.75rem 1.1rem;text-align:center">
-        <div style="font-size:11px;color:#8b6347">Terima kasih sudah mempercayakan perawatan anjing Anda</div>
-        <div style="font-size:12px;font-weight:600;color:#e8822a;margin-top:2px">🐾 Home Paw Grooming</div>
+
+      <div style="padding:.9rem 1.4rem;border-bottom:1px solid #e8d5b7;background:#fdf3e7">
+        <div style="font-size:10px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Pembayaran</div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">No. Rekening</span><span style="font-weight:700;color:#3d1f0d;font-family:monospace;letter-spacing:.5px">770055777787</span></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Bank</span><span style="font-weight:500;color:#3d1f0d">Krom Bank</span></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Atas nama</span><span style="font-weight:500;color:#3d1f0d">Xavier Fidelia Ali</span></div>
+      </div>
+
+      <div style="padding:.9rem 1.4rem;text-align:center">
+        <div style="font-size:11px;color:#8b6347">Terima kasih sudah mempercayakan perawatan anjing Anda 🐾</div>
+        <div style="font-size:12px;font-weight:700;color:#e8822a;margin-top:3px">Home Paw Grooming</div>
       </div>
     </div>`;
+
+  invFillCodes(owner,breed,sz);
+}
+
+async function invFillCodes(ownerName,breed,sz){
+  // Look up customer ID and dog code from DB, and count sessions for this dog
+  try{
+    // Find matching dog by breed+size or owner name
+    let matchDog=null;
+    if(ownerName){
+      const{data:d1}=await db.from('dogs')
+        .select('id,dog_code,owner,customer_id')
+        .ilike('owner',ownerName).limit(1).single();
+      if(d1)matchDog=d1;
+    }
+    if(!matchDog&&breed&&sz){
+      const{data:d2}=await db.from('dogs')
+        .select('id,dog_code,owner,customer_id')
+        .ilike('breed',breed).eq('size',sz).limit(1).single();
+      if(d2)matchDog=d2;
+    }
+
+    if(matchDog){
+      // Dog code
+      const dogCodeEl=document.getElementById('inv-dog-code-display');
+      if(dogCodeEl)dogCodeEl.textContent=matchDog.dog_code||'—';
+
+      // Customer code
+      if(matchDog.customer_id){
+        const{data:cp}=await db.from('customer_profiles')
+          .select('customer_code').eq('id',matchDog.customer_id).single();
+        const custEl=document.getElementById('inv-cust-id-display');
+        if(custEl&&cp)custEl.textContent=cp.customer_code||'—';
+      }
+
+      // Session count (visits for this dog)
+      const{count}=await db.from('visits')
+        .select('id',{count:'exact',head:true}).eq('dog_id',matchDog.id);
+      const sessEl=document.getElementById('inv-session-num-display');
+      if(sessEl)sessEl.textContent=count!=null?`#${count+1}`:'—';
+    }
+  }catch(e){console.warn('invFillCodes:',e);}
 }
 
 function invDownloadPDF(){
