@@ -371,13 +371,68 @@ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
             </div>
           </div>
 
-          <!-- 5. Total Harga -->
-          <div style="background:var(--primary-lt);border-radius:var(--r);padding:12px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-            <span style="font-size:13px;font-weight:600">5. Total Harga</span>
-            <span id="inv-total-display" style="font-size:16px;font-weight:700;color:var(--primary-md)">Rp 0</span>
+          <!-- 5. Advance Booking -->
+          <div style="margin-bottom:.75rem">
+            <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">5. Advance Booking</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+              <div class="fg">
+                <label>Jumlah sesi</label>
+                <input type="number" id="inv-sessions" value="1" min="1" max="52" oninput="invPreview()" style="text-align:center;font-weight:600"/>
+              </div>
+              <div class="fg">
+                <label>Interval</label>
+                <select id="inv-interval" onchange="invPreview()">
+                  <option value="7">Tiap 1 minggu</option>
+                  <option value="14">Tiap 2 minggu</option>
+                  <option value="28">Tiap 4 minggu</option>
+                  <option value="custom">Custom…</option>
+                </select>
+              </div>
+              <div class="fg" id="inv-custom-interval-wrap" style="display:none">
+                <label>Hari</label>
+                <input type="number" id="inv-custom-days" value="7" min="1" max="365" oninput="invPreview()" placeholder="hari"/>
+              </div>
+              <div class="fg">
+                <label>Tanggal mulai</label>
+                <input type="date" id="inv-start-date" oninput="invPreview()"/>
+              </div>
+            </div>
+            <div id="inv-sessions-info" style="font-size:11px;color:var(--muted);margin-top:5px"></div>
           </div>
 
-          <button class="btn btn-p" onclick="invDownloadPDF()" style="width:100%">⬇️ Download PDF</button>
+          <!-- 6. Discount -->
+          <div style="margin-bottom:.75rem">
+            <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">6. Diskon</div>
+            <div style="display:flex;gap:6px;margin-bottom:6px">
+              <button class="btn btn-sm" id="disc-pct-btn" onclick="setDiscType('pct')" style="background:var(--primary-md);color:#fff">%</button>
+              <button class="btn btn-g btn-sm" id="disc-rp-btn" onclick="setDiscType('rp')">Rp</button>
+              <input type="number" id="inv-discount" value="0" min="0" oninput="invPreview()" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle)"/>
+              <span id="inv-disc-unit" style="display:flex;align-items:center;font-size:13px;color:var(--muted);font-weight:600">%</span>
+            </div>
+          </div>
+
+          <!-- 7. Total Harga -->
+          <div style="background:var(--primary-lt);border-radius:var(--r);padding:12px 14px;margin-bottom:1rem">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:3px">
+              <span>Subtotal per sesi</span><span id="inv-subtotal-display">Rp 0</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:3px" id="inv-sessions-row" style="display:none">
+              <span id="inv-sessions-label">× 1 sesi</span><span id="inv-sessions-total">Rp 0</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--red-t);margin-bottom:4px" id="inv-disc-row">
+              <span id="inv-disc-label">Diskon</span><span id="inv-disc-amount">- Rp 0</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;border-top:1px solid var(--border);padding-top:6px;margin-top:3px">
+              <span>Total Harga</span>
+              <span id="inv-total-display" style="color:var(--primary-md)">Rp 0</span>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-p" onclick="invDownloadPDF()" style="flex:1">⬇️ Download PDF</button>
+            <button class="btn btn-g" id="inv-save-btn" onclick="invSaveAppointments()" style="flex:1" title="Simpan semua sesi ke kalender">📅 Simpan ke kalender</button>
+          </div>
+          <div id="inv-save-result" style="font-size:12px;margin-top:6px;color:var(--muted)"></div>
         </div>
 
         <!-- RIGHT: preview -->
@@ -1023,7 +1078,6 @@ async function deleteGroomer(id){
 
 
 // ── INVOICE ──────────────────────────────────────────────────
-let invSource='manual';
 const INV_PRICES={
   base:{XS:120000,S:140000,M:190000,L:250000},
   styling:{XS:100000,S:100000,M:120000,L:140000},
@@ -1041,20 +1095,50 @@ const INV_DUR={
   dematting:{XS:15,S:15,M:15,L:15},
   deshedding:{XS:15,S:15,M:15,L:30}
 };
+let invSource='manual';
+let invDiscType='pct';
 
-function invFmtRp(n){return'Rp '+n.toLocaleString('id-ID')}
-function invCalcEnd(t,dur){
-  if(!t)return'—';
-  const[hh,mm]=t.split(':').map(Number);
-  const tot=hh*60+mm+dur;
-  return String(Math.floor(tot/60)).padStart(2,'0')+':'+String(tot%60).padStart(2,'0');
-}
+function invFmtRp(n){return'Rp '+Math.round(n).toLocaleString('id-ID')}
 function invFmtDate(d){
   if(!d)return'—';
   return new Date(d+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 }
+function invAddDays(dateStr,days){
+  const d=new Date(dateStr+'T00:00:00');
+  d.setDate(d.getDate()+days);
+  return d.toISOString().split('T')[0];
+}
+
+function setDiscType(t){
+  invDiscType=t;
+  document.getElementById('disc-pct-btn').style.cssText='background:var(--primary-md);color:#fff';
+  document.getElementById('disc-rp-btn').style.cssText='';
+  document.getElementById('disc-pct-btn').className='btn btn-sm'+(t==='pct'?' btn-p':' btn-g');
+  document.getElementById('disc-rp-btn').className='btn btn-sm'+(t==='rp'?' btn-p':' btn-g');
+  document.getElementById('inv-disc-unit').textContent=t==='pct'?'%':'Rp';
+  invPreview();
+}
+
+function invGetIntervalDays(){
+  const sel=document.getElementById('inv-interval').value;
+  if(sel==='custom'){
+    const v=parseInt(document.getElementById('inv-custom-days')?.value)||7;
+    return v;
+  }
+  return parseInt(sel)||7;
+}
+
+// Show/hide custom interval input
+document.addEventListener('change',function(e){
+  if(e.target.id==='inv-interval'){
+    const wrap=document.getElementById('inv-custom-interval-wrap');
+    if(wrap)wrap.style.display=e.target.value==='custom'?'block':'none';
+    invPreview();
+  }
+});
 
 function invSetSource(src){
+  invSource=src;
   document.getElementById('inv-src-appt-btn').className='btn btn-sm '+(src==='appointment'?'btn-p':'btn-g');
   document.getElementById('inv-src-manual-btn').className='btn btn-sm '+(src==='manual'?'btn-p':'btn-g');
   document.getElementById('inv-appt-picker').style.display=src==='appointment'?'block':'none';
@@ -1067,15 +1151,15 @@ function invSetSource(src){
         return`<option value="${a.id}">${a.appt_date} — ${a.dogs?.emoji||'🐶'} ${dogName} (${ownerName})</option>`;
       }).join('');
   } else {
-    // Clear for manual
     document.getElementById('inv-owner').value='';
     document.getElementById('inv-breed').value='';
     document.getElementById('inv-size').value='';
+    document.getElementById('inv-sessions').value='1';
+    document.getElementById('inv-discount').value='0';
     document.querySelectorAll('input[name="inv-styling"]').forEach(r=>{r.checked=r.value===''});
     ['inv-dematting','inv-deshedding','inv-antifungal','inv-antikutu','inv-whitening','inv-parfume'].forEach(id=>{
       const el=document.getElementById(id);if(el)el.checked=false;
     });
-    document.getElementById('inv-total-display').textContent='Rp 0';
     document.getElementById('inv-preview-box').innerHTML='<div class="empty" style="padding:2rem"><span class="empty-icon">🧾</span>Isi form untuk melihat preview</div>';
     invUpdatePrices();
   }
@@ -1089,6 +1173,7 @@ function loadInvFromAppt(){
   document.getElementById('inv-owner').value=d.owner||a.customer_profiles?.name||'';
   document.getElementById('inv-breed').value=d.breed||'';
   document.getElementById('inv-size').value=d.size||'';
+  if(a.appt_date)document.getElementById('inv-start-date').value=a.appt_date;
   const base=a.service_base||'';
   document.querySelectorAll('input[name="inv-styling"]').forEach(r=>{r.checked=r.value===base;});
   const addons=a.service_addon||[];
@@ -1102,12 +1187,10 @@ function loadInvFromAppt(){
 
 function invUpdatePrices(){
   const sz=document.getElementById('inv-size').value;
-  const ids=['base','styling','botak','dematting','deshedding','antifungal','antikutu','whitening'];
-  ids.forEach(k=>{
+  ['base','styling','botak','dematting','deshedding','antifungal','antikutu','whitening'].forEach(k=>{
     const el=document.getElementById('inv-'+k+'-price');
     if(!el)return;
-    if(!sz){el.textContent='';return;}
-    el.textContent=invFmtRp(INV_PRICES[k]?.[sz]||0);
+    el.textContent=sz?(invFmtRp(INV_PRICES[k]?.[sz]||0)):'';
   });
 }
 
@@ -1131,20 +1214,70 @@ function invGetServices(){
   return svcs;
 }
 
+function invCalcTotals(){
+  const svcs=invGetServices();
+  const sessions=Math.max(1,parseInt(document.getElementById('inv-sessions')?.value)||1);
+  const discVal=parseFloat(document.getElementById('inv-discount')?.value)||0;
+  const subtotalPerSession=svcs.reduce((s,x)=>s+(x.price||0),0);
+  const subtotalAll=subtotalPerSession*sessions;
+  let discAmt=0;
+  if(invDiscType==='pct') discAmt=subtotalAll*(discVal/100);
+  else discAmt=discVal;
+  discAmt=Math.min(discAmt,subtotalAll);
+  const total=subtotalAll-discAmt;
+  return{svcs,subtotalPerSession,subtotalAll,discAmt,total,sessions};
+}
+
 function invPreview(){
   const owner=document.getElementById('inv-owner').value.trim();
   const breed=document.getElementById('inv-breed').value.trim();
   const sz=document.getElementById('inv-size').value;
-  const svcs=invGetServices();
-  const totalPrice=svcs.reduce((s,x)=>s+(x.price||0),0);
-  const totalDur=svcs.reduce((s,x)=>s+(x.dur||0),0);
+  const sessions=Math.max(1,parseInt(document.getElementById('inv-sessions')?.value)||1);
+  const intervalDays=invGetIntervalDays();
+  const startDate=document.getElementById('inv-start-date')?.value||'';
+  const discVal=parseFloat(document.getElementById('inv-discount')?.value)||0;
+  const{svcs,subtotalPerSession,subtotalAll,discAmt,total}=invCalcTotals();
 
-  // Update total display live
-  document.getElementById('inv-total-display').textContent=invFmtRp(totalPrice);
+  // Update live totals
+  const subEl=document.getElementById('inv-subtotal-display');
+  const sessLabel=document.getElementById('inv-sessions-label');
+  const sessTotal=document.getElementById('inv-sessions-total');
+  const discRow=document.getElementById('inv-disc-row');
+  const discLabel=document.getElementById('inv-disc-label');
+  const discAmtEl=document.getElementById('inv-disc-amount');
+  const totalEl=document.getElementById('inv-total-display');
+  const sessInfo=document.getElementById('inv-sessions-info');
+
+  if(subEl)subEl.textContent=invFmtRp(subtotalPerSession);
+  if(sessLabel)sessLabel.textContent=`× ${sessions} sesi`;
+  if(sessTotal)sessTotal.textContent=invFmtRp(subtotalAll);
+  if(discLabel)discLabel.textContent=invDiscType==='pct'?`Diskon ${discVal}%`:`Diskon`;
+  if(discAmtEl)discAmtEl.textContent=`- ${invFmtRp(discAmt)}`;
+  if(discRow)discRow.style.display=discAmt>0?'flex':'none';
+  if(totalEl)totalEl.textContent=invFmtRp(total);
+
+  // Sessions info
+  if(sessInfo&&sessions>1&&startDate){
+    const dates=Array.from({length:sessions},(_,i)=>invAddDays(startDate,i*intervalDays));
+    sessInfo.textContent=`${sessions} sesi: ${dates.map(d=>new Date(d+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric',month:'short'})).join(' · ')}`;
+  } else if(sessInfo){sessInfo.textContent='';}
 
   if(!owner&&!breed&&!sz){
     document.getElementById('inv-preview-box').innerHTML='<div class="empty" style="padding:2rem"><span class="empty-icon">🧾</span>Isi form untuk melihat preview</div>';
     return;
+  }
+
+  // Build sessions schedule for preview
+  let scheduleHTML='';
+  if(sessions>1&&startDate){
+    const dates=Array.from({length:sessions},(_,i)=>invAddDays(startDate,i*intervalDays));
+    scheduleHTML=`<div style="padding:.9rem 1.1rem;border-bottom:1px solid #e8d5b7">
+      <div style="font-size:10px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Jadwal sesi</div>
+      ${dates.map((d,i)=>`<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px">
+        <span style="color:#8b6347">Sesi ${i+1}</span>
+        <span style="font-weight:500">${new Date(d+'T00:00:00').toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</span>
+      </div>`).join('')}
+    </div>`;
   }
 
   document.getElementById('inv-preview-box').innerHTML=`
@@ -1161,17 +1294,21 @@ function invPreview(){
       </div>
       <div style="padding:.9rem 1.1rem;border-bottom:1px solid #e8d5b7">
         <div style="font-size:10px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Service Type</div>
-        ${svcs.map(s=>`
-          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0e4ce;font-size:13px">
-            <span style="font-weight:500">${s.name}</span>
-            <span style="font-weight:600">${s.free?'Gratis':invFmtRp(s.price)}</span>
-          </div>`).join('')}
+        ${svcs.map(s=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0e4ce;font-size:12px">
+          <span style="font-weight:500">${s.name}</span>
+          <span style="font-weight:600">${s.free?'Gratis':invFmtRp(s.price)}</span>
+        </div>`).join('')}
       </div>
-      <div style="padding:.9rem 1.1rem;display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:14px;font-weight:600">Total Harga</span>
-        <span style="font-size:18px;font-weight:700;color:#e8822a">${invFmtRp(totalPrice)}</span>
+      ${scheduleHTML}
+      <div style="padding:.9rem 1.1rem;border-bottom:1px solid #e8d5b7">
+        <div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;color:#8b6347"><span>Subtotal per sesi</span><span>${invFmtRp(subtotalPerSession)}</span></div>
+        ${sessions>1?`<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;color:#8b6347"><span>× ${sessions} sesi</span><span>${invFmtRp(subtotalAll)}</span></div>`:''}
+        ${discAmt>0?`<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;color:#991b1b"><span>${invDiscType==='pct'?`Diskon ${discVal}%`:'Diskon'}</span><span>- ${invFmtRp(discAmt)}</span></div>`:''}
+        <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:15px;font-weight:700;border-top:1px solid #e8d5b7;margin-top:4px">
+          <span>Total Harga</span><span style="color:#e8822a">${invFmtRp(total)}</span>
+        </div>
       </div>
-      <div style="padding:.5rem 1.1rem 1rem;text-align:center;border-top:1px solid #e8d5b7">
+      <div style="padding:.75rem 1.1rem;text-align:center">
         <div style="font-size:11px;color:#8b6347">Terima kasih sudah mempercayakan perawatan anjing Anda</div>
         <div style="font-size:12px;font-weight:600;color:#e8822a;margin-top:2px">🐾 Home Paw Grooming</div>
       </div>
@@ -1188,6 +1325,51 @@ function invDownloadPDF(){
     +box.outerHTML
     +'<script>window.onload=function(){window.print();}<\/script></body></html>');
   win.document.close();
+}
+
+async function invSaveAppointments(){
+  const sessions=Math.max(1,parseInt(document.getElementById('inv-sessions')?.value)||1);
+  const startDate=document.getElementById('inv-start-date')?.value;
+  const sz=document.getElementById('inv-size')?.value;
+  const owner=document.getElementById('inv-owner')?.value.trim();
+  const res=document.getElementById('inv-save-result');
+
+  if(!startDate){res.textContent='⚠️ Masukkan tanggal mulai terlebih dahulu.';res.style.color='#991b1b';return}
+  if(!sz){res.textContent='⚠️ Pilih size anjing terlebih dahulu.';res.style.color='#991b1b';return}
+
+  // Try to find matching dog in DB
+  const matchDog=dogs.find(d=>d.owner&&d.owner.toLowerCase()===owner.toLowerCase())||
+                 dogs.find(d=>d.size===sz)||null;
+
+  const intervalDays=invGetIntervalDays();
+  const{svcs,subtotalPerSession,discAmt,total}=invCalcTotals();
+  const styling=document.querySelector('input[name="inv-styling"]:checked')?.value||'';
+  const addons=['dematting','deshedding','antifungal','antikutu','whitening','parfume'].filter(k=>document.getElementById('inv-'+k)?.checked);
+  const dur=svcs.reduce((s,x)=>s+(x.dur||0),0);
+
+  const rows=Array.from({length:sessions},(_,i)=>{
+    const apptDate=invAddDays(startDate,i*intervalDays);
+    return{
+      dog_id:matchDog?.id||null,
+      appt_date:apptDate,
+      appt_time:'09:00',
+      duration_mins:dur,
+      price_total:Math.round(subtotalPerSession-(discAmt/sessions)),
+      service_base:styling||'basic',
+      service_addon:addons,
+      status:'pending',
+      appt_note:`Advance booking sesi ${i+1}/${sessions}`
+    };
+  });
+
+  res.textContent='Menyimpan…';res.style.color='var(--muted)';
+  const{error}=await db.from('appointments').insert(rows);
+  if(error){res.textContent='⚠️ Gagal menyimpan: '+error.message;res.style.color='#991b1b';}
+  else{
+    res.textContent=`✅ ${sessions} sesi berhasil disimpan ke kalender!`;
+    res.style.color='#16a34a';
+    await loadAll();
+  }
 }
 
 // ── INIT ─────────────────────────────────────────────────────
