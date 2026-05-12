@@ -1650,6 +1650,8 @@ function loadInvFromToday(){
   document.getElementById('inv-first-date').value=todayStr;
   if(custIds.length>1) alert(`Loaded ${c.owner}'s appointments. ${custIds.length-1} other customer(s) today — switch customer manually to invoice them.`);
  },120);
+}
+
 function onInvCustomerChange(){
  const id=document.getElementById('inv-customer').value;
  invSelectedCust=custs.find(c=>c.id===id)||null;
