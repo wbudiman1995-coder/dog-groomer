@@ -3,82 +3,83 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>🐾 Home Paw Grooming — Admin</title>
+<title>Dog Groomer CRM</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{
-  /* Home Paw brand palette — from poster */
-  --primary:#3d1f0d;       /* deep dark brown — logo, headers */
-  --primary-lt:#f9d9a8;    /* light orange card bg */
-  --primary-md:#e8822a;    /* orange accent — buttons, highlights */
-  --primary-dk:#2a1208;    /* darker brown for hover */
-  --green:#e8822a;--green-lt:#fdefd8;--green-md:#f0a855;--green-dk:#c46d1a;
+:root {
+  --green:#16a34a;--green-lt:#dcfce7;--green-md:#4ade80;--green-dk:#15803d;
   --red:#fee2e2;--red-t:#991b1b;--amber:#fef3c7;--amb-t:#92400e;
-  --blue-lt:#eff6ff;--blue-t:#1e40af;--purple-lt:#ede9fe;--purple-t:#5b21b6;
-  --bg:#f5ead8;            /* warm cream background */
-  --surface:#fffdf9;       /* off-white surface */
-  --border:#e8d5b7;        /* warm beige border */
-  --text:#3d1f0d;          /* dark brown text */
-  --muted:#8b6347;         /* medium warm brown */
-  --subtle:#fdf3e7;        /* very light cream */
-  --r:8px;--rl:12px;--sh:0 1px 3px rgba(61,31,13,.1);
+  --blue-lt:#eff6ff;--blue-t:#1e40af;
+  --bg:#f9fafb;--surface:#fff;--border:#e5e7eb;
+  --text:#111827;--muted:#6b7280;--subtle:#f3f4f6;
+  --r:8px;--rl:12px;--sh:0 1px 3px rgba(0,0,0,.08);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
-.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem;background:linear-gradient(135deg,#3d1f0d 0%,#e8822a 100%)}
-.auth-box{background:#fffdf9;border-radius:20px;padding:2rem;width:100%;max-width:360px;box-shadow:0 8px 40px rgba(61,31,13,.25)}
-.auth-logo{text-align:center;font-size:36px;margin-bottom:.4rem}
-.auth-brand{text-align:center;font-size:17px;font-weight:700;color:#3d1f0d;margin-bottom:.2rem}
-.auth-sub{text-align:center;font-size:12px;color:var(--muted);margin-bottom:1.5rem}
-.auth-fg{display:flex;flex-direction:column;gap:5px;margin-bottom:.75rem}
-.auth-fg label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.auth-fg input{padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:14px;background:var(--subtle);width:100%;transition:border-color .15s}
-.auth-fg input:focus{outline:none;border-color:var(--primary-md);background:#fff}
-.auth-btn{width:100%;padding:10px;border:none;border-radius:var(--r);background:var(--primary-md);color:#fff;font-size:14px;font-weight:600;cursor:pointer;margin-top:.25rem}
-.auth-btn:hover{background:var(--primary-dk)}
-.auth-err{background:var(--red);color:var(--red-t);border-radius:var(--r);padding:8px 11px;font-size:12px;margin-bottom:.75rem;display:none}
-.auth-ok{background:var(--green-lt);color:var(--primary-dk);border-radius:var(--r);padding:8px 11px;font-size:12px;margin-bottom:.75rem;display:none}
-.auth-link{text-align:center;font-size:12px;color:var(--muted);margin-top:.75rem}
-.auth-link a{color:var(--primary-md);text-decoration:none;font-weight:500}
 .nav{background:var(--surface);border-bottom:1px solid var(--border);height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 1.25rem;position:sticky;top:0;z-index:100;box-shadow:var(--sh)}
-.nav-brand{font-weight:700;font-size:15px;color:var(--primary)}
+.nav-brand{font-weight:600;font-size:15px}
 .nav-tabs{display:flex;gap:2px;background:var(--subtle);border-radius:var(--r);padding:3px}
-.nav-tab{padding:5px 11px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:500;color:var(--muted);transition:all .15s;white-space:nowrap}
+.nav-tab{padding:5px 13px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted);transition:all .15s;white-space:nowrap}
 .nav-tab.active{background:var(--surface);color:var(--text);box-shadow:var(--sh)}
-.page{max-width:980px;margin:0 auto;padding:1.25rem}
+.page{max-width:960px;margin:0 auto;padding:1.25rem}
 .sec{display:none}.sec.active{display:block}
 .btn{padding:7px 15px;border-radius:var(--r);border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:5px}
-.btn-p{background:var(--primary-md);color:#fff}.btn-p:hover{background:var(--primary-dk)}
+.btn-p{background:var(--green);color:#fff}.btn-p:hover{background:var(--green-dk)}
 .btn-g{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-g:hover{background:var(--subtle);color:var(--text)}
 .btn-d{background:var(--red);color:var(--red-t);border:1px solid #fca5a5}.btn-d:hover{background:#fecaca}
+.btn-b{background:#1d4ed8;color:#fff}.btn-b:hover{background:#1e40af}
 .btn-sm{padding:4px 10px;font-size:12px}
-.toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--sh)}
+.toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
 .toolbar-title{font-size:16px;font-weight:600}
-.dog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+
+/* CLIENTS */
+.dog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:10px}
 .dog-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:.9rem;cursor:pointer;position:relative;transition:border-color .15s,box-shadow .15s}
-.dog-card:hover{border-color:var(--primary-md);box-shadow:0 2px 12px rgba(232,130,42,.15)}
+.dog-card:hover{border-color:var(--green-md);box-shadow:0 2px 12px rgba(22,163,74,.12)}
 .dog-card:hover .del-btn{opacity:1}
 .del-btn{position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;background:var(--red);color:var(--red-t);border:none;cursor:pointer;font-size:10px;font-weight:700;opacity:0;transition:opacity .15s;display:flex;align-items:center;justify-content:center;z-index:2}
-.dog-av{width:36px;height:36px;border-radius:50%;background:var(--primary-lt);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.dog-av{width:36px;height:36px;border-radius:50%;background:var(--green-lt);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
 .dog-hd{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .dog-nm{font-weight:600;font-size:14px}
 .dog-br{font-size:11px;color:var(--muted)}
 .dog-mt{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
 .badge{display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:600}
-.bl{background:#fee2e2;color:#991b1b}.bm{background:#fdefd8;color:#c46d1a}.bs{background:var(--primary-lt);color:var(--primary)}.bc{background:var(--purple-lt);color:var(--purple-t)}
-.wa-lnk{color:var(--primary-md);text-decoration:none;font-weight:500}
+.bl{background:var(--red);color:var(--red-t)}.bm{background:var(--amber);color:var(--amb-t)}.bs{background:var(--green-lt);color:var(--green-dk)}
+.wa-lnk{color:var(--green);text-decoration:none;font-weight:500}
+
+/* DATABASE TAB */
+.subtabs{display:flex;gap:4px;margin-bottom:1rem;border-bottom:1px solid var(--border)}
+.subtab{padding:8px 14px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s}
+.subtab.active{color:var(--green-dk);border-bottom-color:var(--green)}
+.subtab:hover:not(.active){color:var(--text)}
+.subsec{display:none}.subsec.active{display:block}
+.cust-banner{background:var(--green-lt);border:1px solid var(--green-md);border-radius:var(--rl);padding:.9rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.id-pill{display:inline-block;background:var(--subtle);color:var(--muted);padding:2px 8px;border-radius:6px;font-size:11px;font-family:'SF Mono',Menlo,monospace;font-weight:600}
+.row-actions{display:flex;gap:4px;justify-content:flex-end}
+.icon-btn{padding:4px 8px;font-size:11px;border-radius:6px;border:1px solid var(--border);background:var(--surface);cursor:pointer;color:var(--muted);transition:all .15s}
+.icon-btn:hover{background:var(--subtle);color:var(--text)}
+.icon-btn.del:hover{background:var(--red);color:var(--red-t);border-color:#fca5a5}
+.icon-btn.view{background:var(--green-lt);color:var(--green-dk);border-color:var(--green-md)}
+.icon-btn.view:hover{background:var(--green-md);color:#fff}
+.maps-mini{color:var(--blue-t);text-decoration:none;font-size:12px}
+.maps-mini:hover{text-decoration:underline}
+
+/* MODAL */
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;align-items:center;justify-content:center;padding:1rem}
 .overlay.open{display:flex}
-.modal{background:var(--surface);border-radius:16px;padding:1.5rem;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+.modal{background:var(--surface);border-radius:16px;padding:1.5rem;width:100%;max-width:500px;max-height:88vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.15)}
 .modal-title{font-size:16px;font-weight:600;margin-bottom:1.25rem}
 .fg{display:flex;flex-direction:column;gap:4px}
 .fg.full{grid-column:1/-1}
 .fg label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
 .fg input,.fg select,.fg textarea{padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle);color:var(--text);width:100%;transition:border-color .15s}
-.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--primary-md);background:#fff}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--green);background:#fff}
 .fg textarea{resize:vertical;min-height:64px}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .form-actions{display:flex;gap:8px;margin-top:1.25rem;flex-wrap:wrap}
+
+/* DETAIL */
 .det-hero{display:flex;align-items:center;gap:12px;margin-bottom:1.25rem}
 .det-av{width:48px;height:48px;border-radius:50%;background:var(--green-lt);display:flex;align-items:center;justify-content:center;font-size:22px}
 .det-nm{font-size:17px;font-weight:600}
@@ -87,10 +88,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .det-lbl{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
 .det-row{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px}
 .det-row:last-child{border-bottom:none}
-.dl{color:var(--muted);min-width:90px;font-size:12px;flex-shrink:0}
-.vpill{background:var(--primary-lt);color:var(--primary);padding:4px 9px;border-radius:6px;font-size:12px;margin-bottom:4px;display:flex;align-items:center;gap:4px}
+.dl{color:var(--muted);min-width:80px;font-size:12px;flex-shrink:0}
+.vpill{background:var(--green-lt);color:var(--green-dk);padding:4px 9px;border-radius:6px;font-size:12px;margin-bottom:4px;display:flex;align-items:center;gap:4px}
 .add-v{display:flex;gap:6px;margin-top:7px}
 .add-v input{flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--subtle)}
+
+/* HISTORY */
 .tbl-wrap{overflow-x:auto;border-radius:var(--rl);border:1px solid var(--border)}
 table{width:100%;border-collapse:collapse;font-size:13px}
 thead th{background:var(--subtle);padding:9px 13px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);white-space:nowrap}
@@ -100,44 +103,53 @@ tbody tr:hover{background:var(--subtle)}
 .tav{width:26px;height:26px;border-radius:50%;background:var(--green-lt);display:inline-flex;align-items:center;justify-content:center;font-size:13px;vertical-align:middle;margin-right:5px}
 .filter-bar{display:flex;gap:8px;margin-bottom:.9rem;flex-wrap:wrap;align-items:center}
 .filter-bar input,.filter-bar select{padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface)}
-.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
-.cal-title{font-size:15px;font-weight:600}
-.cal-hdrs{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:4px}
-.cal-dh{text-align:center;font-size:10px;font-weight:600;color:var(--muted);padding:3px;text-transform:uppercase;letter-spacing:.05em}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
-.cal-cell{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);min-height:88px;padding:5px;cursor:pointer;transition:border-color .15s;position:relative}
-.cal-cell:hover{border-color:var(--green-md)}
-.cal-cell.today{border-color:var(--primary-md);border-width:2px}
-.cal-dt{font-size:11px;font-weight:600;color:var(--muted);margin-bottom:3px}
-.cal-cell.today .cal-dt{color:var(--primary-md)}
-.cal-appt{border-radius:4px;padding:2px 4px;font-size:10px;font-weight:500;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--primary-lt);color:var(--primary)}
-.cal-appt.customer{background:var(--purple-lt);color:var(--purple-t)}
-.cal-add{position:absolute;bottom:3px;right:3px;width:16px;height:16px;border-radius:50%;background:var(--primary-lt);color:var(--primary-md);border:none;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;line-height:1}
-.cal-cell:hover .cal-add{opacity:1}
-.cal-legend{display:flex;gap:12px;margin-bottom:.75rem;flex-wrap:wrap}
-.leg{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
-.leg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
-.rem-date-bar{display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap}
-.rem-date-bar input[type=date]{padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface)}
-.rem-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.1rem;margin-bottom:.75rem}
-.rem-header{font-size:14px;font-weight:600;margin-bottom:.75rem}
-.rem-row{display:flex;gap:6px;font-size:12px;padding:3px 0;color:var(--muted)}
-.rem-row span:first-child{min-width:100px;flex-shrink:0}
-.rem-row span:last-child{color:var(--text)}
-.rem-msg-box{background:var(--subtle);border:1px solid var(--border);border-radius:var(--r);padding:10px;font-size:12px;font-family:monospace;line-height:1.7;white-space:pre-wrap;margin-top:.75rem;color:var(--text);min-height:100px}
-.rem-actions{display:flex;gap:8px;margin-top:.75rem;flex-wrap:wrap}
-.groomer-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-bottom:1.25rem}
-.groomer-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;position:relative}
-.groomer-card:hover .del-btn{opacity:1}
-.sched-row{display:flex;align-items:center;gap:7px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px}
-.sched-row:last-child{border-bottom:none}
-.sched-day{min-width:32px;font-weight:600;font-size:11px;color:var(--muted)}
-.sched-area{flex:1;padding:4px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--subtle)}
-.sched-off{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;white-space:nowrap}
 
-.inv-svc-row{transition:background .12s}
+/* CALENDAR */
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.cal-title{font-size:15px;font-weight:600}
+.cal-hdrs{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:5px}
+.cal-dh{text-align:center;font-size:10px;font-weight:600;color:var(--muted);padding:3px;text-transform:uppercase;letter-spacing:.05em}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal-cell{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);min-height:90px;padding:6px;cursor:pointer;transition:border-color .15s;position:relative}
+.cal-cell:hover{border-color:var(--green-md)}
+.cal-cell.today{border-color:var(--green);border-width:2px}
+.cal-dt{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:3px}
+.cal-cell.today .cal-dt{color:var(--green)}
+.cal-appt{background:var(--green-lt);color:var(--green-dk);border-radius:4px;padding:2px 5px;font-size:10px;font-weight:500;margin-bottom:2px;display:flex;align-items:center;gap:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-appt:hover{background:var(--green-md)}
+.cal-add{position:absolute;bottom:4px;right:4px;width:18px;height:18px;border-radius:50%;background:var(--green-lt);color:var(--green);border:none;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;font-weight:700;line-height:1}
+.cal-cell:hover .cal-add{opacity:1}
+
+/* ROUTE */
+.route-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;margin-bottom:1rem;box-shadow:var(--sh)}
+.route-lbl{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px}
+.route-ta{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;min-height:75px;resize:none;font-family:inherit;background:var(--subtle);transition:border-color .15s}
+.route-ta:focus{outline:none;border-color:var(--green);background:#fff}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.chip{padding:4px 11px;font-size:12px;border:1px solid var(--border);border-radius:20px;background:transparent;cursor:pointer;color:var(--muted);transition:all .12s}
+.chip.on{background:var(--green-lt);color:var(--green-dk);border-color:var(--green-md);font-weight:500}
+.maps-banner{background:var(--blue-lt);border:1px solid #bfdbfe;border-radius:var(--rl);padding:12px 16px;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.maps-t{font-size:13px;font-weight:600;color:var(--blue-t)}
+.maps-s{font-size:11px;color:#3b82f6;margin-top:2px}
+.btn-maps{background:#1d4ed8;color:#fff;border:none;border-radius:var(--r);padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+.btn-maps:hover{background:#1e40af}
+.sum-bar{background:var(--green);color:#fff;border-radius:var(--r);padding:9px 14px;font-size:13px;margin-bottom:1rem;display:flex;justify-content:space-between;flex-wrap:wrap;gap:5px}
+.stop-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.stop-row:last-child{border-bottom:none}
+.stop-n{width:26px;height:26px;border-radius:50%;background:var(--green-lt);color:var(--green-dk);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.stop-info{flex:1}
+.stop-nm{font-size:13px;font-weight:600}
+.stop-det{font-size:11px;color:var(--muted);margin-top:2px}
+.stop-links{display:flex;gap:5px;margin-top:5px;flex-wrap:wrap}
+.stop-lnk{font-size:11px;padding:2px 9px;border:1px solid var(--border);border-radius:20px;text-decoration:none;color:var(--green);background:var(--green-lt)}
+.stime{text-align:right;flex-shrink:0}
+.stime-v{font-size:13px;font-weight:600;color:var(--green)}
+.stime-d{font-size:10px;color:var(--muted);margin-top:2px}
+.tip{background:var(--green-lt);color:var(--green-dk);border-radius:var(--r);padding:8px 12px;font-size:12px;margin-top:.9rem}
+.cal-load-btn{background:var(--blue-lt);border:1px solid #bfdbfe;color:var(--blue-t);border-radius:var(--r);padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-bottom:8px}
+.cal-load-btn:hover{background:#dbeafe}
 .loading{text-align:center;padding:2.5rem;color:var(--muted)}
-.spin{display:inline-block;width:17px;height:17px;border:2px solid var(--border);border-top-color:var(--primary-md);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
+.spin{display:inline-block;width:17px;height:17px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .empty{text-align:center;padding:2.5rem 1rem;color:var(--muted);font-size:13px}
 .empty-icon{font-size:30px;display:block;margin-bottom:8px}
@@ -146,362 +158,145 @@ tbody tr:hover{background:var(--subtle)}
 <body>
 
 <script>
-const SUPABASE_URL  = "https://cwqrpslypcjgjuxagglc.supabase.co";
-const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
+  const SUPABASE_URL  = "https://cwqrpslypcjgjuxagglc.supabase.co";
+  const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
+  const ANTHROPIC_KEY = "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";
 </script>
 
-<!-- AUTH -->
-<div id="screen-auth">
-  <div class="auth-wrap" id="view-login">
-    <div class="auth-box">
-      <div class="auth-logo">🐾</div>
-      <div class="auth-brand">Home Paw Grooming</div>
-      <div class="auth-sub">Admin panel</div>
-      <div class="auth-err" id="login-err"></div>
-      <div class="auth-fg"><label>Email</label><input id="l-email" type="email" placeholder="admin@email.com" autocomplete="email"/></div>
-      <div class="auth-fg"><label>Password</label><input id="l-pass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/></div>
-      <button class="auth-btn" onclick="doLogin()">Sign in</button>
-      <div class="auth-link"><a href="#" onclick="showView('view-forgot');return false">Forgot password?</a></div>
-    </div>
+<nav class="nav">
+  <div class="nav-brand">🐾 Groomer CRM</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="sw('database')" id="tab-database">🗃️ Database</button>
+    <button class="nav-tab" onclick="sw('history')" id="tab-history">📋 History</button>
+    <button class="nav-tab" onclick="sw('calendar')" id="tab-calendar">📅 Calendar</button>
+    <button class="nav-tab" onclick="sw('route')" id="tab-route">🗺️ Route</button>
   </div>
-  <div class="auth-wrap" id="view-forgot" style="display:none">
-    <div class="auth-box">
-      <div class="auth-logo">🔑</div>
-      <div class="auth-brand">Reset password</div>
-      <div class="auth-sub">We'll send a reset link to your email</div>
-      <div class="auth-err" id="forgot-err"></div>
-      <div class="auth-ok" id="forgot-ok">Reset link sent! Check your email.</div>
-      <div class="auth-fg"><label>Email</label><input id="f-reset-email" type="email" placeholder="admin@email.com"/></div>
-      <button class="auth-btn" onclick="doForgot()">Send reset link</button>
-      <div class="auth-link"><a href="#" onclick="showView('view-login');return false">← Back to login</a></div>
-    </div>
-  </div>
-  <div class="auth-wrap" id="view-reset" style="display:none">
-    <div class="auth-box">
-      <div class="auth-logo">🔒</div>
-      <div class="auth-brand">Set new password</div>
-      <div class="auth-sub">Choose a new password for your account</div>
-      <div class="auth-err" id="reset-err"></div>
-      <div class="auth-fg"><label>New password</label><input id="r-pass" type="password" placeholder="Min. 6 characters"/></div>
-      <div class="auth-fg"><label>Confirm password</label><input id="r-pass2" type="password" placeholder="Repeat password"/></div>
-      <button class="auth-btn" onclick="doReset()">Update password</button>
-    </div>
-  </div>
-</div>
+</nav>
 
-<!-- APP -->
-<div id="screen-app" style="display:none">
-  <nav class="nav">
-    <div class="nav-brand">🐾 Home Paw</div>
-    <div class="nav-tabs">
-      <button class="nav-tab active" onclick="sw('clients')" id="tab-clients">🐕 Clients</button>
-      <button class="nav-tab" onclick="sw('history')" id="tab-history">📋 History</button>
-      <button class="nav-tab" onclick="sw('calendar')" id="tab-calendar">📅 Calendar</button>
-      <button class="nav-tab" onclick="sw('reminders')" id="tab-reminders">🔔 Reminders</button>
-      <button class="nav-tab" onclick="sw('groomers')" id="tab-groomers">✂️ Groomers</button>
-      <button class="nav-tab" onclick="sw('invoice')" id="tab-invoice">🧾 Invoice</button>
-      <button class="nav-tab" onclick="sw('database')" id="tab-database">🗃️ Database</button>
-      <button class="nav-tab" onclick="sw('financial')" id="tab-financial">💰 Financial</button>
+<div class="page">
+  <div class="sec active" id="sec-database">
+    <div class="toolbar">
+      <span class="toolbar-title">Database</span>
+      <button class="btn btn-p" onclick="openAddCust()">+ Add customer</button>
     </div>
-    <button class="btn btn-g btn-sm" onclick="doSignOut()">Sign out</button>
-  </nav>
-  <div class="page">
-
-    <!-- CLIENTS -->
-    <div class="sec active" id="sec-clients">
-      <div class="toolbar">
-        <span class="toolbar-title">Dog clients</span>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <select id="client-filter" onchange="renderDogs()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--surface)">
-            <option value="all">All clients</option>
-            <option value="admin">Admin-added</option>
-            <option value="customer">Customer-added</option>
-          </select>
-          <button class="btn btn-p" onclick="openAdd()">+ Add client</button>
-        </div>
-      </div>
-      <div class="dog-grid" id="dog-grid"><div class="loading"><span class="spin"></span>Loading…</div></div>
+    <div class="subtabs">
+      <button class="subtab active" id="stab-cust" onclick="swSub('cust')">👤 Customers</button>
+      <button class="subtab" id="stab-dogs" onclick="swSub('dogs')">🐕 Dogs</button>
     </div>
 
-    <!-- HISTORY -->
-    <div class="sec" id="sec-history">
-      <div class="toolbar"><span class="toolbar-title">Grooming history</span></div>
+    <div class="subsec active" id="ssec-cust">
       <div class="filter-bar">
-        <input id="hs" placeholder="🔍 Search…" oninput="renderHist()" style="min-width:160px"/>
-        <select id="hd" onchange="renderHist()"><option value="">All dogs</option></select>
-        <select id="hsort" onchange="renderHist()"><option value="desc">Newest first</option><option value="asc">Oldest first</option></select>
+        <input id="cs" placeholder="🔍 Search customer / area / WA…" oninput="renderCusts()" style="min-width:220px;flex:1"/>
       </div>
       <div class="tbl-wrap">
-        <table><thead><tr><th>Dog</th><th>Owner</th><th>Date</th><th>Service</th><th>Area</th><th>Size</th></tr></thead>
-        <tbody id="hist-body"></tbody></table>
+        <table><thead><tr>
+          <th>ID</th><th>Owner</th><th>WhatsApp</th><th>Area</th><th>Address</th><th>Dogs</th><th>Maps</th><th></th>
+        </tr></thead>
+        <tbody id="cust-body"></tbody></table>
       </div>
     </div>
 
-    <!-- CALENDAR -->
-    <div class="sec" id="sec-calendar">
-      <div class="cal-nav">
-        <button class="btn btn-g btn-sm" onclick="calPrev()">← Prev</button>
-        <span class="cal-title" id="cal-title"></span>
-        <button class="btn btn-g btn-sm" onclick="calNext()">Next →</button>
+    <div class="subsec" id="ssec-dogs">
+      <div id="dogs-empty" class="empty">
+        <span class="empty-icon">👆</span>
+        Select a customer first to view their dogs.
       </div>
-      <div class="cal-legend">
-        <div class="leg"><div class="leg-dot" style="background:var(--green-lt);border:1px solid var(--green-md)"></div>Admin-scheduled</div>
-        <div class="leg"><div class="leg-dot" style="background:var(--purple-lt);border:1px solid #c4b5fd"></div>Customer-booked</div>
-      </div>
-      <div class="cal-hdrs" id="cal-hdrs"></div>
-      <div class="cal-grid" id="cal-grid"></div>
-    </div>
-
-    <!-- REMINDERS -->
-    <div class="sec" id="sec-reminders">
-      <div class="toolbar"><span class="toolbar-title">Send reminders</span></div>
-      <div class="rem-date-bar">
-        <input type="date" id="rem-date"/>
-        <button class="btn btn-p" onclick="loadReminders()">📋 Load schedule</button>
-      </div>
-      <div id="rem-content"><div class="empty"><span class="empty-icon">🔔</span>Pick a date and click Load schedule</div></div>
-    </div>
-
-    <!-- GROOMERS -->
-    <div class="sec" id="sec-groomers">
-      <div class="toolbar">
-        <span class="toolbar-title">Groomers</span>
-        <button class="btn btn-p" onclick="openGroomerAdd()">+ Add groomer</button>
-      </div>
-      <div class="groomer-grid" id="groomer-grid"><div class="loading"><span class="spin"></span>Loading…</div></div>
-    </div>
-
-
-    <!-- INVOICE -->
-    <div class="sec" id="sec-invoice">
-      <div class="toolbar"><span class="toolbar-title">Buat invoice</span></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;align-items:start">
-
-        <!-- LEFT: form -->
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem">
-
-          <!-- Source toggle -->
-          <div style="display:flex;gap:6px;margin-bottom:1rem">
-            <button class="btn btn-p btn-sm" id="inv-src-appt-btn" onclick="invSetSource('appointment')">📅 Dari appointment</button>
-            <button class="btn btn-g btn-sm" id="inv-src-manual-btn" onclick="invSetSource('manual')">✍️ Manual</button>
+      <div id="dogs-view" style="display:none">
+        <div class="cust-banner">
+          <div>
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Viewing dogs for</div>
+            <div id="cb-name" style="font-size:16px;font-weight:600;margin-top:2px"></div>
+            <div id="cb-meta" style="font-size:12px;color:var(--muted);margin-top:3px"></div>
           </div>
-          <div id="inv-appt-picker" style="display:none;margin-bottom:1rem">
-            <div class="fg"><label>Pilih appointment</label>
-              <select id="inv-appt-select" onchange="loadInvFromAppt()"><option value="">Pilih appointment…</option></select>
-            </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-g btn-sm" onclick="swSub('cust')">← Back</button>
+            <button class="btn btn-p btn-sm" onclick="openAddDog()">+ Add dog</button>
           </div>
-
-          <!-- 1. Owner -->
-          <div class="fg" style="margin-bottom:.75rem">
-            <label>1. Nama pemilik</label>
-            <input id="inv-owner" placeholder="e.g. Sarah" oninput="invPreview()"/>
-          </div>
-
-          <!-- 2. Groomer -->
-          <div class="fg" style="margin-bottom:.75rem">
-            <label>2. Groomer</label>
-            <div style="display:flex;gap:6px">
-              <select id="inv-groomer-select" onchange="invGroomerChange()" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle)">
-                <option value="">Pilih groomer…</option>
-              </select>
-            </div>
-            <input id="inv-groomer-custom" placeholder="Atau ketik nama groomer…" oninput="invPreview()" style="margin-top:5px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle);width:100%;display:none"/>
-          </div>
-
-          <!-- 3. Dogs -->
-          <div style="margin-bottom:.75rem">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">3. Anjing</div>
-              <button class="btn btn-p btn-sm" onclick="invAddDog()">+ Tambah anjing</button>
-            </div>
-            <div id="inv-dogs-list"></div>
-          </div>
-
-          <!-- 4. Advance Booking -->
-          <div style="margin-bottom:.75rem">
-            <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">4. Advance Booking</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <div class="fg">
-                <label>Jumlah sesi</label>
-                <input type="number" id="inv-sessions" value="1" min="1" max="52" oninput="invPreview()" style="text-align:center;font-weight:600"/>
-              </div>
-              <div class="fg">
-                <label>Interval</label>
-                <select id="inv-interval" onchange="invPreview()">
-                  <option value="none">Belum dijadwalkan</option>
-                  <option value="7">Tiap 1 minggu</option>
-                  <option value="14">Tiap 2 minggu</option>
-                  <option value="28">Tiap 4 minggu</option>
-                  <option value="custom">Custom…</option>
-                </select>
-              </div>
-              <div class="fg" id="inv-custom-interval-wrap" style="display:none">
-                <label>Hari</label>
-                <input type="number" id="inv-custom-days" value="7" min="1" max="365" oninput="invPreview()" placeholder="hari"/>
-              </div>
-              <div class="fg">
-                <label>Tanggal mulai</label>
-                <input type="date" id="inv-start-date" oninput="invPreview()"/>
-              </div>
-            </div>
-            <div id="inv-sessions-info" style="font-size:11px;color:var(--muted);margin-top:5px"></div>
-          </div>
-
-          <!-- 5. Discount -->
-          <div style="margin-bottom:.75rem">
-            <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">5. Diskon</div>
-            <div style="display:flex;gap:6px">
-              <button class="btn btn-sm" id="disc-pct-btn" onclick="setDiscType('pct')" style="background:var(--primary-md);color:#fff">%</button>
-              <button class="btn btn-g btn-sm" id="disc-rp-btn" onclick="setDiscType('rp')">Rp</button>
-              <input type="number" id="inv-discount" value="0" min="0" oninput="invPreview()" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle)"/>
-              <span id="inv-disc-unit" style="display:flex;align-items:center;font-size:13px;color:var(--muted);font-weight:600">%</span>
-            </div>
-          </div>
-
-          <!-- 6. Total -->
-          <div style="background:var(--primary-lt);border-radius:var(--r);padding:12px 14px;margin-bottom:1rem">
-            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:3px">
-              <span>Subtotal per sesi</span><span id="inv-subtotal-display">Rp 0</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:3px">
-              <span id="inv-sessions-label">× 1 sesi</span><span id="inv-sessions-total">Rp 0</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--red-t);margin-bottom:4px" id="inv-disc-row">
-              <span id="inv-disc-label">Diskon</span><span id="inv-disc-amount">- Rp 0</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;border-top:1px solid var(--border);padding-top:6px;margin-top:3px">
-              <span>Total Harga</span><span id="inv-total-display" style="color:var(--primary-md)">Rp 0</span>
-            </div>
-          </div>
-
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-p" onclick="invDownloadPDF()" style="flex:1">⬇️ Download PDF</button>
-            <button class="btn btn-g" onclick="invSaveAppointments()" style="flex:1">📅 Simpan ke kalender</button>
-            <button class="btn btn-g" onclick="invSaveToDB()" style="flex:1">💾 Simpan invoice</button>
-          </div>
-          <div id="inv-save-result" style="font-size:12px;margin-top:6px;color:var(--muted)"></div>
         </div>
-
-        <!-- RIGHT: preview -->
-        <div>
-          <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem">Preview invoice</div>
-          <div id="inv-preview-box"><div class="empty" style="padding:2rem"><span class="empty-icon">🧾</span>Isi form untuk melihat preview</div></div>
+        <div class="tbl-wrap" style="margin-top:.9rem">
+          <table><thead><tr>
+            <th>Dog ID</th><th>Name</th><th>Breed</th><th>Age</th><th>Weight</th><th>Preferences</th><th></th>
+          </tr></thead>
+          <tbody id="dogs-body"></tbody></table>
         </div>
       </div>
     </div>
+  </div>
 
-
-    <!-- DATABASE -->
-    <div class="sec" id="sec-database">
-      <div class="toolbar">
-        <span class="toolbar-title">Customer database</span>
-        <input id="db-search" placeholder="🔍 Cari nama, WA, area…" oninput="renderDatabase()" style="padding:7px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface);min-width:200px"/>
-      </div>
-      <div id="db-content"><div class="loading"><span class="spin"></span>Loading…</div></div>
+  <div class="sec" id="sec-history">
+    <div class="toolbar"><span class="toolbar-title">Grooming history</span></div>
+    <div class="filter-bar">
+      <input id="hs" placeholder="🔍 Search…" oninput="renderHist()" style="min-width:160px"/>
+      <select id="hd" onchange="renderHist()"><option value="">All dogs</option></select>
+      <select id="hsort" onchange="renderHist()"><option value="desc">Newest first</option><option value="asc">Oldest first</option></select>
     </div>
-
-    <!-- FINANCIAL -->
-    <div class="sec" id="sec-financial">
-      <div class="toolbar"><span class="toolbar-title">Financial</span></div>
-
-      <!-- Summary cards -->
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.25rem">
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;text-align:center">
-          <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Total invoiced</div>
-          <div style="font-size:20px;font-weight:700;color:var(--text)" id="fin-total-invoiced">Rp 0</div>
-        </div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;text-align:center">
-          <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Sudah dibayar</div>
-          <div style="font-size:20px;font-weight:700;color:var(--primary-md)" id="fin-total-paid">Rp 0</div>
-        </div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;text-align:center">
-          <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Belum dibayar</div>
-          <div style="font-size:20px;font-weight:700;color:#991b1b" id="fin-total-unpaid">Rp 0</div>
-        </div>
-      </div>
-
-      <!-- Invoice list -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);margin-bottom:1.25rem">
-        <div style="padding:.9rem 1.1rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:13px;font-weight:600">Invoice list</span>
-          <select id="fin-filter" onchange="renderFinancial()" style="padding:5px 9px;border:1px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--surface)">
-            <option value="all">Semua</option>
-            <option value="unpaid">Belum dibayar</option>
-            <option value="paid">Sudah dibayar</option>
-          </select>
-        </div>
-        <div id="fin-invoice-list"><div class="loading" style="padding:1.5rem"><span class="spin"></span>Loading…</div></div>
-      </div>
-
-      <!-- Bank details editor -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem">
-        <div style="font-size:13px;font-weight:600;margin-bottom:1rem">🏦 Detail rekening</div>
-        <div class="form-grid" style="margin-bottom:1rem">
-          <div class="fg"><label>Nama bank</label><input id="bank-name" placeholder="Krom Bank"/></div>
-          <div class="fg"><label>No. rekening</label><input id="bank-account" placeholder="770055777787"/></div>
-          <div class="fg full"><label>Atas nama</label><input id="bank-holder" placeholder="Xavier Fidelia Ali"/></div>
-        </div>
-        <button class="btn btn-p" onclick="saveBankDetails()">💾 Simpan detail rekening</button>
-        <span id="bank-saved" style="font-size:12px;color:var(--primary-md);margin-left:.75rem;display:none">✓ Tersimpan!</span>
-      </div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>Dog</th><th>Owner</th><th>Date</th><th>Service</th><th>Area</th><th>Size</th></tr></thead>
+      <tbody id="hist-body"></tbody></table>
     </div>
+  </div>
 
+  <div class="sec" id="sec-calendar">
+    <div class="cal-nav">
+      <button class="btn btn-g btn-sm" onclick="calPrev()">← Prev</button>
+      <span class="cal-title" id="cal-title"></span>
+      <button class="btn btn-g btn-sm" onclick="calNext()">Next →</button>
+    </div>
+    <div class="cal-hdrs" id="cal-hdrs"></div>
+    <div class="cal-grid" id="cal-grid"></div>
+  </div>
+
+  <div class="sec" id="sec-route">
+    <div class="route-box">
+      <div class="route-lbl">Who to groom?</div>
+      <button class="cal-load-btn" onclick="loadFromCal()">📅 Load tomorrow's appointments</button>
+      <textarea class="route-ta" id="route-input" placeholder='e.g. "Groom Max, Bella, Cooper tomorrow at 9am from Sudirman"'></textarea>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+        <button class="btn btn-p" onclick="optimizeRoute()">✨ Optimize route</button>
+        <span style="font-size:12px;color:var(--muted)">or quick-select:</span>
+      </div>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div id="route-result"></div>
   </div>
 </div>
 
-<!-- CUSTOMER DETAIL MODAL -->
-<div class="overlay" id="ov-customer">
-  <div class="modal" style="max-width:620px">
-    <div id="customer-detail-content"></div>
+<!-- ADD/EDIT CUSTOMER -->
+<div class="overlay" id="ov-cust">
+  <div class="modal">
+    <div class="modal-title" id="cust-title">Add customer</div>
+    <div class="form-grid">
+      <div class="fg"><label>Owner name *</label><input id="cf-owner" placeholder="Sarah"/></div>
+      <div class="fg"><label>WhatsApp</label><input id="cf-wa" placeholder="08xxxxxxxxxx"/></div>
+      <div class="fg full"><label>Address</label><input id="cf-addr" placeholder="Jl. Kemang Raya No.10, Jak-Sel"/></div>
+      <div class="fg"><label>Area</label><input id="cf-area" placeholder="Kemang"/></div>
+      <div class="fg"><label>Google Maps link</label><input id="cf-gmaps" placeholder="https://maps.app.goo.gl/..."/></div>
+      <div class="fg full"><label>Preferences / notes</label><textarea id="cf-prefs" placeholder="Customer-level notes, contact preferences, etc."></textarea></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-p" onclick="saveCust()" id="cust-save-btn">Save customer</button>
+      <button class="btn btn-g" onclick="cm('ov-cust')">Cancel</button>
+    </div>
   </div>
 </div>
 
 <!-- ADD/EDIT DOG -->
-<div class="overlay" id="ov-add">
+<div class="overlay" id="ov-dog">
   <div class="modal">
-    <div class="modal-title" id="add-title">Add dog client</div>
+    <div class="modal-title" id="dog-title">Add dog</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">For customer: <strong id="dog-cust-lbl"></strong></div>
     <div class="form-grid">
-      <div class="fg"><label>Dog name *</label><input id="f-name" placeholder="Buddy"/></div>
-      <div class="fg"><label>Breed</label><input id="f-breed" placeholder="Poodle"/></div>
-      <div class="fg"><label>Owner *</label><input id="f-owner" placeholder="Sarah"/></div>
-      <div class="fg"><label>WhatsApp</label><input id="f-wa" placeholder="08xxxxxxxxxx"/></div>
-      <div class="fg full"><label>Address</label><input id="f-addr" placeholder="Jl. Kemang Raya No.10"/></div>
-      <div class="fg"><label>Area</label><input id="f-area" placeholder="Kemang"/></div>
-      <div class="fg"><label>Size</label>
-        <select id="f-size">
-          <option value="">Select…</option>
-          <option>XS</option><option>S</option><option>M</option><option>L</option>
-        </select>
-      </div>
-      <div class="fg"><label>Coat</label>
-        <select id="f-coat">
-          <option value="">Select…</option>
-          <option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option>
-        </select>
-      </div>
-      <div class="fg"><label>Age</label><input id="f-age" placeholder="e.g. 2 years"/></div>
-      <div class="fg"><label>Emoji</label><input id="f-emoji" placeholder="🐶" style="max-width:70px"/></div>
-      <div class="fg full"><label>Preferences / notes</label><textarea id="f-prefs" placeholder="e.g. Lion cut. Anxious around clippers."></textarea></div>
+      <div class="fg"><label>Dog name *</label><input id="df-name" placeholder="Buddy"/></div>
+      <div class="fg"><label>Type / Breed</label><input id="df-breed" placeholder="Poodle"/></div>
+      <div class="fg"><label>Age</label><input id="df-age" placeholder="e.g. 2 years, 5 months"/></div>
+      <div class="fg"><label>Weight</label><input id="df-weight" placeholder="e.g. 8 kg"/></div>
+      <div class="fg"><label>Size</label><select id="df-size"><option value="">Select…</option><option>Small</option><option>Medium</option><option>Large</option></select></div>
+      <div class="fg"><label>Coat</label><select id="df-coat"><option value="">Select…</option><option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option></select></div>
+      <div class="fg full"><label>Preferences / notes</label><textarea id="df-prefs" placeholder="e.g. Anxious around clippers. Lion cut."></textarea></div>
     </div>
     <div class="form-actions">
-      <button class="btn btn-p" onclick="saveDog()" id="save-btn">Save client</button>
-      <button class="btn btn-g" onclick="cm('ov-add')">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<!-- DOG DETAIL -->
-<div class="overlay" id="ov-detail"><div class="modal" id="detail-content"></div></div>
-
-<!-- DELETE -->
-<div class="overlay" id="ov-del">
-  <div class="modal" style="max-width:330px;text-align:center">
-    <div style="font-size:34px;margin-bottom:9px">🗑️</div>
-    <div class="modal-title">Delete this dog?</div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:1.25rem">Permanently delete <strong id="del-name"></strong> and all visit history.</p>
-    <div style="display:flex;gap:8px;justify-content:center">
-      <button class="btn btn-d" onclick="confirmDel()">Yes, delete</button>
-      <button class="btn btn-g" onclick="cm('ov-del')">Cancel</button>
+      <button class="btn btn-p" onclick="saveDog()" id="dog-save-btn">Save dog</button>
+      <button class="btn btn-g" onclick="cm('ov-dog')">Cancel</button>
     </div>
   </div>
 </div>
@@ -512,7 +307,7 @@ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
     <div class="modal-title">Schedule appointment</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:1rem" id="appt-date-lbl"></div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      <div class="fg"><label>Dog *</label><select id="appt-dog"></select></div>
+      <div class="fg"><label>Dog *</label><select id="appt-dog"><option value="">Select dog…</option></select></div>
       <div class="fg"><label>Time</label><input type="time" id="appt-time" value="09:00"/></div>
       <div class="fg"><label>Service note</label><input id="appt-note" placeholder="e.g. Full groom, lion cut"/></div>
     </div>
@@ -523,356 +318,290 @@ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
   </div>
 </div>
 
-<!-- ADD/EDIT GROOMER -->
-<div class="overlay" id="ov-groomer">
-  <div class="modal" style="max-width:360px">
-    <div class="modal-title" id="groomer-modal-title">Add groomer</div>
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <div class="fg"><label>Name *</label><input id="g-name" placeholder="Groomer 1"/></div>
-      <div class="fg"><label>Emoji</label><input id="g-emoji" placeholder="✂️" style="max-width:70px"/></div>
-      <div class="fg"><label>Phone / WA</label><input id="g-phone" placeholder="08xxxxxxxxxx"/></div>
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-p" onclick="saveGroomer()" id="groomer-save-btn">Save</button>
-      <button class="btn btn-g" onclick="cm('ov-groomer')">Cancel</button>
-    </div>
-  </div>
-</div>
-
 <script>
-const {createClient} = supabase;
+const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
-let dogs=[], visits=[], appts=[], groomers=[];
-let editId=null, delId=null, apptDate=null, editGroomerId=null;
-let calStart=weekStart(new Date());
-let dataLoaded=false;
+let dogs=[], visits=[], appts=[], custs=[], custEditId=null, dogEditId=null, currentCustId=null, apptDate=null;
+let calStart = weekStart(new Date());
 
-function weekStart(d){const x=new Date(d),day=x.getDay(),diff=x.getDate()-day+(day===0?-6:1);x.setDate(diff);x.setHours(0,0,0,0);return x}
+function weekStart(d) {
+  const x=new Date(d), day=x.getDay(), diff=x.getDate()-day+(day===0?-6:1);
+  x.setDate(diff); x.setHours(0,0,0,0); return x;
+}
 function iso(d){return d.toISOString().split('T')[0]}
-function fmtD(d){return new Date(d+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})}
+function fmtD(d){return new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})}
 function cm(id){document.getElementById(id).classList.remove('open')}
 function om(id){document.getElementById(id).classList.add('open')}
-function isCustomerAppt(a){return !!a.customer_id}
-function apptOwner(a){return a.dogs?.owner||a.customer_profiles?.name||''}
-function sizeBadge(s){if(!s)return'';const cl=s==='L'?'bl':s==='M'?'bm':'bs';return`<span class="badge ${cl}">${s}</span>`}
-
-// ── AUTH ──────────────────────────────────────────────────────
-function showView(id){
-  ['view-login','view-forgot','view-reset'].forEach(v=>{
-    document.getElementById(v).style.display=v===id?'flex':'none';
-  });
-}
-function showApp(){
-  document.getElementById('screen-auth').style.display='none';
-  document.getElementById('screen-app').style.display='block';
-  if(!dataLoaded)loadAll();
-}
-function showAuth(view){
-  document.getElementById('screen-app').style.display='none';
-  document.getElementById('screen-auth').style.display='block';
-  showView(view||'view-login');
+function esc(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function gmapsUrl(addr,manual){
+  if(manual) return manual;
+  if(!addr) return '';
+  return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(addr);
 }
 
-async function initAuth(){
-  // Handle password recovery link
-  const hash=window.location.hash;
-  if(hash.includes('type=recovery')){
-    window.history.replaceState({},document.title,window.location.pathname);
-    showAuth('view-reset');
-    return;
-  }
-  const {data:{session}}=await db.auth.getSession();
-  if(session){showApp()}else{showAuth('view-login')}
-}
-
-db.auth.onAuthStateChange((event,session)=>{
-  if(event==='PASSWORD_RECOVERY'){
-    window.history.replaceState({},document.title,window.location.pathname);
-    showAuth('view-reset');
-  } else if(event==='SIGNED_IN'&&session&&!dataLoaded){
-    // Only fire showApp if not already loaded (prevents double-fire on page load)
-    showApp();
-  } else if(event==='SIGNED_OUT'){
-    dataLoaded=false;
-    dogs=[];visits=[];appts=[];groomers=[];
-    showAuth('view-login');
-  }
-});
-
-async function doLogin(){
-  const email=document.getElementById('l-email').value.trim();
-  const pass=document.getElementById('l-pass').value;
-  const err=document.getElementById('login-err');
-  err.style.display='none';
-  if(!email||!pass){err.textContent='Please enter email and password.';err.style.display='block';return}
-  const {error}=await db.auth.signInWithPassword({email,password:pass});
-  if(error){err.textContent=error.message;err.style.display='block';}
-}
-
-async function doForgot(){
-  const email=document.getElementById('f-reset-email').value.trim();
-  const err=document.getElementById('forgot-err');
-  const ok=document.getElementById('forgot-ok');
-  err.style.display='none';ok.style.display='none';
-  if(!email){err.textContent='Please enter your email.';err.style.display='block';return}
-  const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+window.location.pathname});
-  if(error){err.textContent=error.message;err.style.display='block';}
-  else{ok.style.display='block';}
-}
-
-async function doReset(){
-  const p1=document.getElementById('r-pass').value;
-  const p2=document.getElementById('r-pass2').value;
-  const err=document.getElementById('reset-err');
-  err.style.display='none';
-  if(p1.length<6){err.textContent='Password must be at least 6 characters.';err.style.display='block';return}
-  if(p1!==p2){err.textContent='Passwords do not match.';err.style.display='block';return}
-  const {error}=await db.auth.updateUser({password:p1});
-  if(error){err.textContent=error.message;err.style.display='block';}
-  else{alert('Password updated! Please sign in again.');await db.auth.signOut();}
-}
-
-async function doSignOut(){
-  await db.auth.signOut();
-  // onAuthStateChange handles redirect
-}
-
-// ── DATA ──────────────────────────────────────────────────────
-async function loadAll(){
-  try{
-    const [dr,vr,ar,gr]=await Promise.all([
-      db.from('dogs').select('*').order('created_at',{ascending:false}),
-      db.from('visits').select('*,dogs(name,emoji,owner,area,size)').order('visited_at',{ascending:false}),
-      db.from('appointments')
-        .select('*,dogs(name,emoji,area,address,wa,size,prefs,owner,customer_id,breed),customer_profiles(name,phone),groomers(name,phone)')
-        .order('appt_date').order('appt_time'),
-      db.from('groomers').select('*').order('created_at')
-    ]);
-    dogs=dr.data||[];
-    visits=vr.data||[];
-    if(ar.error){
-      console.warn('Appointments join issue, retrying:',ar.error.message);
-      const ar2=await db.from('appointments')
-        .select('*,dogs(name,emoji,area,address,wa,size,prefs,owner,customer_id,breed),groomers(name,phone)')
-        .order('appt_date').order('appt_time');
-      appts=ar2.data||[];
-    } else {
-      appts=ar.data||[];
-    }
-    groomers=gr.data||[];
-  }catch(e){
-    console.error('loadAll failed:',e);
-    dogs=[];visits=[];appts=[];groomers=[];
-  }
-  dataLoaded=true;
-  renderDogs();
-  renderGroomers();
-  // Load bank settings so invoice preview always uses current bank details
-  db.from('business_settings').select('*').eq('id',1).maybeSingle().then(({data})=>{
-    if(data) bankSettings=data;
-  });
-  const dogOpts=dogs.map(d=>`<option value="${d.id}">${d.emoji||'🐶'} ${d.name}${d.customer_id?' (customer)':''}</option>`).join('');
-  const hdEl=document.getElementById('hd');
-  const apptDogEl=document.getElementById('appt-dog');
-  if(hdEl)hdEl.innerHTML='<option value="">All dogs</option>'+dogOpts;
-  if(apptDogEl)apptDogEl.innerHTML='<option value="">Select dog…</option>'+dogOpts;
-}
-
-// ── TABS ──────────────────────────────────────────────────────
-function sw(tab){
+function sw(tab) {
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
   document.getElementById('sec-'+tab).classList.add('active');
-  if(tab==='history')renderHist();
-  if(tab==='calendar')renderCal();
-  if(tab==='invoice'){
-    const di=document.getElementById('inv-start-date');
-    if(di&&!di.value)di.value=iso(new Date());
-    invPopulateGroomers();
-    if(!document.getElementById('inv-dogs-list')?.children.length) renderInvDogs();
-  }
-  if(tab==='database')renderDatabase();
-  if(tab==='financial')loadFinancial();
+  if(tab==='database') renderCusts();
+  if(tab==='history') renderHist();
+  if(tab==='calendar') renderCal();
+  if(tab==='route') renderChips();
 }
 
-// ── CLIENTS ──────────────────────────────────────────────────
-function renderDogs(){
-  const g=document.getElementById('dog-grid');
-  const filter=document.getElementById('client-filter')?.value||'all';
-  let list=[...dogs];
-  if(filter==='admin')list=list.filter(d=>!d.customer_id);
-  if(filter==='customer')list=list.filter(d=>!!d.customer_id);
-  if(!list.length){g.innerHTML='<div class="empty"><span class="empty-icon">🐾</span>No clients yet!</div>';return}
-  g.innerHTML=list.map(d=>{
-    const vc=visits.filter(v=>v.dog_id===d.id).length;
-    const isCust=!!d.customer_id;
-    const ownerDisplay=d.owner||(isCust?'(customer account)':'—');
-    return `<div class="dog-card" onclick="openDet('${d.id}')">
-      <button class="del-btn" onclick="event.stopPropagation();askDel('${d.id}','${d.name.replace(/'/g,"\\'")}')">✕</button>
-      <div class="dog-hd">
-        <div class="dog-av">${d.emoji||'🐶'}</div>
-        <div style="flex:1;padding-right:18px"><div class="dog-nm">${d.name}</div><div class="dog-br">${d.breed||'—'}</div></div>
-        ${sizeBadge(d.size)}
-      </div>
-      <div class="dog-mt">
-        <div>👤 ${ownerDisplay}</div>
-        ${d.age?`<div>🎂 ${d.age}</div>`:''}
-        <div>📍 ${d.area||'—'}</div>
-        ${d.wa?`<div>💬 <a class="wa-lnk" href="https://wa.me/62${d.wa.replace(/^0/,'')}" target="_blank" onclick="event.stopPropagation()">WhatsApp</a></div>`:''}
-        <div>🗓️ ${vc} visit${vc!==1?'s':''}</div>
-        ${isCust?`<div style="margin-top:3px"><span class="badge bc">👤 Customer</span></div>`:''}
-      </div>
-    </div>`;
+function swSub(sub){
+  if(sub==='dogs' && !currentCustId){
+    // open dogs subtab but show empty state
+  }
+  document.querySelectorAll('.subtab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.subsec').forEach(s=>s.classList.remove('active'));
+  document.getElementById('stab-'+sub).classList.add('active');
+  document.getElementById('ssec-'+sub).classList.add('active');
+  if(sub==='dogs') renderDogsTable();
+  if(sub==='cust') renderCusts();
+}
+
+async function loadAll() {
+  const [cr,dr,vr,ar] = await Promise.all([
+    db.from('customers').select('*').order('created_at',{ascending:false}),
+    db.from('dogs').select('*').order('created_at',{ascending:false}),
+    db.from('visits').select('*,dogs(name,owner,area,size)').order('visited_at',{ascending:false}),
+    db.from('appointments').select('*,dogs(name,area,address,wa,size,prefs,owner)').order('appt_date').order('appt_time')
+  ]);
+  custs=cr.data||[]; dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[];
+  renderCusts();
+  const opts=dogs.map(d=>`<option value="${d.id}">${esc(d.name)} (${esc(getOwnerName(d.customer_id))})</option>`).join('');
+  document.getElementById('hd').innerHTML='<option value="">All dogs</option>'+opts;
+  document.getElementById('appt-dog').innerHTML='<option value="">Select dog…</option>'+opts;
+}
+
+function getOwnerName(custId){
+  const c=custs.find(x=>x.id===custId);
+  return c?c.owner:'—';
+}
+function dogsOf(custId){return dogs.filter(d=>d.customer_id===custId)}
+
+/* CUSTOMERS TABLE */
+function renderCusts(){
+  const s=(document.getElementById('cs')?.value||'').toLowerCase();
+  let rows=[...custs];
+  if(s) rows=rows.filter(c=>(c.owner||'').toLowerCase().includes(s)||(c.area||'').toLowerCase().includes(s)||(c.wa||'').toLowerCase().includes(s)||(c.address||'').toLowerCase().includes(s));
+  const tb=document.getElementById('cust-body');
+  if(!rows.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--muted)">No customers yet. Click "+ Add customer" above.</td></tr>';return}
+  tb.innerHTML=rows.map(c=>{
+    const dc=dogsOf(c.id).length;
+    const gm=gmapsUrl(c.address,c.gmaps_link);
+    return `<tr>
+      <td><span class="id-pill">${esc(c.customer_code||'—')}</span></td>
+      <td><strong>${esc(c.owner)}</strong></td>
+      <td>${c.wa?`<a class="wa-lnk" href="https://wa.me/62${c.wa.replace(/^0/,'')}" target="_blank">${esc(c.wa)}</a>`:'—'}</td>
+      <td>${esc(c.area)||'—'}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.address)}">${esc(c.address)||'—'}</td>
+      <td><span class="badge bs">${dc} dog${dc!==1?'s':''}</span></td>
+      <td>${gm?`<a class="maps-mini" href="${gm}" target="_blank">📍 Open</a>`:'—'}</td>
+      <td><div class="row-actions">
+        <button class="icon-btn view" onclick="viewCustDogs('${c.id}')">Dogs →</button>
+        <button class="icon-btn" onclick="openEditCust('${c.id}')">Edit</button>
+        <button class="icon-btn del" onclick="delCust('${c.id}','${esc(c.owner).replace(/'/g,"\\'")}')">Del</button>
+      </div></td>
+    </tr>`;
   }).join('');
 }
 
-function openDet(id){
-  const d=dogs.find(x=>x.id===id);if(!d)return;
-  const vlist=visits.filter(v=>v.dog_id===id);
-  const isCust=!!d.customer_id;
-  document.getElementById('detail-content').innerHTML=`
-    <div class="det-hero">
-      <div class="det-av">${d.emoji||'🐶'}</div>
-      <div>
-        <div class="det-nm">${d.name}${isCust?' <span class="badge bc">Customer</span>':''}</div>
-        <div class="det-sub">${d.breed||''}${d.coat?' · '+d.coat+' coat':''}</div>
-      </div>
-      ${!isCust?`<button class="btn btn-g btn-sm" style="margin-left:auto" onclick="openEdit('${d.id}')">✏️ Edit</button>`:'<span style="margin-left:auto"></span>'}
-    </div>
-    <div class="det-sec">
-      <div class="det-lbl">Owner & contact</div>
-      <div class="det-row"><span class="dl">Owner</span>${d.owner||(isCust?'(customer account)':'—')}</div>
-      <div class="det-row"><span class="dl">WhatsApp</span>${d.wa?`<a class="wa-lnk" href="https://wa.me/62${d.wa.replace(/^0/,'')}" target="_blank">${d.wa}</a>`:'—'}</div>
-      <div class="det-row"><span class="dl">Address</span>${d.address||'—'}</div>
-      <div class="det-row"><span class="dl">Area</span>${d.area||'—'}</div>
-    </div>
-    <div class="det-sec">
-      <div class="det-lbl">Dog info</div>
-      <div class="det-row"><span class="dl">Size</span>${d.size||'—'}</div>
-      <div class="det-row"><span class="dl">Coat</span>${d.coat||'—'}</div>
-      <div class="det-row"><span class="dl">Age</span>${d.age||'—'}</div>
-      <div class="det-row"><span class="dl">Preferences</span>${d.prefs||'—'}</div>
-    </div>
-    <div class="det-sec">
-      <div class="det-lbl">Visit history (${vlist.length})</div>
-      ${vlist.length?vlist.map(v=>`<div class="vpill">🗓️ ${v.visited_at} — ${v.note||'Visit'}</div>`).join(''):'<div style="font-size:12px;color:var(--muted)">No visits yet.</div>'}
-      <div class="add-v">
-        <input id="vn-${d.id}" placeholder="Log visit… e.g. Full groom"/>
-        <button class="btn btn-p btn-sm" onclick="addVisit('${d.id}')">+ Log</button>
-      </div>
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-g" onclick="cm('ov-detail')">Close</button>
-      <button class="btn btn-d btn-sm" onclick="cm('ov-detail');askDel('${d.id}','${d.name.replace(/'/g,"\\'")}')">🗑 Delete</button>
-    </div>`;
-  om('ov-detail');
+function viewCustDogs(id){
+  currentCustId=id;
+  swSub('dogs');
 }
 
-function openAdd(){
-  editId=null;
-  document.getElementById('add-title').textContent='Add dog client';
-  document.getElementById('save-btn').textContent='Save client';
-  ['f-name','f-breed','f-owner','f-wa','f-addr','f-area','f-prefs','f-emoji','f-age'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('f-size').value='';document.getElementById('f-coat').value='';
-  om('ov-add');
+function renderDogsTable(){
+  const empty=document.getElementById('dogs-empty');
+  const view=document.getElementById('dogs-view');
+  if(!currentCustId){empty.style.display='block';view.style.display='none';return}
+  const c=custs.find(x=>x.id===currentCustId);
+  if(!c){currentCustId=null;empty.style.display='block';view.style.display='none';return}
+  empty.style.display='none';view.style.display='block';
+  document.getElementById('cb-name').textContent=c.owner;
+  document.getElementById('cb-meta').innerHTML=`<span class="id-pill">${esc(c.customer_code||'—')}</span> · ${esc(c.area)||'—'} · ${c.wa?esc(c.wa):'no WA'}`;
+  const list=dogsOf(currentCustId);
+  const tb=document.getElementById('dogs-body');
+  if(!list.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--muted)">No dogs yet. Click "+ Add dog" above.</td></tr>';return}
+  tb.innerHTML=list.map(d=>`<tr>
+    <td><span class="id-pill">${esc(d.dog_code||'—')}</span></td>
+    <td><strong>${esc(d.name)}</strong></td>
+    <td>${esc(d.breed)||'—'}</td>
+    <td>${esc(d.age)||'—'}</td>
+    <td>${esc(d.weight)||'—'}</td>
+    <td style="max-width:240px;font-size:12px;color:var(--muted)">${esc(d.prefs)||'—'}</td>
+    <td><div class="row-actions">
+      <button class="icon-btn" onclick="openEditDog('${d.id}')">Edit</button>
+      <button class="icon-btn del" onclick="delDog('${d.id}','${esc(d.name).replace(/'/g,"\\'")}')">Del</button>
+    </div></td>
+  </tr>`).join('');
 }
 
-function openEdit(id){
-  const d=dogs.find(x=>x.id===id);if(!d)return;
-  editId=id;cm('ov-detail');
-  document.getElementById('add-title').textContent='Edit dog';
-  document.getElementById('save-btn').textContent='Update';
-  ['name','breed','owner','wa','addr','area','prefs','emoji','age'].forEach(k=>{
-    const el=document.getElementById('f-'+k);
-    if(el)el.value=d[k==='addr'?'address':k]||'';
-  });
-  document.getElementById('f-size').value=d.size||'';
-  document.getElementById('f-coat').value=d.coat||'';
-  om('ov-add');
+/* CUSTOMER MODAL */
+function openAddCust(){
+  custEditId=null;
+  document.getElementById('cust-title').textContent='Add customer';
+  document.getElementById('cust-save-btn').textContent='Save customer';
+  ['cf-owner','cf-wa','cf-addr','cf-area','cf-gmaps','cf-prefs'].forEach(id=>document.getElementById(id).value='');
+  om('ov-cust');
+}
+
+function openEditCust(id){
+  const c=custs.find(x=>x.id===id); if(!c) return;
+  custEditId=id;
+  document.getElementById('cust-title').textContent='Edit customer';
+  document.getElementById('cust-save-btn').textContent='Update';
+  document.getElementById('cf-owner').value=c.owner||'';
+  document.getElementById('cf-wa').value=c.wa||'';
+  document.getElementById('cf-addr').value=c.address||'';
+  document.getElementById('cf-area').value=c.area||'';
+  document.getElementById('cf-gmaps').value=c.gmaps_link||'';
+  document.getElementById('cf-prefs').value=c.prefs||'';
+  om('ov-cust');
+}
+
+async function saveCust(){
+  const owner=document.getElementById('cf-owner').value.trim();
+  if(!owner){alert('Owner name required.');return}
+  const p={
+    owner,
+    wa:document.getElementById('cf-wa').value.trim(),
+    address:document.getElementById('cf-addr').value.trim(),
+    area:document.getElementById('cf-area').value.trim(),
+    gmaps_link:document.getElementById('cf-gmaps').value.trim(),
+    prefs:document.getElementById('cf-prefs').value.trim()
+  };
+  if(custEditId){await db.from('customers').update(p).eq('id',custEditId)}
+  else{await db.from('customers').insert(p)}
+  cm('ov-cust'); await loadAll();
+}
+
+async function delCust(id,name){
+  if(!confirm(`Delete customer "${name}" and ALL their dogs? Cannot be undone.`)) return;
+  await db.from('dogs').delete().eq('customer_id',id);
+  await db.from('customers').delete().eq('id',id);
+  if(currentCustId===id) currentCustId=null;
+  await loadAll();
+}
+
+/* DOG MODAL */
+function openAddDog(){
+  if(!currentCustId){alert('Select a customer first.');return}
+  dogEditId=null;
+  const c=custs.find(x=>x.id===currentCustId);
+  document.getElementById('dog-title').textContent='Add dog';
+  document.getElementById('dog-save-btn').textContent='Save dog';
+  document.getElementById('dog-cust-lbl').textContent=c?c.owner:'—';
+  ['df-name','df-breed','df-age','df-weight','df-prefs'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('df-size').value='';
+  document.getElementById('df-coat').value='';
+  om('ov-dog');
+}
+
+function openEditDog(id){
+  const d=dogs.find(x=>x.id===id); if(!d) return;
+  dogEditId=id;
+  const c=custs.find(x=>x.id===d.customer_id);
+  document.getElementById('dog-title').textContent='Edit dog';
+  document.getElementById('dog-save-btn').textContent='Update';
+  document.getElementById('dog-cust-lbl').textContent=c?c.owner:'—';
+  document.getElementById('df-name').value=d.name||'';
+  document.getElementById('df-breed').value=d.breed||'';
+  document.getElementById('df-age').value=d.age||'';
+  document.getElementById('df-weight').value=d.weight||'';
+  document.getElementById('df-size').value=d.size||'';
+  document.getElementById('df-coat').value=d.coat||'';
+  document.getElementById('df-prefs').value=d.prefs||'';
+  om('ov-dog');
 }
 
 async function saveDog(){
-  const name=document.getElementById('f-name').value.trim();
-  const owner=document.getElementById('f-owner').value.trim();
-  if(!name||!owner){alert('Name and owner required.');return}
-  const p={name,owner,
-    breed:document.getElementById('f-breed').value.trim(),
-    wa:document.getElementById('f-wa').value.trim(),
-    address:document.getElementById('f-addr').value.trim(),
-    area:document.getElementById('f-area').value.trim(),
-    size:document.getElementById('f-size').value,
-    coat:document.getElementById('f-coat').value,
-    prefs:document.getElementById('f-prefs').value.trim(),
-    emoji:document.getElementById('f-emoji').value.trim()||'🐶',
-    age:document.getElementById('f-age').value.trim()
+  const name=document.getElementById('df-name').value.trim();
+  if(!name){alert('Dog name required.');return}
+  const p={
+    name,
+    customer_id:currentCustId,
+    breed:document.getElementById('df-breed').value.trim(),
+    age:document.getElementById('df-age').value.trim(),
+    weight:document.getElementById('df-weight').value.trim(),
+    size:document.getElementById('df-size').value,
+    coat:document.getElementById('df-coat').value,
+    prefs:document.getElementById('df-prefs').value.trim()
   };
-  if(editId){await db.from('dogs').update(p).eq('id',editId)}
+  if(dogEditId){await db.from('dogs').update(p).eq('id',dogEditId)}
   else{await db.from('dogs').insert(p)}
-  cm('ov-add');await loadAll();
+  cm('ov-dog'); await loadAll();
+}
+
+async function delDog(id,name){
+  if(!confirm(`Delete dog "${name}"? Cannot be undone.`)) return;
+  await db.from('dogs').delete().eq('id',id);
+  await loadAll();
 }
 
 async function addVisit(dogId){
   const inp=document.getElementById('vn-'+dogId);
-  const note=inp.value.trim();if(!note)return;
+  const note=inp.value.trim(); if(!note) return;
   await db.from('visits').insert({dog_id:dogId,note,visited_at:new Date().toISOString().split('T')[0]});
-  inp.value='';await loadAll();cm('ov-detail');openDet(dogId);
+  inp.value=''; await loadAll();
 }
 
-function askDel(id,name){delId=id;document.getElementById('del-name').textContent=name;om('ov-del')}
-async function confirmDel(){
-  if(!delId)return;
-  await db.from('dogs').delete().eq('id',delId);
-  cm('ov-del');delId=null;await loadAll();
-}
-
-// ── HISTORY ──────────────────────────────────────────────────
+/* HISTORY */
 function renderHist(){
   const s=document.getElementById('hs').value.toLowerCase();
   const df=document.getElementById('hd').value;
   const sort=document.getElementById('hsort').value;
   let rows=[...visits];
-  if(df)rows=rows.filter(v=>v.dog_id===df);
-  if(s)rows=rows.filter(v=>(v.dogs?.name||'').toLowerCase().includes(s)||(v.dogs?.owner||'').toLowerCase().includes(s)||(v.note||'').toLowerCase().includes(s));
+  if(df) rows=rows.filter(v=>v.dog_id===df);
+  if(s) rows=rows.filter(v=>{
+    const d=dogs.find(x=>x.id===v.dog_id);
+    const ownerName=d?getOwnerName(d.customer_id):'';
+    return (v.dogs?.name||'').toLowerCase().includes(s)||ownerName.toLowerCase().includes(s)||(v.note||'').toLowerCase().includes(s);
+  });
   rows.sort((a,b)=>sort==='asc'?new Date(a.visited_at)-new Date(b.visited_at):new Date(b.visited_at)-new Date(a.visited_at));
   const tb=document.getElementById('hist-body');
   if(!rows.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">No visits found.</td></tr>';return}
-  tb.innerHTML=rows.map(v=>`<tr>
-    <td><span class="tav">${v.dogs?.emoji||'🐶'}</span><strong>${v.dogs?.name||'—'}</strong></td>
-    <td>${v.dogs?.owner||'—'}</td>
-    <td style="white-space:nowrap">${fmtD(v.visited_at)}</td>
-    <td>${v.note||'—'}</td>
-    <td>${v.dogs?.area||'—'}</td>
-    <td>${sizeBadge(v.dogs?.size)}</td>
-  </tr>`).join('');
+  tb.innerHTML=rows.map(v=>{
+    const d=dogs.find(x=>x.id===v.dog_id);
+    const ownerName=d?getOwnerName(d.customer_id):'—';
+    const c=d?custs.find(x=>x.id===d.customer_id):null;
+    return `<tr>
+      <td><strong>${esc(v.dogs?.name)||'—'}</strong></td>
+      <td>${esc(ownerName)}</td>
+      <td style="white-space:nowrap">${fmtD(v.visited_at)}</td>
+      <td>${esc(v.note)||'—'}</td>
+      <td>${esc(c?.area||v.dogs?.area)||'—'}</td>
+      <td>${v.dogs?.size?`<span class="badge ${v.dogs.size==='Large'?'bl':v.dogs.size==='Medium'?'bm':'bs'}">${v.dogs.size}</span>`:'—'}</td>
+    </tr>`;
+  }).join('');
 }
 
-// ── CALENDAR ─────────────────────────────────────────────────
+/* CALENDAR */
 function calPrev(){calStart.setDate(calStart.getDate()-7);renderCal()}
 function calNext(){calStart.setDate(calStart.getDate()+7);renderCal()}
+
 function renderCal(){
   const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   document.getElementById('cal-hdrs').innerHTML=days.map(d=>`<div class="cal-dh">${d}</div>`).join('');
-  const end=new Date(calStart);end.setDate(end.getDate()+6);
+  const end=new Date(calStart); end.setDate(end.getDate()+6);
   document.getElementById('cal-title').textContent=
     calStart.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+
     end.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
-  const today=new Date();today.setHours(0,0,0,0);
+  const today=new Date(); today.setHours(0,0,0,0);
   let html='';
   for(let i=0;i<7;i++){
-    const d=new Date(calStart);d.setDate(d.getDate()+i);
+    const d=new Date(calStart); d.setDate(d.getDate()+i);
     const isoD=iso(d);
     const isToday=d.getTime()===today.getTime();
     const da=appts.filter(a=>a.appt_date===isoD);
     html+=`<div class="cal-cell${isToday?' today':''}" onclick="openAppt('${isoD}')">
       <div class="cal-dt">${d.getDate()}</div>
-      ${da.map(a=>{
-        const nm=a.dogs?.name||'?';
-        const isCust=isCustomerAppt(a);
-        return `<div class="cal-appt${isCust?' customer':''}" onclick="event.stopPropagation();delAppt('${a.id}')" title="${apptOwner(a)?apptOwner(a)+' · ':''}${nm}&#10;Click to remove">
-          ${a.appt_time?.slice(0,5)||''} ${a.dogs?.emoji||'🐶'} ${nm}${isCust?' 👤':''}
-        </div>`;
-      }).join('')}
+      ${da.map(a=>`<div class="cal-appt" onclick="event.stopPropagation();delAppt('${a.id}')" title="Click to remove">
+        ${a.appt_time?.slice(0,5)||''} ${a.dogs?.name||'?'}
+      </div>`).join('')}
       <button class="cal-add" onclick="event.stopPropagation();openAppt('${isoD}')">+</button>
     </div>`;
   }
@@ -881,835 +610,132 @@ function renderCal(){
 
 function openAppt(dateISO){
   apptDate=dateISO;
-  const d=new Date(dateISO+'T00:00:00');
+  const d=new Date(dateISO);
   document.getElementById('appt-date-lbl').textContent=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   document.getElementById('appt-dog').value='';
   document.getElementById('appt-time').value='09:00';
   document.getElementById('appt-note').value='';
   om('ov-appt');
 }
+
 async function saveAppt(){
   const dogId=document.getElementById('appt-dog').value;
   if(!dogId){alert('Please select a dog.');return}
   await db.from('appointments').insert({dog_id:dogId,appt_date:apptDate,appt_time:document.getElementById('appt-time').value,appt_note:document.getElementById('appt-note').value.trim()});
-  cm('ov-appt');await loadAll();renderCal();
+  cm('ov-appt'); await loadAll(); renderCal();
 }
+
 async function delAppt(id){
-  if(!confirm('Remove this appointment?'))return;
+  if(!confirm('Remove this appointment?')) return;
   await db.from('appointments').delete().eq('id',id);
-  await loadAll();renderCal();
+  await loadAll(); renderCal();
 }
 
-// ── REMINDERS ────────────────────────────────────────────────
-function initRemDate(){
-  const t=new Date();t.setDate(t.getDate()+1);
-  document.getElementById('rem-date').value=iso(t);
-}
-
-function calcEndTime(startTime, durMins){
-  if(!startTime)return'—';
-  const [hh,mm]=startTime.split(':').map(Number);
-  const total=hh*60+mm+(durMins||60);
-  return`${String(Math.floor(total/60)).padStart(2,'0')}:${String(total%60).padStart(2,'0')}`;
-}
-
-async function loadReminders(){
-  const date=document.getElementById('rem-date').value;
-  if(!date)return;
-  const rc=document.getElementById('rem-content');
-  rc.innerHTML='<div class="loading"><span class="spin"></span>Loading…</div>';
-
-  const {data:dayAppts}=await db.from('appointments')
-    .select('*,dogs(name,emoji,area,address,wa,size,prefs,owner,customer_id,breed),customer_profiles(name,phone),groomers(name,phone)')
-    .eq('appt_date',date)
-    .order('appt_time');
-
-  if(!dayAppts||!dayAppts.length){
-    rc.innerHTML='<div class="empty"><span class="empty-icon">📭</span>No appointments on this date.</div>';
-    return;
-  }
-
-  const dateObj=new Date(date+'T00:00:00');
-  const dateStr=dateObj.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-
-  // Group by groomer
-  const byGroomer={};
-  dayAppts.forEach(a=>{
-    const key=a.groomer_id||'unassigned';
-    const gname=a.groomers?.name||'Unassigned';
-    if(!byGroomer[key])byGroomer[key]={name:gname,phone:a.groomers?.phone||'',apts:[]};
-    byGroomer[key].apts.push(a);
-  });
-
-  let html='';
-  for(const [key,group] of Object.entries(byGroomer)){
-    const {name:gname,phone:gphone,apts}=group;
-
-    let msg=`Jadwal Grooming - ${dateStr}\n`;
-    apts.forEach(a=>{
-      const ownerName=a.dogs?.owner||a.customer_profiles?.name||'—';
-      const breed=a.dogs?.breed||'—';
-      const size=a.dogs?.size||'—';
-      const addr=a.dogs?.address||'—';
-      const note=a.appt_note||a.dogs?.prefs||'—';
-      const startTime=a.appt_time?.slice(0,5)||'—';
-      const endTime=calcEndTime(a.appt_time?.slice(0,5),a.duration_mins);
-      const mapsLink=addr!=='—'?`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}&travelmode=driving`:'—';
-      msg+=`\nJam: ${startTime} - ${endTime}`;
-      msg+=`\nClient: ${ownerName}`;
-      msg+=`\nTipe Anjing: ${breed} (${size})`;
-      msg+=`\nAlamat: ${addr}`;
-      msg+=`\nGoogle Maps: ${mapsLink}`;
-      msg+=`\nCatatan: ${note}\n`;
-    });
-    msg+=`\n- Home Paw Grooming`;
-
-    const safeKey=key.replace(/-/g,'_');
-    const msgId='msg_'+safeKey;
-    const waLink=gphone?`https://wa.me/62${gphone.replace(/^0/,'')}?text=${encodeURIComponent(msg)}`:'';
-
-    html+=`<div class="rem-card">
-      <div class="rem-header">✂️ ${gname} — ${apts.length} janji</div>
-      ${apts.map(a=>{
-        const ownerName=a.dogs?.owner||a.customer_profiles?.name||'—';
-        const st=a.appt_time?.slice(0,5)||'—';
-        const et=calcEndTime(a.appt_time?.slice(0,5),a.duration_mins);
-        return `<div class="rem-row">
-          <span>⏰ ${st} – ${et}</span>
-          <span>${a.dogs?.emoji||'🐶'} ${a.dogs?.name||'?'} · ${ownerName}</span>
-        </div>`;
-      }).join('')}
-      <div id="${msgId}" class="rem-msg-box" contenteditable="true">${msg}</div>
-      <div class="rem-actions">
-        <button class="btn btn-p btn-sm" onclick="copyMsg('${msgId}')">📋 Copy</button>
-        ${waLink?`<a class="btn btn-p btn-sm" style="text-decoration:none" href="${waLink}" target="_blank">💬 Kirim ke ${gname}</a>`
-          :`<span style="font-size:11px;color:var(--muted)">Tambahkan nomor WA groomer untuk kirim langsung</span>`}
-      </div>
-    </div>`;
-  }
-  rc.innerHTML=html;
-}
-
-function copyMsg(id){
-  const el=document.getElementById(id);
-  navigator.clipboard.writeText(el.innerText).then(()=>{
-    const orig=el.style.background;
-    el.style.background='#dcfce7';
-    setTimeout(()=>{el.style.background=orig},700);
-  });
-}
-
-// ── GROOMERS ─────────────────────────────────────────────────
-function renderGroomers(){
-  const g=document.getElementById('groomer-grid');
-  if(!groomers.length){g.innerHTML='<div class="empty"><span class="empty-icon">✂️</span>No groomers yet. Add one!</div>';return}
-  g.innerHTML=groomers.map(gr=>`
-    <div class="groomer-card">
-      <button class="del-btn" onclick="deleteGroomer('${gr.id}')">✕</button>
-      <div class="dog-hd" style="margin-bottom:.75rem">
-        <div class="dog-av">${gr.emoji||'✂️'}</div>
-        <div><div class="dog-nm">${gr.name}</div>${gr.phone?`<div style="font-size:11px;color:var(--muted)">📱 ${gr.phone}</div>`:''}</div>
-        <button class="btn btn-g btn-sm" style="margin-left:auto" onclick="openGroomerEdit('${gr.id}')">Edit</button>
-      </div>
-      <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">This week's schedule</div>
-      <div id="sched-${gr.id}"><div class="loading" style="padding:.5rem;font-size:12px"><span class="spin"></span>Loading…</div></div>
-      <button class="btn btn-p btn-sm" style="margin-top:8px;width:100%" onclick="saveGroomerSched('${gr.id}')">💾 Save schedule</button>
-    </div>`
+/* ROUTE */
+function renderChips(){
+  document.getElementById('chips').innerHTML=dogs.map(d=>
+    `<button class="chip" data-name="${esc(d.name)}" onclick="toggleChip('${d.id}',this)">${esc(d.name)}</button>`
   ).join('');
-  groomers.forEach(gr=>loadGroomerSched(gr.id));
 }
 
-async function loadGroomerSched(groomerId){
-  const monday=weekStart(new Date());
-  const dates=Array.from({length:7},(_,i)=>{const d=new Date(monday);d.setDate(d.getDate()+i);return iso(d)});
-  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const {data:scheds}=await db.from('groomer_schedules').select('*').eq('groomer_id',groomerId).in('date',dates);
-  const map={};(scheds||[]).forEach(s=>{map[s.date]=s});
-  const el=document.getElementById('sched-'+groomerId);
-  if(!el)return;
-  el.innerHTML=dates.map((d,i)=>{
-    const s=map[d]||{};
-    const off=s.is_off||false;
-    const area=(s.areas||[]).join(', ');
-    return `<div class="sched-row">
-      <span class="sched-day">${days[i]}</span>
-      <input class="sched-area" id="sa-${groomerId}-${d}" value="${area}" placeholder="Area (e.g. Kemang)" ${off?'disabled':''}/>
-      <label class="sched-off"><input type="checkbox" id="so-${groomerId}-${d}" ${off?'checked':''} onchange="toggleOff('${groomerId}','${d}')"/> Off</label>
-    </div>`;
-  }).join('');
+function toggleChip(id,el){
+  el.classList.toggle('on');
+  const sel=[...document.querySelectorAll('.chip.on')].map(c=>c.dataset.name);
+  document.getElementById('route-input').value=sel.length?`I want to groom ${sel.join(', ')} tomorrow.`:'';
 }
 
-function toggleOff(gid,date){
-  const cb=document.getElementById(`so-${gid}-${date}`);
-  const inp=document.getElementById(`sa-${gid}-${date}`);
-  inp.disabled=cb.checked;
+function loadFromCal(){
+  const tom=new Date(); tom.setDate(tom.getDate()+1);
+  const isoT=iso(tom);
+  const ta=appts.filter(a=>a.appt_date===isoT);
+  if(!ta.length){alert('No appointments for tomorrow. Add some in the Calendar tab!');return}
+  const names=ta.map(a=>a.dogs?.name).filter(Boolean);
+  const firstTime=ta[0]?.appt_time?.slice(0,5)||'09:00';
+  document.getElementById('route-input').value=`I want to groom ${names.join(', ')} tomorrow starting at ${firstTime}.`;
+  document.querySelectorAll('.chip').forEach(c=>{
+    if(names.includes(c.dataset.name)) c.classList.add('on'); else c.classList.remove('on');
+  });
 }
 
-async function saveGroomerSched(groomerId){
-  const monday=weekStart(new Date());
-  const dates=Array.from({length:7},(_,i)=>{const d=new Date(monday);d.setDate(d.getDate()+i);return iso(d)});
-  const rows=dates.map(d=>({
-    groomer_id:groomerId,
-    date:d,
-    areas:(document.getElementById(`sa-${groomerId}-${d}`)?.value||'').split(',').map(a=>a.trim()).filter(Boolean),
-    is_off:document.getElementById(`so-${groomerId}-${d}`)?.checked||false
-  }));
-  const {error}=await db.from('groomer_schedules').upsert(rows,{onConflict:'groomer_id,date'});
-  if(error){alert('Error saving: '+error.message);}
-  else{alert('Schedule saved!');}
+function buildMapsUrl(stops){
+  const a=stops.map(s=>encodeURIComponent(s.address));
+  if(!a.length) return null;
+  if(a.length===1) return `https://www.google.com/maps/dir/?api=1&destination=${a[0]}&travelmode=driving&avoid=tolls`;
+  const wps=a.slice(1,-1).join('|');
+  let u=`https://www.google.com/maps/dir/?api=1&origin=${a[0]}&destination=${a[a.length-1]}&travelmode=driving&avoid=tolls`;
+  if(wps) u+=`&waypoints=${wps}`;
+  return u;
 }
 
-function openGroomerAdd(){
-  editGroomerId=null;
-  document.getElementById('groomer-modal-title').textContent='Add groomer';
-  document.getElementById('groomer-save-btn').textContent='Save';
-  ['g-name','g-emoji','g-phone'].forEach(id=>document.getElementById(id).value='');
-  om('ov-groomer');
-}
+async function optimizeRoute(){
+  const input=document.getElementById('route-input').value.trim();
+  if(!input){alert('Please describe who to groom.');return}
+  const rd=document.getElementById('route-result');
+  rd.innerHTML='<div class="loading"><span class="spin"></span>Planning your motorcycle route…</div>';
 
-function openGroomerEdit(id){
-  const gr=groomers.find(x=>x.id===id);if(!gr)return;
-  editGroomerId=id;
-  document.getElementById('groomer-modal-title').textContent='Edit groomer';
-  document.getElementById('groomer-save-btn').textContent='Update';
-  document.getElementById('g-name').value=gr.name||'';
-  document.getElementById('g-emoji').value=gr.emoji||'';
-  document.getElementById('g-phone').value=gr.phone||'';
-  om('ov-groomer');
-}
+  const dogList=dogs.map(d=>{
+    const c=custs.find(x=>x.id===d.customer_id)||{};
+    return `- ${d.name} (${d.breed||'mixed'}, ${d.size||'?'}, area:${c.area||'?'}, address:${c.address||'?'}, owner:${c.owner||'?'}, WA:${c.wa||'n/a'}, prefs:"${d.prefs||'none'}")`;
+  }).join('\n');
 
-async function saveGroomer(){
-  const name=document.getElementById('g-name').value.trim();
-  if(!name){alert('Name required.');return}
-  const p={name,emoji:document.getElementById('g-emoji').value.trim()||'✂️',phone:document.getElementById('g-phone').value.trim()};
-  if(editGroomerId){await db.from('groomers').update(p).eq('id',editGroomerId)}
-  else{await db.from('groomers').insert(p)}
-  cm('ov-groomer');await loadAll();
-}
+  try {
+    const resp=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","x-api-key":ANTHROPIC_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({
+        model:"claude-sonnet-4-20250514",
+        max_tokens:1024,
+        messages:[{role:"user",content:`You are a route optimizer for a mobile dog grooming service in Jakarta, Indonesia. Groomer uses MOTORCYCLE, NO toll roads (no tol).
 
-async function deleteGroomer(id){
-  if(!confirm('Delete this groomer?'))return;
-  await db.from('groomers').delete().eq('id',id);
-  await loadAll();
-}
+Clients:
+${dogList}
 
+Request: "${input}"
 
-// ── INVOICE ──────────────────────────────────────────────────
-const INV_PRICES={
-  base:{XS:120000,S:140000,M:190000,L:250000},
-  styling:{XS:100000,S:100000,M:120000,L:140000},
-  botak:{XS:60000,S:60000,M:70000,L:80000},
-  dematting:{XS:50000,S:50000,M:50000,L:50000},
-  deshedding:{XS:50000,S:50000,M:50000,L:50000},
-  antifungal:{XS:50000,S:50000,M:55000,L:60000},
-  antikutu:{XS:25000,S:25000,M:30000,L:35000},
-  whitening:{XS:15000,S:15000,M:20000,L:25000}
-};
-const INV_DUR={
-  base:{XS:60,S:60,M:90,L:120},
-  styling:{XS:30,S:30,M:30,L:30},
-  botak:{XS:15,S:15,M:15,L:15},
-  dematting:{XS:15,S:15,M:15,L:15},
-  deshedding:{XS:15,S:15,M:15,L:30}
-};
-let invSource='manual';
-let invDiscType='pct';
-let invDogs=[{name:'',breed:'',size:'',styling:'',addons:[],customPrice:null,useCustom:false}];
-const INV_LOGO='data:image/png;base64,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';
-
-function invFmtRp(n){return'Rp '+Math.round(n||0).toLocaleString('id-ID');}
-function invFmtDate(d){if(!d)return'—';return new Date(d+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});}
-function invAddDays(s,days){const d=new Date(s+'T00:00:00');d.setDate(d.getDate()+days);return d.toISOString().split('T')[0];}
-
-// Groomer helpers
-function invGroomerChange(){
-  const sel=document.getElementById('inv-groomer-select');
-  const cust=document.getElementById('inv-groomer-custom');
-  if(!sel||!cust)return;
-  cust.style.display=sel.value==='__custom'?'block':'none';
-  if(sel.value==='__custom')cust.focus();
-  invPreview();
-}
-function invGetGroomerName(){
-  const sel=document.getElementById('inv-groomer-select');
-  if(!sel)return'';
-  if(sel.value==='__custom')return document.getElementById('inv-groomer-custom')?.value.trim()||'';
-  return sel.value||'';
-}
-function invPopulateGroomers(){
-  const sel=document.getElementById('inv-groomer-select');
-  if(!sel)return;
-  sel.innerHTML='<option value="">Pilih groomer\u2026</option>'
-    +groomers.map(g=>`<option value="${g.name}">${g.emoji||'\u2702\ufe0f'} ${g.name}</option>`).join('')
-    +'<option value="__custom">\u270f\ufe0f Ketik manual\u2026</option>';
-}
-
-// Dog list helpers
-function invDogPrice(dog){
-  const sz=dog.size||'M';
-  if(dog.useCustom&&dog.customPrice!=null)return dog.customPrice;
-  let p=INV_PRICES.base[sz]||0;
-  if(dog.styling==='styling')p+=INV_PRICES.styling[sz]||0;
-  if(dog.styling==='botak')p+=INV_PRICES.botak[sz]||0;
-  (dog.addons||[]).forEach(a=>{if(INV_PRICES[a])p+=INV_PRICES[a][sz]||0;});
-  return p;
-}
-function invDogAutoPrice(dog){
-  const sz=dog.size||'M';
-  let p=INV_PRICES.base[sz]||0;
-  if(dog.styling==='styling')p+=INV_PRICES.styling[sz]||0;
-  if(dog.styling==='botak')p+=INV_PRICES.botak[sz]||0;
-  (dog.addons||[]).forEach(a=>{if(INV_PRICES[a])p+=INV_PRICES[a][sz]||0;});
-  return p;
-}
-function invDogServices(dog){
-  const sz=dog.size||'M';
-  const svcs=[{name:'Basic Grooming',price:INV_PRICES.base[sz]||0}];
-  if(dog.styling==='styling')svcs.push({name:'Styling / Cukur Pendek',price:INV_PRICES.styling[sz]||0});
-  if(dog.styling==='botak')svcs.push({name:'Shaving / Cukur Botak',price:INV_PRICES.botak[sz]||0});
-  const lbl={dematting:'Dematting',deshedding:'Deshedding',antifungal:'Anti Fungal',antikutu:'Anti Kutu',whitening:'Whitening Shampoo',parfume:'Parfume'};
-  (dog.addons||[]).forEach(a=>svcs.push({name:lbl[a]||a,price:a==='parfume'?0:(INV_PRICES[a]?.[sz]||0),free:a==='parfume'}));
-  return svcs;
-}
-
-function invAddDog(){
-  invDogs.push({name:'',breed:'',size:'',styling:'',addons:[],customPrice:null,useCustom:false});
-  renderInvDogs();
-}
-function invRemoveDog(i){
-  if(invDogs.length<=1)return;
-  invDogs.splice(i,1);
-  renderInvDogs();
-}
-function invToggleAddon(i,addon,checked){
-  if(!invDogs[i].addons)invDogs[i].addons=[];
-  if(checked){if(!invDogs[i].addons.includes(addon))invDogs[i].addons.push(addon);}
-  else{invDogs[i].addons=invDogs[i].addons.filter(a=>a!==addon);}
-  renderInvDogs();
-}
-
-function renderInvDogs(){
-  const el=document.getElementById('inv-dogs-list');
-  if(!el)return;
-  const addons=['dematting','deshedding','antifungal','antikutu','whitening','parfume'];
-  const addonLbl={dematting:'Dematting',deshedding:'Deshedding',antifungal:'Anti Fungal',antikutu:'Anti Kutu',whitening:'Whitening',parfume:'Parfume'};
-  el.innerHTML=invDogs.map((dog,i)=>{
-    const sz=dog.size||'';
-    const autoP=invDogAutoPrice(dog);
-    const dispP=dog.useCustom&&dog.customPrice!=null?dog.customPrice:autoP;
-    return `<div style="border:1.5px solid var(--border);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <span style="font-size:12px;font-weight:600;color:var(--muted)">Anjing ${i+1}</span>
-        ${invDogs.length>1?`<button onclick="invRemoveDog(${i})" style="background:var(--red);color:var(--red-t);border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:11px;font-weight:700">✕</button>`:''}
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 80px;gap:6px;margin-bottom:8px">
-        <div class="fg"><label>Nama anjing</label><input value="${dog.name}" oninput="invDogs[${i}].name=this.value;invPreview()" placeholder="Buddy" style="padding:6px 8px"/></div>
-        <div class="fg"><label>Breed</label><input value="${dog.breed}" oninput="invDogs[${i}].breed=this.value;invPreview()" placeholder="Poodle" style="padding:6px 8px"/></div>
-        <div class="fg"><label>Size</label>
-          <select onchange="invDogs[${i}].size=this.value;renderInvDogs()" style="padding:6px 8px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle);width:100%">
-            <option value="" ${!sz?'selected':''}>—</option>
-            <option value="XS" ${sz==='XS'?'selected':''}>XS</option>
-            <option value="S" ${sz==='S'?'selected':''}>S</option>
-            <option value="M" ${sz==='M'?'selected':''}>M</option>
-            <option value="L" ${sz==='L'?'selected':''}>L</option>
-          </select>
-        </div>
-      </div>
-      <div style="margin-bottom:7px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500">Styling</div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap">
-          ${['','styling','botak'].map(v=>`<label style="display:flex;align-items:center;gap:4px;padding:4px 10px;border:1.5px solid ${dog.styling===v?'var(--primary-md)':'var(--border)'};border-radius:20px;cursor:pointer;font-size:12px;background:${dog.styling===v?'var(--primary-lt)':'transparent'}">
-            <input type="radio" name="inv-sty-${i}" value="${v}" ${dog.styling===v?'checked':''} onchange="invDogs[${i}].styling=this.value;renderInvDogs()" style="display:none"/>
-            ${v===''?'Tidak ada':v==='styling'?'Styling':'Botak'}${sz&&v?' <span style=\"font-size:10px;color:var(--muted)\">('+invFmtRp(INV_PRICES[v]?.[sz]||0)+')</span>':''}
-          </label>`).join('')}
-        </div>
-      </div>
-      <div style="margin-bottom:8px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500">Add-on</div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap">
-          ${addons.map(a=>`<label style="display:flex;align-items:center;gap:4px;padding:4px 10px;border:1.5px solid ${(dog.addons||[]).includes(a)?'var(--primary-md)':'var(--border)'};border-radius:20px;cursor:pointer;font-size:12px;background:${(dog.addons||[]).includes(a)?'var(--primary-lt)':'transparent'}">
-            <input type="checkbox" ${(dog.addons||[]).includes(a)?'checked':''} onchange="invToggleAddon(${i},'${a}',this.checked)" style="display:none"/>
-            ${addonLbl[a]}${sz&&a!=='parfume'&&INV_PRICES[a]?' <span style=\"font-size:10px;color:var(--muted)\">('+invFmtRp(INV_PRICES[a][sz]||0)+')</span>':''}
-          </label>`).join('')}
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--subtle);border-radius:var(--r);flex-wrap:wrap">
-        <span style="font-size:12px;color:var(--muted)">Harga:</span>
-        <span style="font-size:14px;font-weight:700;color:var(--primary-md);flex:1">${invFmtRp(dispP)}</span>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap">
-          <input type="checkbox" ${dog.useCustom?'checked':''} onchange="invDogs[${i}].useCustom=this.checked;renderInvDogs()"/> Custom harga
-        </label>
-        ${dog.useCustom?`<input type="number" value="${dog.customPrice!=null?dog.customPrice:autoP}" min="0" oninput="invDogs[${i}].customPrice=parseInt(this.value)||0;invPreview()" placeholder="0" style="width:100px;padding:5px 8px;border:1.5px solid var(--primary-md);border-radius:var(--r);font-size:13px;font-weight:600"/>`:''}
-      </div>
-    </div>`;
-  }).join('');
-  invPreview();
-}
-
-function setDiscType(t){
-  invDiscType=t;
-  document.getElementById('disc-pct-btn').className='btn btn-sm '+(t==='pct'?'btn-p':'btn-g');
-  document.getElementById('disc-rp-btn').className='btn btn-sm '+(t==='rp'?'btn-p':'btn-g');
-  document.getElementById('inv-disc-unit').textContent=t==='pct'?'%':'Rp';
-  invPreview();
-}
-
-function invGetIntervalDays(){
-  const v=document.getElementById('inv-interval')?.value;
-  if(v==='none')return null;
-  if(v==='custom')return parseInt(document.getElementById('inv-custom-days')?.value)||7;
-  return parseInt(v)||7;
-}
-
-document.addEventListener('change',function(e){
-  if(e.target.id==='inv-interval'){
-    const w=document.getElementById('inv-custom-interval-wrap');
-    if(w)w.style.display=e.target.value==='custom'?'block':'none';
-    invPreview();
-  }
-});
-
-function invSetSource(src){
-  invSource=src;
-  document.getElementById('inv-src-appt-btn').className='btn btn-sm '+(src==='appointment'?'btn-p':'btn-g');
-  document.getElementById('inv-src-manual-btn').className='btn btn-sm '+(src==='manual'?'btn-p':'btn-g');
-  document.getElementById('inv-appt-picker').style.display=src==='appointment'?'block':'none';
-  if(src==='appointment'){
-    const sel=document.getElementById('inv-appt-select');
-    sel.innerHTML='<option value="">Pilih appointment\u2026</option>'
-      +appts.map(a=>`<option value="${a.id}">${a.appt_date} \u2014 ${a.dogs?.emoji||'\ud83d\udc36'} ${a.dogs?.name||'?'} (${a.dogs?.owner||a.customer_profiles?.name||'?'})</option>`).join('');
-  } else {
-    invDogs=[{name:'',breed:'',size:'',styling:'',addons:[],customPrice:null,useCustom:false}];
-    document.getElementById('inv-owner').value='';
-    document.getElementById('inv-sessions').value='1';
-    document.getElementById('inv-discount').value='0';
-    renderInvDogs();
-    document.getElementById('inv-preview-box').innerHTML='<div class="empty" style="padding:2rem"><span class="empty-icon">\ud83e\uddfe</span>Isi form untuk melihat preview</div>';
-  }
-}
-
-function loadInvFromAppt(){
-  const id=document.getElementById('inv-appt-select').value;
-  if(!id)return;
-  const a=appts.find(x=>x.id===id);if(!a)return;
-  const d=a.dogs||{};
-  document.getElementById('inv-owner').value=d.owner||a.customer_profiles?.name||'';
-  if(a.appt_date)document.getElementById('inv-start-date').value=a.appt_date;
-  const gsel=document.getElementById('inv-groomer-select');
-  if(gsel&&a.groomers?.name){
-    const opt=[...gsel.options].find(o=>o.value===a.groomers.name);
-    if(opt){gsel.value=a.groomers.name;document.getElementById('inv-groomer-custom').style.display='none';}
-    else{gsel.value='__custom';document.getElementById('inv-groomer-custom').value=a.groomers.name;document.getElementById('inv-groomer-custom').style.display='block';}
-  }
-  invDogs=[{name:d.name||'',breed:d.breed||'',size:d.size||'',styling:a.service_base&&a.service_base!=='basic'?a.service_base:'',addons:a.service_addon||[],customPrice:a.price_total||null,useCustom:false}];
-  renderInvDogs();
-  invPreview();
-}
-
-function invCalcTotals(){
-  const subtotalPerSession=invDogs.reduce((s,dog)=>s+invDogPrice(dog),0);
-  const sessions=Math.max(1,parseInt(document.getElementById('inv-sessions')?.value)||1);
-  const discVal=parseFloat(document.getElementById('inv-discount')?.value)||0;
-  const subtotalAll=subtotalPerSession*sessions;
-  let discAmt=invDiscType==='pct'?subtotalAll*(discVal/100):discVal;
-  discAmt=Math.min(Math.max(discAmt,0),subtotalAll);
-  return{subtotalPerSession,subtotalAll,discAmt,total:subtotalAll-discAmt,sessions,discVal};
-}
-
-function invPreview(){
-  const owner=document.getElementById('inv-owner')?.value.trim()||'';
-  const groomer=invGetGroomerName();
-  const groomDate=document.getElementById('inv-start-date')?.value||'';
-  const sessions=Math.max(1,parseInt(document.getElementById('inv-sessions')?.value)||1);
-  const intervalDays=invGetIntervalDays();
-  const discVal=parseFloat(document.getElementById('inv-discount')?.value)||0;
-  const{subtotalPerSession,subtotalAll,discAmt,total}=invCalcTotals();
-
-  // Update sidebar totals
-  const upd=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
-  upd('inv-subtotal-display',invFmtRp(subtotalPerSession));
-  upd('inv-sessions-label','\u00d7 '+sessions+' sesi');
-  upd('inv-sessions-total',invFmtRp(subtotalAll));
-  upd('inv-disc-label',invDiscType==='pct'?'Diskon '+discVal+'%':'Diskon');
-  upd('inv-disc-amount','- '+invFmtRp(discAmt));
-  upd('inv-total-display',invFmtRp(total));
-  const dr=document.getElementById('inv-disc-row');
-  if(dr)dr.style.display=discAmt>0?'flex':'none';
-
-  const si=document.getElementById('inv-sessions-info');
-  if(si){
-    if(sessions>1&&groomDate&&intervalDays){
-      const dates=Array.from({length:sessions},(_,i)=>invAddDays(groomDate,i*intervalDays));
-      si.textContent=sessions+' sesi: '+dates.map(d=>new Date(d+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric',month:'short'})).join(' \u00b7 ');
-    } else if(sessions>1&&!intervalDays){
-      si.textContent=sessions+' sesi \u2014 jadwal akan ditentukan kemudian';
-    } else si.textContent='';
-  }
-
-  if(!owner&&invDogs.every(d=>!d.name&&!d.size)){
-    document.getElementById('inv-preview-box').innerHTML='<div class="empty" style="padding:2rem"><span class="empty-icon">\ud83e\uddfe</span>Isi form untuk melihat preview</div>';
-    return;
-  }
-
-  const invNum='HPG-'+new Date().toISOString().slice(2,10).replace(/-/g,'')+'-'+String(Math.floor(Math.random()*900)+100);
-  const invDate=new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});
-
-  // Schedule section
-  let schedHTML='';
-  if(sessions>1&&groomDate&&intervalDays){
-    const dates=Array.from({length:sessions},(_,i)=>invAddDays(groomDate,i*intervalDays));
-    schedHTML='<div style="padding:.9rem 1.4rem;border-bottom:1px solid #e8d5b7"><div style="font-size:10px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Jadwal sesi</div>'
-      +dates.map((d,i)=>'<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px"><span style="color:#8b6347">Sesi '+(i+1)+'</span><span style="font-weight:500">'+new Date(d+'T00:00:00').toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short',year:'numeric'})+'</span></div>').join('')+'</div>';
-  } else if(sessions>1&&!intervalDays){
-    schedHTML='<div style="padding:.75rem 1.4rem;border-bottom:1px solid #e8d5b7;background:#fdf3e7"><div style="font-size:12px;color:#8b6347;font-style:italic">\ud83d\udccb '+sessions+' sesi \u2014 jadwal akan ditentukan kemudian</div></div>';
-  }
-
-  // Dogs sections
-  const dogsHTML=invDogs.map((dog,idx2)=>{
-    const svcs=invDogServices(dog);
-    const finalPrice=invDogPrice(dog);
-    const autoPrice=invDogAutoPrice(dog);
-    return '<div style="padding:.9rem 1.4rem;border-bottom:1px solid #e8d5b7">'
-      +'<div style="font-size:13px;font-weight:700;color:#3d1f0d;margin-bottom:6px">\ud83d\udc36 '+(dog.name||'Anjing '+(idx2+1))+(dog.breed?' <span style=\"font-weight:400;color:#8b6347;font-size:11px\">'+dog.breed+'</span>':'')+(dog.size?' <span style=\"background:#f9d9a8;color:#3d1f0d;font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;margin-left:4px\">'+dog.size+'</span>':'')+'</div>'
-      +svcs.map(s=>'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f5e8d0;font-size:13px"><span style="color:#3d1f0d">'+s.name+'</span><span style="font-weight:500;color:#3d1f0d">'+(s.free?'Gratis':invFmtRp(s.price))+'</span></div>').join('')
-      +(dog.useCustom?'<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;color:#8b6347;font-style:italic"><span>Custom harga</span><span>'+invFmtRp(finalPrice)+'</span></div>':'')
-      +'<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;font-weight:600"><span>Subtotal</span><span style="color:#e8822a">'+invFmtRp(finalPrice)+'</span></div>'
-      +'</div>';
-  }).join('');
-
-  const bank=bankSettings||{};
-
-  document.getElementById('inv-preview-box').innerHTML=
-    '<div id="printable-invoice" style="background:#fffdf9;border:1px solid #e8d5b7;border-radius:14px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">'
-
-    // Header
-    +'<div style="background:#3d1f0d;padding:1.1rem 1.4rem;display:flex;align-items:center;gap:14px">'
-    +'<img src="'+INV_LOGO+'" style="width:56px;height:56px;object-fit:contain;border-radius:10px;background:#f5ead8;padding:3px;flex-shrink:0" alt="Home Paw"/>'
-    +'<div style="flex:1"><div style="font-size:18px;font-weight:800;color:#f5ead8;letter-spacing:.5px;line-height:1.1">HOME PAW</div>'
-    +'<div style="font-size:10px;font-weight:600;color:#c97d4e;letter-spacing:1px;margin-top:1px">GROOMING</div>'
-    +'<div style="font-size:10px;color:#8b6347;margin-top:1px">happy grooming starts at home</div></div>'
-    +'<div style="text-align:right;flex-shrink:0"><div style="font-size:10px;color:#8b6347;text-transform:uppercase;letter-spacing:.05em">Invoice</div>'
-    +'<div style="font-size:12px;font-weight:700;color:#f9d9a8;font-family:monospace">'+invNum+'</div>'
-    +'<div style="font-size:10px;color:#8b6347;margin-top:2px">'+invDate+'</div></div>'
-    +'</div>'
-
-    // Structured header bar: customer / customer id / dog code / sesi
-    +'<div style="background:#f9d9a8;padding:8px 1.4rem;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;border-bottom:1px solid #e8d5b7" id="inv-codes-bar">'
-    +'<div><div style="font-size:9px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.05em">Customer</div><div style="font-size:12px;font-weight:700;color:#3d1f0d;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(owner||'—')+'</div></div>'
-    +'<div><div style="font-size:9px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.05em">Customer ID</div><div style="font-size:11px;font-weight:600;color:#3d1f0d;margin-top:1px;font-family:monospace" id="inv-cust-id-display">—</div></div>'
-    +'<div><div style="font-size:9px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.05em">Dog Code</div><div style="font-size:11px;font-weight:600;color:#3d1f0d;margin-top:1px;font-family:monospace" id="inv-dog-code-display">'+(invDogs.length>1?'multi':'—')+'</div></div>'
-    +'<div><div style="font-size:9px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.05em">Sesi ke-</div><div style="font-size:12px;font-weight:700;color:#3d1f0d;margin-top:1px" id="inv-session-num-display">—</div></div>'
-    +'</div>'
-
-    // Booking info: groomer + date
-    +'<div style="padding:.9rem 1.4rem;border-bottom:1px solid #e8d5b7">'
-    +'<div style="font-size:10px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Info grooming</div>'
-    +(groomer?'<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Groomer</span><span style="font-weight:500;color:#3d1f0d">\u2702\ufe0f '+groomer+'</span></div>':'')
-    +(groomDate?'<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Tanggal</span><span style="font-weight:500;color:#3d1f0d">'+invFmtDate(groomDate)+'</span></div>':'')
-    +(sessions>1?'<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Jumlah sesi</span><span style="font-weight:500;color:#3d1f0d">'+sessions+' sesi</span></div>':'')
-    +'</div>'
-
-    // Dogs
-    +dogsHTML
-
-    // Schedule
-    +schedHTML
-
-    // Totals
-    +'<div style="padding:.9rem 1.4rem;border-bottom:1px solid #e8d5b7">'
-    +'<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;color:#8b6347"><span>Subtotal per sesi</span><span>'+invFmtRp(subtotalPerSession)+'</span></div>'
-    +(sessions>1?'<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;color:#8b6347"><span>\u00d7 '+sessions+' sesi</span><span>'+invFmtRp(subtotalAll)+'</span></div>':'')
-    +(discAmt>0?'<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;color:#991b1b"><span>'+(invDiscType==='pct'?'Diskon '+discVal+'%':'Diskon')+'</span><span>- '+invFmtRp(discAmt)+'</span></div>':'')
-    +'<div style="display:flex;justify-content:space-between;padding:7px 0 2px;font-size:16px;font-weight:700;border-top:1px solid #e8d5b7;margin-top:5px"><span style="color:#3d1f0d">Total Harga</span><span style="color:#e8822a">'+invFmtRp(total)+'</span></div>'
-    +'</div>'
-
-    // Payment
-    +'<div style="padding:.9rem 1.4rem;border-bottom:1px solid #e8d5b7;background:#fdf3e7">'
-    +'<div style="font-size:10px;font-weight:600;color:#8b6347;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Pembayaran</div>'
-    +'<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">No. Rekening</span><span style="font-weight:700;color:#3d1f0d;font-family:monospace;letter-spacing:.5px">'+(bank.bank_account||'—')+'</span></div>'
-    +'<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Bank</span><span style="font-weight:500;color:#3d1f0d">'+(bank.bank_name||'—')+'</span></div>'
-    +'<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#8b6347">Atas nama</span><span style="font-weight:500;color:#3d1f0d">'+(bank.bank_holder||'—')+'</span></div>'
-    +'</div>'
-
-    // Footer
-    +'<div style="padding:1rem 1.4rem;text-align:center">'
-    +'<div style="font-size:12px;color:#8b6347;margin-bottom:6px">Terima kasih sudah mempercayakan perawatan anjing Anda \ud83d\udc3e</div>'
-    +'<div style="font-size:12px;font-weight:600;color:#e8822a;margin-bottom:8px">Home Paw Grooming</div>'
-    +'<div style="background:#f9d9a8;border-radius:8px;padding:8px 12px;font-size:11px;color:#3d1f0d;line-height:1.6">'
-    +'\ud83d\udcf2 Mohon kirimkan bukti pembayaran melalui:<br>'
-    +'<strong>WhatsApp</strong> atau <strong>DM Instagram</strong> kami setelah melakukan transfer'
-    +'</div>'
-    +'</div>'
-    +'</div>';
-
-  // Fill codes async
-  invFillCodes(owner, invDogs[0]?.breed||'', invDogs[0]?.size||'');
-}
-
-async function invFillCodes(ownerName,breed,sz){
-  try{
-    let matchDog=null;
-    if(ownerName) matchDog=dogs.find(d=>d.owner&&d.owner.toLowerCase()===ownerName.toLowerCase());
-    if(!matchDog&&breed&&sz) matchDog=dogs.find(d=>d.breed&&d.breed.toLowerCase()===breed.toLowerCase()&&d.size===sz);
-    if(!matchDog&&ownerName){
-      const{data:d1}=await db.from('dogs').select('id,dog_code,owner,customer_id').ilike('owner',ownerName).limit(1).maybeSingle();
-      if(d1)matchDog=d1;
-    }
-    if(matchDog){
-      const dc=document.getElementById('inv-dog-code-display');
-      if(dc&&invDogs.length<=1)dc.textContent=matchDog.dog_code||'—';
-      const custEl=document.getElementById('inv-cust-id-display');
-      if(custEl){
-        if(matchDog.customer_id){
-          const{data:cp}=await db.from('customer_profiles').select('customer_code').eq('id',matchDog.customer_id).maybeSingle();
-          custEl.textContent=cp?.customer_code||'—';
-        } else {
-          custEl.textContent=matchDog.dog_code?matchDog.dog_code.replace('DOG','CUS'):'—';
-        }
-      }
-      const{count}=await db.from('visits').select('id',{count:'exact',head:true}).eq('dog_id',matchDog.id);
-      const se=document.getElementById('inv-session-num-display');
-      if(se)se.textContent=count!=null?'#'+(count+1):'#1';
-    }
-  }catch(e){console.warn('invFillCodes:',e);}
-}
-
-function invDownloadPDF(){
-  const box=document.getElementById('printable-invoice');
-  if(!box){alert('Isi form terlebih dahulu.');return;}
-  const win=window.open('','_blank');
-  win.document.write('<!DOCTYPE html><html><head><title>Invoice - Home Paw Grooming</title>'
-    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,sans-serif;background:#fff;padding:20px}@media print{body{padding:0}}</style>'
-    +'</head><body>'+box.outerHTML
-    +'<script>window.onload=function(){window.print();}<\/script></body></html>');
-  win.document.close();
-}
-
-async function invSaveAppointments(){
-  const sessions=Math.max(1,parseInt(document.getElementById('inv-sessions')?.value)||1);
-  const startDate=document.getElementById('inv-start-date')?.value;
-  const res=document.getElementById('inv-save-result');
-  if(!startDate&&sessions>1){res.textContent='Masukkan tanggal mulai.';res.style.color='#991b1b';return;}
-  if(invDogs.every(d=>!d.size)){res.textContent='Pilih size anjing terlebih dahulu.';res.style.color='#991b1b';return;}
-  const intervalDays=invGetIntervalDays();
-  const groomer=groomers.find(g=>g.name===invGetGroomerName());
-  const rows=[];
-  Array.from({length:sessions},(_,si)=>{
-    const apptDate=intervalDays&&startDate?invAddDays(startDate,si*intervalDays):(startDate||null);
-    invDogs.forEach(dog=>{
-      const matchDog=dogs.find(d=>d.name?.toLowerCase()===dog.name?.toLowerCase())||null;
-      rows.push({
-        dog_id:matchDog?.id||null,
-        groomer_id:groomer?.id||null,
-        appt_date:apptDate,
-        appt_time:'09:00',
-        duration_mins:invDogServices(dog).reduce((s,x)=>s+(INV_DUR[x.key]||0),0)||60,
-        price_total:invDogPrice(dog),
-        service_base:dog.styling||'basic',
-        service_addon:dog.addons||[],
-        status:'pending',
-        appt_note:'Advance booking sesi '+(si+1)+'/'+sessions
-      });
+1. Find the dogs mentioned by name.
+2. Optimize route for motorcycle avoiding tolls. Group nearby areas: Sudirman/Kuningan=Central; Kemang/Tebet/Pancoran=South; Kelapa Gading/Sunter=North; Grogol/Kebon Jeruk=West; Cibubur/Kramat Jati=East.
+3. Schedule times from 9:00 AM unless stated. Large=60min, Medium=45min, Small=30min, travel buffer=20min (motorcycle, no toll).
+4. Return ONLY this exact JSON (no markdown, no backticks, no extra text):
+{"summary":"one sentence","stops":[{"order":1,"dog":"Name","owner":"Owner","area":"Area","address":"Full address","wa":"number","time":"09:00","duration":"60 min","note":"grooming reminder"}],"total_time":"X hrs","tip":"Jakarta motorcycle tip"}`}]
+      })
     });
-  });
-  res.textContent='Menyimpan\u2026';res.style.color='var(--muted)';
-  const{error}=await db.from('appointments').insert(rows);
-  if(error){res.textContent='Gagal: '+error.message;res.style.color='#991b1b';}
-  else{res.textContent='\u2705 '+rows.length+' appointment disimpan!';res.style.color='#16a34a';await loadAll();}
-}
-
-async function invSaveToDB(){
-  const owner=document.getElementById('inv-owner')?.value.trim();
-  const res=document.getElementById('inv-save-result');
-  if(!owner||invDogs.every(d=>!d.size)){res.textContent='Isi nama dan size terlebih dahulu.';res.style.color='#991b1b';return;}
-  const{subtotalPerSession,subtotalAll,discAmt,total,sessions,discVal}=invCalcTotals();
-  const invNum='HPG-'+new Date().toISOString().slice(2,10).replace(/-/g,'')+'-'+String(Math.floor(Math.random()*900)+100);
-  const firstDog=invDogs[0];
-  const matchDog=dogs.find(d=>d.owner?.toLowerCase()===owner.toLowerCase())||dogs.find(d=>d.breed?.toLowerCase()===firstDog.breed?.toLowerCase()&&d.size===firstDog.size)||null;
-  const payload={
-    invoice_number:invNum,dog_id:matchDog?.id||null,owner_name:owner,
-    breed:invDogs.map(d=>d.breed||d.name).join(', '),
-    dog_size:invDogs.map(d=>d.size).join(', '),
-    services:invDogs.map(d=>invDogServices(d)),
-    subtotal:subtotalPerSession,sessions,
-    discount_type:invDiscType,discount_value:discVal,
-    discount_amount:Math.round(discAmt),total:Math.round(total),status:'unpaid'
-  };
-  res.textContent='Menyimpan\u2026';res.style.color='var(--muted)';
-  const{error}=await db.from('invoices').insert(payload);
-  if(error){res.textContent='Gagal: '+error.message;res.style.color='#991b1b';}
-  else{res.textContent='\u2705 Invoice '+invNum+' tersimpan!';res.style.color='#16a34a';}
-}
-
-// ── DATABASE ─────────────────────────────────────────────────
-function renderDatabase(){
-  const search=(document.getElementById('db-search')?.value||'').toLowerCase();
-  const el=document.getElementById('db-content');
-  if(!el)return;
-  const customerMap={};
-  dogs.filter(d=>!d.customer_id).forEach(d=>{
-    const key='admin_'+(d.owner||'').toLowerCase();
-    if(!customerMap[key])customerMap[key]={type:'admin',name:d.owner||'—',wa:d.wa||'',area:d.area||'',address:d.address||'',customer_code:'—',dogs:[]};
-    customerMap[key].dogs.push(d);
-  });
-  dogs.filter(d=>!!d.customer_id).forEach(d=>{
-    const key='cust_'+d.customer_id;
-    if(!customerMap[key])customerMap[key]={type:'customer',customerId:d.customer_id,name:'—',wa:'',area:'',address:'',customer_code:'—',dogs:[]};
-    customerMap[key].dogs.push(d);
-  });
-  let rows=Object.values(customerMap);
-  if(search) rows=rows.filter(c=>c.name.toLowerCase().includes(search)||c.wa.includes(search)||c.area.toLowerCase().includes(search)||c.dogs.some(d=>(d.name||'').toLowerCase().includes(search)));
-  if(!rows.length){el.innerHTML='<div class="empty"><span class="empty-icon">🗃️</span>No customers found.</div>';return;}
-  const fmtRp=n=>'Rp '+(n||0).toLocaleString('id-ID');
-  el.innerHTML='<div class="tbl-wrap"><table><thead><tr><th>Nama</th><th>Dog(s)</th><th>WhatsApp</th><th>Area</th><th>Appts</th><th>Type</th><th></th></tr></thead><tbody>'+
-    rows.map((c,i)=>{
-      const dogNames=c.dogs.map(d=>(d.emoji||'🐶')+' '+d.name).join(', ')||'—';
-      const apptCount=appts.filter(a=>c.dogs.some(d=>d.id===a.dog_id)).length;
-      const key='dbrow_'+i;
-      window['_dbrow_'+i]=c;
-      return '<tr style="cursor:pointer" onclick="openCustomerDetail(\''+key+'\')"><td><strong>'+c.name+'</strong></td><td style="font-size:12px">'+dogNames+'</td><td>'+(c.wa?'<a class="wa-lnk" href="https://wa.me/62'+c.wa.replace(/^0/,'')+'" target="_blank" onclick="event.stopPropagation()">'+c.wa+'</a>':'—')+'</td><td>'+( c.area||'—')+'</td><td style="text-align:center">'+apptCount+'</td><td><span class="badge '+(c.type==='customer'?'bc':'bs')+'">'+(c.type==='customer'?'Portal':'Admin')+'</span></td><td><button class="btn btn-g btn-sm" onclick="event.stopPropagation();openCustomerDetail(\''+key+'\')">→</button></td></tr>';
-    }).join('')+'</tbody></table></div>';
-}
-
-async function openCustomerDetail(key){
-  const c=window[key];
-  if(!c)return;
-  const el=document.getElementById('customer-detail-content');
-  if(!el)return;
-  const dogIds=c.dogs.map(d=>d.id).filter(Boolean);
-  let custInvoices=[];
-  if(dogIds.length){
-    const{data:invData}=await db.from('invoices').select('*').in('dog_id',dogIds).order('created_at',{ascending:false});
-    custInvoices=invData||[];
+    if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||resp.status)}
+    const data=await resp.json();
+    const raw=(data.content||[]).map(b=>b.text||'').join('').replace(/```json|```/g,'').trim();
+    const json=JSON.parse(raw);
+    const tom=new Date(); tom.setDate(tom.getDate()+1);
+    const dateStr=tom.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'});
+    const mapsUrl=buildMapsUrl(json.stops);
+    rd.innerHTML=`
+      <div class="sum-bar"><span>📅 ${dateStr}</span><span>🏍️ No tolls · ⏱ ${json.total_time}</span></div>
+      ${mapsUrl?`<div class="maps-banner">
+        <div><div class="maps-t">🗺️ Open full route in Google Maps</div><div class="maps-s">${json.stops.length} stops · Motorcycle · No tolls · Live traffic</div></div>
+        <a class="btn-maps" href="${mapsUrl}" target="_blank">Open in Maps →</a>
+      </div>`:''}
+      <div class="card" style="padding:1rem">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:.9rem">✨ ${json.summary}</div>
+        ${json.stops.map(s=>`<div class="stop-row">
+          <div class="stop-n">${s.order}</div>
+          <div class="stop-info">
+            <div class="stop-nm">${s.dog} <span style="font-weight:400;color:var(--muted);font-size:11px">· ${s.owner}</span></div>
+            <div class="stop-det">📍 ${s.address}</div>
+            <div class="stop-det">✂️ ${s.note}</div>
+            <div class="stop-links">
+              ${s.wa?`<a class="stop-lnk" href="https://wa.me/62${s.wa.replace(/^0/,'')}" target="_blank">💬 WA</a>`:''}
+              <a class="stop-lnk" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.address)}&travelmode=driving&avoid=tolls" target="_blank">🏍️ Navigate</a>
+            </div>
+          </div>
+          <div class="stime"><div class="stime-v">${s.time}</div><div class="stime-d">${s.duration}</div></div>
+        </div>`).join('')}
+        ${json.tip?`<div class="tip">💡 ${json.tip}</div>`:''}
+      </div>`;
+  } catch(e){
+    rd.innerHTML=`<div class="empty"><span class="empty-icon">⚠️</span>Error: ${e.message}</div>`;
+    console.error(e);
   }
-  const custAppts=appts.filter(a=>c.dogs.some(d=>d.id===a.dog_id));
-  window._currentCustKey=key;
-  el.innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem"><div style="width:44px;height:44px;border-radius:50%;background:var(--primary-lt);display:flex;align-items:center;justify-content:center;font-size:20px">👤</div><div style="flex:1"><div style="font-size:16px;font-weight:600">'+c.name+'</div><div style="font-size:11px;color:var(--muted)">'+(c.type==='customer'?'Customer portal':'Admin-added')+'</div></div><button class="btn btn-g btn-sm" onclick="cm(\'ov-customer\')">✕ Close</button></div>'
-  +'<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem">Info pelanggan</div>'
-  +'<div class="form-grid" style="margin-bottom:1rem"><div class="fg"><label>Nama</label><input id="cd-name" value="'+c.name+'"/></div><div class="fg"><label>WhatsApp</label><input id="cd-wa" value="'+c.wa+'"/></div><div class="fg full"><label>Alamat</label><input id="cd-addr" value="'+c.address+'"/></div><div class="fg"><label>Area</label><input id="cd-area" value="'+c.area+'"/></div></div>'
-  +'<div style="margin-bottom:1.25rem"><button class="btn btn-p btn-sm" onclick="saveCustomerFromDetail()">💾 Simpan perubahan</button><span id="cd-saved" style="font-size:12px;color:var(--primary-md);margin-left:.75rem;display:none">✓ Tersimpan!</span></div>'
-  +'<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem">Dogs ('+c.dogs.length+')</div>'
-  +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1.25rem">'+c.dogs.map(d=>'<div style="background:var(--primary-lt);border-radius:var(--r);padding:7px 11px;font-size:12px"><strong>'+(d.emoji||'🐶')+' '+d.name+'</strong> · '+(d.breed||'—')+' · '+(d.size||'—')+(d.dog_code?' <span style="font-size:10px;color:var(--muted);font-family:monospace">'+d.dog_code+'</span>':'')+'</div>').join('')+'</div>'
-  +'<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem">Appointments ('+custAppts.length+')</div>'
-  +(custAppts.length?'<div class="tbl-wrap" style="margin-bottom:1.25rem"><table><thead><tr><th>Date</th><th>Dog</th><th>Time</th><th>Status</th></tr></thead><tbody>'+custAppts.map(a=>'<tr><td>'+( a.appt_date||'—')+'</td><td>'+(a.dogs?.emoji||'🐶')+' '+(a.dogs?.name||'—')+'</td><td>'+(a.appt_time?.slice(0,5)||'—')+'</td><td><span class="badge '+(a.status==='done'?'bs':a.status==='confirmed'?'bc':'bm')+'">'+(a.status||'pending')+'</span></td></tr>').join('')+'</tbody></table></div>':'<div style="font-size:12px;color:var(--muted);margin-bottom:1.25rem">Belum ada appointment.</div>')
-  +'<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem">Invoices ('+custInvoices.length+')</div>'
-  +(custInvoices.length?'<div class="tbl-wrap"><table><thead><tr><th>Invoice #</th><th>Tanggal</th><th>Sesi</th><th>Total</th><th>Status</th></tr></thead><tbody>'+custInvoices.map(inv=>'<tr><td style="font-family:monospace;font-size:12px">'+(inv.invoice_number||'—')+'</td><td style="font-size:12px">'+(inv.created_at?.slice(0,10)||'—')+'</td><td style="text-align:center">'+(inv.sessions||1)+'</td><td style="font-weight:600">Rp '+(inv.total||0).toLocaleString('id-ID')+'</td><td><span class="badge '+(inv.status==='paid'?'bs':'bm')+'">'+(inv.status==='paid'?'Paid':'Unpaid')+'</span></td></tr>').join('')+'</tbody></table></div>':'<div style="font-size:12px;color:var(--muted)">Belum ada invoice.</div>');
-  om('ov-customer');
 }
 
-async function saveCustomerFromDetail(){
-  const c=window[window._currentCustKey];
-  if(!c)return;
-  const name=document.getElementById('cd-name').value.trim();
-  const wa=document.getElementById('cd-wa').value.trim();
-  const addr=document.getElementById('cd-addr').value.trim();
-  const area=document.getElementById('cd-area').value.trim();
-  const updates=[];
-  for(const dog of c.dogs){
-    if(c.type==='admin') updates.push(db.from('dogs').update({owner:name,wa,address:addr,area}).eq('id',dog.id));
-  }
-  if(c.type==='customer'&&c.customerId) updates.push(db.from('customer_profiles').update({name,phone:wa,address:addr,area}).eq('id',c.customerId));
-  await Promise.all(updates);
-  await loadAll();
-  const saved=document.getElementById('cd-saved');
-  if(saved){saved.style.display='inline';setTimeout(()=>{saved.style.display='none';},2000);}
-}
-
-// ── FINANCIAL ────────────────────────────────────────────────
-let savedInvoices=[];
-let bankSettings={bank_name:'Krom Bank',bank_account:'770055777787',bank_holder:'Xavier Fidelia Ali'};
-
-async function loadFinancial(){
-  const[invRes,bankRes]=await Promise.all([
-    db.from('invoices').select('*').order('created_at',{ascending:false}),
-    db.from('business_settings').select('*').eq('id',1).maybeSingle()
-  ]);
-  savedInvoices=invRes.data||[];
-  if(bankRes.data){
-    bankSettings=bankRes.data;
-    const bn=document.getElementById('bank-name');
-    const ba=document.getElementById('bank-account');
-    const bh=document.getElementById('bank-holder');
-    if(bn)bn.value=bankSettings.bank_name||'';
-    if(ba)ba.value=bankSettings.bank_account||'';
-    if(bh)bh.value=bankSettings.bank_holder||'';
-  }
-  renderFinancial();
-}
-
-function renderFinancial(){
-  const filter=document.getElementById('fin-filter')?.value||'all';
-  let rows=[...savedInvoices];
-  if(filter==='paid') rows=rows.filter(i=>i.status==='paid');
-  if(filter==='unpaid') rows=rows.filter(i=>i.status!=='paid');
-  const fmtRp=n=>'Rp '+(n||0).toLocaleString('id-ID');
-  const totalInvoiced=savedInvoices.reduce((s,i)=>s+(i.total||0),0);
-  const totalPaid=savedInvoices.filter(i=>i.status==='paid').reduce((s,i)=>s+(i.total||0),0);
-  document.getElementById('fin-total-invoiced').textContent=fmtRp(totalInvoiced);
-  document.getElementById('fin-total-paid').textContent=fmtRp(totalPaid);
-  document.getElementById('fin-total-unpaid').textContent=fmtRp(totalInvoiced-totalPaid);
-  const el=document.getElementById('fin-invoice-list');
-  if(!rows.length){el.innerHTML='<div class="empty" style="padding:1.5rem"><span class="empty-icon">🧾</span>Belum ada invoice tersimpan.</div>';return;}
-  el.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
-    +'<th style="background:var(--subtle);padding:9px 13px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">Invoice #</th>'
-    +'<th style="background:var(--subtle);padding:9px 13px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">Customer</th>'
-    +'<th style="background:var(--subtle);padding:9px 13px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">Tanggal</th>'
-    +'<th style="background:var(--subtle);padding:9px 13px;text-align:center;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">Sesi</th>'
-    +'<th style="background:var(--subtle);padding:9px 13px;text-align:right;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">Total</th>'
-    +'<th style="background:var(--subtle);padding:9px 13px;text-align:center;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">Status</th>'
-    +'</tr></thead><tbody>'
-    +rows.map(inv=>'<tr style="border-bottom:1px solid var(--border)">'
-      +'<td style="padding:9px 13px;font-family:monospace;font-size:12px">'+(inv.invoice_number||'—')+'</td>'
-      +'<td style="padding:9px 13px"><strong>'+(inv.owner_name||'—')+'</strong><br><span style="font-size:11px;color:var(--muted)">'+(inv.breed||'')+' '+(inv.dog_size?'· '+inv.dog_size:'')+'</span></td>'
-      +'<td style="padding:9px 13px;font-size:12px;white-space:nowrap">'+(inv.created_at?.slice(0,10)||'—')+'</td>'
-      +'<td style="padding:9px 13px;text-align:center">'+(inv.sessions||1)+'</td>'
-      +'<td style="padding:9px 13px;text-align:right;font-weight:600">'+fmtRp(inv.total)+'</td>'
-      +'<td style="padding:9px 13px;text-align:center"><button onclick="toggleInvPaid(\''+inv.id+'\',\''+inv.status+'\')" class="badge '+(inv.status==='paid'?'bs':'bm')+'" style="border:none;cursor:pointer;padding:3px 10px;font-size:11px">'+(inv.status==='paid'?'✓ Paid':'Unpaid')+'</button></td>'
-      +'</tr>').join('')
-    +'</tbody></table>';
-}
-
-async function toggleInvPaid(id,currentStatus){
-  const newStatus=currentStatus==='paid'?'unpaid':'paid';
-  await db.from('invoices').update({status:newStatus}).eq('id',id);
-  await loadFinancial();
-}
-
-async function saveBankDetails(){
-  const bank_name=document.getElementById('bank-name').value.trim();
-  const bank_account=document.getElementById('bank-account').value.trim();
-  const bank_holder=document.getElementById('bank-holder').value.trim();
-  await db.from('business_settings').upsert({id:1,bank_name,bank_account,bank_holder,updated_at:new Date().toISOString()});
-  bankSettings={bank_name,bank_account,bank_holder};
-  const saved=document.getElementById('bank-saved');
-  if(saved){saved.style.display='inline';setTimeout(()=>{saved.style.display='none';},2000);}
-}
-
-// ── SAVE INVOICE TO DB ────────────────────────────────────────
-async function invSaveToDB(){
-  const owner=document.getElementById('inv-owner')?.value.trim();
-  const breed=document.getElementById('inv-breed')?.value.trim();
-  const sz=document.getElementById('inv-size')?.value;
-  const res=document.getElementById('inv-save-result');
-  if(!owner||!sz){res.textContent='Isi nama dan size terlebih dahulu.';res.style.color='#991b1b';return;}
-  const{svcs,subtotalPerSession,subtotalAll,discAmt,total}=invCalcTotals();
-  const sessions=Math.max(1,parseInt(document.getElementById('inv-sessions')?.value)||1);
-  const discVal=parseFloat(document.getElementById('inv-discount')?.value)||0;
-  const invNum='HPG-'+new Date().toISOString().slice(2,10).replace(/-/g,'')+'-'+String(Math.floor(Math.random()*900)+100);
-  const matchDog=dogs.find(d=>d.owner?.toLowerCase()===owner.toLowerCase())||dogs.find(d=>d.breed?.toLowerCase()===breed?.toLowerCase()&&d.size===sz)||null;
-  const payload={invoice_number:invNum,dog_id:matchDog?.id||null,owner_name:owner,breed:breed||'',dog_size:sz,services:svcs,subtotal:subtotalPerSession,sessions,discount_type:invDiscType,discount_value:discVal,discount_amount:Math.round(discAmt),total:Math.round(total),status:'unpaid'};
-  res.textContent='Menyimpan…';res.style.color='var(--muted)';
-  const{error}=await db.from('invoices').insert(payload);
-  if(error){res.textContent='Gagal: '+error.message;res.style.color='#991b1b';}
-  else{res.textContent='Invoice '+invNum+' tersimpan!';res.style.color='#16a34a';}
-}
-
-
-// ── INIT ─────────────────────────────────────────────────────
-initRemDate();
-initAuth();
-// Patch sw to init invoice tab on first open
-
+loadAll();
 </script>
 </body>
 </html>
