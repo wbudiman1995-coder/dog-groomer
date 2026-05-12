@@ -685,7 +685,7 @@ async function loadAll() {
  db.from('customers').select('*').order('created_at',{ascending:false}),
  db.from('dogs').select('*').order('created_at',{ascending:false}),
  db.from('visits').select('*,dogs(name,owner,area,size)').order('visited_at',{ascending:false}),
- db.from('appointments').select('*,dogs(name,area,address,wa,size,prefs,owner)').order('appt_date').order('appt_time'),
+ db.from('appointments').select('*,dogs(name,breed,size,prefs)').order('appt_date').order('appt_time'),
  db.from('groomers').select('*').order('created_at'),
  db.from('invoices').select('*').order('created_at',{ascending:false}),
  db.from('business_settings').select('*').eq('id',1).single()
@@ -921,13 +921,16 @@ function renderHist(){
  const d=dogs.find(x=>x.id===v.dog_id);
  const ownerName=d?getOwnerName(d.customer_id):'—';
  const c=d?custs.find(x=>x.id===d.customer_id):null;
+ const dogName=v.dogs?.name||d?.name||'—';
+ const dogSize=v.dogs?.size||d?.size;
+ const dogArea=c?.kota||c?.area||'—';
  return `<tr>
- <td><strong>${esc(v.dogs?.name)||'—'}</strong></td>
+ <td><strong>${esc(dogName)}</strong></td>
  <td>${esc(ownerName)}</td>
  <td style="white-space:nowrap">${fmtD(v.visited_at)}</td>
  <td>${esc(v.note)||'—'}</td>
- <td>${esc(c?.area||v.dogs?.area)||'—'}</td>
- <td>${v.dogs?.size?`<span class="badge ${['Large','XL'].includes(v.dogs.size)?'bl':v.dogs.size==='Medium'?'bm':'bs'}">${v.dogs.size}</span>`:'—'}</td>
+ <td>${esc(dogArea)}</td>
+ <td>${dogSize?`<span class="badge ${['Large','XL'].includes(dogSize)?'bl':dogSize==='Medium'?'bm':'bs'}">${dogSize}</span>`:'—'}</td>
  </tr>`;
  }).join('');
 }
@@ -1366,7 +1369,7 @@ function loadFromCal(){
  const isoT=iso(tom);
  const ta=appts.filter(a=>a.appt_date===isoT);
  if(!ta.length){alert('No appointments for tomorrow. Add some in the Calendar tab!');return}
- const names=ta.map(a=>a.dogs?.name).filter(Boolean);
+ const names=ta.map(a=>{const d=dogs.find(x=>x.id===a.dog_id);return a.dogs?.name||d?.name}).filter(Boolean);
  const firstTime=ta[0]?.appt_time?.slice(0,5)||'09:00';
  document.getElementById('route-input').value=`I want to groom ${names.join(', ')} tomorrow starting at ${firstTime}.`;
  document.querySelectorAll('.chip').forEach(c=>{
