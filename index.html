@@ -1629,15 +1629,19 @@ function loadInvFromToday(){
  // Auto-select dogs from today's appts
  setTimeout(()=>{
   custMap[cid].appts.forEach(a=>{
-   const chip=document.querySelector(`.chip[data-id="${a.dog_id}"]`);
-   if(chip&&!chip.classList.contains('on')){
-    chip.classList.add('on');
-    const d=dogs.find(x=>x.id===a.dog_id);
-    if(!invDogServices[a.dog_id]) invDogServices[a.dog_id]={services:{'Basic Grooming':{checked:true,price:priceFor('Basic Grooming',d?.size)}}};
-    invSelectedDogs.push(a.dog_id);
-   }
+   const did=a.dog_id;
+   const d=dogs.find(x=>x.id===did);
+   // Add to selection arrays first
+   if(!invSelectedDogs.includes(did)) invSelectedDogs.push(did);
+   if(!invDogServices[did]) invDogServices[did]={services:{'Basic Grooming':{checked:true,price:priceFor('Basic Grooming',d?.size)}}};
+   if(!invAdvanceDogs[did]) invAdvanceDogs[did]={sessions:1,service_type:'Basic Grooming',disc_type:'percent',disc_value:0,price_per_session:priceFor('Basic Grooming',d?.size)};
   });
   renderInvDogServices();
+  // Mark chips as selected
+  custMap[cid].appts.forEach(a=>{
+   const chip=document.querySelector(`.chip[data-id="${a.dog_id}"]`);
+   if(chip) chip.classList.add('on');
+  });
   // Set groomer
   const g=custMap[cid].groomer_id;
   if(g) document.getElementById('inv-groomer').value=g;
@@ -1645,9 +1649,7 @@ function loadInvFromToday(){
   document.getElementById('inv-date').value=todayStr;
   document.getElementById('inv-first-date').value=todayStr;
   if(custIds.length>1) alert(`Loaded ${c.owner}'s appointments. ${custIds.length-1} other customer(s) today — switch customer manually to invoice them.`);
- },100);
-}
-
+ },120);
 function onInvCustomerChange(){
  const id=document.getElementById('inv-customer').value;
  invSelectedCust=custs.find(c=>c.id===id)||null;
