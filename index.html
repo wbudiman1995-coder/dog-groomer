@@ -955,9 +955,17 @@ function t2m(t){const[h,m]=(t||'09:00').split(':').map(Number);return h*60+m}
 function m2t(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}
 const SSTART=8*60+30,SEND=18*60,SSTEP=30,SH=44;
 
-function isBlocked(gid,date,start,dur,skipId){
+function isBlocked(gid,date,start,dur,skipIds,custId){
+ // skipIds: array of appt IDs to ignore (current booking's own appts)
+ const skip=Array.isArray(skipIds)?skipIds:(skipIds?[skipIds]:[]);
  return appts.some(a=>{
-  if(a.id===skipId||a.appt_date!==date||a.groomer_id!==gid)return false;
+  if(skip.includes(a.id)||a.appt_date!==date||a.groomer_id!==gid)return false;
+  // same customer? no travel buffer needed — allow overlap detection to still work
+  // but skip overlap check entirely if same customer (same location, back-to-back OK)
+  if(custId){
+   const ad=dogs.find(x=>x.id===a.dog_id);
+   if(ad?.customer_id===custId)return false;
+  }
   const as=t2m(a.appt_time),ae=as+(a.duration_mins||60);
   return start<ae&&(start+dur)>as;
  });
@@ -1172,10 +1180,10 @@ function renderWizSlots(){
  if(!di.value)di.value=wiz.date||iso(new Date());
  wiz.date=di.value;
 
- const totalDur=wiz.dogSvcs.reduce((s,ds)=>{
+ const totalDur=wiz.dogSvcs.reduce((s,ds,i)=>{
   const d=dogs.find(x=>x.id===ds.did);
-  return s+dogDur(ds.svc,d?.size)+(wiz.dogSvcs.length>1?5:0);
- },0)-( wiz.dogSvcs.length>1?5:0);
+  return s+dogDur(ds.svc,d?.size);
+ },0);
 
  const info=document.getElementById('wiz-dur-info');
  info.textContent=wiz.dogSvcs.length
@@ -1189,7 +1197,7 @@ function renderWizSlots(){
 
  const slots=[];for(let m=SSTART;m<SEND;m+=SSTEP)slots.push(m);
  wrap.innerHTML=slots.filter(m=>m+totalDur<=SEND).map(m=>{
-  const blocked=isBlocked(wiz.groomerId,wiz.date,m,totalDur,wiz.editId);
+  const blocked=isBlocked(wiz.groomerId,wiz.date,m,totalDur,wiz.editId,wiz.custId);
   const sel=m===wiz.startMins;
   return `<button class="slot-btn${sel?' sel':''}${blocked?' blocked':''}" ${blocked?'disabled':''} onclick="selectWizSlot(${m})">${m2t(m)}</button>`;
  }).join('');
@@ -1202,7 +1210,7 @@ function renderWizSummary(){
  const g=groomers.find(x=>x.id===wiz.groomerId)||{};
  const totalDur=wiz.dogSvcs.reduce((s,ds,i)=>{
   const d=dogs.find(x=>x.id===ds.did);
-  return s+dogDur(ds.svc,d?.size)+(i<wiz.dogSvcs.length-1?5:0);
+  return s+dogDur(ds.svc,d?.size);
  },0);
  const dogLines=wiz.dogSvcs.map(ds=>{
   const d=dogs.find(x=>x.id===ds.did)||{};
@@ -1261,7 +1269,7 @@ async function saveAppt(){
    appt_time:m2t(cursor)+':00',service_base:ds.svc,duration_mins:dur,
    appt_note:note+(wiz.dogSvcs.length>1?` (${i+1}/${wiz.dogSvcs.length})`:'')
   });
-  cursor+=dur+(i<wiz.dogSvcs.length-1?5:0);
+  cursor+=dur;
  });
  if(wiz.editId){
   await db.from('appointments').update(inserts[0]).eq('id',wiz.editId);
