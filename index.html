@@ -7,12 +7,12 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
-  --green:#16a34a;--green-lt:#dcfce7;--green-md:#4ade80;--green-dk:#15803d;
-  --red:#fee2e2;--red-t:#991b1b;--amber:#fef3c7;--amb-t:#92400e;
-  --blue-lt:#eff6ff;--blue-t:#1e40af;
-  --bg:#f9fafb;--surface:#fff;--border:#e5e7eb;
-  --text:#111827;--muted:#6b7280;--subtle:#f3f4f6;
-  --r:8px;--rl:12px;--sh:0 1px 3px rgba(0,0,0,.08);
+ --green:#16a34a;--green-lt:#dcfce7;--green-md:#4ade80;--green-dk:#15803d;
+ --red:#fee2e2;--red-t:#991b1b;--amber:#fef3c7;--amb-t:#92400e;
+ --blue-lt:#eff6ff;--blue-t:#1e40af;
+ --bg:#f9fafb;--surface:#fff;--border:#e5e7eb;
+ --text:#111827;--muted:#6b7280;--subtle:#f3f4f6;
+ --r:8px;--rl:12px;--sh:0 1px 3px rgba(0,0,0,.08);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
@@ -104,21 +104,27 @@ tbody tr:hover{background:var(--subtle)}
 .filter-bar{display:flex;gap:8px;margin-bottom:.9rem;flex-wrap:wrap;align-items:center}
 .filter-bar input,.filter-bar select{padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface)}
 
-/* CALENDAR */
+/* CALENDAR - groomer rows x day columns with time slots */
 .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
 .cal-title{font-size:15px;font-weight:600}
-.cal-hdrs{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:5px}
-.cal-dh{text-align:center;font-size:10px;font-weight:600;color:var(--muted);padding:3px;text-transform:uppercase;letter-spacing:.05em}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
-.cal-cell{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);min-height:90px;padding:6px;cursor:pointer;transition:border-color .15s;position:relative}
-.cal-cell:hover{border-color:var(--green-md)}
-.cal-cell.today{border-color:var(--green);border-width:2px}
-.cal-dt{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:3px}
-.cal-cell.today .cal-dt{color:var(--green)}
-.cal-appt{background:var(--green-lt);color:var(--green-dk);border-radius:4px;padding:2px 5px;font-size:10px;font-weight:500;margin-bottom:2px;display:flex;align-items:center;gap:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cal-appt:hover{background:var(--green-md)}
-.cal-add{position:absolute;bottom:4px;right:4px;width:18px;height:18px;border-radius:50%;background:var(--green-lt);color:var(--green);border:none;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;font-weight:700;line-height:1}
-.cal-cell:hover .cal-add{opacity:1}
+.cal-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--rl);background:var(--surface)}
+.cal-table{width:100%;border-collapse:collapse;min-width:900px}
+.cal-table th,.cal-table td{border:1px solid var(--border);padding:0;vertical-align:top}
+.cal-table th{background:var(--subtle);font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:8px 6px;text-align:center;position:sticky;top:0;z-index:5}
+.cal-table th.today-h{background:var(--green-lt);color:var(--green-dk)}
+.cal-groomer-cell{background:var(--subtle);font-size:12px;font-weight:600;padding:8px;width:120px;min-width:120px;position:sticky;left:0;z-index:4;border-right:2px solid var(--border)}
+.cal-groomer-cell .gdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.cal-day-cell{min-width:120px;height:140px;position:relative;cursor:pointer;transition:background .12s;padding:4px}
+.cal-day-cell:hover{background:var(--green-lt)}
+.cal-day-cell.drag-over{background:var(--green-md);outline:2px dashed var(--green-dk)}
+.cal-day-cell.today{background:rgba(22,163,74,.04)}
+.cal-day-cell.off{background:repeating-linear-gradient(45deg,var(--subtle),var(--subtle) 6px,#f3f4f680 6px,#f3f4f680 12px);cursor:not-allowed}
+.appt-pill{background:var(--green-lt);border-left:3px solid var(--green);color:var(--green-dk);border-radius:5px;padding:4px 6px;font-size:11px;margin-bottom:3px;cursor:grab;line-height:1.3;user-select:none}
+.appt-pill:active{cursor:grabbing}
+.appt-pill.dragging{opacity:.4}
+.appt-pill .t{font-weight:700;font-size:10px}
+.appt-pill .n{font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appt-pill .s{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
 
 /* ROUTE */
 .route-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;margin-bottom:1rem;box-shadow:var(--sh)}
@@ -158,175 +164,215 @@ tbody tr:hover{background:var(--subtle)}
 <body>
 
 <script>
-  const SUPABASE_URL  = "https://cwqrpslypcjgjuxagglc.supabase.co";
-  const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
-  const ANTHROPIC_KEY = "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";
+ const SUPABASE_URL = "https://cwqrpslypcjgjuxagglc.supabase.co";
+ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
+ const ANTHROPIC_KEY = "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";
 </script>
 
 <nav class="nav">
-  <div class="nav-brand">🐾 Groomer CRM</div>
-  <div class="nav-tabs">
-    <button class="nav-tab active" onclick="sw('database')" id="tab-database">🗃️ Database</button>
-    <button class="nav-tab" onclick="sw('history')" id="tab-history">📋 History</button>
-    <button class="nav-tab" onclick="sw('calendar')" id="tab-calendar">📅 Calendar</button>
-    <button class="nav-tab" onclick="sw('route')" id="tab-route">🗺️ Route</button>
-  </div>
+ <div class="nav-brand">Groomer CRM</div>
+ <div class="nav-tabs">
+ <button class="nav-tab active" onclick="sw('database')" id="tab-database">Database</button>
+ <button class="nav-tab" onclick="sw('history')" id="tab-history">History</button>
+ <button class="nav-tab" onclick="sw('calendar')" id="tab-calendar">Calendar</button>
+ <button class="nav-tab" onclick="sw('groomers')" id="tab-groomers">Groomers</button>
+ <button class="nav-tab" onclick="sw('route')" id="tab-route">Route</button>
+ </div>
 </nav>
 
 <div class="page">
-  <div class="sec active" id="sec-database">
-    <div class="toolbar">
-      <span class="toolbar-title">Database</span>
-      <button class="btn btn-p" onclick="openAddCust()">+ Add customer</button>
-    </div>
-    <div class="subtabs">
-      <button class="subtab active" id="stab-cust" onclick="swSub('cust')">👤 Customers</button>
-      <button class="subtab" id="stab-dogs" onclick="swSub('dogs')">🐕 Dogs</button>
-    </div>
+ <div class="sec active" id="sec-database">
+ <div class="toolbar">
+ <span class="toolbar-title">Database</span>
+ <button class="btn btn-p" onclick="openAddCust()">+ Add customer</button>
+ </div>
+ <div class="subtabs">
+ <button class="subtab active" id="stab-cust" onclick="swSub('cust')">Customers</button>
+ <button class="subtab" id="stab-dogs" onclick="swSub('dogs')">Dogs</button>
+ </div>
 
-    <div class="subsec active" id="ssec-cust">
-      <div class="filter-bar">
-        <input id="cs" placeholder="🔍 Search customer / area / WA…" oninput="renderCusts()" style="min-width:220px;flex:1"/>
-      </div>
-      <div class="tbl-wrap">
-        <table><thead><tr>
-          <th>ID</th><th>Owner</th><th>WhatsApp</th><th>Area</th><th>Address</th><th>Dogs</th><th>Maps</th><th></th>
-        </tr></thead>
-        <tbody id="cust-body"></tbody></table>
-      </div>
-    </div>
+ <div class="subsec active" id="ssec-cust">
+ <div class="filter-bar">
+ <input id="cs" placeholder="Search customer / area / WA…" oninput="renderCusts()" style="min-width:220px;flex:1"/>
+ </div>
+ <div class="tbl-wrap">
+ <table><thead><tr>
+ <th>ID</th><th>Owner</th><th>WhatsApp</th><th>Area</th><th>Address</th><th>Dogs</th><th>Maps</th><th></th>
+ </tr></thead>
+ <tbody id="cust-body"></tbody></table>
+ </div>
+ </div>
 
-    <div class="subsec" id="ssec-dogs">
-      <div id="dogs-empty" class="empty">
-        <span class="empty-icon">👆</span>
-        Select a customer first to view their dogs.
-      </div>
-      <div id="dogs-view" style="display:none">
-        <div class="cust-banner">
-          <div>
-            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Viewing dogs for</div>
-            <div id="cb-name" style="font-size:16px;font-weight:600;margin-top:2px"></div>
-            <div id="cb-meta" style="font-size:12px;color:var(--muted);margin-top:3px"></div>
-          </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn btn-g btn-sm" onclick="swSub('cust')">← Back</button>
-            <button class="btn btn-p btn-sm" onclick="openAddDog()">+ Add dog</button>
-          </div>
-        </div>
-        <div class="tbl-wrap" style="margin-top:.9rem">
-          <table><thead><tr>
-            <th>Dog ID</th><th>Name</th><th>Breed</th><th>Age</th><th>Weight</th><th>Preferences</th><th></th>
-          </tr></thead>
-          <tbody id="dogs-body"></tbody></table>
-        </div>
-      </div>
-    </div>
-  </div>
+ <div class="subsec" id="ssec-dogs">
+ <div id="dogs-empty" class="empty">
+ <span class="empty-icon"></span>
+ Select a customer first to view their dogs.
+ </div>
+ <div id="dogs-view" style="display:none">
+ <div class="cust-banner">
+ <div>
+ <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Viewing dogs for</div>
+ <div id="cb-name" style="font-size:16px;font-weight:600;margin-top:2px"></div>
+ <div id="cb-meta" style="font-size:12px;color:var(--muted);margin-top:3px"></div>
+ </div>
+ <div style="display:flex;gap:6px;flex-wrap:wrap">
+ <button class="btn btn-g btn-sm" onclick="swSub('cust')">Back</button>
+ <button class="btn btn-p btn-sm" onclick="openAddDog()">+ Add dog</button>
+ </div>
+ </div>
+ <div class="tbl-wrap" style="margin-top:.9rem">
+ <table><thead><tr>
+ <th>Dog ID</th><th>Name</th><th>Breed</th><th>Age</th><th>Weight</th><th>Preferences</th><th></th>
+ </tr></thead>
+ <tbody id="dogs-body"></tbody></table>
+ </div>
+ </div>
+ </div>
+ </div>
 
-  <div class="sec" id="sec-history">
-    <div class="toolbar"><span class="toolbar-title">Grooming history</span></div>
-    <div class="filter-bar">
-      <input id="hs" placeholder="🔍 Search…" oninput="renderHist()" style="min-width:160px"/>
-      <select id="hd" onchange="renderHist()"><option value="">All dogs</option></select>
-      <select id="hsort" onchange="renderHist()"><option value="desc">Newest first</option><option value="asc">Oldest first</option></select>
-    </div>
-    <div class="tbl-wrap">
-      <table><thead><tr><th>Dog</th><th>Owner</th><th>Date</th><th>Service</th><th>Area</th><th>Size</th></tr></thead>
-      <tbody id="hist-body"></tbody></table>
-    </div>
-  </div>
+ <div class="sec" id="sec-history">
+ <div class="toolbar"><span class="toolbar-title">Grooming history</span></div>
+ <div class="filter-bar">
+ <input id="hs" placeholder="Search…" oninput="renderHist()" style="min-width:160px"/>
+ <select id="hd" onchange="renderHist()"><option value="">All dogs</option></select>
+ <select id="hsort" onchange="renderHist()"><option value="desc">Newest first</option><option value="asc">Oldest first</option></select>
+ </div>
+ <div class="tbl-wrap">
+ <table><thead><tr><th>Dog</th><th>Owner</th><th>Date</th><th>Service</th><th>Area</th><th>Size</th></tr></thead>
+ <tbody id="hist-body"></tbody></table>
+ </div>
+ </div>
 
-  <div class="sec" id="sec-calendar">
-    <div class="cal-nav">
-      <button class="btn btn-g btn-sm" onclick="calPrev()">← Prev</button>
-      <span class="cal-title" id="cal-title"></span>
-      <button class="btn btn-g btn-sm" onclick="calNext()">Next →</button>
-    </div>
-    <div class="cal-hdrs" id="cal-hdrs"></div>
-    <div class="cal-grid" id="cal-grid"></div>
-  </div>
+ <div class="sec" id="sec-calendar">
+ <div class="cal-nav">
+ <button class="btn btn-g btn-sm" onclick="calPrev()">Prev week</button>
+ <span class="cal-title" id="cal-title"></span>
+ <button class="btn btn-g btn-sm" onclick="calNext()">Next week</button>
+ </div>
+ <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Click empty slot to add. Drag appointment to reassign groomer/date. Click appointment to edit.</div>
+ <div id="cal-wrap" class="cal-wrap"></div>
+ </div>
 
-  <div class="sec" id="sec-route">
-    <div class="route-box">
-      <div class="route-lbl">Who to groom?</div>
-      <button class="cal-load-btn" onclick="loadFromCal()">📅 Load tomorrow's appointments</button>
-      <textarea class="route-ta" id="route-input" placeholder='e.g. "Groom Max, Bella, Cooper tomorrow at 9am from Sudirman"'></textarea>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
-        <button class="btn btn-p" onclick="optimizeRoute()">✨ Optimize route</button>
-        <span style="font-size:12px;color:var(--muted)">or quick-select:</span>
-      </div>
-      <div class="chips" id="chips"></div>
-    </div>
-    <div id="route-result"></div>
-  </div>
+ <div class="sec" id="sec-groomers">
+ <div class="toolbar">
+ <span class="toolbar-title">Groomers</span>
+ <button class="btn btn-p" onclick="openAddGroomer()">+ Add groomer</button>
+ </div>
+ <div class="tbl-wrap">
+ <table><thead><tr>
+ <th>Color</th><th>Name</th><th>Phone</th><th>Status</th><th>Appointments</th><th></th>
+ </tr></thead>
+ <tbody id="groomer-body"></tbody></table>
+ </div>
+ </div>
+
+ <div class="sec" id="sec-route">
+ <div class="route-box">
+ <div class="route-lbl">Who to groom?</div>
+ <button class="cal-load-btn" onclick="loadFromCal()">Load tomorrow's appointments</button>
+ <textarea class="route-ta" id="route-input" placeholder='e.g. "Groom Max, Bella, Cooper tomorrow at 9am from Sudirman"'></textarea>
+ <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+ <button class="btn btn-p" onclick="optimizeRoute()">Optimize route</button>
+ <span style="font-size:12px;color:var(--muted)">or quick-select:</span>
+ </div>
+ <div class="chips" id="chips"></div>
+ </div>
+ <div id="route-result"></div>
+ </div>
 </div>
 
 <!-- ADD/EDIT CUSTOMER -->
 <div class="overlay" id="ov-cust">
-  <div class="modal">
-    <div class="modal-title" id="cust-title">Add customer</div>
-    <div class="form-grid">
-      <div class="fg"><label>Owner name *</label><input id="cf-owner" placeholder="Sarah"/></div>
-      <div class="fg"><label>WhatsApp</label><input id="cf-wa" placeholder="08xxxxxxxxxx"/></div>
-      <div class="fg full"><label>Address</label><input id="cf-addr" placeholder="Jl. Kemang Raya No.10, Jak-Sel"/></div>
-      <div class="fg"><label>Area</label><input id="cf-area" placeholder="Kemang"/></div>
-      <div class="fg"><label>Google Maps link</label><input id="cf-gmaps" placeholder="https://maps.app.goo.gl/..."/></div>
-      <div class="fg full"><label>Preferences / notes</label><textarea id="cf-prefs" placeholder="Customer-level notes, contact preferences, etc."></textarea></div>
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-p" onclick="saveCust()" id="cust-save-btn">Save customer</button>
-      <button class="btn btn-g" onclick="cm('ov-cust')">Cancel</button>
-    </div>
-  </div>
+ <div class="modal">
+ <div class="modal-title" id="cust-title">Add customer</div>
+ <div class="form-grid">
+ <div class="fg"><label>Owner name *</label><input id="cf-owner" placeholder="Sarah"/></div>
+ <div class="fg"><label>WhatsApp</label><input id="cf-wa" placeholder="08xxxxxxxxxx"/></div>
+ <div class="fg full"><label>Address</label><input id="cf-addr" placeholder="Jl. Kemang Raya No.10, Jak-Sel"/></div>
+ <div class="fg"><label>Area</label><input id="cf-area" placeholder="Kemang"/></div>
+ <div class="fg"><label>Google Maps link</label><input id="cf-gmaps" placeholder="https://maps.app.goo.gl/..."/></div>
+ <div class="fg full"><label>Preferences / notes</label><textarea id="cf-prefs" placeholder="Customer-level notes, contact preferences, etc."></textarea></div>
+ </div>
+ <div class="form-actions">
+ <button class="btn btn-p" onclick="saveCust()" id="cust-save-btn">Save customer</button>
+ <button class="btn btn-g" onclick="cm('ov-cust')">Cancel</button>
+ </div>
+ </div>
 </div>
 
 <!-- ADD/EDIT DOG -->
 <div class="overlay" id="ov-dog">
-  <div class="modal">
-    <div class="modal-title" id="dog-title">Add dog</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">For customer: <strong id="dog-cust-lbl"></strong></div>
-    <div class="form-grid">
-      <div class="fg"><label>Dog name *</label><input id="df-name" placeholder="Buddy"/></div>
-      <div class="fg"><label>Type / Breed</label><input id="df-breed" placeholder="Poodle"/></div>
-      <div class="fg"><label>Age</label><input id="df-age" placeholder="e.g. 2 years, 5 months"/></div>
-      <div class="fg"><label>Weight</label><input id="df-weight" placeholder="e.g. 8 kg"/></div>
-      <div class="fg"><label>Size</label><select id="df-size"><option value="">Select…</option><option>XS</option><option>Small</option><option>Medium</option><option>Large</option><option>XL</option></select></div>
-      <div class="fg"><label>Coat</label><select id="df-coat"><option value="">Select…</option><option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option></select></div>
-      <div class="fg full"><label>Preferences / notes</label><textarea id="df-prefs" placeholder="e.g. Anxious around clippers. Lion cut."></textarea></div>
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-p" onclick="saveDog()" id="dog-save-btn">Save dog</button>
-      <button class="btn btn-g" onclick="cm('ov-dog')">Cancel</button>
-    </div>
-  </div>
+ <div class="modal">
+ <div class="modal-title" id="dog-title">Add dog</div>
+ <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">For customer: <strong id="dog-cust-lbl"></strong></div>
+ <div class="form-grid">
+ <div class="fg"><label>Dog name *</label><input id="df-name" placeholder="Buddy"/></div>
+ <div class="fg"><label>Type / Breed</label><input id="df-breed" placeholder="Poodle"/></div>
+ <div class="fg"><label>Age</label><input id="df-age" placeholder="e.g. 2 years, 5 months"/></div>
+ <div class="fg"><label>Weight</label><input id="df-weight" placeholder="e.g. 8 kg"/></div>
+ <div class="fg"><label>Size</label><select id="df-size"><option value="">Select…</option><option>XS</option><option>Small</option><option>Medium</option><option>Large</option><option>XL</option></select></div>
+ <div class="fg"><label>Coat</label><select id="df-coat"><option value="">Select…</option><option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option></select></div>
+ <div class="fg full"><label>Preferences / notes</label><textarea id="df-prefs" placeholder="e.g. Anxious around clippers. Lion cut."></textarea></div>
+ </div>
+ <div class="form-actions">
+ <button class="btn btn-p" onclick="saveDog()" id="dog-save-btn">Save dog</button>
+ <button class="btn btn-g" onclick="cm('ov-dog')">Cancel</button>
+ </div>
+ </div>
 </div>
 
 <!-- APPOINTMENT -->
 <div class="overlay" id="ov-appt">
-  <div class="modal" style="max-width:360px">
-    <div class="modal-title">Schedule appointment</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:1rem" id="appt-date-lbl"></div>
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <div class="fg"><label>Dog *</label><select id="appt-dog"><option value="">Select dog…</option></select></div>
-      <div class="fg"><label>Time</label><input type="time" id="appt-time" value="09:00"/></div>
-      <div class="fg"><label>Service note</label><input id="appt-note" placeholder="e.g. Full groom, lion cut"/></div>
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-p" onclick="saveAppt()">Save appointment</button>
-      <button class="btn btn-g" onclick="cm('ov-appt')">Cancel</button>
-    </div>
-  </div>
+ <div class="modal" style="max-width:420px">
+ <div class="modal-title" id="appt-title">Schedule appointment</div>
+ <div style="font-size:12px;color:var(--muted);margin-bottom:1rem" id="appt-date-lbl"></div>
+ <div style="display:flex;flex-direction:column;gap:10px">
+ <div class="fg"><label>Dog *</label><select id="appt-dog"><option value="">Select dog…</option></select></div>
+ <div class="fg"><label>Groomer *</label><select id="appt-groomer"><option value="">Select groomer…</option></select></div>
+ <div class="form-grid">
+ <div class="fg"><label>Date</label><input type="date" id="appt-date-in"/></div>
+ <div class="fg"><label>Time</label><input type="time" id="appt-time" value="09:00"/></div>
+ </div>
+ <div class="form-grid">
+ <div class="fg"><label>Service</label><select id="appt-service"><option value="">Basic groom</option><option>Basic + Styling</option><option>Basic + Botak</option><option>Basic + Dematting</option><option>Basic + Deshedding</option><option>Wash only</option><option>Custom</option></select></div>
+ <div class="fg"><label>Duration (min)</label><input type="number" id="appt-dur" value="60" min="15" step="15"/></div>
+ </div>
+ <div class="fg"><label>Service note</label><input id="appt-note" placeholder="e.g. Lion cut, anxious dog"/></div>
+ </div>
+ <div class="form-actions">
+ <button class="btn btn-p" onclick="saveAppt()" id="appt-save-btn">Save appointment</button>
+ <button class="btn btn-d btn-sm" id="appt-del-btn" style="display:none" onclick="delApptFromModal()">Delete</button>
+ <button class="btn btn-g" onclick="cm('ov-appt')">Cancel</button>
+ </div>
+ </div>
+</div>
+
+<!-- GROOMER -->
+<div class="overlay" id="ov-groomer">
+ <div class="modal" style="max-width:380px">
+ <div class="modal-title" id="groomer-title">Add groomer</div>
+ <div class="form-grid">
+ <div class="fg full"><label>Name *</label><input id="gf-name" placeholder="e.g. Pak Budi"/></div>
+ <div class="fg"><label>Phone</label><input id="gf-phone" placeholder="08xxxxxxxxxx"/></div>
+ <div class="fg"><label>Color</label><input type="color" id="gf-color" value="#16a34a" style="height:38px;padding:2px"/></div>
+ <div class="fg full"><label><input type="checkbox" id="gf-active" checked style="margin-right:6px;vertical-align:middle"/>Active (shows on calendar)</label></div>
+ </div>
+ <div class="form-actions">
+ <button class="btn btn-p" onclick="saveGroomer()" id="groomer-save-btn">Save</button>
+ <button class="btn btn-g" onclick="cm('ov-groomer')">Cancel</button>
+ </div>
+ </div>
 </div>
 
 <script>
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
-let dogs=[], visits=[], appts=[], custs=[], custEditId=null, dogEditId=null, currentCustId=null, apptDate=null;
+let dogs=[], visits=[], appts=[], custs=[], groomers=[], custEditId=null, dogEditId=null, currentCustId=null, apptDate=null, apptEditId=null, groomerEditId=null;
 let calStart = weekStart(new Date());
 
 function weekStart(d) {
-  const x=new Date(d), day=x.getDay(), diff=x.getDate()-day+(day===0?-6:1);
-  x.setDate(diff); x.setHours(0,0,0,0); return x;
+ const x=new Date(d), day=x.getDay(), diff=x.getDate()-day+(day===0?-6:1);
+ x.setDate(diff); x.setHours(0,0,0,0); return x;
 }
 function iso(d){return d.toISOString().split('T')[0]}
 function fmtD(d){return new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})}
@@ -334,380 +380,554 @@ function cm(id){document.getElementById(id).classList.remove('open')}
 function om(id){document.getElementById(id).classList.add('open')}
 function esc(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function gmapsUrl(addr,manual){
-  if(manual) return manual;
-  if(!addr) return '';
-  return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(addr);
+ if(manual) return manual;
+ if(!addr) return '';
+ return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(addr);
 }
 
 function sw(tab) {
-  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
-  document.getElementById('tab-'+tab).classList.add('active');
-  document.getElementById('sec-'+tab).classList.add('active');
-  if(tab==='database') renderCusts();
-  if(tab==='history') renderHist();
-  if(tab==='calendar') renderCal();
-  if(tab==='route') renderChips();
+ document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+ document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
+ document.getElementById('tab-'+tab).classList.add('active');
+ document.getElementById('sec-'+tab).classList.add('active');
+ if(tab==='database') renderCusts();
+ if(tab==='history') renderHist();
+ if(tab==='calendar') renderCal();
+ if(tab==='groomers') renderGroomers();
+ if(tab==='route') renderChips();
 }
 
 function swSub(sub){
-  if(sub==='dogs' && !currentCustId){
-    // open dogs subtab but show empty state
-  }
-  document.querySelectorAll('.subtab').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.subsec').forEach(s=>s.classList.remove('active'));
-  document.getElementById('stab-'+sub).classList.add('active');
-  document.getElementById('ssec-'+sub).classList.add('active');
-  if(sub==='dogs') renderDogsTable();
-  if(sub==='cust') renderCusts();
+ if(sub==='dogs' && !currentCustId){
+ // open dogs subtab but show empty state
+ }
+ document.querySelectorAll('.subtab').forEach(t=>t.classList.remove('active'));
+ document.querySelectorAll('.subsec').forEach(s=>s.classList.remove('active'));
+ document.getElementById('stab-'+sub).classList.add('active');
+ document.getElementById('ssec-'+sub).classList.add('active');
+ if(sub==='dogs') renderDogsTable();
+ if(sub==='cust') renderCusts();
 }
 
 async function loadAll() {
-  const [cr,dr,vr,ar] = await Promise.all([
-    db.from('customers').select('*').order('created_at',{ascending:false}),
-    db.from('dogs').select('*').order('created_at',{ascending:false}),
-    db.from('visits').select('*,dogs(name,owner,area,size)').order('visited_at',{ascending:false}),
-    db.from('appointments').select('*,dogs(name,area,address,wa,size,prefs,owner)').order('appt_date').order('appt_time')
-  ]);
-  custs=cr.data||[]; dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[];
-  renderCusts();
-  const opts=dogs.map(d=>`<option value="${d.id}">${esc(d.name)} (${esc(getOwnerName(d.customer_id))})</option>`).join('');
-  document.getElementById('hd').innerHTML='<option value="">All dogs</option>'+opts;
-  document.getElementById('appt-dog').innerHTML='<option value="">Select dog…</option>'+opts;
+ const [cr,dr,vr,ar,gr] = await Promise.all([
+ db.from('customers').select('*').order('created_at',{ascending:false}),
+ db.from('dogs').select('*').order('created_at',{ascending:false}),
+ db.from('visits').select('*,dogs(name,owner,area,size)').order('visited_at',{ascending:false}),
+ db.from('appointments').select('*,dogs(name,area,address,wa,size,prefs,owner)').order('appt_date').order('appt_time'),
+ db.from('groomers').select('*').order('created_at')
+ ]);
+ custs=cr.data||[]; dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[]; groomers=gr.data||[];
+ renderCusts();
+ const opts=dogs.map(d=>`<option value="${d.id}">${esc(d.name)} (${esc(getOwnerName(d.customer_id))})</option>`).join('');
+ document.getElementById('hd').innerHTML='<option value="">All dogs</option>'+opts;
+ document.getElementById('appt-dog').innerHTML='<option value="">Select dog…</option>'+opts;
+ const gopts=groomers.filter(g=>g.active).map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
+ document.getElementById('appt-groomer').innerHTML='<option value="">Select groomer…</option>'+gopts;
 }
 
 function getOwnerName(custId){
-  const c=custs.find(x=>x.id===custId);
-  return c?c.owner:'—';
+ const c=custs.find(x=>x.id===custId);
+ return c?c.owner:'—';
 }
 function dogsOf(custId){return dogs.filter(d=>d.customer_id===custId)}
 
 /* CUSTOMERS TABLE */
 function renderCusts(){
-  const s=(document.getElementById('cs')?.value||'').toLowerCase();
-  let rows=[...custs];
-  if(s) rows=rows.filter(c=>(c.owner||'').toLowerCase().includes(s)||(c.area||'').toLowerCase().includes(s)||(c.wa||'').toLowerCase().includes(s)||(c.address||'').toLowerCase().includes(s));
-  const tb=document.getElementById('cust-body');
-  if(!rows.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--muted)">No customers yet. Click "+ Add customer" above.</td></tr>';return}
-  tb.innerHTML=rows.map(c=>{
-    const dc=dogsOf(c.id).length;
-    const gm=gmapsUrl(c.address,c.gmaps_link);
-    return `<tr>
-      <td><span class="id-pill">${esc(c.customer_code||'—')}</span></td>
-      <td><strong>${esc(c.owner)}</strong></td>
-      <td>${c.wa?`<a class="wa-lnk" href="https://wa.me/62${c.wa.replace(/^0/,'')}" target="_blank">${esc(c.wa)}</a>`:'—'}</td>
-      <td>${esc(c.area)||'—'}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.address)}">${esc(c.address)||'—'}</td>
-      <td><span class="badge bs">${dc} dog${dc!==1?'s':''}</span></td>
-      <td>${gm?`<a class="maps-mini" href="${gm}" target="_blank">📍 Open</a>`:'—'}</td>
-      <td><div class="row-actions">
-        <button class="icon-btn view" onclick="viewCustDogs('${c.id}')">Dogs →</button>
-        <button class="icon-btn" onclick="openEditCust('${c.id}')">Edit</button>
-        <button class="icon-btn del" onclick="delCust('${c.id}','${esc(c.owner).replace(/'/g,"\\'")}')">Del</button>
-      </div></td>
-    </tr>`;
-  }).join('');
+ const s=(document.getElementById('cs')?.value||'').toLowerCase();
+ let rows=[...custs];
+ if(s) rows=rows.filter(c=>(c.owner||'').toLowerCase().includes(s)||(c.area||'').toLowerCase().includes(s)||(c.wa||'').toLowerCase().includes(s)||(c.address||'').toLowerCase().includes(s));
+ const tb=document.getElementById('cust-body');
+ if(!rows.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--muted)">No customers yet. Click "+ Add customer" above.</td></tr>';return}
+ tb.innerHTML=rows.map(c=>{
+ const dc=dogsOf(c.id).length;
+ const gm=gmapsUrl(c.address,c.gmaps_link);
+ return `<tr>
+ <td><span class="id-pill">${esc(c.customer_code||'—')}</span></td>
+ <td><strong>${esc(c.owner)}</strong></td>
+ <td>${c.wa?`<a class="wa-lnk" href="https://wa.me/62${c.wa.replace(/^0/,'')}" target="_blank">${esc(c.wa)}</a>`:'—'}</td>
+ <td>${esc(c.area)||'—'}</td>
+ <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.address)}">${esc(c.address)||'—'}</td>
+ <td><span class="badge bs">${dc} dog${dc!==1?'s':''}</span></td>
+ <td>${gm?`<a class="maps-mini" href="${gm}" target="_blank">Open</a>`:'—'}</td>
+ <td><div class="row-actions">
+ <button class="icon-btn view" onclick="viewCustDogs('${c.id}')">Dogs</button>
+ <button class="icon-btn" onclick="openEditCust('${c.id}')">Edit</button>
+ <button class="icon-btn del" onclick="delCust('${c.id}','${esc(c.owner).replace(/'/g,"\\'")}')">Del</button>
+ </div></td>
+ </tr>`;
+ }).join('');
 }
 
 function viewCustDogs(id){
-  currentCustId=id;
-  swSub('dogs');
+ currentCustId=id;
+ swSub('dogs');
 }
 
 function renderDogsTable(){
-  const empty=document.getElementById('dogs-empty');
-  const view=document.getElementById('dogs-view');
-  if(!currentCustId){empty.style.display='block';view.style.display='none';return}
-  const c=custs.find(x=>x.id===currentCustId);
-  if(!c){currentCustId=null;empty.style.display='block';view.style.display='none';return}
-  empty.style.display='none';view.style.display='block';
-  document.getElementById('cb-name').textContent=c.owner;
-  document.getElementById('cb-meta').innerHTML=`<span class="id-pill">${esc(c.customer_code||'—')}</span> · ${esc(c.area)||'—'} · ${c.wa?esc(c.wa):'no WA'}`;
-  const list=dogsOf(currentCustId);
-  const tb=document.getElementById('dogs-body');
-  if(!list.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--muted)">No dogs yet. Click "+ Add dog" above.</td></tr>';return}
-  tb.innerHTML=list.map(d=>`<tr>
-    <td><span class="id-pill">${esc(d.dog_code||'—')}</span></td>
-    <td><strong>${esc(d.name)}</strong></td>
-    <td>${esc(d.breed)||'—'}</td>
-    <td>${esc(d.age)||'—'}</td>
-    <td>${esc(d.weight)||'—'}</td>
-    <td style="max-width:240px;font-size:12px;color:var(--muted)">${esc(d.prefs)||'—'}</td>
-    <td><div class="row-actions">
-      <button class="icon-btn" onclick="openEditDog('${d.id}')">Edit</button>
-      <button class="icon-btn del" onclick="delDog('${d.id}','${esc(d.name).replace(/'/g,"\\'")}')">Del</button>
-    </div></td>
-  </tr>`).join('');
+ const empty=document.getElementById('dogs-empty');
+ const view=document.getElementById('dogs-view');
+ if(!currentCustId){empty.style.display='block';view.style.display='none';return}
+ const c=custs.find(x=>x.id===currentCustId);
+ if(!c){currentCustId=null;empty.style.display='block';view.style.display='none';return}
+ empty.style.display='none';view.style.display='block';
+ document.getElementById('cb-name').textContent=c.owner;
+ document.getElementById('cb-meta').innerHTML=`<span class="id-pill">${esc(c.customer_code||'—')}</span> · ${esc(c.area)||'—'} · ${c.wa?esc(c.wa):'no WA'}`;
+ const list=dogsOf(currentCustId);
+ const tb=document.getElementById('dogs-body');
+ if(!list.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--muted)">No dogs yet. Click "+ Add dog" above.</td></tr>';return}
+ tb.innerHTML=list.map(d=>`<tr>
+ <td><span class="id-pill">${esc(d.dog_code||'—')}</span></td>
+ <td><strong>${esc(d.name)}</strong></td>
+ <td>${esc(d.breed)||'—'}</td>
+ <td>${esc(d.age)||'—'}</td>
+ <td>${esc(d.weight)||'—'}</td>
+ <td style="max-width:240px;font-size:12px;color:var(--muted)">${esc(d.prefs)||'—'}</td>
+ <td><div class="row-actions">
+ <button class="icon-btn" onclick="openEditDog('${d.id}')">Edit</button>
+ <button class="icon-btn del" onclick="delDog('${d.id}','${esc(d.name).replace(/'/g,"\\'")}')">Del</button>
+ </div></td>
+ </tr>`).join('');
 }
 
 /* CUSTOMER MODAL */
 function openAddCust(){
-  custEditId=null;
-  document.getElementById('cust-title').textContent='Add customer';
-  document.getElementById('cust-save-btn').textContent='Save customer';
-  ['cf-owner','cf-wa','cf-addr','cf-area','cf-gmaps','cf-prefs'].forEach(id=>document.getElementById(id).value='');
-  om('ov-cust');
+ custEditId=null;
+ document.getElementById('cust-title').textContent='Add customer';
+ document.getElementById('cust-save-btn').textContent='Save customer';
+ ['cf-owner','cf-wa','cf-addr','cf-area','cf-gmaps','cf-prefs'].forEach(id=>document.getElementById(id).value='');
+ om('ov-cust');
 }
 
 function openEditCust(id){
-  const c=custs.find(x=>x.id===id); if(!c) return;
-  custEditId=id;
-  document.getElementById('cust-title').textContent='Edit customer';
-  document.getElementById('cust-save-btn').textContent='Update';
-  document.getElementById('cf-owner').value=c.owner||'';
-  document.getElementById('cf-wa').value=c.wa||'';
-  document.getElementById('cf-addr').value=c.address||'';
-  document.getElementById('cf-area').value=c.area||'';
-  document.getElementById('cf-gmaps').value=c.gmaps_link||'';
-  document.getElementById('cf-prefs').value=c.prefs||'';
-  om('ov-cust');
+ const c=custs.find(x=>x.id===id); if(!c) return;
+ custEditId=id;
+ document.getElementById('cust-title').textContent='Edit customer';
+ document.getElementById('cust-save-btn').textContent='Update';
+ document.getElementById('cf-owner').value=c.owner||'';
+ document.getElementById('cf-wa').value=c.wa||'';
+ document.getElementById('cf-addr').value=c.address||'';
+ document.getElementById('cf-area').value=c.area||'';
+ document.getElementById('cf-gmaps').value=c.gmaps_link||'';
+ document.getElementById('cf-prefs').value=c.prefs||'';
+ om('ov-cust');
 }
 
 async function saveCust(){
-  const owner=document.getElementById('cf-owner').value.trim();
-  if(!owner){alert('Owner name required.');return}
-  const p={
-    owner,
-    wa:document.getElementById('cf-wa').value.trim(),
-    address:document.getElementById('cf-addr').value.trim(),
-    area:document.getElementById('cf-area').value.trim(),
-    gmaps_link:document.getElementById('cf-gmaps').value.trim(),
-    prefs:document.getElementById('cf-prefs').value.trim()
-  };
-  if(custEditId){
-    await db.from('customers').update(p).eq('id',custEditId);
-  } else {
-    // Generate customer_code = CUST-XXX (zero-padded, next available)
-    let maxN=0;
-    custs.forEach(c=>{
-      const m=(c.customer_code||'').match(/^CUST-(\d+)$/);
-      if(m){const n=parseInt(m[1]);if(n>maxN)maxN=n}
-    });
-    p.customer_code=`CUST-${String(maxN+1).padStart(3,'0')}`;
-    await db.from('customers').insert(p);
-  }
-  cm('ov-cust'); await loadAll();
+ const owner=document.getElementById('cf-owner').value.trim();
+ if(!owner){alert('Owner name required.');return}
+ const p={
+ owner,
+ wa:document.getElementById('cf-wa').value.trim(),
+ address:document.getElementById('cf-addr').value.trim(),
+ area:document.getElementById('cf-area').value.trim(),
+ gmaps_link:document.getElementById('cf-gmaps').value.trim(),
+ prefs:document.getElementById('cf-prefs').value.trim()
+ };
+ if(custEditId){
+ await db.from('customers').update(p).eq('id',custEditId);
+ } else {
+ // Generate customer_code = CUST-XXX (zero-padded, next available)
+ let maxN=0;
+ custs.forEach(c=>{
+ const m=(c.customer_code||'').match(/^CUST-(\d+)$/);
+ if(m){const n=parseInt(m[1]);if(n>maxN)maxN=n}
+ });
+ p.customer_code=`CUST-${String(maxN+1).padStart(3,'0')}`;
+ await db.from('customers').insert(p);
+ }
+ cm('ov-cust'); await loadAll();
 }
 
 async function delCust(id,name){
-  if(!confirm(`Delete customer "${name}" and ALL their dogs? Cannot be undone.`)) return;
-  await db.from('dogs').delete().eq('customer_id',id);
-  await db.from('customers').delete().eq('id',id);
-  if(currentCustId===id) currentCustId=null;
-  await loadAll();
+ if(!confirm(`Delete customer "${name}" and ALL their dogs? Cannot be undone.`)) return;
+ await db.from('dogs').delete().eq('customer_id',id);
+ await db.from('customers').delete().eq('id',id);
+ if(currentCustId===id) currentCustId=null;
+ await loadAll();
 }
 
 /* DOG MODAL */
 function openAddDog(){
-  if(!currentCustId){alert('Select a customer first.');return}
-  dogEditId=null;
-  const c=custs.find(x=>x.id===currentCustId);
-  document.getElementById('dog-title').textContent='Add dog';
-  document.getElementById('dog-save-btn').textContent='Save dog';
-  document.getElementById('dog-cust-lbl').textContent=c?c.owner:'—';
-  ['df-name','df-breed','df-age','df-weight','df-prefs'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('df-size').value='';
-  document.getElementById('df-coat').value='';
-  om('ov-dog');
+ if(!currentCustId){alert('Select a customer first.');return}
+ dogEditId=null;
+ const c=custs.find(x=>x.id===currentCustId);
+ document.getElementById('dog-title').textContent='Add dog';
+ document.getElementById('dog-save-btn').textContent='Save dog';
+ document.getElementById('dog-cust-lbl').textContent=c?c.owner:'—';
+ ['df-name','df-breed','df-age','df-weight','df-prefs'].forEach(id=>document.getElementById(id).value='');
+ document.getElementById('df-size').value='';
+ document.getElementById('df-coat').value='';
+ om('ov-dog');
 }
 
 function openEditDog(id){
-  const d=dogs.find(x=>x.id===id); if(!d) return;
-  dogEditId=id;
-  const c=custs.find(x=>x.id===d.customer_id);
-  document.getElementById('dog-title').textContent='Edit dog';
-  document.getElementById('dog-save-btn').textContent='Update';
-  document.getElementById('dog-cust-lbl').textContent=c?c.owner:'—';
-  document.getElementById('df-name').value=d.name||'';
-  document.getElementById('df-breed').value=d.breed||'';
-  document.getElementById('df-age').value=d.age||'';
-  document.getElementById('df-weight').value=d.weight||'';
-  document.getElementById('df-size').value=d.size||'';
-  document.getElementById('df-coat').value=d.coat||'';
-  document.getElementById('df-prefs').value=d.prefs||'';
-  om('ov-dog');
+ const d=dogs.find(x=>x.id===id); if(!d) return;
+ dogEditId=id;
+ const c=custs.find(x=>x.id===d.customer_id);
+ document.getElementById('dog-title').textContent='Edit dog';
+ document.getElementById('dog-save-btn').textContent='Update';
+ document.getElementById('dog-cust-lbl').textContent=c?c.owner:'—';
+ document.getElementById('df-name').value=d.name||'';
+ document.getElementById('df-breed').value=d.breed||'';
+ document.getElementById('df-age').value=d.age||'';
+ document.getElementById('df-weight').value=d.weight||'';
+ document.getElementById('df-size').value=d.size||'';
+ document.getElementById('df-coat').value=d.coat||'';
+ document.getElementById('df-prefs').value=d.prefs||'';
+ om('ov-dog');
 }
 
 async function saveDog(){
-  const name=document.getElementById('df-name').value.trim();
-  if(!name){alert('Dog name required.');return}
-  const p={
-    name,
-    customer_id:currentCustId,
-    breed:document.getElementById('df-breed').value.trim(),
-    age:document.getElementById('df-age').value.trim(),
-    weight:document.getElementById('df-weight').value.trim(),
-    size:document.getElementById('df-size').value,
-    coat:document.getElementById('df-coat').value,
-    prefs:document.getElementById('df-prefs').value.trim()
-  };
-  if(dogEditId){
-    await db.from('dogs').update(p).eq('id',dogEditId);
-  } else {
-    // Generate dog_code = CUST-XXX-D{N} based on existing dogs for this customer
-    const cust=custs.find(x=>x.id===currentCustId);
-    const existing=dogsOf(currentCustId);
-    let maxN=0;
-    existing.forEach(d=>{
-      const m=(d.dog_code||'').match(/-D(\d+)$/);
-      if(m){const n=parseInt(m[1]);if(n>maxN)maxN=n}
-    });
-    p.dog_code=`${cust?.customer_code||'CUST-???'}-D${maxN+1}`;
-    await db.from('dogs').insert(p);
-  }
-  cm('ov-dog'); await loadAll();
+ const name=document.getElementById('df-name').value.trim();
+ if(!name){alert('Dog name required.');return}
+ const p={
+ name,
+ customer_id:currentCustId,
+ breed:document.getElementById('df-breed').value.trim(),
+ age:document.getElementById('df-age').value.trim(),
+ weight:document.getElementById('df-weight').value.trim(),
+ size:document.getElementById('df-size').value,
+ coat:document.getElementById('df-coat').value,
+ prefs:document.getElementById('df-prefs').value.trim()
+ };
+ if(dogEditId){
+ await db.from('dogs').update(p).eq('id',dogEditId);
+ } else {
+ // Generate dog_code = CUST-XXX-D{N} based on existing dogs for this customer
+ const cust=custs.find(x=>x.id===currentCustId);
+ const existing=dogsOf(currentCustId);
+ let maxN=0;
+ existing.forEach(d=>{
+ const m=(d.dog_code||'').match(/-D(\d+)$/);
+ if(m){const n=parseInt(m[1]);if(n>maxN)maxN=n}
+ });
+ p.dog_code=`${cust?.customer_code||'CUST-???'}-D${maxN+1}`;
+ await db.from('dogs').insert(p);
+ }
+ cm('ov-dog'); await loadAll();
 }
 
 async function delDog(id,name){
-  if(!confirm(`Delete dog "${name}"? Cannot be undone.`)) return;
-  await db.from('dogs').delete().eq('id',id);
-  await loadAll();
+ if(!confirm(`Delete dog "${name}"? Cannot be undone.`)) return;
+ await db.from('dogs').delete().eq('id',id);
+ await loadAll();
 }
 
 async function addVisit(dogId){
-  const inp=document.getElementById('vn-'+dogId);
-  const note=inp.value.trim(); if(!note) return;
-  await db.from('visits').insert({dog_id:dogId,note,visited_at:new Date().toISOString().split('T')[0]});
-  inp.value=''; await loadAll();
+ const inp=document.getElementById('vn-'+dogId);
+ const note=inp.value.trim(); if(!note) return;
+ await db.from('visits').insert({dog_id:dogId,note,visited_at:new Date().toISOString().split('T')[0]});
+ inp.value=''; await loadAll();
 }
 
 /* HISTORY */
 function renderHist(){
-  const s=document.getElementById('hs').value.toLowerCase();
-  const df=document.getElementById('hd').value;
-  const sort=document.getElementById('hsort').value;
-  let rows=[...visits];
-  if(df) rows=rows.filter(v=>v.dog_id===df);
-  if(s) rows=rows.filter(v=>{
-    const d=dogs.find(x=>x.id===v.dog_id);
-    const ownerName=d?getOwnerName(d.customer_id):'';
-    return (v.dogs?.name||'').toLowerCase().includes(s)||ownerName.toLowerCase().includes(s)||(v.note||'').toLowerCase().includes(s);
-  });
-  rows.sort((a,b)=>sort==='asc'?new Date(a.visited_at)-new Date(b.visited_at):new Date(b.visited_at)-new Date(a.visited_at));
-  const tb=document.getElementById('hist-body');
-  if(!rows.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">No visits found.</td></tr>';return}
-  tb.innerHTML=rows.map(v=>{
-    const d=dogs.find(x=>x.id===v.dog_id);
-    const ownerName=d?getOwnerName(d.customer_id):'—';
-    const c=d?custs.find(x=>x.id===d.customer_id):null;
-    return `<tr>
-      <td><strong>${esc(v.dogs?.name)||'—'}</strong></td>
-      <td>${esc(ownerName)}</td>
-      <td style="white-space:nowrap">${fmtD(v.visited_at)}</td>
-      <td>${esc(v.note)||'—'}</td>
-      <td>${esc(c?.area||v.dogs?.area)||'—'}</td>
-      <td>${v.dogs?.size?`<span class="badge ${['Large','XL'].includes(v.dogs.size)?'bl':v.dogs.size==='Medium'?'bm':'bs'}">${v.dogs.size}</span>`:'—'}</td>
-    </tr>`;
-  }).join('');
+ const s=document.getElementById('hs').value.toLowerCase();
+ const df=document.getElementById('hd').value;
+ const sort=document.getElementById('hsort').value;
+ let rows=[...visits];
+ if(df) rows=rows.filter(v=>v.dog_id===df);
+ if(s) rows=rows.filter(v=>{
+ const d=dogs.find(x=>x.id===v.dog_id);
+ const ownerName=d?getOwnerName(d.customer_id):'';
+ return (v.dogs?.name||'').toLowerCase().includes(s)||ownerName.toLowerCase().includes(s)||(v.note||'').toLowerCase().includes(s);
+ });
+ rows.sort((a,b)=>sort==='asc'?new Date(a.visited_at)-new Date(b.visited_at):new Date(b.visited_at)-new Date(a.visited_at));
+ const tb=document.getElementById('hist-body');
+ if(!rows.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">No visits found.</td></tr>';return}
+ tb.innerHTML=rows.map(v=>{
+ const d=dogs.find(x=>x.id===v.dog_id);
+ const ownerName=d?getOwnerName(d.customer_id):'—';
+ const c=d?custs.find(x=>x.id===d.customer_id):null;
+ return `<tr>
+ <td><strong>${esc(v.dogs?.name)||'—'}</strong></td>
+ <td>${esc(ownerName)}</td>
+ <td style="white-space:nowrap">${fmtD(v.visited_at)}</td>
+ <td>${esc(v.note)||'—'}</td>
+ <td>${esc(c?.area||v.dogs?.area)||'—'}</td>
+ <td>${v.dogs?.size?`<span class="badge ${['Large','XL'].includes(v.dogs.size)?'bl':v.dogs.size==='Medium'?'bm':'bs'}">${v.dogs.size}</span>`:'—'}</td>
+ </tr>`;
+ }).join('');
 }
 
 /* CALENDAR */
+/* CALENDAR — groomer rows x 7 days, drag-drop appointments */
 function calPrev(){calStart.setDate(calStart.getDate()-7);renderCal()}
 function calNext(){calStart.setDate(calStart.getDate()+7);renderCal()}
 
 function renderCal(){
-  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  document.getElementById('cal-hdrs').innerHTML=days.map(d=>`<div class="cal-dh">${d}</div>`).join('');
-  const end=new Date(calStart); end.setDate(end.getDate()+6);
-  document.getElementById('cal-title').textContent=
-    calStart.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+
-    end.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
-  const today=new Date(); today.setHours(0,0,0,0);
-  let html='';
-  for(let i=0;i<7;i++){
-    const d=new Date(calStart); d.setDate(d.getDate()+i);
-    const isoD=iso(d);
-    const isToday=d.getTime()===today.getTime();
-    const da=appts.filter(a=>a.appt_date===isoD);
-    html+=`<div class="cal-cell${isToday?' today':''}" onclick="openAppt('${isoD}')">
-      <div class="cal-dt">${d.getDate()}</div>
-      ${da.map(a=>`<div class="cal-appt" onclick="event.stopPropagation();delAppt('${a.id}')" title="Click to remove">
-        ${a.appt_time?.slice(0,5)||''} ${a.dogs?.name||'?'}
-      </div>`).join('')}
-      <button class="cal-add" onclick="event.stopPropagation();openAppt('${isoD}')">+</button>
-    </div>`;
-  }
-  document.getElementById('cal-grid').innerHTML=html;
+ const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+ const end=new Date(calStart); end.setDate(end.getDate()+6);
+ document.getElementById('cal-title').textContent=
+ calStart.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+
+ end.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+ const today=new Date(); today.setHours(0,0,0,0);
+
+ const activeGroomers=groomers.filter(g=>g.active);
+ if(!activeGroomers.length){
+ document.getElementById('cal-wrap').innerHTML='<div class="empty"><span class="empty-icon">️</span>No active groomers. Add one in the Groomers tab.</div>';
+ return;
+ }
+
+ // Build day list
+ const weekDays=[];
+ for(let i=0;i<7;i++){
+ const d=new Date(calStart); d.setDate(d.getDate()+i);
+ weekDays.push({date:d, iso:iso(d), label:days[i], dnum:d.getDate(), isToday:d.getTime()===today.getTime()});
+ }
+
+ let html='<table class="cal-table"><thead><tr><th style="position:sticky;left:0;z-index:6;background:var(--subtle)">Groomer</th>';
+ weekDays.forEach(wd=>{
+ html+=`<th class="${wd.isToday?'today-h':''}">${wd.label}<br><span style="font-size:14px;font-weight:700">${wd.dnum}</span></th>`;
+ });
+ html+='</tr></thead><tbody>';
+
+ activeGroomers.forEach(g=>{
+ html+=`<tr><td class="cal-groomer-cell"><span class="gdot" style="background:${g.color||'#16a34a'}"></span>${esc(g.name)}</td>`;
+ weekDays.forEach(wd=>{
+ const dayAppts=appts.filter(a=>a.appt_date===wd.iso && a.groomer_id===g.id)
+ .sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
+ html+=`<td class="cal-day-cell${wd.isToday?' today':''}" data-groomer="${g.id}" data-date="${wd.iso}" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)" onclick="openAppt('${wd.iso}','${g.id}')">`;
+ dayAppts.forEach(a=>{
+ const cust=dogs.find(x=>x.id===a.dog_id);
+ const ownerNm=cust?getOwnerName(cust.customer_id):'';
+ html+=`<div class="appt-pill" draggable="true" ondragstart="onDragStart(event,'${a.id}')" ondragend="onDragEnd(event)" onclick="event.stopPropagation();openApptEdit('${a.id}')" title="${esc(a.appt_note||'')}">
+ <span class="t">${a.appt_time?.slice(0,5)||''}</span>
+ <span class="n">${esc(a.dogs?.name||'?')}</span>
+ <span class="s">${esc(ownerNm)}${a.appt_note?' · '+esc(a.appt_note):''}</span>
+ </div>`;
+ });
+ html+='</td>';
+ });
+ html+='</tr>';
+ });
+ html+='</tbody></table>';
+ document.getElementById('cal-wrap').innerHTML=html;
 }
 
-function openAppt(dateISO){
-  apptDate=dateISO;
-  const d=new Date(dateISO);
-  document.getElementById('appt-date-lbl').textContent=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  document.getElementById('appt-dog').value='';
-  document.getElementById('appt-time').value='09:00';
-  document.getElementById('appt-note').value='';
-  om('ov-appt');
+/* DRAG DROP */
+let draggedApptId=null;
+function onDragStart(e,id){
+ draggedApptId=id;
+ e.target.classList.add('dragging');
+ e.dataTransfer.effectAllowed='move';
+}
+function onDragEnd(e){
+ e.target.classList.remove('dragging');
+ document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
+ draggedApptId=null;
+}
+function onDragOver(e){
+ e.preventDefault();
+ e.currentTarget.classList.add('drag-over');
+ e.dataTransfer.dropEffect='move';
+}
+function onDragLeave(e){
+ e.currentTarget.classList.remove('drag-over');
+}
+async function onDrop(e){
+ e.preventDefault();
+ e.currentTarget.classList.remove('drag-over');
+ if(!draggedApptId) return;
+ const newDate=e.currentTarget.dataset.date;
+ const newGroomer=e.currentTarget.dataset.groomer;
+ const appt=appts.find(a=>a.id===draggedApptId);
+ if(!appt) return;
+ if(appt.appt_date===newDate && appt.groomer_id===newGroomer) return;
+ await db.from('appointments').update({appt_date:newDate, groomer_id:newGroomer}).eq('id',draggedApptId);
+ await loadAll(); renderCal();
+}
+
+/* APPOINTMENT MODAL */
+function openAppt(dateISO, groomerId){
+ apptEditId=null; apptDate=dateISO;
+ const d=new Date(dateISO);
+ document.getElementById('appt-title').textContent='Schedule appointment';
+ document.getElementById('appt-save-btn').textContent='Save appointment';
+ document.getElementById('appt-del-btn').style.display='none';
+ document.getElementById('appt-date-lbl').textContent=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+ document.getElementById('appt-dog').value='';
+ document.getElementById('appt-groomer').value=groomerId||'';
+ document.getElementById('appt-date-in').value=dateISO;
+ document.getElementById('appt-time').value='09:00';
+ document.getElementById('appt-service').value='';
+ document.getElementById('appt-dur').value=60;
+ document.getElementById('appt-note').value='';
+ om('ov-appt');
+}
+
+function openApptEdit(id){
+ const a=appts.find(x=>x.id===id); if(!a) return;
+ apptEditId=id; apptDate=a.appt_date;
+ document.getElementById('appt-title').textContent='Edit appointment';
+ document.getElementById('appt-save-btn').textContent='Update';
+ document.getElementById('appt-del-btn').style.display='inline-flex';
+ const d=new Date(a.appt_date);
+ document.getElementById('appt-date-lbl').textContent=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+ document.getElementById('appt-dog').value=a.dog_id||'';
+ document.getElementById('appt-groomer').value=a.groomer_id||'';
+ document.getElementById('appt-date-in').value=a.appt_date;
+ document.getElementById('appt-time').value=a.appt_time?.slice(0,5)||'09:00';
+ document.getElementById('appt-service').value=a.service_base||'';
+ document.getElementById('appt-dur').value=a.duration_mins||60;
+ document.getElementById('appt-note').value=a.appt_note||'';
+ om('ov-appt');
 }
 
 async function saveAppt(){
-  const dogId=document.getElementById('appt-dog').value;
-  if(!dogId){alert('Please select a dog.');return}
-  await db.from('appointments').insert({dog_id:dogId,appt_date:apptDate,appt_time:document.getElementById('appt-time').value,appt_note:document.getElementById('appt-note').value.trim()});
-  cm('ov-appt'); await loadAll(); renderCal();
+ const dogId=document.getElementById('appt-dog').value;
+ const grId=document.getElementById('appt-groomer').value;
+ if(!dogId){alert('Please select a dog.');return}
+ if(!grId){alert('Please select a groomer.');return}
+ const p={
+ dog_id:dogId,
+ groomer_id:grId,
+ appt_date:document.getElementById('appt-date-in').value,
+ appt_time:document.getElementById('appt-time').value,
+ service_base:document.getElementById('appt-service').value,
+ duration_mins:parseInt(document.getElementById('appt-dur').value)||60,
+ appt_note:document.getElementById('appt-note').value.trim()
+ };
+ if(apptEditId){await db.from('appointments').update(p).eq('id',apptEditId)}
+ else{await db.from('appointments').insert(p)}
+ cm('ov-appt'); await loadAll(); renderCal();
+}
+
+async function delApptFromModal(){
+ if(!apptEditId) return;
+ if(!confirm('Delete this appointment?')) return;
+ await db.from('appointments').delete().eq('id',apptEditId);
+ cm('ov-appt'); await loadAll(); renderCal();
 }
 
 async function delAppt(id){
-  if(!confirm('Remove this appointment?')) return;
-  await db.from('appointments').delete().eq('id',id);
-  await loadAll(); renderCal();
+ if(!confirm('Remove this appointment?')) return;
+ await db.from('appointments').delete().eq('id',id);
+ await loadAll(); renderCal();
+}
+
+/* GROOMERS TAB */
+function renderGroomers(){
+ const tb=document.getElementById('groomer-body');
+ if(!groomers.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">No groomers yet. Click "+ Add groomer".</td></tr>';return}
+ tb.innerHTML=groomers.map(g=>{
+ const ac=appts.filter(a=>a.groomer_id===g.id).length;
+ return `<tr>
+ <td><span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:${g.color||'#16a34a'};vertical-align:middle"></span></td>
+ <td><strong>${esc(g.name)}</strong></td>
+ <td>${g.phone?`<a class="wa-lnk" href="https://wa.me/62${g.phone.replace(/^0/,'')}" target="_blank">${esc(g.phone)}</a>`:'—'}</td>
+ <td>${g.active?'<span class="badge bs">Active</span>':'<span class="badge bm">Inactive</span>'}</td>
+ <td>${ac}</td>
+ <td><div class="row-actions">
+ <button class="icon-btn" onclick="openEditGroomer('${g.id}')">Edit</button>
+ <button class="icon-btn del" onclick="delGroomer('${g.id}','${esc(g.name).replace(/'/g,"\\'")}')">Del</button>
+ </div></td>
+ </tr>`;
+ }).join('');
+}
+
+function openAddGroomer(){
+ groomerEditId=null;
+ document.getElementById('groomer-title').textContent='Add groomer';
+ document.getElementById('groomer-save-btn').textContent='Save';
+ document.getElementById('gf-name').value='';
+ document.getElementById('gf-phone').value='';
+ document.getElementById('gf-color').value='#16a34a';
+ document.getElementById('gf-active').checked=true;
+ om('ov-groomer');
+}
+
+function openEditGroomer(id){
+ const g=groomers.find(x=>x.id===id); if(!g) return;
+ groomerEditId=id;
+ document.getElementById('groomer-title').textContent='Edit groomer';
+ document.getElementById('groomer-save-btn').textContent='Update';
+ document.getElementById('gf-name').value=g.name||'';
+ document.getElementById('gf-phone').value=g.phone||'';
+ document.getElementById('gf-color').value=g.color||'#16a34a';
+ document.getElementById('gf-active').checked=g.active!==false;
+ om('ov-groomer');
+}
+
+async function saveGroomer(){
+ const name=document.getElementById('gf-name').value.trim();
+ if(!name){alert('Name required.');return}
+ const p={
+ name,
+ phone:document.getElementById('gf-phone').value.trim(),
+ color:document.getElementById('gf-color').value,
+ active:document.getElementById('gf-active').checked
+ };
+ if(groomerEditId){await db.from('groomers').update(p).eq('id',groomerEditId)}
+ else{await db.from('groomers').insert(p)}
+ cm('ov-groomer'); await loadAll(); renderGroomers();
+}
+
+async function delGroomer(id,name){
+ const ac=appts.filter(a=>a.groomer_id===id).length;
+ let msg=`Delete groomer "${name}"?`;
+ if(ac) msg+=` ${ac} appointment(s) will be unassigned.`;
+ if(!confirm(msg)) return;
+ await db.from('groomers').delete().eq('id',id);
+ await loadAll(); renderGroomers();
 }
 
 /* ROUTE */
 function renderChips(){
-  document.getElementById('chips').innerHTML=dogs.map(d=>
-    `<button class="chip" data-name="${esc(d.name)}" onclick="toggleChip('${d.id}',this)">${esc(d.name)}</button>`
-  ).join('');
+ document.getElementById('chips').innerHTML=dogs.map(d=>
+ `<button class="chip" data-name="${esc(d.name)}" onclick="toggleChip('${d.id}',this)">${esc(d.name)}</button>`
+ ).join('');
 }
 
 function toggleChip(id,el){
-  el.classList.toggle('on');
-  const sel=[...document.querySelectorAll('.chip.on')].map(c=>c.dataset.name);
-  document.getElementById('route-input').value=sel.length?`I want to groom ${sel.join(', ')} tomorrow.`:'';
+ el.classList.toggle('on');
+ const sel=[...document.querySelectorAll('.chip.on')].map(c=>c.dataset.name);
+ document.getElementById('route-input').value=sel.length?`I want to groom ${sel.join(', ')} tomorrow.`:'';
 }
 
 function loadFromCal(){
-  const tom=new Date(); tom.setDate(tom.getDate()+1);
-  const isoT=iso(tom);
-  const ta=appts.filter(a=>a.appt_date===isoT);
-  if(!ta.length){alert('No appointments for tomorrow. Add some in the Calendar tab!');return}
-  const names=ta.map(a=>a.dogs?.name).filter(Boolean);
-  const firstTime=ta[0]?.appt_time?.slice(0,5)||'09:00';
-  document.getElementById('route-input').value=`I want to groom ${names.join(', ')} tomorrow starting at ${firstTime}.`;
-  document.querySelectorAll('.chip').forEach(c=>{
-    if(names.includes(c.dataset.name)) c.classList.add('on'); else c.classList.remove('on');
-  });
+ const tom=new Date(); tom.setDate(tom.getDate()+1);
+ const isoT=iso(tom);
+ const ta=appts.filter(a=>a.appt_date===isoT);
+ if(!ta.length){alert('No appointments for tomorrow. Add some in the Calendar tab!');return}
+ const names=ta.map(a=>a.dogs?.name).filter(Boolean);
+ const firstTime=ta[0]?.appt_time?.slice(0,5)||'09:00';
+ document.getElementById('route-input').value=`I want to groom ${names.join(', ')} tomorrow starting at ${firstTime}.`;
+ document.querySelectorAll('.chip').forEach(c=>{
+ if(names.includes(c.dataset.name)) c.classList.add('on'); else c.classList.remove('on');
+ });
 }
 
 function buildMapsUrl(stops){
-  const a=stops.map(s=>encodeURIComponent(s.address));
-  if(!a.length) return null;
-  if(a.length===1) return `https://www.google.com/maps/dir/?api=1&destination=${a[0]}&travelmode=driving&avoid=tolls`;
-  const wps=a.slice(1,-1).join('|');
-  let u=`https://www.google.com/maps/dir/?api=1&origin=${a[0]}&destination=${a[a.length-1]}&travelmode=driving&avoid=tolls`;
-  if(wps) u+=`&waypoints=${wps}`;
-  return u;
+ const a=stops.map(s=>encodeURIComponent(s.address));
+ if(!a.length) return null;
+ if(a.length===1) return `https://www.google.com/maps/dir/?api=1&destination=${a[0]}&travelmode=driving&avoid=tolls`;
+ const wps=a.slice(1,-1).join('|');
+ let u=`https://www.google.com/maps/dir/?api=1&origin=${a[0]}&destination=${a[a.length-1]}&travelmode=driving&avoid=tolls`;
+ if(wps) u+=`&waypoints=${wps}`;
+ return u;
 }
 
 async function optimizeRoute(){
-  const input=document.getElementById('route-input').value.trim();
-  if(!input){alert('Please describe who to groom.');return}
-  const rd=document.getElementById('route-result');
-  rd.innerHTML='<div class="loading"><span class="spin"></span>Planning your motorcycle route…</div>';
+ const input=document.getElementById('route-input').value.trim();
+ if(!input){alert('Please describe who to groom.');return}
+ const rd=document.getElementById('route-result');
+ rd.innerHTML='<div class="loading"><span class="spin"></span>Planning your motorcycle route…</div>';
 
-  const dogList=dogs.map(d=>{
-    const c=custs.find(x=>x.id===d.customer_id)||{};
-    return `- ${d.name} (${d.breed||'mixed'}, ${d.size||'?'}, area:${c.area||'?'}, address:${c.address||'?'}, owner:${c.owner||'?'}, WA:${c.wa||'n/a'}, prefs:"${d.prefs||'none'}")`;
-  }).join('\n');
+ const dogList=dogs.map(d=>{
+ const c=custs.find(x=>x.id===d.customer_id)||{};
+ return `- ${d.name} (${d.breed||'mixed'}, ${d.size||'?'}, area:${c.area||'?'}, address:${c.address||'?'}, owner:${c.owner||'?'}, WA:${c.wa||'n/a'}, prefs:"${d.prefs||'none'}")`;
+ }).join('\n');
 
-  try {
-    const resp=await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",
-      headers:{"Content-Type":"application/json","x-api-key":ANTHROPIC_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-      body:JSON.stringify({
-        model:"claude-sonnet-4-20250514",
-        max_tokens:1024,
-        messages:[{role:"user",content:`You are a route optimizer for a mobile dog grooming service in Jakarta, Indonesia. Groomer uses MOTORCYCLE, NO toll roads (no tol).
+ try {
+ const resp=await fetch("https://api.anthropic.com/v1/messages",{
+ method:"POST",
+ headers:{"Content-Type":"application/json","x-api-key":ANTHROPIC_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+ body:JSON.stringify({
+ model:"claude-sonnet-4-20250514",
+ max_tokens:1024,
+ messages:[{role:"user",content:`You are a route optimizer for a mobile dog grooming service in Jakarta, Indonesia. Groomer uses MOTORCYCLE, NO toll roads (no tol).
 
 Clients:
 ${dogList}
@@ -719,42 +939,42 @@ Request: "${input}"
 3. Schedule times from 9:00 AM unless stated. Large=60min, Medium=45min, Small=30min, travel buffer=20min (motorcycle, no toll).
 4. Return ONLY this exact JSON (no markdown, no backticks, no extra text):
 {"summary":"one sentence","stops":[{"order":1,"dog":"Name","owner":"Owner","area":"Area","address":"Full address","wa":"number","time":"09:00","duration":"60 min","note":"grooming reminder"}],"total_time":"X hrs","tip":"Jakarta motorcycle tip"}`}]
-      })
-    });
-    if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||resp.status)}
-    const data=await resp.json();
-    const raw=(data.content||[]).map(b=>b.text||'').join('').replace(/```json|```/g,'').trim();
-    const json=JSON.parse(raw);
-    const tom=new Date(); tom.setDate(tom.getDate()+1);
-    const dateStr=tom.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'});
-    const mapsUrl=buildMapsUrl(json.stops);
-    rd.innerHTML=`
-      <div class="sum-bar"><span>📅 ${dateStr}</span><span>🏍️ No tolls · ⏱ ${json.total_time}</span></div>
-      ${mapsUrl?`<div class="maps-banner">
-        <div><div class="maps-t">🗺️ Open full route in Google Maps</div><div class="maps-s">${json.stops.length} stops · Motorcycle · No tolls · Live traffic</div></div>
-        <a class="btn-maps" href="${mapsUrl}" target="_blank">Open in Maps →</a>
-      </div>`:''}
-      <div class="card" style="padding:1rem">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:.9rem">✨ ${json.summary}</div>
-        ${json.stops.map(s=>`<div class="stop-row">
-          <div class="stop-n">${s.order}</div>
-          <div class="stop-info">
-            <div class="stop-nm">${s.dog} <span style="font-weight:400;color:var(--muted);font-size:11px">· ${s.owner}</span></div>
-            <div class="stop-det">📍 ${s.address}</div>
-            <div class="stop-det">✂️ ${s.note}</div>
-            <div class="stop-links">
-              ${s.wa?`<a class="stop-lnk" href="https://wa.me/62${s.wa.replace(/^0/,'')}" target="_blank">💬 WA</a>`:''}
-              <a class="stop-lnk" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.address)}&travelmode=driving&avoid=tolls" target="_blank">🏍️ Navigate</a>
-            </div>
-          </div>
-          <div class="stime"><div class="stime-v">${s.time}</div><div class="stime-d">${s.duration}</div></div>
-        </div>`).join('')}
-        ${json.tip?`<div class="tip">💡 ${json.tip}</div>`:''}
-      </div>`;
-  } catch(e){
-    rd.innerHTML=`<div class="empty"><span class="empty-icon">⚠️</span>Error: ${e.message}</div>`;
-    console.error(e);
-  }
+ })
+ });
+ if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||resp.status)}
+ const data=await resp.json();
+ const raw=(data.content||[]).map(b=>b.text||'').join('').replace(/```json|```/g,'').trim();
+ const json=JSON.parse(raw);
+ const tom=new Date(); tom.setDate(tom.getDate()+1);
+ const dateStr=tom.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'});
+ const mapsUrl=buildMapsUrl(json.stops);
+ rd.innerHTML=`
+ <div class="sum-bar"><span> ${dateStr}</span><span>No tolls · ${json.total_time}</span></div>
+ ${mapsUrl?`<div class="maps-banner">
+ <div><div class="maps-t">Open full route in Google Maps</div><div class="maps-s">${json.stops.length} stops · Motorcycle · No tolls · Live traffic</div></div>
+ <a class="btn-maps" href="${mapsUrl}" target="_blank">Open in Maps</a>
+ </div>`:''}
+ <div class="card" style="padding:1rem">
+ <div style="font-size:12px;color:var(--muted);margin-bottom:.9rem">${json.summary}</div>
+ ${json.stops.map(s=>`<div class="stop-row">
+ <div class="stop-n">${s.order}</div>
+ <div class="stop-info">
+ <div class="stop-nm">${s.dog} <span style="font-weight:400;color:var(--muted);font-size:11px">· ${s.owner}</span></div>
+ <div class="stop-det">${s.address}</div>
+ <div class="stop-det">${s.note}</div>
+ <div class="stop-links">
+ ${s.wa?`<a class="stop-lnk" href="https://wa.me/62${s.wa.replace(/^0/,'')}" target="_blank">WA</a>`:''}
+ <a class="stop-lnk" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.address)}&travelmode=driving&avoid=tolls" target="_blank">Navigate</a>
+ </div>
+ </div>
+ <div class="stime"><div class="stime-v">${s.time}</div><div class="stime-d">${s.duration}</div></div>
+ </div>`).join('')}
+ ${json.tip?`<div class="tip">${json.tip}</div>`:''}
+ </div>`;
+ } catch(e){
+ rd.innerHTML=`<div class="empty"><span class="empty-icon">️</span>Error: ${e.message}</div>`;
+ console.error(e);
+ }
 }
 
 loadAll();
