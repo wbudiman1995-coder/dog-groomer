@@ -288,9 +288,10 @@ tbody tr:hover{background:var(--subtle)}
  <div class="form-grid">
  <div class="fg"><label>Owner name *</label><input id="cf-owner" placeholder="Sarah"/></div>
  <div class="fg"><label>WhatsApp</label><input id="cf-wa" placeholder="08xxxxxxxxxx"/></div>
- <div class="fg full"><label>Address</label><input id="cf-addr" placeholder="Jl. Kemang Raya No.10, Jak-Sel"/></div>
- <div class="fg"><label>Area</label><input id="cf-area" placeholder="Kemang"/></div>
- <div class="fg"><label>Google Maps link</label><input id="cf-gmaps" placeholder="https://maps.app.goo.gl/..."/></div>
+ <div class="fg full"><label>Address</label><input id="cf-addr" placeholder="Jl. Kemang Raya No.10"/></div>
+ <div class="fg"><label>Kota / Kabupaten</label><select id="cf-kota" onchange="onKotaChange()"><option value="">Pilih kota…</option></select></div>
+ <div class="fg"><label>Kecamatan</label><select id="cf-kec"><option value="">Pilih kota dulu…</option></select></div>
+ <div class="fg full"><label>Google Maps link</label><input id="cf-gmaps" placeholder="https://maps.app.goo.gl/..."/></div>
  <div class="fg full"><label>Preferences / notes</label><textarea id="cf-prefs" placeholder="Customer-level notes, contact preferences, etc."></textarea></div>
  </div>
  <div class="form-actions">
@@ -383,6 +384,29 @@ function gmapsUrl(addr,manual){
  if(manual) return manual;
  if(!addr) return '';
  return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(addr);
+}
+
+/* AREAS - Kota -> Kecamatan */
+const AREAS = {
+ 'Jakarta Pusat': ['Cempaka Putih','Gambir','Johar Baru','Kemayoran','Menteng','Sawah Besar','Senen','Tanah Abang'],
+ 'Jakarta Utara': ['Cilincing','Kelapa Gading','Koja','Pademangan','Penjaringan','Tanjung Priok'],
+ 'Jakarta Selatan': ['Cilandak','Jagakarsa','Kebayoran Baru','Kebayoran Lama','Mampang Prapatan','Pancoran','Pasar Minggu','Pesanggrahan','Setiabudi','Tebet'],
+ 'Jakarta Barat': ['Cengkareng','Grogol Petamburan','Kalideres','Kebon Jeruk','Kembangan','Palmerah','Taman Sari','Tambora'],
+ 'Jakarta Timur': ['Cakung','Cipayung','Ciracas','Duren Sawit','Jatinegara','Kramat Jati','Makasar','Matraman','Pasar Rebo','Pulo Gadung'],
+ 'Alam Sutera': ['Pinang','Serpong Utara','Pondok Aren'],
+ 'Gading Serpong': ['Kelapa Dua','Pagedangan','Cisauk'],
+ 'BSD': ['Serpong','Setu','Cisauk','Pagedangan']
+};
+function populateKotaSelect(sel){
+ sel.innerHTML='<option value="">Pilih kota…</option>'+Object.keys(AREAS).map(k=>`<option value="${k}">${k}</option>`).join('');
+}
+function populateKecSelect(sel,kota){
+ if(!kota){sel.innerHTML='<option value="">Pilih kota dulu…</option>';return}
+ sel.innerHTML='<option value="">Pilih kecamatan…</option>'+(AREAS[kota]||[]).map(k=>`<option value="${k}">${k}</option>`).join('');
+}
+function onKotaChange(){
+ const k=document.getElementById('cf-kota').value;
+ populateKecSelect(document.getElementById('cf-kec'),k);
 }
 
 function sw(tab) {
@@ -495,7 +519,9 @@ function openAddCust(){
  custEditId=null;
  document.getElementById('cust-title').textContent='Add customer';
  document.getElementById('cust-save-btn').textContent='Save customer';
- ['cf-owner','cf-wa','cf-addr','cf-area','cf-gmaps','cf-prefs'].forEach(id=>document.getElementById(id).value='');
+ ['cf-owner','cf-wa','cf-addr','cf-gmaps','cf-prefs'].forEach(id=>document.getElementById(id).value='');
+ populateKotaSelect(document.getElementById('cf-kota'));
+ populateKecSelect(document.getElementById('cf-kec'),'');
  om('ov-cust');
 }
 
@@ -507,27 +533,33 @@ function openEditCust(id){
  document.getElementById('cf-owner').value=c.owner||'';
  document.getElementById('cf-wa').value=c.wa||'';
  document.getElementById('cf-addr').value=c.address||'';
- document.getElementById('cf-area').value=c.area||'';
  document.getElementById('cf-gmaps').value=c.gmaps_link||'';
  document.getElementById('cf-prefs').value=c.prefs||'';
+ populateKotaSelect(document.getElementById('cf-kota'));
+ document.getElementById('cf-kota').value=c.kota||'';
+ populateKecSelect(document.getElementById('cf-kec'),c.kota||'');
+ document.getElementById('cf-kec').value=c.kecamatan||'';
  om('ov-cust');
 }
 
 async function saveCust(){
  const owner=document.getElementById('cf-owner').value.trim();
  if(!owner){alert('Owner name required.');return}
+ const kota=document.getElementById('cf-kota').value;
+ const kec=document.getElementById('cf-kec').value;
  const p={
  owner,
  wa:document.getElementById('cf-wa').value.trim(),
  address:document.getElementById('cf-addr').value.trim(),
- area:document.getElementById('cf-area').value.trim(),
+ kota,
+ kecamatan:kec,
+ area:[kota,kec].filter(Boolean).join(' - '),
  gmaps_link:document.getElementById('cf-gmaps').value.trim(),
  prefs:document.getElementById('cf-prefs').value.trim()
  };
  if(custEditId){
  await db.from('customers').update(p).eq('id',custEditId);
  } else {
- // Generate customer_code = CUST-XXX (zero-padded, next available)
  let maxN=0;
  custs.forEach(c=>{
  const m=(c.customer_code||'').match(/^CUST-(\d+)$/);
