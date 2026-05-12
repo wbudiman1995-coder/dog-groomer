@@ -1592,7 +1592,8 @@ function resetInvoice(){
  document.getElementById('inv-dogs-services').innerHTML='';
  document.getElementById('inv-groomer').value='';
  document.getElementById('inv-groomer-manual').value='';
- document.getElementById('inv-sessions').value=1;
+ const invSessions=document.getElementById('inv-sessions');
+ if(invSessions) invSessions.value=1;
  document.getElementById('inv-interval').value='14';
  document.getElementById('inv-disc-type').value='percent';
  document.getElementById('inv-disc-value').value=0;
