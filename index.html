@@ -176,6 +176,8 @@ tbody tr:hover{background:var(--subtle)}
  <button class="nav-tab" onclick="sw('history')" id="tab-history">History</button>
  <button class="nav-tab" onclick="sw('calendar')" id="tab-calendar">Calendar</button>
  <button class="nav-tab" onclick="sw('groomers')" id="tab-groomers">Groomers</button>
+ <button class="nav-tab" onclick="sw('invoice')" id="tab-invoice">Invoice</button>
+ <button class="nav-tab" onclick="sw('financial')" id="tab-financial">Financial</button>
  <button class="nav-tab" onclick="sw('route')" id="tab-route">Route</button>
  </div>
 </nav>
@@ -263,6 +265,107 @@ tbody tr:hover{background:var(--subtle)}
  <th>Color</th><th>Name</th><th>Phone</th><th>Status</th><th>Appointments</th><th></th>
  </tr></thead>
  <tbody id="groomer-body"></tbody></table>
+ </div>
+ </div>
+
+ <div class="sec" id="sec-invoice">
+ <div class="toolbar">
+ <span class="toolbar-title">Buat invoice</span>
+ <button class="btn btn-g btn-sm" onclick="resetInvoice()">Reset</button>
+ </div>
+
+ <div class="card" style="padding:1rem;margin-bottom:1rem">
+ <div class="det-lbl">1. Pilih customer</div>
+ <select id="inv-customer" onchange="onInvCustomerChange()" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle);margin-bottom:.9rem">
+ <option value="">Pilih customer…</option>
+ </select>
+
+ <div id="inv-cust-summary" style="display:none;background:var(--green-lt);border-radius:var(--r);padding:9px 12px;margin-bottom:.9rem;font-size:12px"></div>
+
+ <div class="det-lbl" style="margin-top:.6rem">2. Pilih dog(s)</div>
+ <div id="inv-dog-picker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:.6rem">
+ <span style="font-size:12px;color:var(--muted)">Pilih customer dulu</span>
+ </div>
+ </div>
+
+ <div id="inv-dogs-services"></div>
+
+ <div class="card" style="padding:1rem;margin-bottom:1rem">
+ <div class="det-lbl">3. Groomer & tanggal</div>
+ <div class="form-grid">
+ <div class="fg"><label>Groomer</label>
+ <select id="inv-groomer"><option value="">Pilih groomer…</option></select>
+ </div>
+ <div class="fg"><label>Or type manually</label><input id="inv-groomer-manual" placeholder="Nama groomer"/></div>
+ <div class="fg"><label>Tanggal invoice</label><input type="date" id="inv-date"/></div>
+ <div class="fg"><label>Tanggal sesi pertama</label><input type="date" id="inv-first-date"/></div>
+ </div>
+ </div>
+
+ <div class="card" style="padding:1rem;margin-bottom:1rem">
+ <div class="det-lbl">4. Advance booking</div>
+ <div class="form-grid">
+ <div class="fg"><label>Jumlah sesi</label><input type="number" id="inv-sessions" value="1" min="1" max="12" onchange="recalcInvoice()"/></div>
+ <div class="fg"><label>Interval</label>
+ <select id="inv-interval" onchange="onIntervalChange()">
+ <option value="7">Setiap minggu</option>
+ <option value="14" selected>Setiap 2 minggu</option>
+ <option value="28">Setiap 4 minggu</option>
+ <option value="custom">Custom (hari)</option>
+ <option value="none">Belum dijadwalkan</option>
+ </select>
+ </div>
+ <div class="fg" id="inv-custom-days-wrap" style="display:none"><label>Custom (hari)</label><input type="number" id="inv-custom-days" value="14" min="1"/></div>
+ </div>
+ </div>
+
+ <div class="card" style="padding:1rem;margin-bottom:1rem">
+ <div class="det-lbl">5. Discount</div>
+ <div class="form-grid">
+ <div class="fg"><label>Tipe</label>
+ <select id="inv-disc-type" onchange="recalcInvoice()">
+ <option value="">Tidak ada</option>
+ <option value="percent">Persen (%)</option>
+ <option value="fixed">Nominal (Rp)</option>
+ </select>
+ </div>
+ <div class="fg"><label>Nilai</label><input type="number" id="inv-disc-value" value="0" min="0" oninput="recalcInvoice()"/></div>
+ </div>
+ </div>
+
+ <div class="card" style="padding:1rem;margin-bottom:1rem">
+ <div class="det-lbl">6. Catatan</div>
+ <textarea id="inv-notes" placeholder="Catatan invoice (opsional)" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle);min-height:60px;font-family:inherit"></textarea>
+ </div>
+
+ <div class="sum-bar" id="inv-summary">Subtotal: Rp 0 · Total: Rp 0</div>
+
+ <div class="form-actions" style="margin-top:1rem">
+ <button class="btn btn-p" onclick="saveInvoice()">Simpan invoice</button>
+ <button class="btn btn-b" onclick="saveInvoiceAndAppts()">Simpan invoice + kalender</button>
+ <button class="btn btn-g" onclick="downloadInvoicePDF()">Download PDF</button>
+ </div>
+ </div>
+
+ <div class="sec" id="sec-financial">
+ <div class="toolbar">
+ <span class="toolbar-title">Financial</span>
+ <button class="btn btn-g btn-sm" onclick="openBankSettings()">Bank settings</button>
+ </div>
+ <div class="filter-bar">
+ <select id="fin-status" onchange="renderFinancial()">
+ <option value="">All status</option>
+ <option value="unpaid">Unpaid only</option>
+ <option value="paid">Paid only</option>
+ </select>
+ <input id="fin-search" placeholder="Search invoice/customer…" oninput="renderFinancial()" style="min-width:180px"/>
+ </div>
+ <div id="fin-totals" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:.9rem"></div>
+ <div class="tbl-wrap">
+ <table><thead><tr>
+ <th>Invoice #</th><th>Date</th><th>Customer</th><th>Dogs</th><th>Total</th><th>Status</th><th></th>
+ </tr></thead>
+ <tbody id="fin-body"></tbody></table>
  </div>
  </div>
 
@@ -365,10 +468,27 @@ tbody tr:hover{background:var(--subtle)}
  </div>
 </div>
 
+<!-- BANK SETTINGS -->
+<div class="overlay" id="ov-bank">
+ <div class="modal" style="max-width:380px">
+ <div class="modal-title">Bank settings (for invoices)</div>
+ <div class="form-grid">
+ <div class="fg full"><label>Bank name</label><input id="bf-name" placeholder="Krom Bank"/></div>
+ <div class="fg full"><label>Account number</label><input id="bf-account" placeholder="770055777787"/></div>
+ <div class="fg full"><label>Account holder</label><input id="bf-holder" placeholder="Xavier Fidelia Ali"/></div>
+ </div>
+ <div class="form-actions">
+ <button class="btn btn-p" onclick="saveBankSettings()">Save</button>
+ <button class="btn btn-g" onclick="cm('ov-bank')">Cancel</button>
+ </div>
+ </div>
+</div>
+
 <script>
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
-let dogs=[], visits=[], appts=[], custs=[], groomers=[], custEditId=null, dogEditId=null, currentCustId=null, apptDate=null, apptEditId=null, groomerEditId=null;
+let dogs=[], visits=[], appts=[], custs=[], groomers=[], invoices=[], bankSettings={}, custEditId=null, dogEditId=null, currentCustId=null, apptDate=null, apptEditId=null, groomerEditId=null;
+let invSelectedCust=null, invSelectedDogs=[], invDogServices={};
 let calStart = weekStart(new Date());
 
 function weekStart(d) {
@@ -418,6 +538,8 @@ function sw(tab) {
  if(tab==='history') renderHist();
  if(tab==='calendar') renderCal();
  if(tab==='groomers') renderGroomers();
+ if(tab==='invoice') initInvoiceTab();
+ if(tab==='financial') renderFinancial();
  if(tab==='route') renderChips();
 }
 
@@ -434,14 +556,16 @@ function swSub(sub){
 }
 
 async function loadAll() {
- const [cr,dr,vr,ar,gr] = await Promise.all([
+ const [cr,dr,vr,ar,gr,ir,br] = await Promise.all([
  db.from('customers').select('*').order('created_at',{ascending:false}),
  db.from('dogs').select('*').order('created_at',{ascending:false}),
  db.from('visits').select('*,dogs(name,owner,area,size)').order('visited_at',{ascending:false}),
  db.from('appointments').select('*,dogs(name,area,address,wa,size,prefs,owner)').order('appt_date').order('appt_time'),
- db.from('groomers').select('*').order('created_at')
+ db.from('groomers').select('*').order('created_at'),
+ db.from('invoices').select('*').order('created_at',{ascending:false}),
+ db.from('business_settings').select('*').eq('id',1).single()
  ]);
- custs=cr.data||[]; dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[]; groomers=gr.data||[];
+ custs=cr.data||[]; dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[]; groomers=gr.data||[]; invoices=ir.data||[]; bankSettings=br.data||{};
  renderCusts();
  const opts=dogs.map(d=>`<option value="${d.id}">${esc(d.name)} (${esc(getOwnerName(d.customer_id))})</option>`).join('');
  document.getElementById('hd').innerHTML='<option value="">All dogs</option>'+opts;
@@ -1007,6 +1131,325 @@ Request: "${input}"
  rd.innerHTML=`<div class="empty"><span class="empty-icon">️</span>Error: ${e.message}</div>`;
  console.error(e);
  }
+}
+
+/* ============ INVOICE TAB ============ */
+const PRICING = {
+ 'Basic Grooming': {XS:120000, S:140000, M:190000, L:250000, XL:280000},
+ 'Styling': {XS:100000, S:100000, M:120000, L:140000, XL:160000},
+ 'Botak': {XS:60000, S:60000, M:70000, L:80000, XL:90000},
+ 'Dematting': {XS:50000, S:50000, M:50000, L:50000, XL:50000},
+ 'Deshedding': {XS:50000, S:50000, M:50000, L:50000, XL:50000},
+ 'Anti Fungal': {XS:50000, S:50000, M:55000, L:60000, XL:65000},
+ 'Anti Kutu': {XS:25000, S:25000, M:30000, L:35000, XL:40000},
+ 'Whitening': {XS:15000, S:15000, M:20000, L:25000, XL:30000},
+ 'Parfume': {XS:0, S:0, M:0, L:0, XL:0}
+};
+const SERVICE_LIST = Object.keys(PRICING);
+function fmtRp(n){return 'Rp '+(n||0).toLocaleString('id-ID')}
+function priceFor(svc,size){const s=size==='Small'?'S':size==='Medium'?'M':size==='Large'?'L':(size||'M'); return PRICING[svc]?.[s]??0}
+
+function initInvoiceTab(){
+ const cs=document.getElementById('inv-customer');
+ cs.innerHTML='<option value="">Pilih customer…</option>'+custs.map(c=>`<option value="${c.id}">${esc(c.customer_code||'?')} - ${esc(c.owner)}</option>`).join('');
+ const gs=document.getElementById('inv-groomer');
+ gs.innerHTML='<option value="">Pilih groomer…</option>'+groomers.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
+ const t=new Date().toISOString().split('T')[0];
+ if(!document.getElementById('inv-date').value) document.getElementById('inv-date').value=t;
+ if(!document.getElementById('inv-first-date').value) document.getElementById('inv-first-date').value=t;
+}
+
+function resetInvoice(){
+ invSelectedCust=null; invSelectedDogs=[]; invDogServices={};
+ document.getElementById('inv-customer').value='';
+ document.getElementById('inv-cust-summary').style.display='none';
+ document.getElementById('inv-dog-picker').innerHTML='<span style="font-size:12px;color:var(--muted)">Pilih customer dulu</span>';
+ document.getElementById('inv-dogs-services').innerHTML='';
+ document.getElementById('inv-groomer').value='';
+ document.getElementById('inv-groomer-manual').value='';
+ document.getElementById('inv-sessions').value=1;
+ document.getElementById('inv-interval').value='14';
+ document.getElementById('inv-disc-type').value='';
+ document.getElementById('inv-disc-value').value=0;
+ document.getElementById('inv-notes').value='';
+ recalcInvoice();
+}
+
+function onInvCustomerChange(){
+ const id=document.getElementById('inv-customer').value;
+ invSelectedCust=custs.find(c=>c.id===id)||null;
+ invSelectedDogs=[]; invDogServices={};
+ const sm=document.getElementById('inv-cust-summary');
+ const pk=document.getElementById('inv-dog-picker');
+ if(!invSelectedCust){sm.style.display='none';pk.innerHTML='<span style="font-size:12px;color:var(--muted)">Pilih customer dulu</span>';renderInvDogServices();return}
+ sm.style.display='block';
+ sm.innerHTML=`<strong>${esc(invSelectedCust.owner)}</strong> · ${esc(invSelectedCust.kota||invSelectedCust.area||'-')}${invSelectedCust.kecamatan?', '+esc(invSelectedCust.kecamatan):''} · ${esc(invSelectedCust.wa||'no WA')}`;
+ const cdogs=dogs.filter(d=>d.customer_id===invSelectedCust.id);
+ if(!cdogs.length){pk.innerHTML='<span style="font-size:12px;color:var(--muted)">Customer belum punya dog</span>';return}
+ pk.innerHTML=cdogs.map(d=>`<button class="chip" data-id="${d.id}" onclick="toggleInvDog('${d.id}',this)">${esc(d.name)} (${esc(d.size||'?')})</button>`).join('');
+ renderInvDogServices();
+}
+
+function toggleInvDog(id,el){
+ el.classList.toggle('on');
+ if(el.classList.contains('on')){
+ if(!invSelectedDogs.includes(id)) invSelectedDogs.push(id);
+ const d=dogs.find(x=>x.id===id);
+ if(!invDogServices[id]) invDogServices[id]={services:{'Basic Grooming':{checked:true, price:priceFor('Basic Grooming',d?.size)}}};
+ } else {
+ invSelectedDogs=invSelectedDogs.filter(x=>x!==id);
+ delete invDogServices[id];
+ }
+ renderInvDogServices();
+}
+
+function renderInvDogServices(){
+ const wrap=document.getElementById('inv-dogs-services');
+ if(!invSelectedDogs.length){wrap.innerHTML='';recalcInvoice();return}
+ wrap.innerHTML=invSelectedDogs.map(did=>{
+ const d=dogs.find(x=>x.id===did); if(!d) return '';
+ const ds=invDogServices[did]||{services:{}};
+ return `<div class="card" style="padding:1rem;margin-bottom:1rem">
+ <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
+ <div><strong>${esc(d.name)}</strong> <span style="font-size:11px;color:var(--muted)">${esc(d.dog_code||'')} · ${esc(d.size||'?')}</span></div>
+ </div>
+ <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+ ${SERVICE_LIST.map(svc=>{
+ const checked=ds.services?.[svc]?.checked?'checked':'';
+ const price=ds.services?.[svc]?.price??priceFor(svc,d.size);
+ return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 8px;background:var(--subtle);border-radius:6px">
+ <input type="checkbox" ${checked} onchange="onSvcToggle('${did}','${svc}',this.checked)"/>
+ <span style="flex:1">${svc}</span>
+ <input type="number" value="${price}" min="0" step="1000" style="width:84px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px" onchange="onSvcPrice('${did}','${svc}',this.value)"/>
+ </label>`;
+ }).join('')}
+ </div>
+ </div>`;
+ }).join('');
+ recalcInvoice();
+}
+
+function onSvcToggle(did,svc,checked){
+ if(!invDogServices[did]) invDogServices[did]={services:{}};
+ const d=dogs.find(x=>x.id===did);
+ if(!invDogServices[did].services[svc]) invDogServices[did].services[svc]={price:priceFor(svc,d?.size)};
+ invDogServices[did].services[svc].checked=checked;
+ recalcInvoice();
+}
+function onSvcPrice(did,svc,val){
+ if(!invDogServices[did]) invDogServices[did]={services:{}};
+ if(!invDogServices[did].services[svc]) invDogServices[did].services[svc]={};
+ invDogServices[did].services[svc].price=parseInt(val)||0;
+ recalcInvoice();
+}
+
+function onIntervalChange(){
+ const v=document.getElementById('inv-interval').value;
+ document.getElementById('inv-custom-days-wrap').style.display=v==='custom'?'':'none';
+}
+
+function calcInvoiceTotals(){
+ let perSession=0;
+ invSelectedDogs.forEach(did=>{
+ const ds=invDogServices[did]?.services||{};
+ Object.values(ds).forEach(s=>{if(s.checked) perSession+=(s.price||0)});
+ });
+ const sessions=parseInt(document.getElementById('inv-sessions').value)||1;
+ const subtotal=perSession*sessions;
+ const dtype=document.getElementById('inv-disc-type').value;
+ const dval=parseFloat(document.getElementById('inv-disc-value').value)||0;
+ let discAmount=0;
+ if(dtype==='percent') discAmount=Math.round(subtotal*dval/100);
+ else if(dtype==='fixed') discAmount=Math.round(dval);
+ const total=Math.max(0,subtotal-discAmount);
+ return {subtotal,perSession,sessions,discAmount,total};
+}
+
+function recalcInvoice(){
+ const t=calcInvoiceTotals();
+ document.getElementById('inv-summary').innerHTML=
+ `<span>Per sesi: ${fmtRp(t.perSession)} × ${t.sessions}</span>`+
+ `<span>Subtotal: ${fmtRp(t.subtotal)}${t.discAmount?' · Diskon: -'+fmtRp(t.discAmount):''} · <strong>Total: ${fmtRp(t.total)}</strong></span>`;
+}
+
+function buildInvoiceRecord(){
+ if(!invSelectedCust){alert('Pilih customer dulu');return null}
+ if(!invSelectedDogs.length){alert('Pilih minimal 1 dog');return null}
+ const t=calcInvoiceTotals();
+ const grId=document.getElementById('inv-groomer').value;
+ const grManual=document.getElementById('inv-groomer-manual').value.trim();
+ const groomerName=grManual||groomers.find(g=>g.id===grId)?.name||'';
+ const dogsData=invSelectedDogs.map(did=>{
+ const d=dogs.find(x=>x.id===did);
+ const services=Object.entries(invDogServices[did]?.services||{})
+ .filter(([_,s])=>s.checked)
+ .map(([name,s])=>({name,price:s.price||0}));
+ return {dog_id:did, dog_code:d?.dog_code, name:d?.name, breed:d?.breed, size:d?.size, services};
+ });
+ const now=new Date();
+ const ym=`${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
+ const monthCount=invoices.filter(i=>(i.invoice_number||'').includes(`INV-${ym}`)).length+1;
+ const invNum=`INV-${ym}-${String(monthCount).padStart(4,'0')}`;
+ return {
+ invoice_number:invNum,
+ customer_id:invSelectedCust.id,
+ customer_code:invSelectedCust.customer_code,
+ owner_name:invSelectedCust.owner,
+ groomer_id:grId||null,
+ groomer_name:groomerName,
+ invoice_date:document.getElementById('inv-date').value||new Date().toISOString().split('T')[0],
+ dogs:dogsData,
+ subtotal:t.subtotal,
+ sessions:t.sessions,
+ discount_type:document.getElementById('inv-disc-type').value||null,
+ discount_value:parseFloat(document.getElementById('inv-disc-value').value)||0,
+ discount_amount:t.discAmount,
+ total:t.total,
+ status:'unpaid',
+ notes:document.getElementById('inv-notes').value.trim()
+ };
+}
+
+async function saveInvoice(){
+ const rec=buildInvoiceRecord(); if(!rec) return;
+ const {error}=await db.from('invoices').insert(rec);
+ if(error){alert('Error: '+error.message);return}
+ alert('Invoice tersimpan: '+rec.invoice_number);
+ await loadAll();
+}
+
+async function saveInvoiceAndAppts(){
+ const rec=buildInvoiceRecord(); if(!rec) return;
+ const grId=document.getElementById('inv-groomer').value;
+ if(!grId){alert('Pilih groomer dari list untuk save ke kalender');return}
+ const firstDate=document.getElementById('inv-first-date').value;
+ if(!firstDate){alert('Pilih tanggal sesi pertama');return}
+ const interval=document.getElementById('inv-interval').value;
+ const customDays=parseInt(document.getElementById('inv-custom-days').value)||14;
+ const intervalDays=interval==='custom'?customDays:(interval==='none'?0:parseInt(interval));
+ const {error:e1}=await db.from('invoices').insert(rec);
+ if(e1){alert('Invoice error: '+e1.message);return}
+ if(interval!=='none'){
+ const apptsToInsert=[];
+ for(let s=0;s<rec.sessions;s++){
+ const d=new Date(firstDate);
+ d.setDate(d.getDate()+(s*intervalDays));
+ const dateStr=d.toISOString().split('T')[0];
+ invSelectedDogs.forEach((did,idx)=>{
+ const services=Object.entries(invDogServices[did]?.services||{}).filter(([_,sv])=>sv.checked).map(([n])=>n);
+ const hour=9+idx;
+ apptsToInsert.push({
+ dog_id:did,
+ groomer_id:grId,
+ appt_date:dateStr,
+ appt_time:`${String(hour).padStart(2,'0')}:00:00`,
+ service_base:services.join(', '),
+ appt_note:`Inv ${rec.invoice_number} sesi ${s+1}/${rec.sessions}`,
+ duration_mins:60
+ });
+ });
+ }
+ const {error:e2}=await db.from('appointments').insert(apptsToInsert);
+ if(e2){alert('Appt save error: '+e2.message);return}
+ }
+ alert(`Invoice ${rec.invoice_number} + ${rec.sessions} sesi tersimpan`);
+ await loadAll();
+}
+
+function downloadInvoicePDF(){
+ const rec=buildInvoiceRecord(); if(!rec) return;
+ const bn=bankSettings.bank_name||'Krom Bank';
+ const ba=bankSettings.bank_account||'770055777787';
+ const bh=bankSettings.bank_holder||'Xavier Fidelia Ali';
+ const dateStr=new Date(rec.invoice_date).toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});
+ let dogsHtml='';
+ rec.dogs.forEach(d=>{
+ const svcRows=d.services.map(s=>`<tr><td style="padding:4px 8px">${s.name}</td><td style="padding:4px 8px;text-align:right">${fmtRp(s.price)}</td></tr>`).join('');
+ dogsHtml+=`<div style="margin-bottom:12px"><strong>${d.name}</strong> <span style="color:#666;font-size:11px">${d.dog_code||''} · ${d.breed||''} · ${d.size||''}</span>
+ <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:4px">${svcRows}</table></div>`;
+ });
+ const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${rec.invoice_number}</title>
+ <style>body{font-family:Arial;padding:30px;color:#222;max-width:700px;margin:0 auto}h1{color:#16a34a;margin:0 0 4px 0}.hdr{border-bottom:2px solid #16a34a;padding-bottom:12px;margin-bottom:18px;display:flex;justify-content:space-between}.box{background:#f6f6f6;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:13px}.totals{margin-top:18px;border-top:1px solid #ccc;padding-top:10px;font-size:13px}.totals .row{display:flex;justify-content:space-between;padding:3px 0}.totals .total{font-size:15px;font-weight:bold;color:#16a34a;border-top:1px solid #ccc;padding-top:6px;margin-top:6px}.foot{margin-top:24px;font-size:11px;color:#666;border-top:1px solid #eee;padding-top:10px}</style></head><body>
+ <div class="hdr"><div><h1>Home Paw Grooming</h1><div style="font-size:11px;color:#666">Mobile Dog Grooming · Jakarta</div></div>
+ <div style="text-align:right"><div style="font-weight:bold">INVOICE</div><div style="font-size:12px">${rec.invoice_number}</div><div style="font-size:11px;color:#666">${dateStr}</div></div></div>
+ <div class="box"><div><strong>Customer:</strong> ${rec.owner_name} (${rec.customer_code||'-'})</div>
+ <div><strong>Groomer:</strong> ${rec.groomer_name||'-'}</div>
+ <div><strong>Sesi:</strong> ${rec.sessions}x</div></div>
+ ${dogsHtml}
+ <div class="totals">
+ <div class="row"><span>Subtotal (${rec.sessions} sesi)</span><span>${fmtRp(rec.subtotal)}</span></div>
+ ${rec.discount_amount?`<div class="row"><span>Diskon</span><span>-${fmtRp(rec.discount_amount)}</span></div>`:''}
+ <div class="row total"><span>Total</span><span>${fmtRp(rec.total)}</span></div>
+ </div>
+ <div class="box" style="margin-top:18px"><strong>Pembayaran:</strong><br>${bn} - ${ba}<br>a.n. ${bh}</div>
+ ${rec.notes?`<div class="box"><strong>Catatan:</strong><br>${rec.notes}</div>`:''}
+ <div class="foot">Mohon kirimkan bukti pembayaran melalui WhatsApp atau DM Instagram kami. Terima kasih!</div>
+ </body></html>`;
+ const w=window.open('','_blank');
+ w.document.write(html); w.document.close();
+ setTimeout(()=>w.print(),300);
+}
+
+/* ============ FINANCIAL TAB ============ */
+function renderFinancial(){
+ const st=document.getElementById('fin-status').value;
+ const s=(document.getElementById('fin-search').value||'').toLowerCase();
+ let rows=[...invoices];
+ if(st) rows=rows.filter(i=>i.status===st);
+ if(s) rows=rows.filter(i=>(i.invoice_number||'').toLowerCase().includes(s)||(i.owner_name||'').toLowerCase().includes(s));
+ const unpaid=invoices.filter(i=>i.status==='unpaid').reduce((a,b)=>a+(b.total||0),0);
+ const paid=invoices.filter(i=>i.status==='paid').reduce((a,b)=>a+(b.total||0),0);
+ document.getElementById('fin-totals').innerHTML=
+ `<div class="badge bm" style="padding:6px 12px;font-size:12px">Unpaid: ${fmtRp(unpaid)}</div>`+
+ `<div class="badge bs" style="padding:6px 12px;font-size:12px">Paid: ${fmtRp(paid)}</div>`+
+ `<div class="badge bs" style="padding:6px 12px;font-size:12px">Total invoices: ${invoices.length}</div>`;
+ const tb=document.getElementById('fin-body');
+ if(!rows.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted)">No invoices.</td></tr>';return}
+ tb.innerHTML=rows.map(i=>{
+ const dogNames=(i.dogs||[]).map(d=>d.name).join(', ');
+ return `<tr>
+ <td><span class="id-pill">${esc(i.invoice_number)}</span></td>
+ <td>${i.invoice_date?fmtD(i.invoice_date):'-'}</td>
+ <td><strong>${esc(i.owner_name)}</strong> <span style="font-size:11px;color:var(--muted)">${esc(i.customer_code||'')}</span></td>
+ <td style="font-size:12px">${esc(dogNames)}</td>
+ <td><strong>${fmtRp(i.total)}</strong></td>
+ <td><span class="badge ${i.status==='paid'?'bs':'bm'}">${i.status}</span></td>
+ <td><div class="row-actions">
+ <button class="icon-btn ${i.status==='paid'?'':'view'}" onclick="toggleInvStatus('${i.id}','${i.status==='paid'?'unpaid':'paid'}')">${i.status==='paid'?'Mark unpaid':'Mark paid'}</button>
+ <button class="icon-btn del" onclick="delInvoice('${i.id}','${esc(i.invoice_number)}')">Del</button>
+ </div></td>
+ </tr>`;
+ }).join('');
+}
+
+async function toggleInvStatus(id,newSt){
+ await db.from('invoices').update({status:newSt}).eq('id',id);
+ await loadAll(); renderFinancial();
+}
+
+async function delInvoice(id,num){
+ if(!confirm(`Delete invoice ${num}?`)) return;
+ await db.from('invoices').delete().eq('id',id);
+ await loadAll(); renderFinancial();
+}
+
+function openBankSettings(){
+ document.getElementById('bf-name').value=bankSettings.bank_name||'';
+ document.getElementById('bf-account').value=bankSettings.bank_account||'';
+ document.getElementById('bf-holder').value=bankSettings.bank_holder||'';
+ om('ov-bank');
+}
+
+async function saveBankSettings(){
+ const p={
+ id:1,
+ bank_name:document.getElementById('bf-name').value.trim(),
+ bank_account:document.getElementById('bf-account').value.trim(),
+ bank_holder:document.getElementById('bf-holder').value.trim(),
+ updated_at:new Date().toISOString()
+ };
+ await db.from('business_settings').upsert(p);
+ cm('ov-bank'); await loadAll();
 }
 
 loadAll();
