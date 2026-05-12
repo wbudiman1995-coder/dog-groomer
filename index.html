@@ -1621,35 +1621,36 @@ function loadInvFromToday(){
  const cid=custIds[0];
  const c=custs.find(x=>x.id===cid);
  if(!c){alert('Customer tidak ditemukan.');return}
- // Set customer
+ // Reset but keep customer & populate dogs first
  resetInvoice();
- const custSel=document.getElementById('inv-customer');
- custSel.value=cid;
- onInvCustomerChange();
- // Auto-select dogs from today's appts
+ invSelectedCust=c;
+ invSelectedDogs=[];
+ invDogServices={};
+ invAdvanceDogs={};
+ // Populate from appointments
+ custMap[cid].appts.forEach(a=>{
+  const did=a.dog_id;
+  const d=dogs.find(x=>x.id===did);
+  if(!d) return;
+  invSelectedDogs.push(did);
+  invDogServices[did]={services:{'Basic Grooming':{checked:true,price:priceFor('Basic Grooming',d?.size)}}};
+  invAdvanceDogs[did]={sessions:1,service_type:'Basic Grooming',disc_type:'percent',disc_value:0,price_per_session:priceFor('Basic Grooming',d?.size)};
+ });
+ // Now update UI
+ document.getElementById('inv-customer').value=cid;
+ renderInvDogServices();
+ // Mark chips
  setTimeout(()=>{
-  custMap[cid].appts.forEach(a=>{
-   const did=a.dog_id;
-   const d=dogs.find(x=>x.id===did);
-   // Add to selection arrays first
-   if(!invSelectedDogs.includes(did)) invSelectedDogs.push(did);
-   if(!invDogServices[did]) invDogServices[did]={services:{'Basic Grooming':{checked:true,price:priceFor('Basic Grooming',d?.size)}}};
-   if(!invAdvanceDogs[did]) invAdvanceDogs[did]={sessions:1,service_type:'Basic Grooming',disc_type:'percent',disc_value:0,price_per_session:priceFor('Basic Grooming',d?.size)};
-  });
-  renderInvDogServices();
-  // Mark chips as selected
   custMap[cid].appts.forEach(a=>{
    const chip=document.querySelector(`.chip[data-id="${a.dog_id}"]`);
    if(chip) chip.classList.add('on');
   });
-  // Set groomer
   const g=custMap[cid].groomer_id;
   if(g) document.getElementById('inv-groomer').value=g;
-  // Set date to today
   document.getElementById('inv-date').value=todayStr;
   document.getElementById('inv-first-date').value=todayStr;
   if(custIds.length>1) alert(`Loaded ${c.owner}'s appointments. ${custIds.length-1} other customer(s) today — switch customer manually to invoice them.`);
- },120);
+ },50);
 }
 
 function onInvCustomerChange(){
