@@ -327,7 +327,6 @@ tbody tr:hover{background:var(--subtle)}
  </div>
  <div class="fg"><label>Or type manually</label><input id="inv-groomer-manual" placeholder="Nama groomer" oninput="renderInvoicePreview()"/></div>
  <div class="fg"><label>Tanggal invoice</label><input type="date" id="inv-date" onchange="renderInvoicePreview()"/></div>
- <div class="fg"><label>Tanggal sesi pertama</label><input type="date" id="inv-first-date"/></div>
  </div>
  </div>
 
@@ -1592,8 +1591,7 @@ function resetInvoice(){
  document.getElementById('inv-dogs-services').innerHTML='';
  document.getElementById('inv-groomer').value='';
  document.getElementById('inv-groomer-manual').value='';
- const invSessions=document.getElementById('inv-sessions');
- if(invSessions) invSessions.value=1;
+ document.getElementById('inv-sessions').value=1;
  document.getElementById('inv-interval').value='14';
  document.getElementById('inv-disc-type').value='percent';
  document.getElementById('inv-disc-value').value=0;
@@ -1622,36 +1620,31 @@ function loadInvFromToday(){
  const cid=custIds[0];
  const c=custs.find(x=>x.id===cid);
  if(!c){alert('Customer tidak ditemukan.');return}
- // Reset but keep customer & populate dogs first
+ // Set customer
  resetInvoice();
- invSelectedCust=c;
- invSelectedDogs=[];
- invDogServices={};
- invAdvanceDogs={};
- // Populate from appointments
- custMap[cid].appts.forEach(a=>{
-  const did=a.dog_id;
-  const d=dogs.find(x=>x.id===did);
-  if(!d) return;
-  invSelectedDogs.push(did);
-  invDogServices[did]={services:{'Basic Grooming':{checked:true,price:priceFor('Basic Grooming',d?.size)}}};
-  invAdvanceDogs[did]={sessions:1,service_type:'Basic Grooming',disc_type:'percent',disc_value:0,price_per_session:priceFor('Basic Grooming',d?.size)};
- });
- // Now update UI
- document.getElementById('inv-customer').value=cid;
- renderInvDogServices();
- // Mark chips
+ const custSel=document.getElementById('inv-customer');
+ custSel.value=cid;
+ onInvCustomerChange();
+ // Auto-select dogs from today's appts
  setTimeout(()=>{
   custMap[cid].appts.forEach(a=>{
    const chip=document.querySelector(`.chip[data-id="${a.dog_id}"]`);
-   if(chip) chip.classList.add('on');
+   if(chip&&!chip.classList.contains('on')){
+    chip.classList.add('on');
+    const d=dogs.find(x=>x.id===a.dog_id);
+    if(!invDogServices[a.dog_id]) invDogServices[a.dog_id]={services:{'Basic Grooming':{checked:true,price:priceFor('Basic Grooming',d?.size)}}};
+    invSelectedDogs.push(a.dog_id);
+   }
   });
+  renderInvDogServices();
+  // Set groomer
   const g=custMap[cid].groomer_id;
   if(g) document.getElementById('inv-groomer').value=g;
+  // Set date to today
   document.getElementById('inv-date').value=todayStr;
   document.getElementById('inv-first-date').value=todayStr;
   if(custIds.length>1) alert(`Loaded ${c.owner}'s appointments. ${custIds.length-1} other customer(s) today — switch customer manually to invoice them.`);
- },50);
+ },100);
 }
 
 function onInvCustomerChange(){
@@ -2604,25 +2597,39 @@ function openInvApptPicker(){
 }
 
 function loadInvFromAppointment(apptId){
- const a=appts.find(x=>x.id===apptId);if(!a)return;
- const d=dogs.find(x=>x.id===a.dog_id);if(!d)return;
- const cid=d.customer_id;if(!cid)return;
- resetInvoice();
- document.getElementById('inv-customer').value=cid;
- onInvCustomerChange();
- if(a.groomer_id)setTimeout(()=>{document.getElementById('inv-groomer').value=a.groomer_id;},80);
- document.getElementById('inv-date').value=a.appt_date;
- document.getElementById('inv-first-date').value=a.appt_date;
- setTimeout(()=>{
-  const chip=document.querySelector('.chip[data-id="'+d.id+'"]');
-  if(chip&&!chip.classList.contains('on')){
-   chip.classList.add('on');
-   if(!invDogServices[d.id])invDogServices[d.id]={services:{'Basic Grooming':{checked:true,price:priceFor('Basic Grooming',d?.size)}}};
-   invSelectedDogs.push(d.id);
-   renderInvDogServices();
-  }
- },160);
+ const a=appts.find(x=>x.id===apptId);if(!a){alert('Appointment not found');return;}
+ const d=dogs.find(x=>x.id===a.dog_id);if(!d){alert('Dog not found');return;}
+ const cid=d.customer_id;if(!cid){alert('Customer not linked');return;}
+ // Close picker first
  cm('ov-inv-appt-picker');
+ // Reset and set customer
+ resetInvoice();
+ const custSel=document.getElementById('inv-customer');
+ if(custSel){custSel.value=cid;onInvCustomerChange();}
+ // Set dates
+ const dateEl=document.getElementById('inv-date');
+ if(dateEl) dateEl.value=a.appt_date;
+ const firstEl=document.getElementById('inv-first-date');
+ if(firstEl) firstEl.value=a.appt_date;
+ // Set groomer
+ if(a.groomer_id){
+  const grEl=document.getElementById('inv-groomer');
+  if(grEl) grEl.value=a.groomer_id;
+ }
+ // Auto-select the dog — use requestAnimationFrame to wait for chips to render
+ requestAnimationFrame(()=>{
+  requestAnimationFrame(()=>{
+   const chip=document.querySelector(`.chip[data-id="${d.id}"]`);
+   if(chip&&!chip.classList.contains('on')){
+    chip.classList.add('on');
+    if(!invDogServices[d.id]){
+     invDogServices[d.id]={services:{'Basic Grooming':{checked:true,price:priceFor('Basic Grooming',d.size)}}};
+    }
+    if(!invSelectedDogs.includes(d.id)) invSelectedDogs.push(d.id);
+    renderInvDogServices();
+   }
+  });
+ });
 }
 
 loadAll().then(()=>autoLogPastAppointments());
