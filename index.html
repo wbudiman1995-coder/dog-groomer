@@ -294,10 +294,10 @@ tbody tr:hover{background:var(--subtle)}
  <div class="det-lbl">3. Groomer & tanggal</div>
  <div class="form-grid">
  <div class="fg"><label>Groomer</label>
- <select id="inv-groomer"><option value="">Pilih groomer…</option></select>
+ <select id="inv-groomer" onchange="renderInvoicePreview()"><option value="">Pilih groomer…</option></select>
  </div>
- <div class="fg"><label>Or type manually</label><input id="inv-groomer-manual" placeholder="Nama groomer"/></div>
- <div class="fg"><label>Tanggal invoice</label><input type="date" id="inv-date"/></div>
+ <div class="fg"><label>Or type manually</label><input id="inv-groomer-manual" placeholder="Nama groomer" oninput="renderInvoicePreview()"/></div>
+ <div class="fg"><label>Tanggal invoice</label><input type="date" id="inv-date" onchange="renderInvoicePreview()"/></div>
  <div class="fg"><label>Tanggal sesi pertama</label><input type="date" id="inv-first-date"/></div>
  </div>
  </div>
@@ -339,6 +339,16 @@ tbody tr:hover{background:var(--subtle)}
  </div>
 
  <div class="sum-bar" id="inv-summary">Subtotal: Rp 0 · Total: Rp 0</div>
+
+ <div class="card" style="margin-top:1rem;margin-bottom:1rem;overflow:hidden">
+  <div style="background:var(--subtle);border-bottom:1px solid var(--border);padding:8px 14px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:flex;justify-content:space-between;align-items:center">
+   <span>Preview Invoice</span>
+   <span style="font-weight:400;font-size:10px">Live preview — updates otomatis</span>
+  </div>
+  <div id="inv-preview" style="padding:32px 36px;background:#fff;font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#1a1a1a;min-height:200px">
+   <div style="color:var(--muted);font-size:12px;text-align:center;padding:2rem">Pilih customer dan dog untuk melihat preview.</div>
+  </div>
+ </div>
 
  <div class="form-actions" style="margin-top:1rem">
  <button class="btn btn-p" onclick="saveInvoice()">Simpan invoice</button>
@@ -1311,6 +1321,7 @@ function recalcInvoice(){
  document.getElementById('inv-summary').innerHTML=
  `<span>Per sesi: ${fmtRp(t.perSession)} × ${t.sessions}</span>`+
  `<span>Subtotal: ${fmtRp(t.subtotal)}${t.discAmount?' · Diskon: -'+fmtRp(t.discAmount):''} · <strong>Total: ${fmtRp(t.total)}</strong></span>`;
+ renderInvoicePreview();
 }
 
 function buildInvoiceRecord(){
@@ -1331,8 +1342,9 @@ function buildInvoiceRecord(){
  });
  const now=new Date();
  const ym=`${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
- const monthCount=invoices.filter(i=>(i.invoice_number||'').includes(`INV-${ym}`)).length+1;
- const invNum=`INV-${ym}-${String(monthCount).padStart(4,'0')}`;
+ const custCode=invSelectedCust.customer_code||'CUST-000';
+ const custInvCount=invoices.filter(i=>i.customer_code===invSelectedCust.customer_code).length+1;
+ const invNum=`${custCode}-${custInvCount}`;
  return {
  invoice_number:invNum,
  customer_id:invSelectedCust.id,
@@ -1355,6 +1367,7 @@ function buildInvoiceRecord(){
 
 async function saveInvoice(){
  const rec=buildInvoiceRecord(); if(!rec) return;
+ if(!confirm(`Simpan invoice ${rec.invoice_number} untuk ${rec.owner_name}?\nTotal: ${fmtRp(rec.total)}`)) return;
  const {error}=await db.from('invoices').insert(rec);
  if(error){alert('Error: '+error.message);return}
  alert('Invoice tersimpan: '+rec.invoice_number);
@@ -1367,6 +1380,7 @@ async function saveInvoiceAndAppts(){
  if(!grId){alert('Pilih groomer dari list untuk save ke kalender');return}
  const firstDate=document.getElementById('inv-first-date').value;
  if(!firstDate){alert('Pilih tanggal sesi pertama');return}
+ if(!confirm(`Simpan invoice ${rec.invoice_number} + ${rec.sessions} sesi ke kalender?\nTotal: ${fmtRp(rec.total)}`)) return;
  const interval=document.getElementById('inv-interval').value;
  const customDays=parseInt(document.getElementById('inv-custom-days').value)||14;
  const intervalDays=interval==='custom'?customDays:(interval==='none'?0:parseInt(interval));
@@ -1399,93 +1413,95 @@ async function saveInvoiceAndAppts(){
  await loadAll();
 }
 
-function downloadInvoicePDF(){
- const rec=buildInvoiceRecord(); if(!rec) return;
- const bn=bankSettings.bank_name||'BCA';
- const ba=bankSettings.bank_account||'770055777787';
- const bh=bankSettings.bank_holder||'Xavier Fidelia Ali';
- // HP-XXX number from INV-YYYYMM-XXXX → strip leading zeros
- const hpNum='#HP-'+((rec.invoice_number||'').split('-').pop()||'001').replace(/^0+/,'').padStart(3,'0');
- const invDate=new Date(rec.invoice_date);
- const dueDate=new Date(invDate); dueDate.setDate(dueDate.getDate()+1);
- const fmtID=(d)=>new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
- const cust=custs.find(c=>c.id===rec.customer_id)||{};
- const fullAddr=[cust.address,cust.kecamatan,cust.kota].filter(Boolean).join(', ');
- // Build service rows per dog with per-dog discount
- let serviceRows='';
- rec.dogs.forEach(d=>{
+function buildServiceRows(dogsData){
+ let rows='';
+ dogsData.forEach(d=>{
   const dogSubtotal=d.services.reduce((a,s)=>a+s.price,0);
   let dogDisc=0;
-  if(d.disc_type==='percent') dogDisc=Math.round(dogSubtotal*d.disc_value/100);
+  if(d.disc_type==='percent') dogDisc=Math.round(dogSubtotal*(d.disc_value||0)/100);
   else if(d.disc_type==='fixed') dogDisc=Math.round(d.disc_value||0);
   const isFree=dogSubtotal===0||dogDisc>=dogSubtotal;
+  const discLabel=d.disc_type==='percent'&&d.disc_value?` (${d.disc_value}% off)`:(dogDisc>0?` (diskon ${fmtRp(dogDisc)})`:'');
   d.services.forEach((s,i)=>{
    const isFirst=i===0;
-   const label=d.services.length>1?s.name:`${s.name}`;
-   if(isFree){
-    serviceRows+=`<tr><td class="svc-name"><strong>${isFirst?d.name+' — ':''}</strong>${label}<div class="svc-sub">Mandi, blow dry, trim, telinga &amp; kuku</div></td><td class="svc-qty">1</td><td class="svc-rate">FREE</td><td class="svc-amt">FREE</td></tr>`;
+   const rate=isFree?'FREE':(s.price===0?'Rp 0':fmtRp(s.price));
+   const amt=isFree?'FREE':(s.price===0?'Rp 0':fmtRp(s.price));
+   if(isFirst){
+    rows+=`<tr style="border-top:2px solid #f0f0f0">
+     <td class="svc-name" style="padding-top:14px"><strong>${d.name} — ${s.name}${discLabel}</strong><div class="svc-sub">Mandi, blow dry, trim, telinga &amp; kuku</div></td>
+     <td class="svc-qty" style="padding-top:14px">1</td>
+     <td class="svc-rate" style="padding-top:14px">${rate}</td>
+     <td class="svc-amt" style="padding-top:14px">${amt}</td></tr>`;
    } else {
-    const discLabel=d.disc_type==='percent'?` (${d.disc_value}% off)`:(dogDisc>0?` (-${fmtRp(dogDisc)})`:'');
-    serviceRows+=`<tr><td class="svc-name"><strong>${isFirst?d.name+' — ':''}</strong>${label}${isFirst&&discLabel?discLabel:''}<div class="svc-sub">Mandi, blow dry, trim, telinga &amp; kuku</div></td><td class="svc-qty">1</td><td class="svc-rate">${fmtRp(s.price)}</td><td class="svc-amt">${fmtRp(s.price)}</td></tr>`;
+    rows+=`<tr>
+     <td class="svc-name" style="padding-left:20px;color:#555;font-size:12px">${s.name}</td>
+     <td class="svc-qty">1</td>
+     <td class="svc-rate">${rate}</td>
+     <td class="svc-amt">${amt}</td></tr>`;
    }
   });
  });
- const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${hpNum}</title>
-<style>
+ return rows;
+}
+
+function buildInvoiceHTML(rec, custObj, bankObj, forPrint){
+ const bn=bankObj.bank_name||'BCA';
+ const ba=bankObj.bank_account||'770055777787';
+ const bh=bankObj.bank_holder||'Xavier Fidelia Ali';
+ const invDate=new Date(rec.invoice_date+'T00:00:00');
+ const dueDate=new Date(invDate); dueDate.setDate(dueDate.getDate()+1);
+ const fmtID=(d)=>new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
+ const fullAddr=[custObj.address,custObj.kecamatan,custObj.kota].filter(Boolean).join(', ');
+ const serviceRows=buildServiceRows(rec.dogs);
+ const pad=forPrint?'48px 52px':'28px 32px';
+ return `<style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;background:#fff;padding:48px 52px;max-width:720px;margin:0 auto;font-size:13px}
-.top-bar{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:36px}
-.logo{font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#1a1a1a}
-.logo span{color:#e07b39}
-.logo-paw{font-size:10px;display:block;font-weight:400;color:#888;margin-top:2px;letter-spacing:.5px;text-transform:uppercase}
-.inv-label{font-size:11px;font-weight:600;letter-spacing:2px;color:#aaa;text-align:right;margin-bottom:4px}
-.meta-row{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid #e8e8e8;border-bottom:1px solid #e8e8e8;padding:14px 0;margin-bottom:32px}
-.meta-item{padding:0 16px;border-right:1px solid #eee}
+.inv-wrap{font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;background:#fff;padding:${pad};max-width:720px;margin:0 auto;font-size:13px}
+.top-bar{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px}
+.logo-text{font-size:20px;font-weight:900;letter-spacing:-0.5px;color:#1a1a1a;line-height:1}
+.logo-text span{color:#e07b39}
+.inv-label{font-size:11px;font-weight:600;letter-spacing:2px;color:#aaa;text-align:right}
+.meta-row{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #e8e8e8;border-bottom:1px solid #e8e8e8;padding:12px 0;margin-bottom:28px}
+.meta-item{padding:0 14px;border-right:1px solid #eee}
 .meta-item:first-child{padding-left:0}
 .meta-item:last-child{border-right:none}
-.meta-lbl{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;margin-bottom:4px}
+.meta-lbl{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;margin-bottom:3px}
 .meta-val{font-size:13px;font-weight:600;color:#1a1a1a}
-.bill-row{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:28px}
-.bill-lbl{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;margin-bottom:8px}
-.bill-name{font-size:16px;font-weight:700;margin-bottom:4px}
+.bill-row{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-bottom:24px}
+.bill-lbl{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;margin-bottom:7px}
+.bill-name{font-size:15px;font-weight:700;margin-bottom:3px}
 .bill-addr{font-size:12px;color:#555;line-height:1.6}
-.svc-table{width:100%;border-collapse:collapse;margin-bottom:24px}
+.svc-table{width:100%;border-collapse:collapse;margin-bottom:20px}
 .svc-table thead tr{border-bottom:1px solid #e8e8e8}
-.svc-table th{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;padding:8px 12px;text-align:left}
-.svc-table th.r{text-align:right}
-.svc-table td{padding:12px 12px;vertical-align:top;border-bottom:1px solid #f5f5f5}
-.svc-name{width:55%}.svc-qty{width:10%;text-align:center}.svc-rate{width:15%;text-align:right}.svc-amt{width:20%;text-align:right;font-weight:700}
-.svc-sub{font-size:10px;color:#aaa;margin-top:2px;font-weight:400}
-.svc-table td.svc-rate,.svc-table td.svc-amt{color:#aaa}
-.svc-table td.svc-amt{color:#1a1a1a}
-.totals-wrap{display:flex;justify-content:flex-end;margin-bottom:32px}
-.totals-box{min-width:260px}
-.tot-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#555}
-.tot-row.final{border-top:1px solid #e8e8e8;margin-top:6px;padding-top:10px;font-size:16px;font-weight:700;color:#1a1a1a}
-.tot-row.final span:last-child{color:#e07b39}
-.pay-section{border-top:1px solid #e8e8e8;padding-top:20px;display:flex;justify-content:space-between;align-items:flex-end}
-.pay-lbl{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;margin-bottom:6px}
-.pay-bank{font-size:12px;color:#888;margin-bottom:4px}
-.pay-acc{font-size:24px;font-weight:700;color:#e07b39;letter-spacing:1px;margin-bottom:4px}
+.svc-table th{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;padding:7px 10px;text-align:left}
+.svc-table td{padding:10px 10px;vertical-align:top}
+.svc-name{width:55%}.svc-qty{width:10%;text-align:center}.svc-rate{width:17%;text-align:right;color:#aaa}.svc-amt{width:18%;text-align:right;font-weight:700;color:#1a1a1a}
+.svc-sub{font-size:10px;color:#bbb;margin-top:2px;font-weight:400}
+.totals-wrap{display:flex;justify-content:flex-end;margin-bottom:28px}
+.totals-box{min-width:240px}
+.tot-row{display:flex;justify-content:space-between;padding:3px 0;font-size:13px;color:#555}
+.tot-final{border-top:1px solid #e8e8e8;margin-top:5px;padding-top:9px;font-size:15px;font-weight:700;color:#1a1a1a;display:flex;justify-content:space-between}
+.tot-final span:last-child{color:#e07b39}
+.pay-section{border-top:1px solid #e8e8e8;padding-top:18px;display:flex;justify-content:space-between;align-items:flex-end}
+.pay-lbl{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;margin-bottom:5px}
+.pay-bank{font-size:12px;color:#888;margin-bottom:3px}
+.pay-acc{font-size:22px;font-weight:700;color:#e07b39;letter-spacing:1px;margin-bottom:3px}
 .pay-note{font-size:11px;color:#aaa;line-height:1.5}
-.pay-due-lbl{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;margin-bottom:4px;text-align:right}
-.pay-due-val{font-size:20px;font-weight:700;color:#aaa;text-align:right}
-.footer{margin-top:36px;border-top:1px solid #f0f0f0;padding-top:16px;display:flex;justify-content:space-between;align-items:center}
-.footer-brand{font-size:12px;font-weight:700;color:#e07b39}
-.footer-brand span{color:#1a1a1a}
-.footer-thanks{font-size:11px;color:#aaa}
-@media print{body{padding:24px 28px}}
-</style></head><body>
+.pay-due-lbl{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;margin-bottom:3px;text-align:right}
+.pay-due-val{font-size:18px;font-weight:700;color:#aaa;text-align:right}
+.inv-footer{margin-top:28px;border-top:1px solid #f0f0f0;padding-top:14px;display:flex;justify-content:space-between;align-items:center}
+.inv-footer-brand{font-size:12px;font-weight:700;color:#e07b39}
+.inv-footer-brand span{color:#1a1a1a}
+.inv-footer-thanks{font-size:11px;color:#aaa}
+${forPrint?'@media print{.inv-wrap{padding:24px 28px}}':''}
+</style>
+<div class="inv-wrap">
 <div class="top-bar">
- <div>
-  <div class="logo">HOME<br><span>PAW</span></div>
- </div>
- <div style="text-align:right">
-  <div class="inv-label">+ INVOICE</div>
- </div>
+ <div class="logo-text">HOME<br><span>PAW</span></div>
+ <div class="inv-label">+ INVOICE</div>
 </div>
 <div class="meta-row">
- <div class="meta-item"><div class="meta-lbl">Invoice No.</div><div class="meta-val">${hpNum}</div></div>
+ <div class="meta-item"><div class="meta-lbl">Invoice No.</div><div class="meta-val">${rec.invoice_number}</div></div>
  <div class="meta-item"><div class="meta-lbl">Issue Date</div><div class="meta-val">${fmtID(invDate)}</div></div>
  <div class="meta-item"><div class="meta-lbl">Due Date</div><div class="meta-val">${fmtID(dueDate)}</div></div>
  <div class="meta-item"><div class="meta-lbl">Groomer</div><div class="meta-val">${rec.groomer_name||'-'}</div></div>
@@ -1494,21 +1510,20 @@ body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;background:#fff
  <div>
   <div class="bill-lbl">Billed To</div>
   <div class="bill-name">${rec.owner_name}</div>
-  <div class="bill-addr">${fullAddr||cust.address||'-'}<br>${cust.wa?'+62'+cust.wa.replace(/^0/,''):''}</div>
+  <div class="bill-addr">${fullAddr||'-'}${custObj.wa?'<br>+62'+custObj.wa.replace(/^0/,''):''}</div>
  </div>
  <div>
   <div class="bill-lbl">Dog Info</div>
   <div class="bill-name">${rec.dogs.map(d=>d.name).join(' &amp; ')}</div>
   <div class="bill-addr">
    Breed: ${rec.dogs.map(d=>d.breed||'?').join(' &amp; ')}<br>
-   Size: ${[...new Set(rec.dogs.map(d=>d.size||'?'))].join(' / ')}<br>
-   ${rec.sessions>1?`Sesi: ${rec.sessions}x`:''}
+   Size: ${[...new Set(rec.dogs.map(d=>d.size||'?'))].join(' / ')}${rec.sessions>1?'<br>Sesi: '+rec.sessions+'x':''}
   </div>
  </div>
 </div>
 <table class="svc-table">
  <thead><tr>
-  <th>Service</th><th class="r" style="text-align:center">QTY</th><th class="r">Rate</th><th class="r">Amount</th>
+  <th>Service</th><th style="text-align:center">QTY</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th>
  </tr></thead>
  <tbody>${serviceRows}</tbody>
 </table>
@@ -1516,7 +1531,7 @@ body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;background:#fff
  <div class="totals-box">
   <div class="tot-row"><span>Subtotal</span><span>${fmtRp(rec.subtotal)}</span></div>
   ${rec.discount_amount?`<div class="tot-row"><span>Diskon</span><span>— ${fmtRp(rec.discount_amount)}</span></div>`:''}
-  <div class="tot-row final"><span>Total</span><span>${fmtRp(rec.total)}</span></div>
+  <div class="tot-final"><span>Total</span><span>${fmtRp(rec.total)}</span></div>
  </div>
 </div>
 <div class="pay-section">
@@ -1531,11 +1546,30 @@ body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;background:#fff
   <div class="pay-due-val">${fmtRp(rec.total)}</div>
  </div>
 </div>
-<div class="footer">
- <div class="footer-brand">HomePaw <span>— Dog Home Grooming · Jakarta</span></div>
- <div class="footer-thanks">Thank you for trusting HomePaw!</div>
+<div class="inv-footer">
+ <div class="inv-footer-brand">HomePaw <span>— Dog Home Grooming · Jakarta</span></div>
+ <div class="inv-footer-thanks">Thank you for trusting HomePaw!</div>
 </div>
-</body></html>`;
+</div>`;
+}
+
+function renderInvoicePreview(){
+ const el=document.getElementById('inv-preview'); if(!el) return;
+ if(!invSelectedCust||!invSelectedDogs.length){
+  el.innerHTML='<div style="color:#9ca3af;font-size:12px;text-align:center;padding:2rem">Pilih customer dan dog untuk melihat preview.</div>';
+  return;
+ }
+ const rec=buildInvoiceRecord();
+ if(!rec){el.innerHTML='';return}
+ const cust=custs.find(c=>c.id===rec.customer_id)||{};
+ el.innerHTML=buildInvoiceHTML(rec,cust,bankSettings,false);
+}
+
+function downloadInvoicePDF(){
+ const rec=buildInvoiceRecord(); if(!rec) return;
+ const cust=custs.find(c=>c.id===rec.customer_id)||{};
+ const body=buildInvoiceHTML(rec,cust,bankSettings,true);
+ const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${rec.invoice_number}</title></head><body>${body}</body></html>`;
  const w=window.open('','_blank');
  w.document.write(html); w.document.close();
  setTimeout(()=>w.print(),300);
