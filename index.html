@@ -104,40 +104,41 @@ tbody tr:hover{background:var(--subtle)}
 .filter-bar{display:flex;gap:8px;margin-bottom:.9rem;flex-wrap:wrap;align-items:center}
 .filter-bar input,.filter-bar select{padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface)}
 
-/* CALENDAR - Google Calendar style: time rows × groomer columns */
-.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+/* CALENDAR */
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
 .cal-title{font-size:15px;font-weight:600}
-.cal-outer{overflow:auto;border:1px solid var(--border);border-radius:var(--rl);background:var(--surface);max-height:72vh;position:relative}
-.cal-grid-wrap{display:grid;min-width:700px}
-/* header row */
-.cal-header{display:grid;position:sticky;top:0;z-index:10;background:var(--surface);border-bottom:2px solid var(--border)}
-.cal-corner{background:var(--subtle);border-right:1px solid var(--border);padding:8px 6px;font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;text-align:center;min-width:54px}
-.cal-col-hdr{background:var(--subtle);border-right:1px solid var(--border);padding:7px 8px;text-align:center;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;min-width:160px}
-.cal-col-hdr.today-h{background:var(--green-lt);color:var(--green-dk)}
-.cal-col-hdr .day-num{font-size:18px;font-weight:700;display:block;margin-top:1px}
-/* body */
-.cal-body{display:grid;position:relative}
-.cal-time-col{border-right:1px solid var(--border);background:var(--subtle)}
-.cal-time-slot{height:44px;border-bottom:1px solid #f0f0f0;padding:2px 6px 0;font-size:9px;color:var(--muted);font-weight:600;display:flex;align-items:flex-start;justify-content:flex-end;white-space:nowrap}
-.cal-time-slot.half{border-bottom:1px dashed #f0f0f0}
-/* day column per groomer */
-.cal-day-col{border-right:1px solid var(--border);position:relative}
-.cal-slot{height:44px;border-bottom:1px solid #f4f4f4;cursor:pointer;transition:background .1s;position:relative}
-.cal-slot.half{border-bottom:1px dashed #f4f4f4}
-.cal-slot:hover{background:rgba(22,163,74,.06)}
-.cal-slot.today{background:rgba(22,163,74,.02)}
-/* appt blocks */
-.appt-block{position:absolute;left:3px;right:3px;border-radius:5px;padding:3px 6px;font-size:11px;cursor:grab;overflow:hidden;z-index:2;border-left:3px solid;line-height:1.3;box-shadow:0 1px 3px rgba(0,0,0,.1)}
-.appt-block:active{cursor:grabbing;opacity:.8;z-index:20}
-.appt-block.dragging{opacity:.35}
-.appt-block .ab-time{font-size:9px;font-weight:700;opacity:.8}
-.appt-block .ab-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.appt-block .ab-svc{font-size:10px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* day picker strip (top of calendar section) */
-.day-strip{display:flex;gap:4px;margin-bottom:.75rem;overflow-x:auto;padding-bottom:4px}
-.day-btn{padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap;transition:all .12s;flex-shrink:0}
+.day-strip{display:flex;gap:4px;margin-bottom:.6rem;overflow-x:auto;padding-bottom:2px}
+.day-btn{padding:6px 13px;border-radius:6px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap;transition:all .12s;flex-shrink:0}
 .day-btn.active{background:var(--green);color:#fff;border-color:var(--green)}
 .day-btn.today-btn{border-color:var(--green);color:var(--green-dk)}
+.cal-outer{overflow:auto;border:1px solid var(--border);border-radius:var(--rl);background:var(--surface);max-height:70vh}
+.tsgrid{display:grid;min-width:500px}
+.ts-header{display:grid;position:sticky;top:0;z-index:10;background:var(--surface);border-bottom:2px solid var(--border)}
+.ts-corner{background:var(--subtle);border-right:1px solid var(--border);padding:8px 4px;font-size:9px;font-weight:600;color:var(--muted);text-align:center;width:50px;min-width:50px}
+.ts-col-hdr{border-right:1px solid var(--border);padding:7px 10px;text-align:center;font-size:11px;font-weight:600;color:var(--muted);min-width:150px}
+.ts-body{display:grid;position:relative}
+.ts-time-col{border-right:1px solid var(--border);background:var(--subtle);width:50px;min-width:50px;position:sticky;left:0;z-index:3}
+.ts-time-lbl{height:44px;border-bottom:1px solid #f0f0f0;padding:3px 5px 0;font-size:9px;color:var(--muted);font-weight:600;display:flex;align-items:flex-start;justify-content:flex-end;white-space:nowrap}
+.ts-time-lbl.half{border-bottom:1px dashed #f0f0f0;color:transparent}
+.ts-gcol{border-right:1px solid var(--border);position:relative;min-width:150px}
+.ts-slot{height:44px;border-bottom:1px solid #f4f4f4;cursor:pointer;position:absolute;left:0;right:0;transition:background .1s}
+.ts-slot:hover{background:rgba(22,163,74,.08)!important}
+.ts-slot.half-slot{border-bottom:1px dashed #f4f4f4}
+.appt-block{position:absolute;left:3px;right:3px;border-radius:5px;padding:3px 7px;font-size:11px;cursor:grab;overflow:hidden;z-index:2;border-left:3px solid;line-height:1.35;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.appt-block:active{cursor:grabbing;opacity:.7}
+.appt-block.dragging{opacity:.3}
+.ab-time{font-size:9px;font-weight:700;opacity:.75}
+.ab-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.ab-svc{font-size:10px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+/* BOOKING WIZARD STEPS */
+.step-dot{width:18px;height:6px;border-radius:3px;transition:background .2s}
+.svc-check-row{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--subtle);border-radius:6px;margin-bottom:5px;cursor:pointer;border:1px solid transparent;transition:all .12s}
+.svc-check-row:hover{background:var(--green-lt);border-color:var(--green-md)}
+.svc-check-row.selected{background:var(--green-lt);border-color:var(--green-md)}
+.slot-btn{padding:6px 4px;font-size:11px;border-radius:5px;border:1px solid var(--border);background:var(--surface);cursor:pointer;transition:all .12s;font-weight:500;text-align:center}
+.slot-btn:hover:not(:disabled){background:var(--green-lt);border-color:var(--green-md)}
+.slot-btn.sel{background:var(--green);color:#fff;border-color:var(--green);font-weight:700}
+.slot-btn.blocked{background:#fee2e2;color:#d1d5db;cursor:not-allowed;border-color:#fca5a5}
 
 /* ROUTE */
 .route-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;margin-bottom:1rem;box-shadow:var(--sh)}
@@ -165,6 +166,15 @@ tbody tr:hover{background:var(--subtle)}
 .stime-v{font-size:13px;font-weight:600;color:var(--green)}
 .stime-d{font-size:10px;color:var(--muted);margin-top:2px}
 .tip{background:var(--green-lt);color:var(--green-dk);border-radius:var(--r);padding:8px 12px;font-size:12px;margin-top:.9rem}
+.rem-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);margin-bottom:1rem;overflow:hidden;box-shadow:var(--sh)}
+.rem-card-hdr{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;background:var(--subtle);border-bottom:1px solid var(--border)}
+.rem-card-name{font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px}
+.rem-card-body{padding:.9rem 1rem}
+.rem-msg{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;font-family:'SF Mono',Menlo,monospace;line-height:1.65;min-height:260px;resize:vertical;background:var(--subtle);color:var(--text)}
+.rem-msg:focus{outline:none;border-color:var(--green);background:#fff}
+.rem-actions{display:flex;gap:7px;margin-top:.75rem;flex-wrap:wrap}
+.btn-wa{background:#25d366;color:#fff;border:none;border-radius:var(--r);padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+.btn-wa:hover{background:#1ebe5d}
 .cal-load-btn{background:var(--blue-lt);border:1px solid #bfdbfe;color:var(--blue-t);border-radius:var(--r);padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-bottom:8px}
 .cal-load-btn:hover{background:#dbeafe}
 .loading{text-align:center;padding:2.5rem;color:var(--muted)}
@@ -191,6 +201,7 @@ tbody tr:hover{background:var(--subtle)}
  <button class="nav-tab" onclick="sw('groomers')" id="tab-groomers">Groomers</button>
  <button class="nav-tab" onclick="sw('invoice')" id="tab-invoice">Invoice</button>
  <button class="nav-tab" onclick="sw('financial')" id="tab-financial">Financial</button>
+ <button class="nav-tab" onclick="sw('reminders')" id="tab-reminders">Reminders</button>
  <button class="nav-tab" onclick="sw('route')" id="tab-route">Route</button>
  </div>
 </nav>
@@ -265,7 +276,7 @@ tbody tr:hover{background:var(--subtle)}
  <button class="btn btn-g btn-sm" onclick="calNext()">Next week</button>
  </div>
  <div class="day-strip" id="day-strip"></div>
- <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Click empty slot to schedule. Drag block to move. Click block to edit.</div>
+ <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Click a time slot to book. Drag appointment block to reschedule. Click block to edit.</div>
  <div class="cal-outer" id="cal-outer" ondragover="onDragOver(event)" ondrop="onDrop(event)"></div>
  </div>
 
@@ -393,6 +404,36 @@ tbody tr:hover{background:var(--subtle)}
  </div>
  </div>
 
+ <div class="sec" id="sec-reminders">
+ <div class="toolbar">
+  <span class="toolbar-title">Groomer reminders</span>
+ </div>
+
+ <!-- Controls -->
+ <div class="card" style="padding:1rem;margin-bottom:1rem">
+  <div class="form-grid">
+   <div class="fg">
+    <label>Tanggal</label>
+    <input type="date" id="rem-date" onchange="generateReminders()"/>
+   </div>
+   <div class="fg">
+    <label>Pickup point (opsional)</label>
+    <input id="rem-pickup" placeholder="e.g. Rumah Mas Xavier, Gg. Macan B4 No.11" oninput="generateReminders()"/>
+   </div>
+   <div class="fg">
+    <label>Pickup time (opsional)</label>
+    <input id="rem-pickup-time" placeholder="e.g. 08:00" oninput="generateReminders()"/>
+   </div>
+   <div class="fg">
+    <label>Catatan tambahan (opsional)</label>
+    <input id="rem-extra-note" placeholder="e.g. Kamis besok kita break ya" oninput="generateReminders()"/>
+   </div>
+  </div>
+ </div>
+
+ <div id="rem-cards"></div>
+ </div>
+
  <div class="sec" id="sec-route">
  <div class="route-box">
  <div class="route-lbl">Who to groom?</div>
@@ -449,74 +490,75 @@ tbody tr:hover{background:var(--subtle)}
  </div>
 </div>
 
-<!-- APPOINTMENT -->
+<!-- APPOINTMENT WIZARD -->
 <div class="overlay" id="ov-appt">
- <div class="modal" style="max-width:520px">
- <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
-  <div class="modal-title" id="appt-title" style="margin:0">Schedule appointment</div>
-  <div style="display:flex;gap:4px" id="appt-steps-bar"></div>
- </div>
-
- <!-- STEP 1: Customer -->
- <div id="appt-step-1">
-  <div class="fg" style="margin-bottom:1rem">
-   <label>Customer *</label>
-   <select id="appt-cust" onchange="onApptCustChange()">
-    <option value="">Select customer…</option>
-   </select>
+ <div class="modal" style="max-width:500px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.1rem">
+   <div class="modal-title" id="appt-title" style="margin:0">Schedule appointment</div>
+   <div style="display:flex;gap:4px" id="wiz-dots"></div>
   </div>
-  <div id="appt-cust-info" style="display:none;background:var(--green-lt);border-radius:var(--r);padding:8px 12px;font-size:12px;margin-bottom:1rem"></div>
-  <div class="form-actions">
-   <button class="btn btn-p" onclick="apptStepNext(2)" id="appt-next-1">Next: Select dogs</button>
-   <button class="btn btn-g" onclick="cm('ov-appt')">Cancel</button>
-  </div>
- </div>
 
- <!-- STEP 2: Dogs + Services -->
- <div id="appt-step-2" style="display:none">
-  <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Select dogs — can pick multiple. Set service per dog.</div>
-  <div id="appt-dog-cards"></div>
-  <div class="form-actions">
-   <button class="btn btn-p" onclick="apptStepNext(3)" id="appt-next-2">Next: Groomer & time</button>
-   <button class="btn btn-g btn-sm" onclick="apptStepNext(1)">Back</button>
-  </div>
- </div>
-
- <!-- STEP 3: Groomer + Date + Time -->
- <div id="appt-step-3" style="display:none">
-  <div class="form-grid" style="margin-bottom:.9rem">
-   <div class="fg">
-    <label>Groomer *</label>
-    <select id="appt-groomer"><option value="">Select groomer…</option></select>
+  <!-- Step 1: Customer -->
+  <div id="wiz-1">
+   <div class="fg" style="margin-bottom:.9rem">
+    <label>Customer *</label>
+    <select id="appt-cust" onchange="onWizCustChange()" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle)">
+     <option value="">Select customer…</option>
+    </select>
    </div>
-   <div class="fg">
-    <label>Date</label>
-    <input type="date" id="appt-date-in"/>
+   <div id="wiz-cust-info" style="display:none;background:var(--green-lt);border-radius:var(--r);padding:8px 12px;font-size:12px;margin-bottom:.9rem"></div>
+   <div class="form-actions">
+    <button class="btn btn-p" onclick="wizNext(2)">Next: Select dogs</button>
+    <button class="btn btn-g" onclick="cm('ov-appt')">Cancel</button>
    </div>
   </div>
-  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Select start time (08:30–18:00)</div>
-  <div id="appt-time-slots" style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;max-height:220px;overflow-y:auto"></div>
-  <div style="margin-top:.75rem;padding:9px 12px;background:var(--subtle);border-radius:var(--r);font-size:12px" id="appt-duration-info"></div>
-  <div class="form-actions" style="margin-top:.75rem">
-   <button class="btn btn-p" onclick="apptStepNext(4)">Next: Confirm</button>
-   <button class="btn btn-g btn-sm" onclick="apptStepNext(2)">Back</button>
-  </div>
- </div>
 
- <!-- STEP 4: Note + Confirm -->
- <div id="appt-step-4" style="display:none">
-  <div id="appt-summary-box" style="background:var(--subtle);border-radius:var(--rl);padding:1rem;margin-bottom:1rem;font-size:13px;line-height:1.8"></div>
-  <div class="fg" style="margin-bottom:1rem">
-   <label>Notes (optional)</label>
-   <input id="appt-note" placeholder="e.g. Lion cut, anxious, brings own shampoo"/>
+  <!-- Step 2: Dogs + Services -->
+  <div id="wiz-2" style="display:none">
+   <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Select dog(s) and set service for each.</div>
+   <div id="wiz-dog-list" style="max-height:340px;overflow-y:auto"></div>
+   <div class="form-actions" style="margin-top:.75rem">
+    <button class="btn btn-p" onclick="wizNext(3)">Next: Groomer & time</button>
+    <button class="btn btn-g btn-sm" onclick="wizNext(1)">Back</button>
+   </div>
   </div>
-  <div class="form-actions">
-   <button class="btn btn-p" onclick="saveAppt()" id="appt-save-btn">Save appointment</button>
-   <button class="btn btn-d btn-sm" id="appt-del-btn" style="display:none" onclick="delApptFromModal()">Delete</button>
-   <button class="btn btn-g btn-sm" onclick="apptStepNext(3)">Back</button>
-   <button class="btn btn-g" onclick="cm('ov-appt')">Cancel</button>
+
+  <!-- Step 3: Groomer + Date + Time slots -->
+  <div id="wiz-3" style="display:none">
+   <div class="form-grid" style="margin-bottom:.75rem">
+    <div class="fg">
+     <label>Groomer *</label>
+     <select id="wiz-groomer" onchange="onWizGroomerChange()" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle)">
+      <option value="">Select groomer…</option>
+     </select>
+    </div>
+    <div class="fg">
+     <label>Date</label>
+     <input type="date" id="wiz-date" onchange="renderWizSlots()"/>
+    </div>
+   </div>
+   <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px" id="wiz-dur-info"></div>
+   <div id="wiz-slots" style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;max-height:200px;overflow-y:auto"></div>
+   <div class="form-actions" style="margin-top:.75rem">
+    <button class="btn btn-p" onclick="wizNext(4)">Next: Confirm</button>
+    <button class="btn btn-g btn-sm" onclick="wizNext(2)">Back</button>
+   </div>
   </div>
- </div>
+
+  <!-- Step 4: Summary + Save -->
+  <div id="wiz-4" style="display:none">
+   <div id="wiz-summary" style="background:var(--subtle);border-radius:var(--rl);padding:1rem;margin-bottom:.9rem;font-size:13px;line-height:1.8"></div>
+   <div class="fg" style="margin-bottom:.9rem">
+    <label>Notes (optional)</label>
+    <input id="appt-note" placeholder="e.g. Lion cut, bring own shampoo"/>
+   </div>
+   <div class="form-actions">
+    <button class="btn btn-p" onclick="saveAppt()" id="appt-save-btn">Save appointment</button>
+    <button class="btn btn-d btn-sm" id="appt-del-btn" style="display:none" onclick="delApptFromModal()">Delete</button>
+    <button class="btn btn-g btn-sm" onclick="wizNext(3)">Back</button>
+    <button class="btn btn-g" onclick="cm('ov-appt')">Cancel</button>
+   </div>
+  </div>
  </div>
 </div>
 
@@ -618,10 +660,11 @@ function sw(tab) {
  document.getElementById('sec-'+tab).classList.add('active');
  if(tab==='database') renderCusts();
  if(tab==='history') renderHist();
- if(tab==='calendar'){calSelectedDay=calSelectedDay||iso(new Date());renderCal()};
+ if(tab==='calendar') renderCal();
  if(tab==='groomers') renderGroomers();
  if(tab==='invoice') initInvoiceTab();
  if(tab==='financial') renderFinancial();
+ if(tab==='reminders') initReminders();
  if(tab==='route') renderChips();
 }
 
@@ -891,496 +934,354 @@ function renderHist(){
 
 /* CALENDAR */
 /* CALENDAR — groomer rows x 7 days, drag-drop appointments */
-function calPrev(){calStart.setDate(calStart.getDate()-7);calSelectedDay=iso(calStart);renderCal()}
-function calNext(){calStart.setDate(calStart.getDate()+7);calSelectedDay=iso(calStart);renderCal()}
-let calSelectedDay=iso(new Date());
+function calPrev(){calStart.setDate(calStart.getDate()-7);calDay=iso(calStart);renderCal()}
+function calNext(){calStart.setDate(calStart.getDate()+7);calDay=iso(calStart);renderCal()}
+let calDay=iso(new Date());
 
-/* DURATION CALC */
+/* ---- DURATION LOGIC ---- */
 const DUR_BASE={XS:60,Small:60,S:60,Medium:90,M:90,Large:120,L:120,XL:120};
-const DUR_EXTRA={Styling:30,Botak:15,Dematting:15,Deshedding:20};
-const SVC_OPTS=['Basic Grooming','Basic + Styling','Basic + Botak','Basic + Dematting','Basic + Deshedding','Wash only','Custom'];
-function calcDuration(svc,size){
- let base=DUR_BASE[size]||60;
+const DUR_ADD={Styling:30,Botak:15,Dematting:15,Deshedding:20};
+const SVC_LIST=['Basic Grooming','Basic + Styling','Basic + Botak','Basic + Dematting','Basic + Deshedding','Wash only'];
+function dogDur(svc,size){
+ const base=DUR_BASE[size]||60;
  let extra=0;
- Object.entries(DUR_EXTRA).forEach(([k,v])=>{if((svc||'').includes(k)) extra+=v});
+ Object.entries(DUR_ADD).forEach(([k,v])=>{if((svc||'').includes(k))extra+=v});
  return base+extra;
 }
-function totalBookingMins(dogServices){
- // dogServices = [{dog_id, svc}]
- return dogServices.reduce((sum,ds)=>{
-  const d=dogs.find(x=>x.id===ds.dog_id);
-  return sum+calcDuration(ds.svc, d?.size||'Medium');
- },0)+(dogServices.length>1?(dogServices.length-1)*5:0);
-}
-function timeToMins(t){const[h,m]=(t||'00:00').split(':').map(Number);return h*60+m}
-function minsToTime(m){return`${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`}
+function t2m(t){const[h,m]=(t||'09:00').split(':').map(Number);return h*60+m}
+function m2t(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}
+const SSTART=8*60+30,SEND=18*60,SSTEP=30,SH=44;
 
-/* TIME SLOTS 08:30-18:00 every 30 min */
-const SLOT_START=8*60+30, SLOT_END=18*60, SLOT_STEP=30;
-function allSlots(){
- const s=[];
- for(let m=SLOT_START;m<SLOT_END;m+=SLOT_STEP) s.push(m);
- return s;
-}
-function isSlotBlocked(groomerId,dateISO,startMins,durMins){
+function isBlocked(gid,date,start,dur,skipId){
  return appts.some(a=>{
-  if(a.appt_date!==dateISO||a.appt_id===apptEditId) return false;
-  const gid=a.groomer_id||a.groomer_id;
-  if(gid!==groomerId) return false;
-  const as=timeToMins(a.appt_time);
-  const ae=as+(a.duration_mins||60);
-  const es=startMins, ee=startMins+durMins;
-  return es<ae && ee>as;
+  if(a.id===skipId||a.appt_date!==date||a.groomer_id!==gid)return false;
+  const as=t2m(a.appt_time),ae=as+(a.duration_mins||60);
+  return start<ae&&(start+dur)>as;
  });
 }
 
-/* CALENDAR RENDER */
+/* ---- CALENDAR RENDER ---- */
 function renderCal(){
  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
- const end=new Date(calStart); end.setDate(end.getDate()+6);
+ const end=new Date(calStart);end.setDate(end.getDate()+6);
  document.getElementById('cal-title').textContent=
- calStart.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+
- end.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
- const today=new Date(); today.setHours(0,0,0,0);
+  calStart.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+
+  end.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+ const today=new Date();today.setHours(0,0,0,0);
  const todayIso=iso(today);
 
- // Build week days
- const weekDays=[];
+ const wdays=[];
  for(let i=0;i<7;i++){
-  const d=new Date(calStart); d.setDate(d.getDate()+i);
-  weekDays.push({date:d,iso:iso(d),label:days[i],dnum:d.getDate(),isToday:d.getTime()===today.getTime()});
+  const d=new Date(calStart);d.setDate(d.getDate()+i);
+  wdays.push({d,iso_:iso(d),lbl:days[i],num:d.getDate(),isToday:d.getTime()===today.getTime()});
  }
- if(!calSelectedDay||!weekDays.find(w=>w.iso===calSelectedDay)) calSelectedDay=weekDays[0].iso;
+ if(!wdays.find(w=>w.iso_===calDay))calDay=wdays[0].iso_;
 
  // Day strip
- document.getElementById('day-strip').innerHTML=weekDays.map(wd=>`
-  <button class="day-btn${wd.iso===calSelectedDay?' active':''}${wd.isToday&&wd.iso!==calSelectedDay?' today-btn':''}" onclick="selectCalDay('${wd.iso}')">${wd.label} ${wd.dnum}</button>
- `).join('');
+ document.getElementById('day-strip').innerHTML=wdays.map(w=>
+  `<button class="day-btn${w.iso_===calDay?' active':''}${w.isToday&&w.iso_!==calDay?' today-btn':''}" onclick="selectDay('${w.iso_}')">${w.lbl} ${w.num}</button>`
+ ).join('');
 
- const activeGroomers=groomers.filter(g=>g.active);
+ const activeG=groomers.filter(g=>g.active);
  const outer=document.getElementById('cal-outer');
- if(!activeGroomers.length){
-  outer.innerHTML='<div class="empty">No active groomers. Add one in Groomers tab.</div>';return;
- }
+ if(!activeG.length){outer.innerHTML='<div class="empty">No active groomers. Add in Groomers tab.</div>';return}
 
- const selDay=weekDays.find(w=>w.iso===calSelectedDay)||weekDays[0];
- const slots=allSlots();
- const SLOT_H=44;
- const COL_W=Math.max(160, Math.floor((outer.offsetWidth-70)/activeGroomers.length));
+ const selDay=wdays.find(w=>w.iso_===calDay)||wdays[0];
+ const slots=[];for(let m=SSTART;m<SEND;m+=SSTEP)slots.push(m);
+ const totalH=slots.length*SH;
+ const nCols=activeG.length;
 
- // Header
- let html=`<div class="cal-grid-wrap">`;
- html+=`<div class="cal-header" style="grid-template-columns:54px repeat(${activeGroomers.length},${COL_W}px)">`;
- html+=`<div class="cal-corner">${selDay.label}<br><strong style="font-size:14px">${selDay.dnum}</strong></div>`;
- activeGroomers.forEach(g=>{
-  html+=`<div class="cal-col-hdr"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${g.color||'#16a34a'};margin-right:5px;vertical-align:middle"></span>${esc(g.name)}</div>`;
+ let html=`<div class="tsgrid" style="grid-template-columns:50px repeat(${nCols},1fr)">`;
+ // header
+ html+=`<div class="ts-header" style="grid-template-columns:50px repeat(${nCols},1fr);grid-column:1/${nCols+2}">`;
+ html+=`<div class="ts-corner">${selDay.lbl}<br><strong style="font-size:15px">${selDay.num}</strong></div>`;
+ activeG.forEach(g=>{
+  html+=`<div class="ts-col-hdr"><div class="ts-gcol-name" style="display:flex;align-items:center;justify-content:center;gap:6px">
+   <span style="width:9px;height:9px;border-radius:50%;background:${g.color||'#16a34a'};display:inline-block"></span>
+   ${esc(g.name)}</div></div>`;
  });
  html+=`</div>`;
-
- // Body
- const totalH=slots.length*SLOT_H;
- html+=`<div class="cal-body" style="grid-template-columns:54px repeat(${activeGroomers.length},${COL_W}px);height:${totalH}px">`;
-
- // Time column
- html+=`<div class="cal-time-col" style="grid-row:1/${slots.length+1}">`;
- slots.forEach((m,i)=>{
+ // body row
+ html+=`<div style="grid-column:1/${nCols+2};display:grid;grid-template-columns:50px repeat(${nCols},1fr)">`;
+ // time col
+ html+=`<div class="ts-time-col" style="height:${totalH}px">`;
+ slots.forEach(m=>{
   const half=m%60!==0;
-  html+=`<div class="cal-time-slot${half?' half':''}" style="height:${SLOT_H}px">${half?'':minsToTime(m)}</div>`;
+  html+=`<div class="ts-time-lbl${half?' half':''}" style="height:${SH}px">${half?'&nbsp;':m2t(m)}</div>`;
  });
  html+=`</div>`;
-
- // Groomer columns
- activeGroomers.forEach(g=>{
-  html+=`<div class="cal-day-col" style="position:relative;height:${totalH}px">`;
-  // Click slot backgrounds
+ // groomer cols
+ activeG.forEach(g=>{
+  html+=`<div class="ts-gcol" style="height:${totalH}px">`;
+  // slot backgrounds (clickable)
   slots.forEach((m,i)=>{
    const half=m%60!==0;
-   html+=`<div class="cal-slot${half?' half':''}${selDay.isToday?' today':''}" style="height:${SLOT_H}px;top:${i*SLOT_H}px;position:absolute;left:0;right:0" data-groomer="${g.id}" data-date="${selDay.iso}" data-mins="${m}" onclick="openAppt('${selDay.iso}','${g.id}',${m})"></div>`;
+   const top=i*SH;
+   html+=`<div class="ts-slot${half?' half-slot':''}" style="top:${top}px;${selDay.isToday?'background:rgba(22,163,74,.02)':''}"
+    data-g="${g.id}" data-date="${selDay.iso_}" data-m="${m}"
+    onclick="openAppt('${selDay.iso_}','${g.id}',${m})"></div>`;
   });
-  // Appointment blocks
-  const dayAppts=appts.filter(a=>a.appt_date===selDay.iso && a.groomer_id===g.id);
+  // appointment blocks
+  const dayAppts=appts.filter(a=>a.appt_date===selDay.iso_&&a.groomer_id===g.id);
   dayAppts.forEach(a=>{
-   const startMins=timeToMins(a.appt_time||'09:00');
+   const sm=t2m(a.appt_time||'09:00');
    const dur=a.duration_mins||60;
-   const topPx=((startMins-SLOT_START)/SLOT_STEP)*SLOT_H;
-   const heightPx=Math.max((dur/SLOT_STEP)*SLOT_H-2,24);
-   const color=g.color||'#16a34a';
-   const bgAlpha=color+'22';
-   const d=dogs.find(x=>x.id===a.dog_id);
-   const ownerNm=d?getOwnerName(d.customer_id):'';
+   const top=((sm-SSTART)/SSTEP)*SH;
+   const h=Math.max((dur/SSTEP)*SH-2,28);
+   const col=g.color||'#16a34a';
+   const bg=col+'1a';
+   const d=dogs.find(x=>x.id===a.dog_id)||{};
+   const owner=d.customer_id?getOwnerName(d.customer_id):'';
    html+=`<div class="appt-block" draggable="true"
     ondragstart="onDragStart(event,'${a.id}')" ondragend="onDragEnd(event)"
     onclick="event.stopPropagation();openApptEdit('${a.id}')"
-    style="top:${topPx}px;height:${heightPx}px;background:${bgAlpha};border-left-color:${color};color:${color}">
-    <div class="ab-time">${minsToTime(startMins)} – ${minsToTime(startMins+dur)}</div>
-    <div class="ab-name">${esc(a.dogs?.name||d?.name||'?')}</div>
-    <div class="ab-svc">${esc(ownerNm)}${a.service_base?' · '+esc(a.service_base.split(',')[0]):''}</div>
+    style="top:${top}px;height:${h}px;background:${bg};border-left-color:${col};color:${col}">
+    <span class="ab-time">${m2t(sm)}–${m2t(sm+dur)}</span>
+    <span class="ab-name">${esc(a.dogs?.name||d.name||'?')}</span>
+    <span class="ab-svc">${esc(owner)}${a.service_base?' · '+esc(a.service_base.split(',')[0]):''}</span>
    </div>`;
   });
   html+=`</div>`;
  });
  html+=`</div></div>`;
  outer.innerHTML=html;
-
- // Scroll to 8:30 (first slot)
- outer.scrollTop=0;
 }
 
-function selectCalDay(isoD){
- calSelectedDay=isoD;
- renderCal();
-}
+function selectDay(d){calDay=d;renderCal()}
 
-/* DRAG DROP on time-slot grid */
-let draggedApptId=null, dragOffsetMins=0;
+/* ---- DRAG DROP ---- */
+let draggedId=null;
 function onDragStart(e,id){
- draggedApptId=id;
+ draggedId=id;
  e.target.classList.add('dragging');
  e.dataTransfer.effectAllowed='move';
 }
-function onDragEnd(e){
- e.target.classList.remove('dragging');
- draggedApptId=null;
-}
+function onDragEnd(e){e.target.classList.remove('dragging');draggedId=null}
 function onDragOver(e){e.preventDefault()}
-function onDragLeave(e){}
 async function onDrop(e){
  e.preventDefault();
- if(!draggedApptId) return;
- const t=e.target.closest('[data-mins]'); if(!t) return;
- const newDate=t.dataset.date;
- const newGroomer=t.dataset.groomer;
- const snapMins=parseInt(t.dataset.mins);
- const appt=appts.find(a=>a.id===draggedApptId);
- if(!appt) return;
- const newTime=minsToTime(snapMins);
- if(appt.appt_date===newDate && appt.groomer_id===newGroomer && appt.appt_time?.slice(0,5)===newTime) return;
- await db.from('appointments').update({appt_date:newDate,groomer_id:newGroomer,appt_time:newTime}).eq('id',draggedApptId);
- await loadAll(); renderCal();
+ if(!draggedId)return;
+ const t=e.target.closest('[data-m]');if(!t)return;
+ const nd=t.dataset.date,ng=t.dataset.g,nm=parseInt(t.dataset.m);
+ const a=appts.find(x=>x.id===draggedId);if(!a)return;
+ const newTime=m2t(nm)+':00';
+ if(a.appt_date===nd&&a.groomer_id===ng&&a.appt_time?.slice(0,5)===m2t(nm))return;
+ await db.from('appointments').update({appt_date:nd,groomer_id:ng,appt_time:newTime}).eq('id',draggedId);
+ await loadAll();renderCal();
 }
 
-/* ====== 5-STEP BOOKING WIZARD ====== */
-let apptWizard={step:1, custId:null, dogServices:[], groomerId:null, date:null, startMins:null};
+/* ---- 4-STEP BOOKING WIZARD ---- */
+let wiz={step:1,custId:null,dogSvcs:[],groomerId:null,date:null,startMins:null,editId:null};
 
-function apptStepShow(n){
+function wizDots(n){
+ const el=document.getElementById('wiz-dots');if(!el)return;
+ el.innerHTML=[1,2,3,4].map(i=>
+  `<div class="step-dot" style="background:${i<=n?'var(--green)':'var(--border)'}"></div>`
+ ).join('');
+}
+
+function wizShow(n){
  [1,2,3,4].forEach(i=>{
-  const el=document.getElementById(`appt-step-${i}`);
-  if(el) el.style.display=i===n?'':'none';
+  const el=document.getElementById('wiz-'+i);
+  if(el)el.style.display=i===n?'':'none';
  });
- apptWizard.step=n;
- // Steps bar
- const bar=document.getElementById('appt-steps-bar');
- if(bar) bar.innerHTML=[1,2,3,4].map(i=>`<div style="width:18px;height:6px;border-radius:3px;background:${i<=n?'var(--green)':'var(--border)'}"></div>`).join('');
+ wiz.step=n;wizDots(n);
 }
 
-function apptStepNext(n){
+function wizNext(n){
  if(n===2){
-  if(!apptWizard.custId){alert('Select a customer first');return}
-  apptStepShow(2);
-  renderApptDogCards();
+  if(!wiz.custId){alert('Select a customer first');return}
+  wizShow(2);renderWizDogs();
  } else if(n===3){
-  if(!apptWizard.dogServices.length){alert('Select at least one dog');return}
-  apptStepShow(3);
-  renderApptTimeSlots();
+  if(!wiz.dogSvcs.length){alert('Select at least one dog');return}
+  wizShow(3);renderWizSlots();
  } else if(n===4){
-  if(!apptWizard.groomerId){alert('Select a groomer');return}
-  if(apptWizard.startMins===null){alert('Select a time slot');return}
-  apptStepShow(4);
-  renderApptSummary();
+  if(!wiz.groomerId){alert('Select a groomer');return}
+  if(wiz.startMins===null){alert('Select a time slot');return}
+  wizShow(4);renderWizSummary();
  } else {
-  apptStepShow(n);
+  wizShow(n);
  }
 }
 
-function onApptCustChange(){
+function onWizCustChange(){
  const id=document.getElementById('appt-cust').value;
- apptWizard.custId=id;
- apptWizard.dogServices=[];
- const info=document.getElementById('appt-cust-info');
+ wiz.custId=id;wiz.dogSvcs=[];
+ const info=document.getElementById('wiz-cust-info');
  const c=custs.find(x=>x.id===id);
  if(c){
   info.style.display='block';
-  info.innerHTML=`<strong>${esc(c.owner)}</strong> · ${esc(c.kota||c.area||'-')} · ${esc(c.wa||'no WA')}`;
- } else {
-  info.style.display='none';
- }
+  info.innerHTML=`<strong>${esc(c.owner)}</strong> · ${esc(c.kota||c.area||'-')} · WA: ${esc(c.wa||'-')}`;
+ } else {info.style.display='none'}
 }
 
-function renderApptDogCards(){
- if(!apptWizard.custId) return;
- const custDogs=dogs.filter(d=>d.customer_id===apptWizard.custId);
- const wrap=document.getElementById('appt-dog-cards');
- if(!custDogs.length){wrap.innerHTML='<div style="color:var(--muted);font-size:12px">No dogs for this customer.</div>';return}
- wrap.innerHTML=custDogs.map(d=>{
-  const ds=apptWizard.dogServices.find(x=>x.dog_id===d.id);
-  const checked=ds?'checked':'';
-  const selSvc=ds?.svc||'Basic Grooming';
-  const dur=calcDuration(selSvc,d.size);
-  return `<div style="padding:10px;background:var(--subtle);border-radius:var(--r);margin-bottom:7px;border:1px solid ${ds?'var(--green-md)':'var(--border)'}" id="appt-dog-card-${d.id}">
-   <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-    <input type="checkbox" ${checked} onchange="onApptDogToggle('${d.id}',this.checked)" style="width:16px;height:16px"/>
-    <div style="flex:1">
+function renderWizDogs(){
+ const wrap=document.getElementById('wiz-dog-list');
+ const cdogs=dogs.filter(d=>d.customer_id===wiz.custId);
+ if(!cdogs.length){wrap.innerHTML='<div style="color:var(--muted);font-size:12px">No dogs for this customer.</div>';return}
+ wrap.innerHTML=cdogs.map(d=>{
+  const ds=wiz.dogSvcs.find(x=>x.did===d.id);
+  const sel=ds?.svc||'Basic Grooming';
+  return `<div style="padding:10px;background:var(--subtle);border-radius:var(--r);margin-bottom:6px;border:2px solid ${ds?'var(--green-md)':'var(--border)'}">
+   <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:${ds?'8px':'0'}">
+    <input type="checkbox" ${ds?'checked':''} onchange="onWizDogToggle('${d.id}',this.checked)" style="width:16px;height:16px"/>
+    <div>
      <strong>${esc(d.name)}</strong>
-     <span style="font-size:11px;color:var(--muted);margin-left:6px">${esc(d.dog_code||'')} · ${esc(d.breed||'-')} · ${esc(d.size||'?')}</span>
+     <span style="font-size:11px;color:var(--muted);margin-left:5px">${esc(d.breed||'-')} · ${esc(d.size||'?')}</span>
     </div>
    </label>
-   <div style="margin-top:7px;margin-left:24px;display:${ds?'flex':'none'};gap:8px;align-items:center" id="appt-dog-svc-${d.id}">
-    <select style="flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:var(--r);font-size:12px" onchange="onApptDogSvc('${d.id}',this.value)">
-     ${SVC_OPTS.map(s=>`<option value="${s}" ${s===selSvc?'selected':''}>${s}</option>`).join('')}
+   <div id="wiz-svc-${d.id}" style="display:${ds?'flex':'none'};gap:8px;align-items:center;margin-left:24px">
+    <select style="flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:var(--r);font-size:12px" onchange="onWizSvc('${d.id}',this.value)">
+     ${SVC_LIST.map(s=>`<option ${s===sel?'selected':''}>${s}</option>`).join('')}
     </select>
-    <span style="font-size:11px;color:var(--muted);white-space:nowrap" id="appt-dur-lbl-${d.id}">${dur} min</span>
+    <span id="wiz-dur-${d.id}" style="font-size:11px;color:var(--muted);white-space:nowrap">${dogDur(sel,d.size)} min</span>
    </div>
   </div>`;
  }).join('');
 }
 
-function onApptDogToggle(did,checked){
- if(checked){
-  if(!apptWizard.dogServices.find(x=>x.dog_id===did))
-   apptWizard.dogServices.push({dog_id:did,svc:'Basic Grooming'});
- } else {
-  apptWizard.dogServices=apptWizard.dogServices.filter(x=>x.dog_id!==did);
- }
- // Update card styling + show/hide service row
- const card=document.getElementById(`appt-dog-card-${did}`);
- const svcRow=document.getElementById(`appt-dog-svc-${did}`);
- if(card) card.style.borderColor=checked?'var(--green-md)':'var(--border)';
- if(svcRow) svcRow.style.display=checked?'flex':'none';
+function onWizDogToggle(did,on){
+ if(on){if(!wiz.dogSvcs.find(x=>x.did===did))wiz.dogSvcs.push({did,svc:'Basic Grooming'})}
+ else{wiz.dogSvcs=wiz.dogSvcs.filter(x=>x.did!==did)}
+ renderWizDogs();
 }
-
-function onApptDogSvc(did,svc){
- const ds=apptWizard.dogServices.find(x=>x.dog_id===did);
- if(ds) ds.svc=svc;
+function onWizSvc(did,svc){
+ const ds=wiz.dogSvcs.find(x=>x.did===did);if(ds)ds.svc=svc;
  const d=dogs.find(x=>x.id===did);
- const dur=calcDuration(svc,d?.size);
- const lbl=document.getElementById(`appt-dur-lbl-${did}`);
- if(lbl) lbl.textContent=dur+' min';
- renderApptTimeSlots();
+ const lbl=document.getElementById('wiz-dur-'+did);
+ if(lbl)lbl.textContent=dogDur(svc,d?.size)+' min';
+ renderWizSlots();
 }
 
-function renderApptTimeSlots(){
- // Update groomer dropdown
- const gs=document.getElementById('appt-groomer');
- gs.innerHTML='<option value="">Select groomer…</option>'+groomers.filter(g=>g.active).map(g=>`<option value="${g.id}" ${g.id===apptWizard.groomerId?'selected':''}>${esc(g.name)}</option>`).join('');
- gs.onchange=()=>{apptWizard.groomerId=gs.value;apptWizard.startMins=null;renderApptTimeSlots()};
+function onWizGroomerChange(){
+ wiz.groomerId=document.getElementById('wiz-groomer').value;
+ wiz.startMins=null;
+ renderWizSlots();
+}
 
- // Date
- const di=document.getElementById('appt-date-in');
- if(!di.value) di.value=apptWizard.date||iso(new Date());
- di.onchange=()=>{apptWizard.date=di.value;apptWizard.startMins=null;renderApptTimeSlots()};
- apptWizard.date=di.value;
+function renderWizSlots(){
+ const gs=document.getElementById('wiz-groomer');
+ if(!gs.options.length||gs.options[0].value===''){
+  gs.innerHTML='<option value="">Select groomer…</option>'+
+   groomers.filter(g=>g.active).map(g=>`<option value="${g.id}" ${g.id===wiz.groomerId?'selected':''}>${esc(g.name)}</option>`).join('');
+ }
+ const di=document.getElementById('wiz-date');
+ if(!di.value)di.value=wiz.date||iso(new Date());
+ wiz.date=di.value;
 
- const totalDur=totalBookingMins(apptWizard.dogServices);
- const info=document.getElementById('appt-duration-info');
- const wrap=document.getElementById('appt-time-slots');
+ const totalDur=wiz.dogSvcs.reduce((s,ds)=>{
+  const d=dogs.find(x=>x.id===ds.did);
+  return s+dogDur(ds.svc,d?.size)+(wiz.dogSvcs.length>1?5:0);
+ },0)-( wiz.dogSvcs.length>1?5:0);
 
- if(!apptWizard.groomerId||!apptWizard.date){
-  wrap.innerHTML='<div style="color:var(--muted);font-size:12px;grid-column:1/-1">Select groomer and date first.</div>';
-  info.textContent='';return;
+ const info=document.getElementById('wiz-dur-info');
+ info.textContent=wiz.dogSvcs.length
+  ?`Total: ${totalDur} min · ${wiz.dogSvcs.length} dog${wiz.dogSvcs.length>1?'s':''}`
+  :'Select dogs first';
+
+ const wrap=document.getElementById('wiz-slots');
+ if(!wiz.groomerId||!wiz.date){
+  wrap.innerHTML='<div style="color:var(--muted);font-size:12px;grid-column:1/-1">Select groomer and date first.</div>';return;
  }
 
- info.innerHTML=`Total duration: <strong>${totalDur} min</strong> · ${apptWizard.dogServices.length} dog${apptWizard.dogServices.length>1?'s':''}`;
-
- const slots=allSlots();
- wrap.innerHTML=slots.filter(m=>m+totalDur<=SLOT_END).map(m=>{
-  const blocked=isSlotBlocked(apptWizard.groomerId,apptWizard.date,m,totalDur);
-  const sel=m===apptWizard.startMins;
-  const t=minsToTime(m);
-  if(blocked) return `<button style="padding:6px 4px;font-size:11px;border-radius:5px;border:1px solid var(--border);background:#fee2e2;color:#9ca3af;cursor:not-allowed" disabled>${t}</button>`;
-  return `<button onclick="selectApptSlot(${m})" style="padding:6px 4px;font-size:11px;border-radius:5px;border:1px solid ${sel?'var(--green)':'var(--border)'};background:${sel?'var(--green)':'var(--surface)'};color:${sel?'#fff':'var(--text)'};cursor:pointer;font-weight:${sel?'700':'400'}">${t}</button>`;
+ const slots=[];for(let m=SSTART;m<SEND;m+=SSTEP)slots.push(m);
+ wrap.innerHTML=slots.filter(m=>m+totalDur<=SEND).map(m=>{
+  const blocked=isBlocked(wiz.groomerId,wiz.date,m,totalDur,wiz.editId);
+  const sel=m===wiz.startMins;
+  return `<button class="slot-btn${sel?' sel':''}${blocked?' blocked':''}" ${blocked?'disabled':''} onclick="selectWizSlot(${m})">${m2t(m)}</button>`;
  }).join('');
 }
 
-function selectApptSlot(m){
- apptWizard.startMins=m;
- renderApptTimeSlots();
-}
+function selectWizSlot(m){wiz.startMins=m;renderWizSlots()}
 
-function renderApptSummary(){
- const c=custs.find(x=>x.id===apptWizard.custId)||{};
- const g=groomers.find(x=>x.id===apptWizard.groomerId)||{};
- const totalDur=totalBookingMins(apptWizard.dogServices);
- const endMins=apptWizard.startMins+totalDur;
- const dogLines=apptWizard.dogServices.map(ds=>{
-  const d=dogs.find(x=>x.id===ds.dog_id)||{};
-  return `<div>${esc(d.name)} — ${esc(ds.svc)} (${calcDuration(ds.svc,d.size)} min)</div>`;
+function renderWizSummary(){
+ const c=custs.find(x=>x.id===wiz.custId)||{};
+ const g=groomers.find(x=>x.id===wiz.groomerId)||{};
+ const totalDur=wiz.dogSvcs.reduce((s,ds,i)=>{
+  const d=dogs.find(x=>x.id===ds.did);
+  return s+dogDur(ds.svc,d?.size)+(i<wiz.dogSvcs.length-1?5:0);
+ },0);
+ const dogLines=wiz.dogSvcs.map(ds=>{
+  const d=dogs.find(x=>x.id===ds.did)||{};
+  return `<div style="font-size:12px;margin-left:8px">${esc(d.name)} — ${esc(ds.svc)} (${dogDur(ds.svc,d.size)} min)</div>`;
  }).join('');
- document.getElementById('appt-summary-box').innerHTML=`
+ document.getElementById('wiz-summary').innerHTML=`
   <div><strong>Customer:</strong> ${esc(c.owner||'?')}</div>
-  <div><strong>Dogs:</strong></div>
-  <div style="margin-left:12px;font-size:12px">${dogLines}</div>
+  <div><strong>Dog(s):</strong></div>${dogLines}
   <div><strong>Groomer:</strong> ${esc(g.name||'?')}</div>
-  <div><strong>Date:</strong> ${new Date(apptWizard.date).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
-  <div><strong>Time:</strong> ${minsToTime(apptWizard.startMins)} – ${minsToTime(endMins)}</div>
+  <div><strong>Date:</strong> ${new Date(wiz.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</div>
+  <div><strong>Time:</strong> ${m2t(wiz.startMins)} – ${m2t(wiz.startMins+totalDur)}</div>
  `;
 }
 
 function openAppt(dateISO,groomerId,startMins){
- apptEditId=null;
- apptWizard={step:1, custId:null, dogServices:[], groomerId:groomerId||null, date:dateISO, startMins:startMins||null};
+ wiz={step:1,custId:null,dogSvcs:[],groomerId:groomerId||null,date:dateISO,startMins:startMins??null,editId:null};
  document.getElementById('appt-title').textContent='Schedule appointment';
  document.getElementById('appt-save-btn').textContent='Save appointment';
  document.getElementById('appt-del-btn').style.display='none';
- // Populate customer dropdown
- const cs=document.getElementById('appt-cust');
- cs.innerHTML='<option value="">Select customer…</option>'+custs.map(c=>`<option value="${c.id}">${esc(c.customer_code||'?')} - ${esc(c.owner)}</option>`).join('');
- document.getElementById('appt-cust-info').style.display='none';
  document.getElementById('appt-note').value='';
- apptStepShow(1);
+ const cs=document.getElementById('appt-cust');
+ cs.innerHTML='<option value="">Select customer…</option>'+
+  custs.map(c=>`<option value="${c.id}">${esc(c.customer_code||'?')} – ${esc(c.owner)}</option>`).join('');
+ document.getElementById('wiz-cust-info').style.display='none';
+ wizShow(1);
  om('ov-appt');
 }
 
 function openApptEdit(id){
- const a=appts.find(x=>x.id===id); if(!a) return;
- apptEditId=id;
+ const a=appts.find(x=>x.id===id);if(!a)return;
  const d=dogs.find(x=>x.id===a.dog_id);
- const custId=d?.customer_id||null;
- apptWizard={step:4, custId, dogServices:d?[{dog_id:d.id,svc:a.service_base||'Basic Grooming'}]:[], groomerId:a.groomer_id, date:a.appt_date, startMins:timeToMins(a.appt_time||'09:00')};
+ wiz={step:4,custId:d?.customer_id||null,dogSvcs:d?[{did:d.id,svc:a.service_base||'Basic Grooming'}]:[],groomerId:a.groomer_id,date:a.appt_date,startMins:t2m(a.appt_time||'09:00'),editId:id};
  document.getElementById('appt-title').textContent='Edit appointment';
  document.getElementById('appt-save-btn').textContent='Update';
  document.getElementById('appt-del-btn').style.display='inline-flex';
  document.getElementById('appt-note').value=a.appt_note||'';
- // Populate customer dropdown
  const cs=document.getElementById('appt-cust');
- cs.innerHTML='<option value="">Select customer…</option>'+custs.map(c=>`<option value="${c.id}" ${c.id===custId?'selected':''}>${esc(c.customer_code||'?')} - ${esc(c.owner)}</option>`).join('');
- apptStepShow(4);
- renderApptSummary();
+ cs.innerHTML='<option value="">Select customer…</option>'+
+  custs.map(c=>`<option value="${c.id}" ${c.id===wiz.custId?'selected':''}>${esc(c.customer_code||'?')} – ${esc(c.owner)}</option>`).join('');
+ wizShow(4);renderWizSummary();
  om('ov-appt');
 }
 
 async function saveAppt(){
- const grId=apptWizard.groomerId;
- const date=apptWizard.date;
- const startMins=apptWizard.startMins;
+ if(!wiz.groomerId||!wiz.date||wiz.startMins===null||!wiz.dogSvcs.length){
+  alert('Incomplete booking details');return;
+ }
  const note=document.getElementById('appt-note').value.trim();
- if(!grId){alert('Select a groomer');return}
- if(!date){alert('Select a date');return}
- if(startMins===null){alert('Select a time slot');return}
- if(!apptWizard.dogServices.length){alert('Select at least one dog');return}
- // For multi-dog: create one appt per dog, staggered
  const inserts=[];
- let cursor=startMins;
- apptWizard.dogServices.forEach((ds,idx)=>{
-  const d=dogs.find(x=>x.id===ds.dog_id);
-  const dur=calcDuration(ds.svc,d?.size);
+ let cursor=wiz.startMins;
+ wiz.dogSvcs.forEach((ds,i)=>{
+  const d=dogs.find(x=>x.id===ds.did);
+  const dur=dogDur(ds.svc,d?.size);
   inserts.push({
-   dog_id:ds.dog_id,
-   groomer_id:grId,
-   appt_date:date,
-   appt_time:minsToTime(cursor)+':00',
-   service_base:ds.svc,
-   duration_mins:dur,
-   appt_note:note+(apptWizard.dogServices.length>1?` (${idx+1}/${apptWizard.dogServices.length})`:'')
+   dog_id:ds.did,groomer_id:wiz.groomerId,appt_date:wiz.date,
+   appt_time:m2t(cursor)+':00',service_base:ds.svc,duration_mins:dur,
+   appt_note:note+(wiz.dogSvcs.length>1?` (${i+1}/${wiz.dogSvcs.length})`:'')
   });
-  cursor+=dur+(idx<apptWizard.dogServices.length-1?5:0);
+  cursor+=dur+(i<wiz.dogSvcs.length-1?5:0);
  });
- if(apptEditId){
-  // Edit: update first appt, delete extras
-  const first=inserts[0];
-  await db.from('appointments').update(first).eq('id',apptEditId);
+ if(wiz.editId){
+  await db.from('appointments').update(inserts[0]).eq('id',wiz.editId);
  } else {
   const {error}=await db.from('appointments').insert(inserts);
   if(error){alert('Error: '+error.message);return}
  }
- cm('ov-appt'); await loadAll(); renderCal();
+ calDay=wiz.date;
+ cm('ov-appt');await loadAll();renderCal();
 }
 
 async function delApptFromModal(){
- if(!apptEditId) return;
- if(!confirm('Delete this appointment?')) return;
- await db.from('appointments').delete().eq('id',apptEditId);
- cm('ov-appt'); await loadAll(); renderCal();
+ if(!wiz.editId)return;
+ if(!confirm('Delete this appointment?'))return;
+ await db.from('appointments').delete().eq('id',wiz.editId);
+ cm('ov-appt');await loadAll();renderCal();
 }
 
 async function delAppt(id){
- if(!confirm('Remove this appointment?')) return;
+ if(!confirm('Remove appointment?'))return;
  await db.from('appointments').delete().eq('id',id);
- await loadAll(); renderCal();
+ await loadAll();renderCal();
 }
-
-/* GROOMERS TAB */
- const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
- const end=new Date(calStart); end.setDate(end.getDate()+6);
- document.getElementById('cal-title').textContent=
- calStart.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+
- end.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
- const today=new Date(); today.setHours(0,0,0,0);
-
- const activeGroomers=groomers.filter(g=>g.active);
- if(!activeGroomers.length){
- document.getElementById('cal-wrap').innerHTML='<div class="empty"><span class="empty-icon">️</span>No active groomers. Add one in the Groomers tab.</div>';
- return;
- }
-
- // Build day list
- const weekDays=[];
- for(let i=0;i<7;i++){
- const d=new Date(calStart); d.setDate(d.getDate()+i);
- weekDays.push({date:d, iso:iso(d), label:days[i], dnum:d.getDate(), isToday:d.getTime()===today.getTime()});
- }
-
- let html='<table class="cal-table"><thead><tr><th style="position:sticky;left:0;z-index:6;background:var(--subtle)">Groomer</th>';
- weekDays.forEach(wd=>{
- html+=`<th class="${wd.isToday?'today-h':''}">${wd.label}<br><span style="font-size:14px;font-weight:700">${wd.dnum}</span></th>`;
- });
- html+='</tr></thead><tbody>';
-
- activeGroomers.forEach(g=>{
- html+=`<tr><td class="cal-groomer-cell"><span class="gdot" style="background:${g.color||'#16a34a'}"></span>${esc(g.name)}</td>`;
- weekDays.forEach(wd=>{
- const dayAppts=appts.filter(a=>a.appt_date===wd.iso && a.groomer_id===g.id)
- .sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
- html+=`<td class="cal-day-cell${wd.isToday?' today':''}" data-groomer="${g.id}" data-date="${wd.iso}" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)" onclick="openAppt('${wd.iso}','${g.id}')">`;
- dayAppts.forEach(a=>{
- const cust=dogs.find(x=>x.id===a.dog_id);
- const ownerNm=cust?getOwnerName(cust.customer_id):'';
- html+=`<div class="appt-pill" draggable="true" ondragstart="onDragStart(event,'${a.id}')" ondragend="onDragEnd(event)" onclick="event.stopPropagation();openApptEdit('${a.id}')" title="${esc(a.appt_note||'')}">
- <span class="t">${a.appt_time?.slice(0,5)||''}</span>
- <span class="n">${esc(a.dogs?.name||'?')}</span>
- <span class="s">${esc(ownerNm)}${a.appt_note?' · '+esc(a.appt_note):''}</span>
- </div>`;
- });
- html+='</td>';
- });
- html+='</tr>';
- });
- html+='</tbody></table>';
- document.getElementById('cal-wrap').innerHTML=html;
-}
-
-/* DRAG DROP */
-let draggedApptId=null;
-function onDragStart(e,id){
- draggedApptId=id;
- e.target.classList.add('dragging');
- e.dataTransfer.effectAllowed='move';
-}
-function onDragEnd(e){
- e.target.classList.remove('dragging');
- document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
- draggedApptId=null;
-}
-function onDragOver(e){
- e.preventDefault();
- e.currentTarget.classList.add('drag-over');
- e.dataTransfer.dropEffect='move';
-}
-function onDragLeave(e){
- e.currentTarget.classList.remove('drag-over');
-}
-async function onDrop(e){
- e.preventDefault();
- e.currentTarget.classList.remove('drag-over');
- if(!draggedApptId) return;
- const newDate=e.currentTarget.dataset.date;
- const newGroomer=e.currentTarget.dataset.groomer;
- const appt=appts.find(a=>a.id===draggedApptId);
- if(!appt) return;
- if(appt.appt_date===newDate && appt.groomer_id===newGroomer) return;
- await db.from('appointments').update({appt_date:newDate, groomer_id:newGroomer}).eq('id',draggedApptId);
- await loadAll(); renderCal();
-}
-
 /* GROOMERS TAB */
 function renderGroomers(){
  const tb=document.getElementById('groomer-body');
@@ -2031,6 +1932,106 @@ async function saveBankSettings(){
  await db.from('business_settings').upsert(p);
  cm('ov-bank'); await loadAll();
 }
+
+/* ============ REMINDERS ============ */
+function initReminders(){
+ const di=document.getElementById('rem-date');
+ if(!di.value){const t=new Date();t.setDate(t.getDate()+1);di.value=iso(t)}
+ generateReminders();
+}
+
+function fmtIDlong(d){
+ return new Date(d+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+}
+
+function generateReminders(){
+ const date=document.getElementById('rem-date').value;
+ const pickup=document.getElementById('rem-pickup').value.trim();
+ const pickupTime=document.getElementById('rem-pickup-time').value.trim();
+ const extra=document.getElementById('rem-extra-note').value.trim();
+ const wrap=document.getElementById('rem-cards');
+ if(!date){wrap.innerHTML='<div style="color:var(--muted);font-size:13px">Pilih tanggal dulu.</div>';return}
+ const activeG=groomers.filter(g=>g.active);
+ if(!activeG.length){wrap.innerHTML='<div style="color:var(--muted);font-size:13px">Belum ada groomer aktif.</div>';return}
+ const dayAppts=appts.filter(a=>a.appt_date===date).sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
+ if(!dayAppts.length){wrap.innerHTML='<div style="color:var(--muted);font-size:13px;padding:1rem 0">Tidak ada jadwal untuk tanggal ini.</div>';return}
+ const cards=activeG.map(g=>{
+  const ga=dayAppts.filter(a=>a.groomer_id===g.id);
+  if(!ga.length)return '';
+  const msgId='rem-msg-'+g.id;
+  const msg=buildMsg(g,ga,date,pickup,pickupTime,extra);
+  const waHref=g.phone?'https://wa.me/'+g.phone.replace(/^0/,'62').replace(/\D/g,'')+'?text='+encodeURIComponent(msg):'';
+  return `<div class="rem-card">
+   <div class="rem-card-hdr">
+    <div class="rem-card-name">
+     <span style="width:10px;height:10px;border-radius:50%;background:${g.color||'#16a34a'};display:inline-block"></span>
+     ${esc(g.name)}
+     <span style="font-size:11px;font-weight:400;color:var(--muted)">${ga.length} jadwal</span>
+    </div>
+    <span style="font-size:11px;color:var(--muted)">${fmtIDlong(date)}</span>
+   </div>
+   <div class="rem-card-body">
+    <textarea class="rem-msg" id="${msgId}">${msg}</textarea>
+    <div class="rem-actions">
+     <button class="btn btn-g btn-sm" onclick="copyRem('${msgId}')">Copy</button>
+     ${waHref?`<a class="btn-wa" href="${waHref}" target="_blank">Kirim WhatsApp</a>`:'<span style="font-size:12px;color:var(--muted)">No phone</span>'}
+     <button class="btn btn-g btn-sm" onclick="regenRem('${g.id}','${msgId}')">Refresh</button>
+    </div>
+   </div>
+  </div>`;
+ }).join('');
+ wrap.innerHTML=cards||'<div style="color:var(--muted);font-size:13px">Jadwal belum di-assign ke groomer.</div>';
+}
+
+function buildMsg(g,ga,date,pickup,pickupTime,extra){
+ const lines=[];
+ lines.push(`Malam Mas ${g.name}, berikut jadwal untuk besok ya:`,'');
+ if(pickup&&pickupTime){lines.push(`Jam ${pickupTime}`,`Ke ${pickup}`,'')}
+ ga.forEach((a,i)=>{
+  const d=dogs.find(x=>x.id===a.dog_id)||{};
+  const c=d.customer_id?custs.find(x=>x.id===d.customer_id)||{}:{};
+  const time=(a.appt_time||'').slice(0,5);
+  const addr=[c.address,c.kecamatan,c.kota].filter(Boolean).join(', ');
+  const gmaps=c.gmaps_link||buildGLink(c.address,c.kota);
+  lines.push(`Jam ${time}`);
+  lines.push(`Client ${i+1}: ${c.owner||'?'}`);
+  lines.push(`Dog: ${d.breed||'?'} - ${d.name||'?'}`);
+  lines.push(`Alamat: ${addr||'-'}`);
+  if(gmaps)lines.push(`Google Link: ${gmaps}`);
+  if(a.appt_note)lines.push(`Catatan: ${a.appt_note}`);
+  lines.push('');
+ });
+ if(extra){lines.push('Note:',extra,'')}
+ lines.push('Kalau ada pertanyaan bisa langsung ke sini ya, thanks');
+ return lines.join('\n');
+}
+
+function buildGLink(addr,kota){
+ if(!addr)return '';
+ return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent([addr,kota,'Jakarta'].filter(Boolean).join(', '));
+}
+
+function copyRem(id){
+ const el=document.getElementById(id);if(!el)return;
+ navigator.clipboard.writeText(el.value).then(()=>{
+  el.style.background='var(--green-lt)';
+  setTimeout(()=>el.style.background='var(--subtle)',700);
+ }).catch(()=>{el.select();document.execCommand('copy')});
+}
+
+function regenRem(gid,mid){
+ const date=document.getElementById('rem-date').value;
+ const pickup=document.getElementById('rem-pickup').value.trim();
+ const pt=document.getElementById('rem-pickup-time').value.trim();
+ const extra=document.getElementById('rem-extra-note').value.trim();
+ const g=groomers.find(x=>x.id===gid);if(!g)return;
+ const ga=appts.filter(a=>a.appt_date===date&&a.groomer_id===gid).sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
+ const msg=buildMsg(g,ga,date,pickup,pt,extra);
+ const el=document.getElementById(mid);if(el)el.value=msg;
+ const card=el?.closest('.rem-card');
+ if(card){const wa=card.querySelector('.btn-wa');if(wa)wa.href='https://wa.me/'+g.phone?.replace(/^0/,'62').replace(/\D/g,'')+'?text='+encodeURIComponent(msg)}
+}
+
 
 loadAll();
 </script>
