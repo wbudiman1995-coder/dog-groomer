@@ -290,7 +290,7 @@ tbody tr:hover{background:var(--subtle)}
       <div class="fg"><label>Type / Breed</label><input id="df-breed" placeholder="Poodle"/></div>
       <div class="fg"><label>Age</label><input id="df-age" placeholder="e.g. 2 years, 5 months"/></div>
       <div class="fg"><label>Weight</label><input id="df-weight" placeholder="e.g. 8 kg"/></div>
-      <div class="fg"><label>Size</label><select id="df-size"><option value="">Select…</option><option>Small</option><option>Medium</option><option>Large</option></select></div>
+      <div class="fg"><label>Size</label><select id="df-size"><option value="">Select…</option><option>XS</option><option>Small</option><option>Medium</option><option>Large</option><option>XL</option></select></div>
       <div class="fg"><label>Coat</label><select id="df-coat"><option value="">Select…</option><option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option></select></div>
       <div class="fg full"><label>Preferences / notes</label><textarea id="df-prefs" placeholder="e.g. Anxious around clippers. Lion cut."></textarea></div>
     </div>
@@ -474,8 +474,18 @@ async function saveCust(){
     gmaps_link:document.getElementById('cf-gmaps').value.trim(),
     prefs:document.getElementById('cf-prefs').value.trim()
   };
-  if(custEditId){await db.from('customers').update(p).eq('id',custEditId)}
-  else{await db.from('customers').insert(p)}
+  if(custEditId){
+    await db.from('customers').update(p).eq('id',custEditId);
+  } else {
+    // Generate customer_code = CUST-XXX (zero-padded, next available)
+    let maxN=0;
+    custs.forEach(c=>{
+      const m=(c.customer_code||'').match(/^CUST-(\d+)$/);
+      if(m){const n=parseInt(m[1]);if(n>maxN)maxN=n}
+    });
+    p.customer_code=`CUST-${String(maxN+1).padStart(3,'0')}`;
+    await db.from('customers').insert(p);
+  }
   cm('ov-cust'); await loadAll();
 }
 
@@ -531,8 +541,20 @@ async function saveDog(){
     coat:document.getElementById('df-coat').value,
     prefs:document.getElementById('df-prefs').value.trim()
   };
-  if(dogEditId){await db.from('dogs').update(p).eq('id',dogEditId)}
-  else{await db.from('dogs').insert(p)}
+  if(dogEditId){
+    await db.from('dogs').update(p).eq('id',dogEditId);
+  } else {
+    // Generate dog_code = CUST-XXX-D{N} based on existing dogs for this customer
+    const cust=custs.find(x=>x.id===currentCustId);
+    const existing=dogsOf(currentCustId);
+    let maxN=0;
+    existing.forEach(d=>{
+      const m=(d.dog_code||'').match(/-D(\d+)$/);
+      if(m){const n=parseInt(m[1]);if(n>maxN)maxN=n}
+    });
+    p.dog_code=`${cust?.customer_code||'CUST-???'}-D${maxN+1}`;
+    await db.from('dogs').insert(p);
+  }
   cm('ov-dog'); await loadAll();
 }
 
@@ -574,7 +596,7 @@ function renderHist(){
       <td style="white-space:nowrap">${fmtD(v.visited_at)}</td>
       <td>${esc(v.note)||'—'}</td>
       <td>${esc(c?.area||v.dogs?.area)||'—'}</td>
-      <td>${v.dogs?.size?`<span class="badge ${v.dogs.size==='Large'?'bl':v.dogs.size==='Medium'?'bm':'bs'}">${v.dogs.size}</span>`:'—'}</td>
+      <td>${v.dogs?.size?`<span class="badge ${['Large','XL'].includes(v.dogs.size)?'bl':v.dogs.size==='Medium'?'bm':'bs'}">${v.dogs.size}</span>`:'—'}</td>
     </tr>`;
   }).join('');
 }
