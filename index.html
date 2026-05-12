@@ -412,7 +412,7 @@ tbody tr:hover{background:var(--subtle)}
  <div class="form-grid">
  <div class="fg"><label>Dog name *</label><input id="df-name" placeholder="Buddy"/></div>
  <div class="fg"><label>Type / Breed</label><input id="df-breed" placeholder="Poodle"/></div>
- <div class="fg"><label>Age</label><input id="df-age" placeholder="e.g. 2 years, 5 months"/></div>
+ <div class="fg"><label>Age (tahun)</label><input type="number" id="df-age" placeholder="e.g. 3" min="0" step="0.5"/></div>
  <div class="fg"><label>Weight</label><input id="df-weight" placeholder="e.g. 8 kg"/></div>
  <div class="fg"><label>Size</label><select id="df-size"><option value="">Select…</option><option>XS</option><option>Small</option><option>Medium</option><option>Large</option><option>XL</option></select></div>
  <div class="fg"><label>Coat</label><select id="df-coat"><option value="">Select…</option><option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option></select></div>
@@ -504,6 +504,19 @@ function gmapsUrl(addr,manual){
  if(manual) return manual;
  if(!addr) return '';
  return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(addr);
+}
+function calcAge(ageAtInput, createdAt){
+ // ageAtInput = years when added, createdAt = ISO timestamp
+ if(!ageAtInput && !createdAt) return null;
+ const base=parseFloat(ageAtInput)||0;
+ if(!createdAt) return base?`${base} thn`:null;
+ const created=new Date(createdAt), now=new Date();
+ const yearsElapsed=(now-created)/(1000*60*60*24*365.25);
+ const currentAge=base+yearsElapsed;
+ const yrs=Math.floor(currentAge);
+ const mos=Math.floor((currentAge-yrs)*12);
+ if(yrs===0) return `${mos} bln`;
+ return mos>0?`${yrs} thn ${mos} bln`:`${yrs} thn`;
 }
 
 /* AREAS - Kota -> Kecamatan */
@@ -628,7 +641,7 @@ function renderDogsTable(){
  <td><span class="id-pill">${esc(d.dog_code||'—')}</span></td>
  <td><strong>${esc(d.name)}</strong></td>
  <td>${esc(d.breed)||'—'}</td>
- <td>${esc(d.age)||'—'}</td>
+ <td>${calcAge(d.age, d.created_at)||'—'}</td>
  <td>${esc(d.weight)||'—'}</td>
  <td style="max-width:240px;font-size:12px;color:var(--muted)">${esc(d.prefs)||'—'}</td>
  <td><div class="row-actions">
@@ -1212,6 +1225,15 @@ function renderInvDogServices(){
  return `<div class="card" style="padding:1rem;margin-bottom:1rem">
  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
  <div><strong>${esc(d.name)}</strong> <span style="font-size:11px;color:var(--muted)">${esc(d.dog_code||'')} · ${esc(d.size||'?')}</span></div>
+ <div style="display:flex;align-items:center;gap:5px;font-size:11px">
+  <span style="color:var(--muted)">Diskon anjing ini:</span>
+  <select style="padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px" onchange="onDogDiscType('${did}',this.value)">
+   <option value="">-</option>
+   <option value="percent" ${ds.disc_type==='percent'?'selected':''}>%</option>
+   <option value="fixed" ${ds.disc_type==='fixed'?'selected':''}>Rp</option>
+  </select>
+  <input type="number" value="${ds.disc_value||0}" min="0" style="width:65px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px" onchange="onDogDiscValue('${did}',this.value)"/>
+ </div>
  </div>
  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
  ${SERVICE_LIST.map(svc=>{
@@ -1243,6 +1265,16 @@ function onSvcPrice(did,svc,val){
  recalcInvoice();
 }
 
+function onDogDiscType(did,val){
+ if(!invDogServices[did]) invDogServices[did]={services:{}};
+ invDogServices[did].disc_type=val||null;
+ recalcInvoice();
+}
+function onDogDiscValue(did,val){
+ if(!invDogServices[did]) invDogServices[did]={services:{}};
+ invDogServices[did].disc_value=parseFloat(val)||0;
+ recalcInvoice();
+}
 function onIntervalChange(){
  const v=document.getElementById('inv-interval').value;
  document.getElementById('inv-custom-days-wrap').style.display=v==='custom'?'':'none';
@@ -1250,19 +1282,28 @@ function onIntervalChange(){
 
 function calcInvoiceTotals(){
  let perSession=0;
+ let dogDiscAmount=0;
  invSelectedDogs.forEach(did=>{
- const ds=invDogServices[did]?.services||{};
- Object.values(ds).forEach(s=>{if(s.checked) perSession+=(s.price||0)});
+  const ds=invDogServices[did]||{services:{}};
+  let dogTotal=0;
+  Object.values(ds.services||{}).forEach(s=>{if(s.checked) dogTotal+=(s.price||0)});
+  perSession+=dogTotal;
+  // per-dog discount
+  const dt=ds.disc_type, dv=ds.disc_value||0;
+  if(dt==='percent') dogDiscAmount+=Math.round(dogTotal*dv/100);
+  else if(dt==='fixed') dogDiscAmount+=Math.round(dv);
  });
  const sessions=parseInt(document.getElementById('inv-sessions').value)||1;
  const subtotal=perSession*sessions;
+ // global discount on top
  const dtype=document.getElementById('inv-disc-type').value;
  const dval=parseFloat(document.getElementById('inv-disc-value').value)||0;
- let discAmount=0;
- if(dtype==='percent') discAmount=Math.round(subtotal*dval/100);
- else if(dtype==='fixed') discAmount=Math.round(dval);
+ let globalDisc=0;
+ if(dtype==='percent') globalDisc=Math.round(subtotal*dval/100);
+ else if(dtype==='fixed') globalDisc=Math.round(dval);
+ const discAmount=dogDiscAmount*sessions+globalDisc;
  const total=Math.max(0,subtotal-discAmount);
- return {subtotal,perSession,sessions,discAmount,total};
+ return {subtotal,perSession,sessions,discAmount,dogDiscAmount,globalDisc,total};
 }
 
 function recalcInvoice(){
@@ -1281,10 +1322,12 @@ function buildInvoiceRecord(){
  const groomerName=grManual||groomers.find(g=>g.id===grId)?.name||'';
  const dogsData=invSelectedDogs.map(did=>{
  const d=dogs.find(x=>x.id===did);
- const services=Object.entries(invDogServices[did]?.services||{})
+ const ds=invDogServices[did]||{services:{}};
+ const services=Object.entries(ds.services||{})
  .filter(([_,s])=>s.checked)
  .map(([name,s])=>({name,price:s.price||0}));
- return {dog_id:did, dog_code:d?.dog_code, name:d?.name, breed:d?.breed, size:d?.size, services};
+ return {dog_id:did, dog_code:d?.dog_code, name:d?.name, breed:d?.breed, size:d?.size, services,
+  disc_type:ds.disc_type||null, disc_value:ds.disc_value||0};
  });
  const now=new Date();
  const ym=`${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -1358,33 +1401,141 @@ async function saveInvoiceAndAppts(){
 
 function downloadInvoicePDF(){
  const rec=buildInvoiceRecord(); if(!rec) return;
- const bn=bankSettings.bank_name||'Krom Bank';
+ const bn=bankSettings.bank_name||'BCA';
  const ba=bankSettings.bank_account||'770055777787';
  const bh=bankSettings.bank_holder||'Xavier Fidelia Ali';
- const dateStr=new Date(rec.invoice_date).toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});
- let dogsHtml='';
+ // HP-XXX number from INV-YYYYMM-XXXX → strip leading zeros
+ const hpNum='#HP-'+((rec.invoice_number||'').split('-').pop()||'001').replace(/^0+/,'').padStart(3,'0');
+ const invDate=new Date(rec.invoice_date);
+ const dueDate=new Date(invDate); dueDate.setDate(dueDate.getDate()+1);
+ const fmtID=(d)=>new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
+ const cust=custs.find(c=>c.id===rec.customer_id)||{};
+ const fullAddr=[cust.address,cust.kecamatan,cust.kota].filter(Boolean).join(', ');
+ // Build service rows per dog with per-dog discount
+ let serviceRows='';
  rec.dogs.forEach(d=>{
- const svcRows=d.services.map(s=>`<tr><td style="padding:4px 8px">${s.name}</td><td style="padding:4px 8px;text-align:right">${fmtRp(s.price)}</td></tr>`).join('');
- dogsHtml+=`<div style="margin-bottom:12px"><strong>${d.name}</strong> <span style="color:#666;font-size:11px">${d.dog_code||''} · ${d.breed||''} · ${d.size||''}</span>
- <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:4px">${svcRows}</table></div>`;
+  const dogSubtotal=d.services.reduce((a,s)=>a+s.price,0);
+  let dogDisc=0;
+  if(d.disc_type==='percent') dogDisc=Math.round(dogSubtotal*d.disc_value/100);
+  else if(d.disc_type==='fixed') dogDisc=Math.round(d.disc_value||0);
+  const isFree=dogSubtotal===0||dogDisc>=dogSubtotal;
+  d.services.forEach((s,i)=>{
+   const isFirst=i===0;
+   const label=d.services.length>1?s.name:`${s.name}`;
+   if(isFree){
+    serviceRows+=`<tr><td class="svc-name"><strong>${isFirst?d.name+' — ':''}</strong>${label}<div class="svc-sub">Mandi, blow dry, trim, telinga &amp; kuku</div></td><td class="svc-qty">1</td><td class="svc-rate">FREE</td><td class="svc-amt">FREE</td></tr>`;
+   } else {
+    const discLabel=d.disc_type==='percent'?` (${d.disc_value}% off)`:(dogDisc>0?` (-${fmtRp(dogDisc)})`:'');
+    serviceRows+=`<tr><td class="svc-name"><strong>${isFirst?d.name+' — ':''}</strong>${label}${isFirst&&discLabel?discLabel:''}<div class="svc-sub">Mandi, blow dry, trim, telinga &amp; kuku</div></td><td class="svc-qty">1</td><td class="svc-rate">${fmtRp(s.price)}</td><td class="svc-amt">${fmtRp(s.price)}</td></tr>`;
+   }
+  });
  });
- const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${rec.invoice_number}</title>
- <style>body{font-family:Arial;padding:30px;color:#222;max-width:700px;margin:0 auto}h1{color:#16a34a;margin:0 0 4px 0}.hdr{border-bottom:2px solid #16a34a;padding-bottom:12px;margin-bottom:18px;display:flex;justify-content:space-between}.box{background:#f6f6f6;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:13px}.totals{margin-top:18px;border-top:1px solid #ccc;padding-top:10px;font-size:13px}.totals .row{display:flex;justify-content:space-between;padding:3px 0}.totals .total{font-size:15px;font-weight:bold;color:#16a34a;border-top:1px solid #ccc;padding-top:6px;margin-top:6px}.foot{margin-top:24px;font-size:11px;color:#666;border-top:1px solid #eee;padding-top:10px}</style></head><body>
- <div class="hdr"><div><h1>Home Paw Grooming</h1><div style="font-size:11px;color:#666">Mobile Dog Grooming · Jakarta</div></div>
- <div style="text-align:right"><div style="font-weight:bold">INVOICE</div><div style="font-size:12px">${rec.invoice_number}</div><div style="font-size:11px;color:#666">${dateStr}</div></div></div>
- <div class="box"><div><strong>Customer:</strong> ${rec.owner_name} (${rec.customer_code||'-'})</div>
- <div><strong>Groomer:</strong> ${rec.groomer_name||'-'}</div>
- <div><strong>Sesi:</strong> ${rec.sessions}x</div></div>
- ${dogsHtml}
- <div class="totals">
- <div class="row"><span>Subtotal (${rec.sessions} sesi)</span><span>${fmtRp(rec.subtotal)}</span></div>
- ${rec.discount_amount?`<div class="row"><span>Diskon</span><span>-${fmtRp(rec.discount_amount)}</span></div>`:''}
- <div class="row total"><span>Total</span><span>${fmtRp(rec.total)}</span></div>
+ const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${hpNum}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;background:#fff;padding:48px 52px;max-width:720px;margin:0 auto;font-size:13px}
+.top-bar{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:36px}
+.logo{font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#1a1a1a}
+.logo span{color:#e07b39}
+.logo-paw{font-size:10px;display:block;font-weight:400;color:#888;margin-top:2px;letter-spacing:.5px;text-transform:uppercase}
+.inv-label{font-size:11px;font-weight:600;letter-spacing:2px;color:#aaa;text-align:right;margin-bottom:4px}
+.meta-row{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid #e8e8e8;border-bottom:1px solid #e8e8e8;padding:14px 0;margin-bottom:32px}
+.meta-item{padding:0 16px;border-right:1px solid #eee}
+.meta-item:first-child{padding-left:0}
+.meta-item:last-child{border-right:none}
+.meta-lbl{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;margin-bottom:4px}
+.meta-val{font-size:13px;font-weight:600;color:#1a1a1a}
+.bill-row{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:28px}
+.bill-lbl{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;margin-bottom:8px}
+.bill-name{font-size:16px;font-weight:700;margin-bottom:4px}
+.bill-addr{font-size:12px;color:#555;line-height:1.6}
+.svc-table{width:100%;border-collapse:collapse;margin-bottom:24px}
+.svc-table thead tr{border-bottom:1px solid #e8e8e8}
+.svc-table th{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;padding:8px 12px;text-align:left}
+.svc-table th.r{text-align:right}
+.svc-table td{padding:12px 12px;vertical-align:top;border-bottom:1px solid #f5f5f5}
+.svc-name{width:55%}.svc-qty{width:10%;text-align:center}.svc-rate{width:15%;text-align:right}.svc-amt{width:20%;text-align:right;font-weight:700}
+.svc-sub{font-size:10px;color:#aaa;margin-top:2px;font-weight:400}
+.svc-table td.svc-rate,.svc-table td.svc-amt{color:#aaa}
+.svc-table td.svc-amt{color:#1a1a1a}
+.totals-wrap{display:flex;justify-content:flex-end;margin-bottom:32px}
+.totals-box{min-width:260px}
+.tot-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#555}
+.tot-row.final{border-top:1px solid #e8e8e8;margin-top:6px;padding-top:10px;font-size:16px;font-weight:700;color:#1a1a1a}
+.tot-row.final span:last-child{color:#e07b39}
+.pay-section{border-top:1px solid #e8e8e8;padding-top:20px;display:flex;justify-content:space-between;align-items:flex-end}
+.pay-lbl{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;margin-bottom:6px}
+.pay-bank{font-size:12px;color:#888;margin-bottom:4px}
+.pay-acc{font-size:24px;font-weight:700;color:#e07b39;letter-spacing:1px;margin-bottom:4px}
+.pay-note{font-size:11px;color:#aaa;line-height:1.5}
+.pay-due-lbl{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;margin-bottom:4px;text-align:right}
+.pay-due-val{font-size:20px;font-weight:700;color:#aaa;text-align:right}
+.footer{margin-top:36px;border-top:1px solid #f0f0f0;padding-top:16px;display:flex;justify-content:space-between;align-items:center}
+.footer-brand{font-size:12px;font-weight:700;color:#e07b39}
+.footer-brand span{color:#1a1a1a}
+.footer-thanks{font-size:11px;color:#aaa}
+@media print{body{padding:24px 28px}}
+</style></head><body>
+<div class="top-bar">
+ <div>
+  <div class="logo">HOME<br><span>PAW</span></div>
  </div>
- <div class="box" style="margin-top:18px"><strong>Pembayaran:</strong><br>${bn} - ${ba}<br>a.n. ${bh}</div>
- ${rec.notes?`<div class="box"><strong>Catatan:</strong><br>${rec.notes}</div>`:''}
- <div class="foot">Mohon kirimkan bukti pembayaran melalui WhatsApp atau DM Instagram kami. Terima kasih!</div>
- </body></html>`;
+ <div style="text-align:right">
+  <div class="inv-label">+ INVOICE</div>
+ </div>
+</div>
+<div class="meta-row">
+ <div class="meta-item"><div class="meta-lbl">Invoice No.</div><div class="meta-val">${hpNum}</div></div>
+ <div class="meta-item"><div class="meta-lbl">Issue Date</div><div class="meta-val">${fmtID(invDate)}</div></div>
+ <div class="meta-item"><div class="meta-lbl">Due Date</div><div class="meta-val">${fmtID(dueDate)}</div></div>
+ <div class="meta-item"><div class="meta-lbl">Groomer</div><div class="meta-val">${rec.groomer_name||'-'}</div></div>
+</div>
+<div class="bill-row">
+ <div>
+  <div class="bill-lbl">Billed To</div>
+  <div class="bill-name">${rec.owner_name}</div>
+  <div class="bill-addr">${fullAddr||cust.address||'-'}<br>${cust.wa?'+62'+cust.wa.replace(/^0/,''):''}</div>
+ </div>
+ <div>
+  <div class="bill-lbl">Dog Info</div>
+  <div class="bill-name">${rec.dogs.map(d=>d.name).join(' &amp; ')}</div>
+  <div class="bill-addr">
+   Breed: ${rec.dogs.map(d=>d.breed||'?').join(' &amp; ')}<br>
+   Size: ${[...new Set(rec.dogs.map(d=>d.size||'?'))].join(' / ')}<br>
+   ${rec.sessions>1?`Sesi: ${rec.sessions}x`:''}
+  </div>
+ </div>
+</div>
+<table class="svc-table">
+ <thead><tr>
+  <th>Service</th><th class="r" style="text-align:center">QTY</th><th class="r">Rate</th><th class="r">Amount</th>
+ </tr></thead>
+ <tbody>${serviceRows}</tbody>
+</table>
+<div class="totals-wrap">
+ <div class="totals-box">
+  <div class="tot-row"><span>Subtotal</span><span>${fmtRp(rec.subtotal)}</span></div>
+  ${rec.discount_amount?`<div class="tot-row"><span>Diskon</span><span>— ${fmtRp(rec.discount_amount)}</span></div>`:''}
+  <div class="tot-row final"><span>Total</span><span>${fmtRp(rec.total)}</span></div>
+ </div>
+</div>
+<div class="pay-section">
+ <div>
+  <div class="pay-lbl">+ Payment Details</div>
+  <div class="pay-bank">${bn} — a/n ${bh}</div>
+  <div class="pay-acc">${ba}</div>
+  <div class="pay-note">Transfer sesuai nominal.<br>Kirim bukti via WhatsApp / DM Instagram.</div>
+ </div>
+ <div>
+  <div class="pay-due-lbl">Amount Due</div>
+  <div class="pay-due-val">${fmtRp(rec.total)}</div>
+ </div>
+</div>
+<div class="footer">
+ <div class="footer-brand">HomePaw <span>— Dog Home Grooming · Jakarta</span></div>
+ <div class="footer-thanks">Thank you for trusting HomePaw!</div>
+</div>
+</body></html>`;
  const w=window.open('','_blank');
  w.document.write(html); w.document.close();
  setTimeout(()=>w.print(),300);
