@@ -1601,7 +1601,7 @@ function initInvoiceTab(){
  cs.innerHTML='<option value="">Pilih customer…</option>'+custs.map(c=>`<option value="${c.id}">${esc(c.customer_code||'?')} - ${esc(c.owner)}</option>`).join('');
  const gs=document.getElementById('inv-groomer');
  gs.innerHTML='<option value="">Pilih groomer…</option>'+groomers.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
- const t=new Date().toISOString().split('T')[0];
+ const t=isoLocal(new Date());
  if(!document.getElementById('inv-date').value) document.getElementById('inv-date').value=t;
  if(!document.getElementById('inv-first-date').value) document.getElementById('inv-first-date').value=t;
  // Default discount to %
@@ -1621,7 +1621,6 @@ function resetInvoice(){
  document.getElementById('inv-dogs-services').innerHTML='';
  document.getElementById('inv-groomer').value='';
  document.getElementById('inv-groomer-manual').value='';
- document.getElementById('inv-sessions').value=1;
  document.getElementById('inv-interval').value='14';
  document.getElementById('inv-disc-type').value='percent';
  document.getElementById('inv-disc-value').value=0;
@@ -2554,7 +2553,7 @@ async function autoLogPastAppointments(){
  if(_lastHistoryCheck===today)return;
  _lastHistoryCheck=today;
  const cutoff=new Date();cutoff.setDate(cutoff.getDate()-7);
- const cutoffIso=iso(cutoff);
+ const cutoffIso=isoLocal(cutoff);
  const pastAppts=appts.filter(a=>a.appt_date>=cutoffIso&&a.appt_date<today);
  if(!pastAppts.length)return;
  // Log visits
@@ -2627,39 +2626,49 @@ function openInvApptPicker(){
 }
 
 function loadInvFromAppointment(apptId){
- const a=appts.find(x=>x.id===apptId);if(!a){alert('Appointment not found');return;}
- const d=dogs.find(x=>x.id===a.dog_id);if(!d){alert('Dog not found');return;}
- const cid=d.customer_id;if(!cid){alert('Customer not linked');return;}
- // Close picker first
+ const a=appts.find(x=>x.id===apptId);
+ if(!a){alert('Appointment not found');return;}
+ const d=dogs.find(x=>x.id===a.dog_id);
+ if(!d){alert('Dog not found');return;}
+ const cid=d.customer_id;
+ if(!cid){alert('Customer not linked');return;}
+
  cm('ov-inv-appt-picker');
- // Reset and set customer
  resetInvoice();
+
+ // Set customer — this renders dog chips synchronously
  const custSel=document.getElementById('inv-customer');
- if(custSel){custSel.value=cid;onInvCustomerChange();}
- // Set dates
- const dateEl=document.getElementById('inv-date');
- if(dateEl) dateEl.value=a.appt_date;
- const firstEl=document.getElementById('inv-first-date');
- if(firstEl) firstEl.value=a.appt_date;
+ if(custSel){custSel.value=cid; onInvCustomerChange();}
+
  // Set groomer
  if(a.groomer_id){
   const grEl=document.getElementById('inv-groomer');
   if(grEl) grEl.value=a.groomer_id;
  }
- // Auto-select the dog — use requestAnimationFrame to wait for chips to render
- requestAnimationFrame(()=>{
-  requestAnimationFrame(()=>{
-   const chip=document.querySelector(`.chip[data-id="${d.id}"]`);
-   if(chip&&!chip.classList.contains('on')){
-    chip.classList.add('on');
-    if(!invDogServices[d.id]){
-     invDogServices[d.id]={services:{'Basic Grooming':{checked:true,price:priceFor('Basic Grooming',d.size)}}};
-    }
-    if(!invSelectedDogs.includes(d.id)) invSelectedDogs.push(d.id);
-    renderInvDogServices();
-   }
-  });
- });
+
+ // Set dates
+ const dateEl=document.getElementById('inv-date');
+ if(dateEl) dateEl.value=a.appt_date;
+ const firstEl=document.getElementById('inv-first-date');
+ if(firstEl) firstEl.value=a.appt_date;
+
+ // Select dog chip + set service from appointment
+ const chip=document.querySelector(`.chip[data-id="${d.id}"]`);
+ if(chip&&!chip.classList.contains('on')){
+  chip.classList.add('on');
+  // Build service map from appointment's service_base
+  const svcName=a.service_base||'Basic Grooming';
+  const svcPrice=priceFor(svcName,d.size)||priceFor('Basic Grooming',d.size);
+  invDogServices[d.id]={services:{}};
+  // Always check Basic Grooming
+  invDogServices[d.id].services['Basic Grooming']={checked:true, price:priceFor('Basic Grooming',d.size)};
+  // If appointment has extra service, check that too
+  if(svcName!=='Basic Grooming' && PRICING[svcName]){
+   invDogServices[d.id].services[svcName]={checked:true, price:priceFor(svcName,d.size)};
+  }
+  if(!invSelectedDogs.includes(d.id)) invSelectedDogs.push(d.id);
+  renderInvDogServices();
+ }
 }
 
 loadAll().then(()=>autoLogPastAppointments());
