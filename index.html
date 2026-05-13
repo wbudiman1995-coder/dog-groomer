@@ -648,7 +648,7 @@ function weekStart(d) {
  const x=new Date(d), day=x.getDay(), diff=x.getDate()-day+(day===0?-6:1);
  x.setDate(diff); x.setHours(0,0,0,0); return x;
 }
-function iso(d){return d.toISOString().split('T')[0]}
+function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function fmtD(d){return new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})}
 function cm(id){document.getElementById(id).classList.remove('open')}
 function om(id){document.getElementById(id).classList.add('open')}
