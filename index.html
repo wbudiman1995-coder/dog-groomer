@@ -68,7 +68,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* MODAL */
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;align-items:center;justify-content:center;padding:1rem}
 .overlay.open{display:flex}
-.modal{background:var(--surface);border-radius:16px;padding:1.5rem;width:100%;max-width:500px;max-height:88vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+.modal{background:var(--surface);border-radius:16px;padding:1.5rem;width:100%;max-width:500px;max-height:88vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.15);position:relative}
 .modal-title{font-size:16px;font-weight:600;margin-bottom:1.25rem}
 .fg{display:flex;flex-direction:column;gap:4px}
 .fg.full{grid-column:1/-1}
@@ -182,6 +182,8 @@ tbody tr:hover{background:var(--subtle)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .empty{text-align:center;padding:2.5rem 1rem;color:var(--muted);font-size:13px}
 .empty-icon{font-size:30px;display:block;margin-bottom:8px}
+.modal-close{position:absolute;top:12px;right:12px;width:28px;height:28px;border-radius:50%;border:none;background:var(--subtle);color:var(--muted);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;z-index:1}
+.modal-close:hover{background:var(--red);color:var(--red-t)}
 </style>
 </head>
 <body>
@@ -465,6 +467,7 @@ tbody tr:hover{background:var(--subtle)}
 <!-- ADD/EDIT CUSTOMER -->
 <div class="overlay" id="ov-cust">
  <div class="modal">
+ <button class="modal-close" onclick="cm('ov-cust')" title="Close">×</button>
  <div class="modal-title" id="cust-title">Add customer</div>
  <div class="form-grid">
  <div class="fg"><label>Owner name *</label><input id="cf-owner" placeholder="Sarah"/></div>
@@ -485,6 +488,7 @@ tbody tr:hover{background:var(--subtle)}
 <!-- ADD/EDIT DOG -->
 <div class="overlay" id="ov-dog">
  <div class="modal">
+ <button class="modal-close" onclick="cm('ov-dog')" title="Close">×</button>
  <div class="modal-title" id="dog-title">Add dog</div>
  <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">For customer: <strong id="dog-cust-lbl"></strong></div>
  <div class="form-grid">
@@ -506,6 +510,7 @@ tbody tr:hover{background:var(--subtle)}
 <!-- APPOINTMENT WIZARD -->
 <div class="overlay" id="ov-appt">
  <div class="modal" style="max-width:500px">
+ <button class="modal-close" onclick="cm('ov-appt')" title="Close">×</button>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.1rem">
    <div class="modal-title" id="appt-title" style="margin:0">Schedule appointment</div>
    <div style="display:flex;gap:4px" id="wiz-dots"></div>
@@ -586,6 +591,7 @@ tbody tr:hover{background:var(--subtle)}
 <!-- GROOMER -->
 <div class="overlay" id="ov-groomer">
  <div class="modal" style="max-width:380px">
+ <button class="modal-close" onclick="cm('ov-groomer')" title="Close">×</button>
  <div class="modal-title" id="groomer-title">Add groomer</div>
  <div class="form-grid">
  <div class="fg full"><label>Name *</label><input id="gf-name" placeholder="e.g. Pak Budi"/></div>
@@ -603,6 +609,7 @@ tbody tr:hover{background:var(--subtle)}
 <!-- BANK SETTINGS -->
 <div class="overlay" id="ov-bank">
  <div class="modal" style="max-width:380px">
+ <button class="modal-close" onclick="cm('ov-bank')" title="Close">×</button>
  <div class="modal-title">Bank settings (for invoices)</div>
  <div class="form-grid">
  <div class="fg full"><label>Bank name</label><input id="bf-name" placeholder="Krom Bank"/></div>
@@ -1250,13 +1257,12 @@ function renderWizSlots(){
   groomers.filter(g=>g.active).map(g=>`<option value="${g.id}" ${g.id===wiz.groomerId?'selected':''}>${esc(g.name)}</option>`).join('');
  gs.onchange=()=>{wiz.groomerId=gs.value;wiz.startMins=null;renderWizSlots()};
 
- // Always sync date: input takes priority over wiz.date
+ // Sync date: wiz.date takes priority (set from calendar click), then input value, then today
  const di=document.getElementById('wiz-date');
  if(di){
-  if(!di.value) di.value=wiz.date||iso(new Date());
-  // If wiz.date was pre-set from calendar click, update input too
-  if(wiz.date && !di.value) di.value=wiz.date;
-  wiz.date=di.value;
+  if(wiz.date) di.value=wiz.date;
+  else if(di.value) wiz.date=di.value;
+  else { wiz.date=iso(new Date()); di.value=wiz.date; }
   di.onchange=()=>{wiz.date=di.value;wiz.startMins=null;renderWizSlots()};
  }
 
@@ -1328,18 +1334,26 @@ function openAppt(dateISO,groomerId,startMins){
 function openApptEdit(id){
  const a=appts.find(x=>x.id===id);if(!a)return;
  const d=dogs.find(x=>x.id===a.dog_id);
- wiz={step:4,custId:d?.customer_id||null,dogSvcs:d?[{did:d.id,svc:a.service_base||'Basic Grooming'}]:[],groomerId:a.groomer_id,date:a.appt_date,startMins:t2m(a.appt_time||'09:00'),editId:id};
+ const custId=d?.customer_id||null;
+ wiz={
+  step:1,custId,
+  dogSvcs:d?[{did:d.id,svc:a.service_base||'Basic Grooming',customDur:a.duration_mins||null}]:[],
+  groomerId:a.groomer_id,date:a.appt_date,
+  startMins:t2m(a.appt_time||'09:00'),editId:id,tokenId:a.token_id||null
+ };
  document.getElementById('appt-title').textContent='Edit appointment';
  document.getElementById('appt-save-btn').textContent='Update';
  document.getElementById('appt-del-btn').style.display='inline-flex';
  document.getElementById('appt-note').value=a.appt_note||'';
- const cs=document.getElementById('appt-cust');
- cs.innerHTML='<option value="">Select customer…</option>'+
-  custs.map(c=>`<option value="${c.id}" ${c.id===wiz.custId?'selected':''}>${esc(c.customer_code||'?')} – ${esc(c.owner)}</option>`).join('');
- wizShow(4);renderWizSummary();
+ const cv=custs.find(x=>x.id===custId);
+ document.getElementById('appt-cust').value=custId||'';
+ document.getElementById('appt-cust-search').value=cv?cv.owner:'';
+ populateWizCustList();
+ const info=document.getElementById('wiz-cust-info');
+ if(cv&&info){info.style.display='block';info.innerHTML='<strong>'+esc(cv.owner)+'</strong> · '+esc(cv.kota||cv.area||'-')+' · WA: '+esc(cv.wa||'-');}
+ wizShow(3);renderWizSlots();renderWizTokens();
  om('ov-appt');
 }
-
 async function saveAppt(){
  if(!wiz.groomerId||!wiz.date||wiz.startMins===null||!wiz.dogSvcs.length){
   alert('Incomplete booking details');return;
