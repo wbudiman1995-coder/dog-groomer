@@ -221,7 +221,7 @@ tbody tr:hover{background:var(--subtle)}
 
  <div class="subsec active" id="ssec-cust">
  <div class="filter-bar">
- <input id="cs" placeholder="Search customer / area / WA…" oninput="renderCusts()" style="min-width:220px;flex:1"/>
+ <input id="cs" placeholder="Search customer / area / WA…" oninput="debouncedRenderCusts()" style="min-width:220px;flex:1"/>
  </div>
  <div class="tbl-wrap">
  <table><thead><tr>
@@ -261,7 +261,7 @@ tbody tr:hover{background:var(--subtle)}
  <div class="sec" id="sec-history">
  <div class="toolbar"><span class="toolbar-title">Grooming history</span></div>
  <div class="filter-bar">
- <input id="hs" placeholder="Search…" oninput="renderHist()" style="min-width:160px"/>
+ <input id="hs" placeholder="Search…" oninput="debouncedRenderHist()" style="min-width:160px"/>
  <select id="hd" onchange="renderHist()"><option value="">All dogs</option></select>
  <select id="hsort" onchange="renderHist()"><option value="desc">Newest first</option><option value="asc">Oldest first</option></select>
  </div>
@@ -408,7 +408,7 @@ tbody tr:hover{background:var(--subtle)}
  <option value="unpaid">Unpaid only</option>
  <option value="paid">Paid only</option>
  </select>
- <input id="fin-search" placeholder="Search invoice/customer…" oninput="renderFinancial()" style="min-width:180px"/>
+ <input id="fin-search" placeholder="Search invoice/customer…" oninput="debouncedRenderFin()" style="min-width:180px"/>
  </div>
  <div id="fin-totals" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:.9rem"></div>
  <div class="tbl-wrap">
@@ -433,15 +433,15 @@ tbody tr:hover{background:var(--subtle)}
    </div>
    <div class="fg">
     <label>Pickup point (opsional)</label>
-    <input id="rem-pickup" placeholder="e.g. Rumah Mas Xavier, Gg. Macan B4 No.11" oninput="generateReminders()"/>
+    <input id="rem-pickup" placeholder="e.g. Rumah Mas Xavier, Gg. Macan B4 No.11" oninput="debouncedGenRem()"/>
    </div>
    <div class="fg">
     <label>Pickup time (opsional)</label>
-    <input id="rem-pickup-time" placeholder="e.g. 08:00" oninput="generateReminders()"/>
+    <input id="rem-pickup-time" placeholder="e.g. 08:00" oninput="debouncedGenRem()"/>
    </div>
    <div class="fg">
     <label>Catatan tambahan (opsional)</label>
-    <input id="rem-extra-note" placeholder="e.g. Kamis besok kita break ya" oninput="generateReminders()"/>
+    <input id="rem-extra-note" placeholder="e.g. Kamis besok kita break ya" oninput="debouncedGenRem()"/>
    </div>
   </div>
  </div>
@@ -654,6 +654,11 @@ function fmtD(d){return new Date(d).toLocaleDateString('id-ID',{day:'numeric',mo
 function cm(id){document.getElementById(id).classList.remove('open')}
 function om(id){document.getElementById(id).classList.add('open')}
 function esc(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function debounce(fn,ms=200){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
+const debouncedRenderCusts=debounce(()=>renderCusts());
+const debouncedRenderHist=debounce(()=>renderHist());
+const debouncedRenderFin=debounce(()=>renderFinancial());
+const debouncedGenRem=debounce(()=>generateReminders(),300);
 function gmapsUrl(addr,manual){
  if(manual) return manual;
  if(!addr) return '';
@@ -726,35 +731,45 @@ function swSub(sub){
  if(sub==='cust') renderCusts();
 }
 
-async function loadAll() {
- const [cr,dr,vr,ar,gr,ir,br,tr] = await Promise.all([
- db.from('customers').select('*').order('created_at',{ascending:false}),
- db.from('dogs').select('*').order('created_at',{ascending:false}),
- db.from('visits').select('*,dogs(name,size)').order('visited_at',{ascending:false}),
- db.from('appointments').select('*,dogs(name,breed,size,prefs)').order('appt_date').order('appt_time'),
- db.from('groomers').select('*').order('created_at'),
- db.from('invoices').select('*').order('created_at',{ascending:false}),
- db.from('business_settings').select('*').eq('id',1).single(),
- db.from('tokens').select('*').order('created_at',{ascending:false})
- ]);
- custs=cr.data||[]; dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[]; groomers=gr.data||[]; invoices=ir.data||[]; bankSettings=br.data||{}; tokens=tr.data||[];
- // Rebuild dropdowns
- const opts=dogs.map(d=>`<option value="${d.id}">${esc(d.name)} (${esc(getOwnerName(d.customer_id))})</option>`).join('');
- const hdEl=document.getElementById('hd'); if(hdEl) hdEl.innerHTML='<option value="">All dogs</option>'+opts;
- const apptDogEl=document.getElementById('appt-dog'); if(apptDogEl) apptDogEl.innerHTML='<option value="">Select dog…</option>'+opts;
- const gopts=groomers.filter(g=>g.active).map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
- const apptGrEl=document.getElementById('appt-groomer'); if(apptGrEl) apptGrEl.innerHTML='<option value="">Select groomer…</option>'+gopts;
- // Re-render active tab
- const activeTab=document.querySelector('.nav-tab.active')?.id?.replace('tab-','');
- if(activeTab==='database') renderCusts();
- else if(activeTab==='history') renderHist();
- else if(activeTab==='calendar') renderCal();
- else if(activeTab==='groomers') renderGroomers();
- else if(activeTab==='financial') renderFinancial();
- else if(activeTab==='reminders') generateReminders();
+// ---- TARGETED LOADERS (replaces monolithic loadAll) ----
+function rerender(){
+ const t=document.querySelector('.nav-tab.active')?.id?.replace('tab-','');
+ if(t==='database'){if(document.getElementById('ssec-dogs').classList.contains('active'))renderDogsTable();else renderCusts();}
+ else if(t==='history')renderHist();
+ else if(t==='calendar')renderCal();
+ else if(t==='groomers')renderGroomers();
+ else if(t==='financial')renderFinancial();
+ else if(t==='reminders')generateReminders();
+ else if(t==='invoice'){}
  else renderCusts();
 }
-
+function rebuildDropdowns(){
+ const opts=dogs.map(d=>`<option value="${d.id}">${esc(d.name)} (${esc(getOwnerName(d.customer_id))})</option>`).join('');
+ const hdEl=document.getElementById('hd');if(hdEl)hdEl.innerHTML='<option value="">All dogs</option>'+opts;
+ const gopts=groomers.filter(g=>g.active).map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
+}
+async function loadCusts(){const r=await db.from('customers').select('*').order('created_at',{ascending:false});custs=r.data||[];}
+async function loadDogs(){const r=await db.from('dogs').select('*').order('created_at',{ascending:false});dogs=r.data||[];rebuildDropdowns();}
+async function loadVisits(){const r=await db.from('visits').select('*,dogs(name,size)').order('visited_at',{ascending:false});visits=r.data||[];}
+async function loadAppts(){const r=await db.from('appointments').select('*,dogs(name,breed,size,prefs)').order('appt_date').order('appt_time');appts=r.data||[];}
+async function loadGroomers(){const r=await db.from('groomers').select('*').order('created_at');groomers=r.data||[];rebuildDropdowns();}
+async function loadInvoices(){const r=await db.from('invoices').select('*').order('created_at',{ascending:false});invoices=r.data||[];}
+async function loadTokens(){const r=await db.from('tokens').select('*').order('created_at',{ascending:false});tokens=r.data||[];}
+async function loadBank(){const r=await db.from('business_settings').select('*').eq('id',1).single();bankSettings=r.data||{};}
+async function loadAll(){
+ const [cr,dr,vr,ar,gr,ir,br,tr]=await Promise.all([
+  db.from('customers').select('*').order('created_at',{ascending:false}),
+  db.from('dogs').select('*').order('created_at',{ascending:false}),
+  db.from('visits').select('*,dogs(name,size)').order('visited_at',{ascending:false}),
+  db.from('appointments').select('*,dogs(name,breed,size,prefs)').order('appt_date').order('appt_time'),
+  db.from('groomers').select('*').order('created_at'),
+  db.from('invoices').select('*').order('created_at',{ascending:false}),
+  db.from('business_settings').select('*').eq('id',1).single(),
+  db.from('tokens').select('*').order('created_at',{ascending:false})
+ ]);
+ custs=cr.data||[];dogs=dr.data||[];visits=vr.data||[];appts=ar.data||[];groomers=gr.data||[];invoices=ir.data||[];bankSettings=br.data||{};tokens=tr.data||[];
+ rebuildDropdowns();rerender();
+}
 function getOwnerName(custId){
  const c=custs.find(x=>x.id===custId);
  return c?c.owner:'—';
@@ -873,7 +888,7 @@ async function saveCust(){
  p.customer_code=`CUST-${String(maxN+1).padStart(3,'0')}`;
  await db.from('customers').insert(p);
  }
- cm('ov-cust'); await loadAll();
+ cm('ov-cust'); await loadCusts(); renderCusts();
 }
 
 async function delCust(id,name){
@@ -881,7 +896,7 @@ async function delCust(id,name){
  await db.from('dogs').delete().eq('customer_id',id);
  await db.from('customers').delete().eq('id',id);
  if(currentCustId===id) currentCustId=null;
- await loadAll();
+ await loadCusts(); await loadDogs(); renderCusts();
 }
 
 /* DOG MODAL */
@@ -942,20 +957,20 @@ async function saveDog(){
  p.dog_code=`${cust?.customer_code||'CUST-???'}-D${maxN+1}`;
  await db.from('dogs').insert(p);
  }
- cm('ov-dog'); await loadAll();
+ cm('ov-dog'); await loadDogs(); renderDogsTable();
 }
 
 async function delDog(id,name){
  if(!confirm(`Delete dog "${name}"? Cannot be undone.`)) return;
  await db.from('dogs').delete().eq('id',id);
- await loadAll();
+ await loadDogs(); renderDogsTable();
 }
 
 async function addVisit(dogId){
  const inp=document.getElementById('vn-'+dogId);
  const note=inp.value.trim(); if(!note) return;
  await db.from('visits').insert({dog_id:dogId,note,visited_at:new Date().toISOString().split('T')[0]});
- inp.value=''; await loadAll();
+ inp.value=''; await loadVisits(); renderHist();
 }
 
 /* HISTORY */
@@ -1130,7 +1145,7 @@ async function onDrop(e){
  const newTime=m2t(nm)+':00';
  if(a.appt_date===nd&&a.groomer_id===ng&&a.appt_time?.slice(0,5)===m2t(nm))return;
  await db.from('appointments').update({appt_date:nd,groomer_id:ng,appt_time:newTime}).eq('id',draggedId);
- await loadAll();renderCal();
+ await loadAppts(); renderCal();
 }
 
 /* ---- 4-STEP BOOKING WIZARD ---- */
@@ -1380,20 +1395,20 @@ async function saveAppt(){
   if(error){alert('Error: '+error.message);return}
  }
  calDay=wiz.date;
- cm('ov-appt');await loadAll();renderCal();
+ cm('ov-appt');await loadAppts();await loadVisits();renderCal();
 }
 
 async function delApptFromModal(){
  if(!wiz.editId)return;
  if(!confirm('Delete this appointment?'))return;
  await db.from('appointments').delete().eq('id',wiz.editId);
- cm('ov-appt');await loadAll();renderCal();
+ cm('ov-appt');await loadAppts();renderCal();
 }
 
 async function delAppt(id){
  if(!confirm('Remove appointment?'))return;
  await db.from('appointments').delete().eq('id',id);
- await loadAll();renderCal();
+ await loadAppts(); renderCal();
 }
 /* GROOMERS TAB */
 function renderGroomers(){
@@ -1449,7 +1464,7 @@ async function saveGroomer(){
  };
  if(groomerEditId){await db.from('groomers').update(p).eq('id',groomerEditId)}
  else{await db.from('groomers').insert(p)}
- cm('ov-groomer'); await loadAll(); renderGroomers();
+ cm('ov-groomer'); await loadGroomers(); renderGroomers(); renderCal();
 }
 
 async function delGroomer(id,name){
@@ -1458,7 +1473,7 @@ async function delGroomer(id,name){
  if(ac) msg+=` ${ac} appointment(s) will be unassigned.`;
  if(!confirm(msg)) return;
  await db.from('groomers').delete().eq('id',id);
- await loadAll(); renderGroomers();
+ await loadGroomers(); renderGroomers(); renderCal();
 }
 
 /* ROUTE */
@@ -2035,7 +2050,7 @@ async function saveInvoice(){
  await saveVisitsFromInvoice(rec);
  await createTokensFromInvoice(rec);
  alert('Invoice tersimpan: '+rec.invoice_number);
- await loadAll();
+ await loadInvoices(); await loadVisits(); await loadTokens();
 }
 
 async function saveInvoiceAndAppts(){
@@ -2078,7 +2093,7 @@ async function saveInvoiceAndAppts(){
   if(e2){alert('Appt save error: '+e2.message);return}
  }
  alert(`Invoice ${rec.invoice_number}${rec.is_advance?` + ${totalSessions} sesi ke kalender`:''} tersimpan`);
- await loadAll();
+ await loadInvoices(); await loadAppts(); await loadVisits(); await loadTokens();
 }
 
 function buildServiceRows(dogsData){
@@ -2352,13 +2367,13 @@ function renderFinancial(){
 
 async function toggleInvStatus(id,newSt){
  await db.from('invoices').update({status:newSt}).eq('id',id);
- await loadAll(); renderFinancial();
+ await loadInvoices(); renderFinancial();
 }
 
 async function delInvoice(id,num){
  if(!confirm(`Delete invoice ${num}?`)) return;
  await db.from('invoices').delete().eq('id',id);
- await loadAll(); renderFinancial();
+ await loadInvoices(); renderFinancial();
 }
 
 function openBankSettings(){
@@ -2377,7 +2392,7 @@ async function saveBankSettings(){
  updated_at:new Date().toISOString()
  };
  await db.from('business_settings').upsert(p);
- cm('ov-bank'); await loadAll();
+ cm('ov-bank'); await loadBank();
 }
 
 /* ============ REMINDERS ============ */
@@ -2560,7 +2575,7 @@ async function autoLogPastAppointments(){
   await db.from('appointments').update({token_used:true}).eq('id',a.id);
   console.log(`Deducted 1 token from ${tok.id}, now ${newUsed}/${tok.sessions_total} used`);
  }
- if(toLog.length||apptWithTokens.length) await loadAll();
+ if(toLog.length||apptWithTokens.length){await loadAppts();await loadVisits();await loadTokens();rerender();}
 }
 
 /* ========== #10 PHOTO UPLOAD ========== */
