@@ -648,7 +648,8 @@ function weekStart(d) {
  const x=new Date(d), day=x.getDay(), diff=x.getDate()-day+(day===0?-6:1);
  x.setDate(diff); x.setHours(0,0,0,0); return x;
 }
-function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function iso(d){return d.toISOString().split('T')[0]}
+function isoLocal(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function fmtD(d){return new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})}
 function cm(id){document.getElementById(id).classList.remove('open')}
 function om(id){document.getElementById(id).classList.add('open')}
@@ -992,9 +993,9 @@ function renderHist(){
 
 /* CALENDAR */
 /* CALENDAR — groomer rows x 7 days, drag-drop appointments */
-function calPrev(){calStart.setDate(calStart.getDate()-7);calDay=iso(calStart);renderCal()}
-function calNext(){calStart.setDate(calStart.getDate()+7);calDay=iso(calStart);renderCal()}
-let calDay=iso(new Date());
+function calPrev(){calStart.setDate(calStart.getDate()-7);calDay=isoLocal(calStart);renderCal()}
+function calNext(){calStart.setDate(calStart.getDate()+7);calDay=isoLocal(calStart);renderCal()}
+let calDay=isoLocal(new Date());
 
 /* ---- DURATION LOGIC ---- */
 const DUR_BASE={XS:60,Small:60,S:60,Medium:90,M:90,Large:120,L:120,XL:120};
@@ -1030,12 +1031,12 @@ function renderCal(){
   calStart.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+
   end.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
  const today=new Date();today.setHours(0,0,0,0);
- const todayIso=iso(today);
+ const todayIso=isoLocal(today);
 
  const wdays=[];
  for(let i=0;i<7;i++){
   const d=new Date(calStart);d.setDate(d.getDate()+i);
-  wdays.push({d,iso_:iso(d),lbl:days[i],num:d.getDate(),isToday:d.getTime()===today.getTime()});
+  wdays.push({d,iso_:isoLocal(d),lbl:days[i],num:d.getDate(),isToday:d.getTime()===today.getTime()});
  }
  if(!wdays.find(w=>w.iso_===calDay))calDay=wdays[0].iso_;
 
@@ -1262,7 +1263,7 @@ function renderWizSlots(){
  if(di){
   if(wiz.date) di.value=wiz.date;
   else if(di.value) wiz.date=di.value;
-  else { wiz.date=iso(new Date()); di.value=wiz.date; }
+  else { wiz.date=isoLocal(new Date()); di.value=wiz.date; }
   di.onchange=()=>{wiz.date=di.value;wiz.startMins=null;renderWizSlots()};
  }
 
@@ -1315,7 +1316,7 @@ function populateWizCustList(){
 }
 
 function openAppt(dateISO,groomerId,startMins){
- wiz={step:1,custId:null,dogSvcs:[],groomerId:groomerId||null,date:dateISO||iso(new Date()),startMins:startMins??null,editId:null,tokenId:null};
+ wiz={step:1,custId:null,dogSvcs:[],groomerId:groomerId||null,date:dateISO||isoLocal(new Date()),startMins:startMins??null,editId:null,tokenId:null};
  document.getElementById('appt-title').textContent='Schedule appointment';
  document.getElementById('appt-save-btn').textContent='Save appointment';
  document.getElementById('appt-del-btn').style.display='none';
@@ -1614,7 +1615,7 @@ function resetInvoice(){
 }
 
 function loadInvFromToday(){
- const todayStr=iso(new Date());
+ const todayStr=isoLocal(new Date());
  const todayAppts=appts.filter(a=>a.appt_date===todayStr)
   .sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
  if(!todayAppts.length){
@@ -1964,7 +1965,7 @@ function buildInvoiceRecord(){
   owner_name:invSelectedCust.owner,
   groomer_id:grId||null,
   groomer_name:groomerName,
-  invoice_date:document.getElementById('inv-date').value||iso(new Date()),
+  invoice_date:document.getElementById('inv-date').value||isoLocal(new Date()),
   dogs:dogsData,
   subtotal:t.subtotal,
   sessions:1,
@@ -1982,7 +1983,7 @@ function buildInvoiceRecord(){
 
 async function saveVisitsFromInvoice(rec){
  if(!rec.dogs?.length) return;
- const date=rec.invoice_date||iso(new Date());
+ const date=rec.invoice_date||isoLocal(new Date());
  const existingKeys=new Set(visits.map(v=>v.dog_id+'::'+v.visited_at));
  const rows=rec.dogs
   .filter(d=>d.dog_id&&!existingKeys.has(d.dog_id+'::'+date))
@@ -2534,7 +2535,7 @@ function selectWizToken(id){
 }
 
 async function autoLogPastAppointments(){
- const today=iso(new Date());
+ const today=isoLocal(new Date());
  if(_lastHistoryCheck===today)return;
  _lastHistoryCheck=today;
  const cutoff=new Date();cutoff.setDate(cutoff.getDate()-7);
@@ -2585,7 +2586,7 @@ function buildPhotoHTML(did){
 
 /* ========== #2 LOAD INVOICE FROM APPOINTMENT ========== */
 function openInvApptPicker(){
- const today=iso(new Date());
+ const today=isoLocal(new Date());
  const cutoff=new Date();cutoff.setDate(cutoff.getDate()-14);
  const cutoffIso=iso(cutoff);
  const list=appts.filter(a=>a.appt_date>=cutoffIso)
