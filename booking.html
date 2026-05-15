@@ -185,8 +185,18 @@ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
  <div class="auth-fg"><label>Email</label><input id="su-email" type="email" placeholder="your@email.com"/></div>
  <div class="auth-fg"><label>Password</label><input id="su-pass" type="password" placeholder="Min. 6 characters"/></div>
  <div class="auth-fg"><label>WhatsApp</label><input id="su-wa" placeholder="08xxxxxxxxxx"/></div>
- <div class="auth-fg"><label>Area</label><input id="su-area" placeholder="e.g. Kemang"/></div>
- <button class="auth-btn" onclick="doSignup()">Create account</button>
+ <div class="auth-fg"><label>Kota / Area *</label>
+  <select id="su-kota" style="padding:9px 11px;border:1px solid #e8d5b7;border-radius:8px;font-size:14px;background:#fdf3e7;width:100%;color:#3d1f0d">
+   <option value="">Pilih kota kamu...</option>
+   <option>Jakarta Pusat</option><option>Jakarta Utara</option>
+   <option>Jakarta Selatan</option><option>Jakarta Barat</option>
+   <option>Jakarta Timur</option><option>Alam Sutera</option>
+   <option>Gading Serpong</option><option>BSD</option>
+   <option>Kota Tangerang</option><option>Tangerang Selatan</option>
+   <option>Kabupaten Tangerang</option>
+  </select>
+ </div>
+ <button class="auth-btn" onclick="doSignup()">Daftar sekarang</button>
  <div class="auth-switch">Already have an account? <a href="#" onclick="showView('view-login');return false">Sign in</a></div>
  </div>
  </div>
@@ -1229,10 +1239,12 @@ function loadProfileForm(){
  if(!currentUser)return;
  document.getElementById('p-email').value=currentUser.email||'';
  if(userProfile){
- document.getElementById('p-name').value=userProfile.name||'';
- document.getElementById('p-wa').value=userProfile.phone||'';
- document.getElementById('p-addr').value=userProfile.address||'';
- document.getElementById('p-area').value=userProfile.area||'';
+  document.getElementById('p-name').value=userProfile.owner||userProfile.name||'';
+  document.getElementById('p-wa').value=userProfile.wa||userProfile.phone||'';
+  document.getElementById('p-addr').value=userProfile.address||'';
+  // Set kota dropdown
+  const kotaEl=document.getElementById('p-area');
+  if(kotaEl) kotaEl.value=userProfile.kota||userProfile.area||'';
  }
  renderProfileDogs();
 }
