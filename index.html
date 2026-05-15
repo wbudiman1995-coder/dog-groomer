@@ -1754,23 +1754,21 @@ function onInvSearchChange(val){
 
 function resetInvoice(){
  invSelectedCust=null; invSelectedDogs=[]; invDogServices={}; invDogNotes={}; invPhotos={}; invAdvanceDogs={};
- const si=document.getElementById('inv-customer-search');if(si)si.value='';
- document.getElementById('inv-customer').value='';
- const advCb=document.getElementById('inv-is-advance');
- if(advCb){advCb.checked=false;}
- const advWrap=document.getElementById('inv-advance-wrap');
- if(advWrap) advWrap.style.display='none';
- document.getElementById('inv-customer').value='';
- document.getElementById('inv-cust-summary').style.display='none';
- document.getElementById('inv-dog-picker').innerHTML='<span style="font-size:12px;color:var(--muted)">Pilih customer dulu</span>';
- document.getElementById('inv-dogs-services').innerHTML='';
- document.getElementById('inv-groomer').value='';
- document.getElementById('inv-groomer-manual').value='';
- document.getElementById('inv-sessions').value=1;
- document.getElementById('inv-interval').value='14';
- document.getElementById('inv-disc-type').value='percent';
- document.getElementById('inv-disc-value').value=0;
- document.getElementById('inv-notes').value='';
+ const g=id=>document.getElementById(id); // helper
+ if(g('inv-customer-search')) g('inv-customer-search').value='';
+ if(g('inv-customer')) g('inv-customer').value='';
+ if(g('inv-is-advance')) g('inv-is-advance').checked=false;
+ if(g('inv-advance-wrap')) g('inv-advance-wrap').style.display='none';
+ if(g('inv-cust-summary')) g('inv-cust-summary').style.display='none';
+ if(g('inv-dog-picker')) g('inv-dog-picker').innerHTML='<span style="font-size:12px;color:var(--muted)">Pilih customer dulu</span>';
+ if(g('inv-dogs-services')) g('inv-dogs-services').innerHTML='';
+ if(g('inv-groomer')) g('inv-groomer').value='';
+ if(g('inv-groomer-manual')) g('inv-groomer-manual').value='';
+ if(g('inv-sessions')) g('inv-sessions').value=1;
+ if(g('inv-interval')) g('inv-interval').value='14';
+ if(g('inv-disc-type')) g('inv-disc-type').value='percent';
+ if(g('inv-disc-value')) g('inv-disc-value').value=0;
+ if(g('inv-notes')) g('inv-notes').value='';
  recalcInvoice();
 }
 
