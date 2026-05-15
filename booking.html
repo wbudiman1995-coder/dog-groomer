@@ -251,23 +251,40 @@ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
 
  <!-- PROFILE -->
  <div class="sec" id="sec-profile">
+ <!-- Onboarding banner for new users -->
+ <div id="profile-banner" style="display:none;background:linear-gradient(135deg,#3d1f0d,#e8822a);color:#fff;border-radius:var(--rl);padding:1rem 1.25rem;margin-bottom:1rem">
+  <div style="font-size:15px;font-weight:700;margin-bottom:4px">Selamat datang! Lengkapi profil dulu ya.</div>
+  <div style="font-size:12px;opacity:.9">Isi nama, WhatsApp, dan pilih kotamu sebelum daftar anjing dan booking.</div>
+ </div>
+
  <div style="font-size:16px;font-weight:600;margin-bottom:1rem">My profile</div>
 
  <!-- Customer info -->
  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;margin-bottom:1rem">
- <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.9rem;display:flex;align-items:center;gap:6px">
+ <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.9rem">
  Personal information
  </div>
  <div class="form-grid">
- <div class="fg"><label>Full name</label><input id="p-name" placeholder="Sarah"/></div>
- <div class="fg"><label>WhatsApp</label><input id="p-wa" placeholder="08xxxxxxxxxx"/></div>
+ <div class="fg"><label>Full name *</label><input id="p-name" placeholder="Sarah"/></div>
+ <div class="fg"><label>WhatsApp *</label><input id="p-wa" placeholder="08xxxxxxxxxx"/></div>
  <div class="fg full"><label>Address</label><input id="p-addr" placeholder="Jl. Kemang Raya No.10, Jakarta Selatan"/></div>
- <div class="fg"><label>Area</label><input id="p-area" placeholder="e.g. Kemang"/></div>
+ <div class="fg">
+  <label>Kota *</label>
+  <select id="p-area" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle);color:var(--text);width:100%">
+   <option value="">Pilih kota...</option>
+   <option>Jakarta Pusat</option><option>Jakarta Utara</option>
+   <option>Jakarta Selatan</option><option>Jakarta Barat</option>
+   <option>Jakarta Timur</option><option>Alam Sutera</option>
+   <option>Gading Serpong</option><option>BSD</option>
+   <option>Kota Tangerang</option><option>Tangerang Selatan</option>
+   <option>Kabupaten Tangerang</option>
+  </select>
+ </div>
  <div class="fg"><label>Email</label><input id="p-email" disabled style="background:#f0e8dd;color:var(--muted)"/></div>
  </div>
  <div style="margin-top:1rem">
- <button class="btn btn-p" onclick="saveProfile()"> Save profile</button>
- <span id="p-saved" style="font-size:12px;color:var(--green-dk);margin-left:.75rem;display:none"> Saved!</span>
+ <button class="btn btn-p" onclick="saveProfile()">Simpan profil</button>
+ <span id="p-saved" style="font-size:12px;color:var(--green-dk);margin-left:.75rem;display:none">Tersimpan!</span>
  </div>
  </div>
 
@@ -501,8 +518,18 @@ async function loadMyData(){
  ]);
  userProfile=pr.data;myDogs=dr.data||[];myAppts=ar.data||[];allGroomers=gr.data||[];
  renderWelcome();
- renderMyDogs();
  loadProfileForm();
+ // Re-render whatever tab is currently active
+ const activeTab=document.querySelector('.nav-tab.active')?.id?.replace('tab-','');
+ if(activeTab==='dogs'||!activeTab) renderMyDogs();
+ else if(activeTab==='appointments') renderAppts();
+ else if(activeTab==='profile'){loadProfileForm();renderProfileDogs();}
+ // New user with no profile: force to profile tab
+ if(!myCustomerId||!userProfile?.owner){
+  sw('profile');
+  const banner=document.getElementById('profile-banner');
+  if(banner) banner.style.display='block';
+ }
 }
 
 function renderWelcome(){
@@ -527,20 +554,28 @@ function sw(tab){
 // ── MY DOGS ──────────────────────────────────────────────────
 function renderMyDogs(){
  const g=document.getElementById('my-dog-grid');
+ if(!g)return;
+ if(!myCustomerId){
+  g.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:2rem;color:var(--muted)">
+   <div style="font-size:14px;margin-bottom:.75rem">Lengkapi profil kamu dulu.</div>
+   <button class="btn btn-p" onclick="sw('profile')">Ke halaman profil</button>
+  </div>`;
+  return;
+ }
  let html=myDogs.map(d=>`
  <div class="dog-card" onclick="editDog('${d.id}')">
- <div class="dog-av">${d.emoji||''}</div>
- <div class="dog-nm">${d.name}</div>
- <div class="dog-br">${d.breed||'—'}</div>
- ${sizeBadge(d.size)}
- <div style="display:flex;gap:6px;justify-content:center;margin-top:.75rem">
- <button class="btn btn-p btn-sm" onclick="event.stopPropagation();bookForDog('${d.id}')"> Book</button>
- <button class="btn btn-g btn-sm" onclick="event.stopPropagation();editDog('${d.id}')">️ Edit</button>
- </div>
+  <div class="dog-av" style="background:var(--brown-lt);font-size:24px;display:flex;align-items:center;justify-content:center">🐕</div>
+  <div class="dog-nm">${d.name}</div>
+  <div class="dog-br">${d.breed||'—'}</div>
+  ${sizeBadge(d.size)}
+  <div style="display:flex;gap:6px;justify-content:center;margin-top:.75rem">
+   <button class="btn btn-p btn-sm" onclick="event.stopPropagation();bookForDog('${d.id}')">Book</button>
+   <button class="btn btn-g btn-sm" onclick="event.stopPropagation();editDog('${d.id}')">Edit</button>
+  </div>
  </div>`).join('');
  html+=`<div class="dog-card add-card" onclick="openAddDog()">
- <div style="font-size:28px;margin-bottom:6px">+</div>
- <div style="font-size:13px;font-weight:500">Add dog</div>
+  <div style="font-size:28px;margin-bottom:6px">+</div>
+  <div style="font-size:13px;font-weight:500">Tambah anjing</div>
  </div>`;
  g.innerHTML=html;
 }
@@ -572,21 +607,30 @@ function editDog(id){
 }
 
 async function saveDog(){
+ if(!myCustomerId){
+  alert('Lengkapi profil kamu dulu sebelum mendaftarkan anjing.');
+  cm('ov-dog');sw('profile');return;
+ }
  const name=document.getElementById('d-name').value.trim();
  const size=document.getElementById('d-size').value;
- if(!name||!size){alert('Dog name and size are required.');return}
+ if(!name||!size){alert('Nama anjing dan ukuran wajib diisi.');return}
  const p={name,size,
- breed:document.getElementById('d-breed').value.trim(),
- coat:document.getElementById('d-coat').value,
- gender:document.getElementById('d-gender').value,
- age:document.getElementById('d-age').value.trim(),
- prefs:document.getElementById('d-prefs').value.trim(),
- emoji:'',
- customer_id:myCustomerId
+  breed:document.getElementById('d-breed').value.trim(),
+  coat:document.getElementById('d-coat').value,
+  gender:document.getElementById('d-gender').value,
+  age:document.getElementById('d-age').value.trim(),
+  prefs:document.getElementById('d-prefs').value.trim(),
+  customer_id:myCustomerId
  };
  if(editDogId){await db.from('dogs').update(p).eq('id',editDogId);}
- else{await db.from('dogs').insert(p);}
- cm('ov-dog');await loadMyData();
+ else{
+  const {error}=await db.from('dogs').insert(p);
+  if(error){alert('Error: '+error.message);return;}
+ }
+ cm('ov-dog');
+ await loadMyData();
+ renderMyDogs();
+ renderProfileDogs();
 }
 
 function bookForDog(dogId){
@@ -1120,23 +1164,27 @@ function loadProfileForm(){
 
 async function saveProfile(){
  if(!currentUser)return;
+ const owner=document.getElementById('p-name').value.trim();
+ const wa=document.getElementById('p-wa').value.trim();
+ const kota=document.getElementById('p-area').value;
+ if(!owner||!wa||!kota){alert('Nama, WhatsApp, dan Kota wajib diisi.');return;}
  const p={
- id:currentUser.id,
- name:document.getElementById('p-name').value.trim(),
- phone:document.getElementById('p-wa').value.trim(),
- address:document.getElementById('p-addr').value.trim(),
- area:document.getElementById('p-area').value.trim()
+  owner,
+  wa,
+  address:document.getElementById('p-addr').value.trim(),
+  kota
  };
  if(!myCustomerId){alert('Akun belum terhubung. Hubungi admin.');return;}
-  const{error}=await db.from('customers').update(p).eq('id',myCustomerId);
+ const{error}=await db.from('customers').update(p).eq('id',myCustomerId);
  if(error){alert('Error saving: '+error.message);return;}
- userProfile={...userProfile,...p};
- // Show saved confirmation
+ // Hide onboarding banner
+ const banner=document.getElementById('profile-banner');
+ if(banner) banner.style.display='none';
+ await loadMyData();
+ // After first-time save: go to dogs tab
+ sw('dogs');
  const saved=document.getElementById('p-saved');
- saved.style.display='inline';
- setTimeout(()=>{saved.style.display='none';},2000);
- // Update welcome bar
- renderWelcome();
+ if(saved){saved.style.display='inline';setTimeout(()=>{saved.style.display='none';},2000);}
 }
 
 // ── INIT ─────────────────────────────────────────────────────
