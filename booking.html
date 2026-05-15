@@ -503,6 +503,8 @@ async function loadMyData(){
  if(!currentUser)return;
  const {data:authRow}=await db.from('customer_auth').select('customer_id').eq('id',currentUser.id).single();
  myCustomerId=authRow?.customer_id||null;
+ // Fallback: no customer_auth row yet — profile was created via saveProfile, just reload
+ // (saveProfile creates both rows, so after that loadMyData will find it)
  const [pr,dr,ar,gr]=await Promise.all([
  myCustomerId
   ? db.from('customers').select('*').eq('id',myCustomerId).single()
@@ -1168,20 +1170,23 @@ async function saveProfile(){
  const wa=document.getElementById('p-wa').value.trim();
  const kota=document.getElementById('p-area').value;
  if(!owner||!wa||!kota){alert('Nama, WhatsApp, dan Kota wajib diisi.');return;}
- const p={
-  owner,
-  wa,
-  address:document.getElementById('p-addr').value.trim(),
-  kota
- };
- if(!myCustomerId){alert('Akun belum terhubung. Hubungi admin.');return;}
- const{error}=await db.from('customers').update(p).eq('id',myCustomerId);
- if(error){alert('Error saving: '+error.message);return;}
- // Hide onboarding banner
+ const p={owner,wa,address:document.getElementById('p-addr').value.trim(),kota};
+ let custId=myCustomerId;
+ if(!custId){
+  // No customer row yet — create one and link it
+  const {data:newCust,error:e1}=await db.from('customers').insert(p).select().single();
+  if(e1){alert('Error membuat profil: '+e1.message);return;}
+  custId=newCust.id;
+  const {error:e2}=await db.from('customer_auth').insert({id:currentUser.id,customer_id:custId});
+  if(e2){alert('Error linking profil: '+e2.message);return;}
+  myCustomerId=custId;
+ } else {
+  const {error}=await db.from('customers').update(p).eq('id',custId);
+  if(error){alert('Error saving: '+error.message);return;}
+ }
  const banner=document.getElementById('profile-banner');
  if(banner) banner.style.display='none';
  await loadMyData();
- // After first-time save: go to dogs tab
  sw('dogs');
  const saved=document.getElementById('p-saved');
  if(saved){saved.style.display='inline';setTimeout(()=>{saved.style.display='none';},2000);}
