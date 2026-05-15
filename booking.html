@@ -142,6 +142,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .receipt-total .rgt{color:var(--brown)}
 
 .loading{text-align:center;padding:2.5rem;color:var(--muted)}
+.modal-close{position:absolute;top:.9rem;right:.9rem;width:28px;height:28px;border:none;background:rgba(61,31,13,.1);border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--brown);line-height:1}
+.modal-close:hover{background:rgba(61,31,13,.2)}
+.modal{position:relative}
 .spin{display:inline-block;width:17px;height:17px;border:2px solid var(--border);border-top-color:var(--brown-md);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .empty{text-align:center;padding:2.5rem 1rem;color:var(--muted);font-size:13px}
@@ -303,6 +306,7 @@ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
 <!-- DOG FORM -->
 <div class="overlay" id="ov-dog">
  <div class="modal">
+ <button class="modal-close" onclick="cm('ov-dog')" title="Close">&#x2715;</button>
  <div class="modal-title" id="dog-modal-title">Add dog</div>
  <div class="fg"><label>Dog name *</label><input id="d-name" placeholder="Buddy"/></div>
  <div class="fg"><label>Breed</label><input id="d-breed" placeholder="Poodle"/></div>
@@ -499,12 +503,12 @@ async function doReset(){
 async function doSignOut(){await db.auth.signOut();}
 
 // ── DATA ─────────────────────────────────────────────────────
-async function loadMyData(){
+async function loadMyData(skipRedirect=false){
  if(!currentUser)return;
  const {data:authRow}=await db.from('customer_auth').select('customer_id').eq('id',currentUser.id).single();
- myCustomerId=authRow?.customer_id||null;
- // Fallback: no customer_auth row yet — profile was created via saveProfile, just reload
- // (saveProfile creates both rows, so after that loadMyData will find it)
+ // Only update myCustomerId from DB if we don't already have it
+ // (prevents race condition where fresh INSERT isn't readable yet)
+ if(authRow?.customer_id) myCustomerId=authRow.customer_id;
  const [pr,dr,ar,gr]=await Promise.all([
  myCustomerId
   ? db.from('customers').select('*').eq('id',myCustomerId).single()
@@ -521,13 +525,13 @@ async function loadMyData(){
  userProfile=pr.data;myDogs=dr.data||[];myAppts=ar.data||[];allGroomers=gr.data||[];
  renderWelcome();
  loadProfileForm();
- // Re-render whatever tab is currently active
+ // Re-render current tab
  const activeTab=document.querySelector('.nav-tab.active')?.id?.replace('tab-','');
  if(activeTab==='dogs'||!activeTab) renderMyDogs();
  else if(activeTab==='appointments') renderAppts();
  else if(activeTab==='profile'){loadProfileForm();renderProfileDogs();}
- // New user with no profile: force to profile tab
- if(!myCustomerId||!userProfile?.owner){
+ // Only redirect to profile if not skipping (i.e. not called right after saveProfile)
+ if(!skipRedirect&&(!myCustomerId||!userProfile?.owner)){
   sw('profile');
   const banner=document.getElementById('profile-banner');
   if(banner) banner.style.display='block';
@@ -1173,7 +1177,6 @@ async function saveProfile(){
  const p={owner,wa,address:document.getElementById('p-addr').value.trim(),kota};
  let custId=myCustomerId;
  if(!custId){
-  // No customer row yet — create one and link it
   const {data:newCust,error:e1}=await db.from('customers').insert(p).select().single();
   if(e1){alert('Error membuat profil: '+e1.message);return;}
   custId=newCust.id;
@@ -1184,9 +1187,12 @@ async function saveProfile(){
   const {error}=await db.from('customers').update(p).eq('id',custId);
   if(error){alert('Error saving: '+error.message);return;}
  }
+ // Set userProfile locally immediately — don't wait for DB round-trip
+ userProfile={...(userProfile||{}), ...p, id:custId};
  const banner=document.getElementById('profile-banner');
  if(banner) banner.style.display='none';
- await loadMyData();
+ // Reload with skipRedirect=true so it doesn't bounce back to profile
+ await loadMyData(true);
  sw('dogs');
  const saved=document.getElementById('p-saved');
  if(saved){saved.style.display='inline';setTimeout(()=>{saved.style.display='none';},2000);}
