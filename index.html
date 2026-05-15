@@ -1777,7 +1777,7 @@ function loadInvFromToday(){
  custSel.value=cid;
  onInvCustomerChange();
  // Auto-select dogs from today's appts
- setTimeout(()=>{
+ const doSelectDogs=()=>{
   custMap[cid].appts.forEach(a=>{
    const chip=document.querySelector(`.chip[data-id="${a.dog_id}"]`);
    if(chip&&!chip.classList.contains('on')){
@@ -1788,14 +1788,12 @@ function loadInvFromToday(){
    }
   });
   renderInvDogServices();
-  // Set groomer
   const g=custMap[cid].groomer_id;
   if(g) document.getElementById('inv-groomer').value=g;
-  // Set date to today
   document.getElementById('inv-date').value=todayStr;
-  document.getElementById('inv-first-date').value=todayStr;
-  if(custIds.length>1) alert(`Loaded ${c.owner}'s appointments. ${custIds.length-1} other customer(s) today — switch customer manually to invoice them.`);
- },100);
+  if(custIds.length>1) alert(`Loaded ${c.owner}'s appointments. ${custIds.length-1} other customer(s) today.`);
+ };
+ requestAnimationFrame(()=>requestAnimationFrame(doSelectDogs));
 }
 
 function onInvCustomerChange(){
@@ -1866,19 +1864,12 @@ function renderInvDogServices(){
    onchange="onDogNoteChange('${did}',this.value)"
    style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--subtle);min-height:44px;font-family:inherit;resize:vertical">${esc((invDogNotes||{})[did]||'')}</textarea>
   <div style="font-size:10px;color:var(--muted);margin-top:2px">Past visits: ${visits.filter(v=>v.dog_id===did).length}</div>
-  <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-   <label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:5px;padding:4px 10px;background:var(--subtle);border:1px solid var(--border);border-radius:5px">
-    Before photo
-    <input type="file" accept="image/*" style="display:none" onchange="onPhotoUpload('${did}','before',this)"/>
+  <div style="margin-top:8px">
+   <div id="photo-grid-${did}" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
+   <label style="font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:5px 12px;background:var(--subtle);border:1px solid var(--border);border-radius:5px">
+    + Add photo
+    <input type="file" accept="image/*" multiple style="display:none" onchange="onPhotosAdd('${did}',this)"/>
    </label>
-   <label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:5px;padding:4px 10px;background:var(--subtle);border:1px solid var(--border);border-radius:5px">
-    After photo
-    <input type="file" accept="image/*" style="display:none" onchange="onPhotoUpload('${did}','after',this)"/>
-   </label>
-  </div>
-  <div style="display:flex;gap:8px;margin-top:5px">
-   <img id="photo-prev-${did}-before" style="display:none;height:60px;border-radius:5px;object-fit:cover"/>
-   <img id="photo-prev-${did}-after" style="display:none;height:60px;border-radius:5px;object-fit:cover"/>
   </div>
  </div>
  </div>`;
@@ -2408,7 +2399,7 @@ ${custTokenBalance}
 </div>
 ${(()=>{
  // Page 2: groomer notes + before/after photos (if any)
- const hasContent=rec.dogs.some(d=>d.groomer_notes||(invPhotos&&invPhotos[d.dog_id]&&(invPhotos[d.dog_id].before||invPhotos[d.dog_id].after)));
+ const hasContent=rec.dogs.some(d=>d.groomer_notes||(Array.isArray(invPhotos[d.dog_id])&&invPhotos[d.dog_id].length>0));
  if(!hasContent)return '';
  const dogSections=rec.dogs.map(d=>{
   const notes=d.groomer_notes||'';
@@ -2699,25 +2690,66 @@ async function autoLogPastAppointments(){
  if(toLog.length||apptWithTokens.length) await loadAll();
 }
 
-/* ========== #10 PHOTO UPLOAD ========== */
+/* ========== PHOTOS (unlimited per dog) ========== */
+function onPhotosAdd(did,input){
+ const files=Array.from(input.files);if(!files.length)return;
+ if(!invPhotos[did]) invPhotos[did]=[];
+ let loaded=0;
+ files.forEach(file=>{
+  const reader=new FileReader();
+  reader.onload=e=>{
+   invPhotos[did].push({data:e.target.result,label:''});
+   loaded++;
+   if(loaded===files.length) renderPhotoGrid(did);
+  };
+  reader.readAsDataURL(file);
+ });
+ input.value='';
+}
+
+function renderPhotoGrid(did){
+ const grid=document.getElementById('photo-grid-'+did);
+ if(!grid)return;
+ const photos=invPhotos[did]||[];
+ grid.innerHTML=photos.map((p,i)=>`
+  <div style="position:relative;display:inline-block">
+   <img src="${p.data}" style="width:120px;height:90px;object-fit:contain;border-radius:6px;border:1px solid var(--border);background:#f9f9f9"/>
+   <button onclick="deletePhoto('${did}',${i})" style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center" title="Delete">&#x2715;</button>
+   <input value="${esc(p.label)}" placeholder="e.g. Before, Flea" oninput="setPhotoLabel('${did}',${i},this.value)"
+    style="width:120px;font-size:10px;padding:2px 5px;border:1px solid var(--border);border-radius:4px;margin-top:3px;display:block"/>
+  </div>`).join('');
+}
+
+function deletePhoto(did,idx){
+ if(!invPhotos[did])return;
+ invPhotos[did].splice(idx,1);
+ renderPhotoGrid(did);
+}
+
+function setPhotoLabel(did,idx,val){
+ if(invPhotos[did]&&invPhotos[did][idx]) invPhotos[did][idx].label=val;
+}
+
+function buildPhotoHTML(did){
+ const photos=Array.isArray(invPhotos[did])?invPhotos[did]:[];
+ if(!photos.length) return '';
+ const imgs=photos.map(p=>`<div style="flex:1;min-width:100px;max-width:180px">
+  ${p.label?`<div style="font-size:9px;color:#aaa;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px">${esc(p.label)}</div>`:''}
+  <img src="${p.data}" style="width:100%;height:auto;border-radius:6px;display:block"/>
+ </div>`).join('');
+ return `<div style="display:flex;flex-wrap:wrap;gap:10px;margin:8px 0">${imgs}</div>`;
+}
+
+// Legacy compat
 function onPhotoUpload(did,type,input){
  const file=input.files[0];if(!file)return;
  const reader=new FileReader();
  reader.onload=e=>{
-  if(!invPhotos[did])invPhotos[did]={};
-  invPhotos[did][type]=e.target.result;
-  const prev=document.getElementById('photo-prev-'+did+'-'+type);
-  if(prev){prev.src=e.target.result;prev.style.display='block';}
+  if(!invPhotos[did]) invPhotos[did]=[];
+  invPhotos[did].push({data:e.target.result,label:type});
+  renderPhotoGrid(did);
  };
  reader.readAsDataURL(file);
-}
-function buildPhotoHTML(did){
- const p=invPhotos[did]||{};
- if(!p.before&&!p.after)return '';
- return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0">'
-  +(p.before?'<div><div style="font-size:9px;color:#aaa;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px">Before</div><img src="'+p.before+'" style="width:100%;max-height:120px;object-fit:cover;border-radius:6px"/></div>':'<div></div>')
-  +(p.after?'<div><div style="font-size:9px;color:#aaa;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px">After</div><img src="'+p.after+'" style="width:100%;max-height:120px;object-fit:cover;border-radius:6px"/></div>':'')
-  +'</div>';
 }
 
 /* ========== #2 LOAD INVOICE FROM APPOINTMENT ========== */
@@ -2767,7 +2799,6 @@ function loadInvFromAppointment(apptId){
   const grEl=document.getElementById('inv-groomer');
   if(grEl) grEl.value=a.groomer_id;
  }
- // Auto-select the dog — use requestAnimationFrame to wait for chips to render
  requestAnimationFrame(()=>{
   requestAnimationFrame(()=>{
    const chip=document.querySelector(`.chip[data-id="${d.id}"]`);
