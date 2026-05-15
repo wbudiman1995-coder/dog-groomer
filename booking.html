@@ -102,7 +102,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .month-title{font-size:14px;font-weight:600}
 .date-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .date-dh{text-align:center;font-size:10px;font-weight:600;color:var(--muted);padding:3px;text-transform:uppercase}
-.date-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:var(--r);font-size:13px;cursor:pointer;border:1.5px solid transparent;transition:all .12s}
+.date-cell{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:var(--r);font-size:13px;cursor:pointer;border:1.5px solid transparent;transition:all .12s;padding:2px}
 .date-cell:hover:not(.disabled):not(.empty-cell){background:var(--brown-lt);border-color:var(--brown-md)}
 .date-cell.selected{background:var(--brown);color:#fff;border-color:var(--brown)}
 .date-cell.today{border-color:var(--brown-md);font-weight:600}
@@ -471,7 +471,10 @@ async function doSignup(){
  const {data,error}=await db.auth.signUp({email,password:pass,options:{data:{name}}});
  if(error){err.textContent=error.message;err.style.display='block';return}
  if(data.user){
-  const {data:cust}=await db.from('customers').insert({owner:name,wa,kota}).select().single();
+  // Generate next customer_code
+  const {count}=await db.from('customers').select('*',{count:'exact',head:true});
+  const nextCode='CUST-'+String((count||0)+1).padStart(3,'0');
+  const {data:cust}=await db.from('customers').insert({owner:name,wa,kota,customer_code:nextCode}).select().single();
   if(cust) await db.from('customer_auth').insert({id:data.user.id,customer_id:cust.id});
  }
  alert('Pendaftaran berhasil! Silakan cek email untuk verifikasi lalu login.');
@@ -686,8 +689,7 @@ function renderStep1(){
  return`<div class="step-title">Select your dog</div>
  <div class="dog-grid">${myDogs.map(d=>`
  <div class="dog-card${bk.dog?.id===d.id?' selected':''}" onclick="selectDog('${d.id}')">
- <div class="dog-av">${d.emoji||''}</div>
- <div class="dog-nm">${d.name}</div>
+ <div class="dog-nm" style="margin-top:.5rem">${d.name}</div>
  <div class="dog-br">${d.breed||'—'}</div>
  ${sizeBadge(d.size)}
  </div>`).join('')}
@@ -777,57 +779,113 @@ function updateDurBadge(){
 }
 
 function renderStep3(){
- return`<div class="step-title">Pick a date</div>
+ return`<div class="step-title">Pilih tanggal</div>
+ <div id="groomer-legend" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;min-height:20px"></div>
  <div class="month-nav">
- <button class="btn btn-g btn-sm" onclick="calPickerMonth.setMonth(calPickerMonth.getMonth()-1);renderCalPicker()">←</button>
+ <button class="btn btn-g btn-sm" onclick="calPickerMonth.setMonth(calPickerMonth.getMonth()-1);renderCalPicker()">&#8592;</button>
  <span class="month-title" id="picker-month-title"></span>
- <button class="btn btn-g btn-sm" onclick="calPickerMonth.setMonth(calPickerMonth.getMonth()+1);renderCalPicker()">→</button>
+ <button class="btn btn-g btn-sm" onclick="calPickerMonth.setMonth(calPickerMonth.getMonth()+1);renderCalPicker()">&#8594;</button>
  </div>
  <div id="date-picker-grid"></div>
  <div class="form-actions" style="margin-top:1rem">
- <button class="btn btn-g" onclick="bk.step=2;renderStep()">← Back</button>
+ <button class="btn btn-g" onclick="bk.step=2;renderStep()">&#8592; Back</button>
  </div>`;
 }
 
-function renderCalPicker(){
+let _calSchedCache={}; // date->schedules cache
+
+async function renderCalPicker(){
  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
  const y=calPickerMonth.getFullYear(), m=calPickerMonth.getMonth();
- document.getElementById('picker-month-title').textContent=
- calPickerMonth.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+ const title=document.getElementById('picker-month-title');
+ if(title) title.textContent=calPickerMonth.toLocaleDateString('id-ID',{month:'long',year:'numeric'});
  const firstDay=new Date(y,m,1).getDay();
  const offset=firstDay===0?6:firstDay-1;
  const daysInMonth=new Date(y,m+1,0).getDate();
  const today=new Date();today.setHours(0,0,0,0);
+ const custKota=userProfile?.kota||'';
+
+ // Fetch schedules for entire month
+ const monthStart=`${y}-${String(m+1).padStart(2,'0')}-01`;
+ const monthEnd=`${y}-${String(m+1).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`;
+ const {data:scheds}=await db.from('groomer_schedules')
+  .select('date,is_off,kota_served,groomers(id,name,color)')
+  .gte('date',monthStart).lte('date',monthEnd).eq('is_off',false);
+
+ // Build date -> available groomers map
+ const dateGroomers={};
+ (scheds||[]).forEach(s=>{
+  if(!s.groomers)return;
+  const ks=s.kota_served||[];
+  if(ks.length>0&&!ks.includes(custKota))return; // not serving this kota
+  if(!dateGroomers[s.date])dateGroomers[s.date]=[];
+  dateGroomers[s.date].push(s.groomers);
+ });
+ _calSchedCache=dateGroomers;
+
+ // Render legend
+ const allGroomers=[];
+ const seen=new Set();
+ Object.values(dateGroomers).flat().forEach(g=>{if(!seen.has(g.id)){seen.add(g.id);allGroomers.push(g);}});
+ const legend=document.getElementById('groomer-legend');
+ if(legend) legend.innerHTML=allGroomers.length
+  ? allGroomers.map(g=>`<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 8px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:20px">
+     <span style="width:9px;height:9px;border-radius:50%;background:${g.color||'#16a34a'};display:inline-block"></span>${g.name}
+    </span>`).join('')
+  : '<span style="font-size:11px;color:#9ca3af">No groomer availability this month</span>';
+
+ // Render grid
  let html=`<div class="date-grid">${days.map(d=>`<div class="date-dh">${d}</div>`).join('')}`;
  for(let i=0;i<offset;i++)html+=`<div class="date-cell empty-cell"></div>`;
  for(let day=1;day<=daysInMonth;day++){
- const d=new Date(y,m,day);
- const isoD=iso(d);
- const isPast=d<today;
- const isSel=isoD===bk.date;
- const isToday=d.getTime()===today.getTime();
- html+=`<div class="date-cell${isPast?' disabled':''} ${isSel?' selected':''} ${isToday?' today':''}" onclick="${isPast?'':'selectDate(\''+isoD+'\')'}">${day}</div>`;
+  const d=new Date(y,m,day);
+  const isoD=iso(d);
+  const isPast=d<today;
+  const isSel=isoD===bk.date;
+  const isToday=d.getTime()===today.getTime();
+  const groomersAvail=dateGroomers[isoD]||[];
+  const dots=groomersAvail.map(g=>`<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${g.color||'#16a34a'};margin:0 1px"></span>`).join('');
+  html+=`<div class="date-cell${isPast?' disabled':''}${isSel?' selected':''}${isToday?' today':''}"
+   onclick="${isPast||!groomersAvail.length?'':'selectDate(\''+isoD+'\')'}"
+   style="${!isPast&&!groomersAvail.length?'opacity:.35;cursor:not-allowed':''}">
+   <div>${day}</div>
+   <div style="min-height:8px;margin-top:2px">${dots}</div>
+  </div>`;
  }
  html+=`</div>`;
- document.getElementById('date-picker-grid').innerHTML=html;
+ const grid=document.getElementById('date-picker-grid');
+ if(grid) grid.innerHTML=html;
 }
 
 async function selectDate(isoD){
  bk.date=isoD;bk.groomer=null;bk.time=null;
- bk.step=4;renderStep();
+ // Highlight selected date
+ document.querySelectorAll('.date-cell').forEach(el=>el.classList.remove('selected'));
+ event?.target?.closest('.date-cell')?.classList?.add('selected');
+ // If only 1 groomer available, auto-select
+ const avail=_calSchedCache[isoD]||[];
+ if(avail.length===1){
+  bk.groomer={id:avail[0].id,name:avail[0].name,color:avail[0].color};
+  bk.step=5;renderStep();
+ } else {
+  bk.step=4;renderStep();
+ }
 }
 
 async function renderStep4(){
- const {data:scheds}=await db.from('groomer_schedules')
-  .select('*,groomers(id,name,phone,color)')
-  .eq('date',bk.date).eq('is_off',false);
  const custKota=userProfile?.kota||'';
- // Only show groomers serving customer's kota (empty kota_served = serves all)
- const available=(scheds||[]).filter(s=>{
-  if(!s.groomers)return false;
-  const ks=s.kota_served||[];
-  return ks.length===0||ks.includes(custKota);
- });
+ // Use cache if available, else fetch
+ let available=(_calSchedCache[bk.date]||[]).map(g=>({groomers:g,kota_served:[]}));
+ if(!available.length){
+  const {data:scheds}=await db.from('groomer_schedules')
+   .select('*,groomers(id,name,phone,color)')
+   .eq('date',bk.date).eq('is_off',false);
+  available=(scheds||[]).filter(s=>{
+   if(!s.groomers)return false;
+   const ks=s.kota_served||[];
+   return ks.length===0||ks.includes(custKota);
+  });
+ }
  const c=document.getElementById('step-content');
  if(!available.length){
   c.innerHTML=`<div class="step-title">Pilih groomer</div>
@@ -836,30 +894,25 @@ async function renderStep4(){
   return;
  }
  let html=`<div class="step-title">Pilih groomer — ${fmtDate(bk.date)}</div>`;
- html+=`<div style="font-size:12px;color:var(--muted);margin-bottom:.9rem">Melayani area: <strong>${custKota}</strong></div>`;
- html+=`<div id="groomer-options">${renderGroomerOptions(available)}</div>
-  <div class="form-actions"><button class="btn btn-g" onclick="bk.step=3;renderStep()">Kembali</button></div>`;
+ html+=`<div style="font-size:12px;color:#6b7280;margin-bottom:.9rem">Tersedia di area: <strong>${custKota}</strong></div>`;
+ html+=available.map(s=>{
+  const gr=s.groomers||s;
+  const sel=bk.groomer?.id===gr.id;
+  return`<div class="svc-option${sel?' selected':''}" onclick="selectGroomer('${gr.id}','${gr.name}','${gr.color||'#16a34a'}')" style="display:flex;align-items:center;gap:12px;padding:14px">
+   <span style="width:36px;height:36px;border-radius:50%;background:${gr.color||'#16a34a'};flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px">${gr.name.charAt(0)}</span>
+   <div>
+    <div class="svc-name" style="font-size:14px">${gr.name}</div>
+    <div class="svc-dur" style="margin-top:2px">Tap to select</div>
+   </div>
+  </div>`;
+ }).join('');
+ html+=`<div class="form-actions"><button class="btn btn-g" onclick="bk.step=3;renderStep()">Kembali</button></div>`;
  c.innerHTML=html;
 }
 
-function renderGroomerOptions(scheds){
- if(!scheds.length)return`<div class="empty" style="padding:1rem">Tidak ada groomer di area ini.</div>`;
- return scheds.map(s=>{
-  const gr=s.groomers;if(!gr)return'';
-  const sel=bk.groomer?.id===gr.id;
-  const dot=`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${gr.color||'#16a34a'};margin-right:8px;flex-shrink:0"></span>`;
-  return`<div class="svc-option${sel?' selected':''}" onclick="selectGroomer('${gr.id}','${gr.name}')">
-   ${dot}
-   <div class="svc-name">${gr.name}</div>
-   <div class="svc-dur">${(s.kota_served||[]).slice(0,3).join(', ')||'Semua area'}</div>
-  </div>`;
- }).join('');
-}
-
-function selectGroomer(id,name){
- bk.groomer={id,name};
+function selectGroomer(id,name,color){
+ bk.groomer={id,name,color:color||'#16a34a'};
  bk.step=5;renderStep();
-
 }
 
 async function renderStep5(container){
@@ -900,7 +953,7 @@ async function renderStep5(container){
  }
 
  container.innerHTML=`<div class="step-title">Pick a time slot</div>
- <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">Duration: ${bk.duration} min · ${bk.groomer.emoji} ${bk.groomer.name}</div>
+ <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">Duration: ${bk.duration} min · ${bk.groomer.name}</div>
  ${slots.length?`<div class="slot-grid">${slots.map(s=>`
  <div class="slot${s.taken?' taken':bk.time===s.time?' selected':''}" onclick="${s.taken?'':'selectTime(\''+s.time+'\')'}">
  ${s.time}
@@ -921,19 +974,23 @@ function renderStep6(){
  bk.price=calcPrice(sz,bk.services.styling,bk.services.addons);
  const endTime=calcEndTime(bk.time,bk.duration);
  const services=buildServiceList(sz);
+ const dot=`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${bk.groomer?.color||'#16a34a'};margin-right:5px;vertical-align:middle"></span>`;
 
- return`<div class="step-title">Confirm booking</div>
+ return`<div class="step-title">Konfirmasi booking</div>
  <div style="background:var(--subtle);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;margin-bottom:1rem">
- <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Dog</span><span>${bk.dog?.emoji||''} ${bk.dog?.name} (${sz})</span></div>
- <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Date</span><span>${fmtDate(bk.date)}</span></div>
- <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Time</span><span>${bk.time} – ${endTime}</span></div>
- <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Groomer</span><span>${bk.groomer?.emoji||'️'} ${bk.groomer?.name}</span></div>
- <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Services</span><span style="text-align:right;max-width:200px">${services.map(s=>s.name).join(', ')}</span></div>
- <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;font-weight:600"><span>Total</span><span style="color:var(--brown)">${fmtRp(bk.price)}</span></div>
+ <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:#6b7280">Anjing</span><strong>${bk.dog?.name} (${sz})</strong></div>
+ <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:#6b7280">Tanggal</span><strong>${fmtDate(bk.date)}</strong></div>
+ <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:#6b7280">Waktu</span><strong>${bk.time} – ${endTime}</strong></div>
+ <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:#6b7280">Groomer</span><span>${dot}<strong>${bk.groomer?.name}</strong></span></div>
+ <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:#6b7280">Services</span><span style="text-align:right;max-width:200px">${services.map(s=>s.name).join(', ')}</span></div>
+ <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:15px;font-weight:700"><span>Total</span><span style="color:var(--brown)">${fmtRp(bk.price)}</span></div>
+ </div>
+ <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:var(--r);padding:12px 14px;margin-bottom:1.2rem;font-size:12px;color:#92400e;line-height:1.7">
+  Booking ini berstatus <strong>pending</strong> — admin akan konfirmasi jadwal kamu. Setelah dikonfirmasi, kamu akan dihubungi melalui <strong>WhatsApp</strong>.
  </div>
  <div class="form-actions">
- <button class="btn btn-p" onclick="confirmBooking()"> Confirm booking</button>
- <button class="btn btn-g" onclick="bk.step=5;renderStep()">← Back</button>
+ <button class="btn btn-p" onclick="confirmBooking()">Kirim booking</button>
+ <button class="btn btn-g" onclick="bk.step=5;renderStep()">&#8592; Back</button>
  </div>`;
 }
 
@@ -1010,7 +1067,7 @@ function showReceipt(){
  <div class="receipt-lbl">Booking info</div>
  <div class="receipt-row"><span class="lft">Tanggal</span><span class="rgt">${fmtDate(bk.date)}</span></div>
  <div class="receipt-row"><span class="lft">Jam</span><span class="rgt">${bk.time} – ${endTime}</span></div>
- <div class="receipt-row"><span class="lft">Groomer</span><span class="rgt">${bk.groomer?.emoji||'️'} ${bk.groomer?.name}</span></div>
+ <div class="receipt-row"><span class="lft">Groomer</span><span class="rgt">${bk.groomer?.name}</span></div>
  <div class="receipt-row"><span class="lft">Status</span><span class="rgt" style="color:var(--amb-t)">Pending confirmation</span></div>
  </div>
  <div class="receipt-section">
@@ -1141,8 +1198,7 @@ function renderProfileDogs(){
  if(!g)return;
  let html=myDogs.map(d=>`
  <div class="dog-card" onclick="editDog('${d.id}')">
- <div class="dog-av">${d.emoji||''}</div>
- <div class="dog-nm">${d.name}</div>
+ <div class="dog-nm" style="margin-top:.5rem">${d.name}</div>
  <div class="dog-br">${d.breed||'—'}</div>
  ${sizeBadge(d.size)}
  <div style="display:flex;gap:6px;justify-content:center;margin-top:.75rem">
@@ -1178,7 +1234,9 @@ async function saveProfile(){
  const p={owner,wa,address:document.getElementById('p-addr').value.trim(),kota};
  let custId=myCustomerId;
  if(!custId){
-  const {data:newCust,error:e1}=await db.from('customers').insert(p).select().single();
+  const {count:cnt}=await db.from('customers').select('*',{count:'exact',head:true});
+  const newCode='CUST-'+String((cnt||0)+1).padStart(3,'0');
+  const {data:newCust,error:e1}=await db.from('customers').insert({...p,customer_code:newCode}).select().single();
   if(e1){alert('Error membuat profil: '+e1.message);return;}
   custId=newCust.id;
   const {error:e2}=await db.from('customer_auth').insert({id:currentUser.id,customer_id:custId});
