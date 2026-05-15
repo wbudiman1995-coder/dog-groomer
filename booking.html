@@ -180,6 +180,7 @@ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
  <div class="auth-brand">Create account</div>
  <div class="auth-tagline">Join Home Paw Grooming</div>
  <div class="auth-err" id="signup-err"></div>
+ <div id="signup-ok" style="display:none;background:#dcfce7;color:#15803d;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:.5rem"></div>
  <div class="auth-fg"><label>Full name</label><input id="su-name" placeholder="Sarah"/></div>
  <div class="auth-fg"><label>Email</label><input id="su-email" type="email" placeholder="your@email.com"/></div>
  <div class="auth-fg"><label>Password</label><input id="su-pass" type="password" placeholder="Min. 6 characters"/></div>
@@ -464,21 +465,36 @@ async function doSignup(){
  const wa=document.getElementById('su-wa').value.trim();
  const kota=document.getElementById('su-kota').value;
  const err=document.getElementById('signup-err');
+ const btn=document.querySelector('#view-signup .auth-btn');
  err.style.display='none';
  if(!name||!email||!pass){err.textContent='Nama, email, dan password wajib diisi.';err.style.display='block';return}
  if(!kota){err.textContent='Pilih kota/area kamu.';err.style.display='block';return}
  if(pass.length<6){err.textContent='Password minimal 6 karakter.';err.style.display='block';return}
- const {data,error}=await db.auth.signUp({email,password:pass,options:{data:{name}}});
- if(error){err.textContent=error.message;err.style.display='block';return}
- if(data.user){
-  // Generate next customer_code
-  const {count}=await db.from('customers').select('*',{count:'exact',head:true});
-  const nextCode='CUST-'+String((count||0)+1).padStart(3,'0');
-  const {data:cust}=await db.from('customers').insert({owner:name,wa,kota,customer_code:nextCode}).select().single();
-  if(cust) await db.from('customer_auth').insert({id:data.user.id,customer_id:cust.id});
+ if(btn){btn.disabled=true;btn.textContent='Mendaftar...';}
+ try{
+  const {data,error}=await db.auth.signUp({email,password:pass,options:{data:{name}}});
+  if(error){err.textContent=error.message;err.style.display='block';return}
+  if(data.user){
+   const {count:cnt}=await db.from('customers').select('*',{count:'exact',head:true});
+   const newCode='CUST-'+String((cnt||0)+1).padStart(3,'0');
+   const {data:cust,error:ce}=await db.from('customers').insert({owner:name,wa,kota,customer_code:newCode}).select().single();
+   if(ce){err.textContent='Akun dibuat tapi profil gagal tersimpan: '+ce.message;err.style.display='block';return}
+   if(cust){
+    const {error:ae}=await db.from('customer_auth').insert({id:data.user.id,customer_id:cust.id});
+    if(ae) console.warn('customer_auth link failed:',ae.message);
+   }
+  }
+  err.style.display='none';
+  // Show success
+  const ok=document.getElementById('signup-ok');
+  if(ok){ok.textContent='Pendaftaran berhasil! Cek email untuk verifikasi, lalu login.';ok.style.display='block';}
+  else{alert('Pendaftaran berhasil! Cek email untuk verifikasi lalu login.');}
+  setTimeout(()=>showView('view-login'),2500);
+ } catch(e){
+  err.textContent='Terjadi kesalahan: '+e.message;err.style.display='block';
+ } finally{
+  if(btn){btn.disabled=false;btn.textContent='Daftar sekarang';}
  }
- alert('Pendaftaran berhasil! Silakan cek email untuk verifikasi lalu login.');
- showView('view-login');
 }
 
 async function doForgot(){
@@ -671,15 +687,15 @@ function renderStepBar(){
  }).join('');
 }
 
-function renderStep(){
+async function renderStep(){
  renderStepBar();
  const c=document.getElementById('step-content');
  switch(bk.step){
  case 1: c.innerHTML=renderStep1();break;
  case 2: c.innerHTML=renderStep2();break;
- case 3: c.innerHTML=renderStep3();calPickerMonth=bk.date?new Date(bk.date+'T00:00:00'):new Date();renderCalPicker();break;
- case 4: c.innerHTML=renderStep4();break;
- case 5: renderStep5(c);break;
+ case 3: c.innerHTML=renderStep3();calPickerMonth=bk.date?new Date(bk.date+'T00:00:00'):new Date();await renderCalPicker();break;
+ case 4: await renderStep4();break;
+ case 5: await renderStep5(c);break;
  case 6: c.innerHTML=renderStep6();break;
  }
 }
@@ -742,8 +758,8 @@ function renderStep2(){
  <span class="dur-badge" id="dur-badge">⏱ ${calcDuration(sz,bk.services.styling,bk.services.addons)} min total</span>
  </div>
  <div class="form-actions">
- <button class="btn btn-p" onclick="bk.step=3;renderStep()">Next →</button>
- <button class="btn btn-g" onclick="bk.step=1;renderStep()">← Back</button>
+ <button class="btn btn-p" onclick="bk.step=3;renderStep()">Lanjut &#8594;</button>
+ <button class="btn btn-g" onclick="bk.step=1;renderStep()">&#8592; Ganti anjing</button>
  </div>`;
 }
 
@@ -846,6 +862,7 @@ async function renderCalPicker(){
   const groomersAvail=dateGroomers[isoD]||[];
   const dots=groomersAvail.map(g=>`<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${g.color||'#16a34a'};margin:0 1px"></span>`).join('');
   html+=`<div class="date-cell${isPast?' disabled':''}${isSel?' selected':''}${isToday?' today':''}"
+   data-iso="${isoD}"
    onclick="${isPast||!groomersAvail.length?'':'selectDate(\''+isoD+'\')'}"
    style="${!isPast&&!groomersAvail.length?'opacity:.35;cursor:not-allowed':''}">
    <div>${day}</div>
@@ -859,54 +876,49 @@ async function renderCalPicker(){
 
 async function selectDate(isoD){
  bk.date=isoD;bk.groomer=null;bk.time=null;
- // Highlight selected date
+ // Re-highlight selected date without re-rendering calendar
  document.querySelectorAll('.date-cell').forEach(el=>el.classList.remove('selected'));
- event?.target?.closest('.date-cell')?.classList?.add('selected');
- // If only 1 groomer available, auto-select
+ document.querySelectorAll('.date-cell').forEach(el=>{
+  if(el.dataset.iso===isoD) el.classList.add('selected');
+ });
  const avail=_calSchedCache[isoD]||[];
  if(avail.length===1){
   bk.groomer={id:avail[0].id,name:avail[0].name,color:avail[0].color};
-  bk.step=5;renderStep();
+  bk.step=5;await renderStep();
  } else {
-  bk.step=4;renderStep();
+  bk.step=4;await renderStep();
  }
 }
 
 async function renderStep4(){
  const custKota=userProfile?.kota||'';
- // Use cache if available, else fetch
- let available=(_calSchedCache[bk.date]||[]).map(g=>({groomers:g,kota_served:[]}));
- if(!available.length){
-  const {data:scheds}=await db.from('groomer_schedules')
-   .select('*,groomers(id,name,phone,color)')
-   .eq('date',bk.date).eq('is_off',false);
-  available=(scheds||[]).filter(s=>{
-   if(!s.groomers)return false;
-   const ks=s.kota_served||[];
-   return ks.length===0||ks.includes(custKota);
-  });
- }
  const c=document.getElementById('step-content');
+ // Always fetch fresh — cache may be stale or from different month
+ const {data:scheds}=await db.from('groomer_schedules')
+  .select('*,groomers(id,name,color)')
+  .eq('date',bk.date).eq('is_off',false);
+ const available=(scheds||[]).filter(s=>{
+  if(!s.groomers)return false;
+  const ks=s.kota_served||[];
+  return ks.length===0||ks.includes(custKota);
+ });
  if(!available.length){
   c.innerHTML=`<div class="step-title">Pilih groomer</div>
-   <div class="empty">Tidak ada groomer tersedia di <strong>${custKota||'area kamu'}</strong> tanggal ini. Coba tanggal lain.</div>
-   <div class="form-actions"><button class="btn btn-g" onclick="bk.step=3;renderStep()">Kembali</button></div>`;
+   <div class="empty">Tidak ada groomer tersedia di <strong>${custKota||'area kamu'}</strong> pada ${fmtDate(bk.date)}. Coba tanggal lain.</div>
+   <div class="form-actions"><button class="btn btn-g" onclick="bk.step=3;renderStep()">&#8592; Ganti tanggal</button></div>`;
   return;
  }
- let html=`<div class="step-title">Pilih groomer — ${fmtDate(bk.date)}</div>`;
- html+=`<div style="font-size:12px;color:#6b7280;margin-bottom:.9rem">Tersedia di area: <strong>${custKota}</strong></div>`;
+ let html=`<div class="step-title">Pilih groomer</div>`;
+ html+=`<div style="font-size:12px;color:#6b7280;margin-bottom:.9rem">${fmtDate(bk.date)} · Area: <strong>${custKota||'semua'}</strong></div>`;
  html+=available.map(s=>{
-  const gr=s.groomers||s;
+  const gr=s.groomers;
   const sel=bk.groomer?.id===gr.id;
   return`<div class="svc-option${sel?' selected':''}" onclick="selectGroomer('${gr.id}','${gr.name}','${gr.color||'#16a34a'}')" style="display:flex;align-items:center;gap:12px;padding:14px">
-   <span style="width:36px;height:36px;border-radius:50%;background:${gr.color||'#16a34a'};flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px">${gr.name.charAt(0)}</span>
-   <div>
-    <div class="svc-name" style="font-size:14px">${gr.name}</div>
-    <div class="svc-dur" style="margin-top:2px">Tap to select</div>
-   </div>
+   <span style="width:40px;height:40px;border-radius:50%;background:${gr.color||'#16a34a'};flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px">${gr.name.charAt(0).toUpperCase()}</span>
+   <div><div class="svc-name" style="font-size:14px">${gr.name}</div><div class="svc-dur" style="margin-top:2px">Tap untuk pilih</div></div>
   </div>`;
  }).join('');
- html+=`<div class="form-actions"><button class="btn btn-g" onclick="bk.step=3;renderStep()">Kembali</button></div>`;
+ html+=`<div class="form-actions" style="margin-top:1rem"><button class="btn btn-g" onclick="bk.step=3;renderStep()">&#8592; Ganti tanggal</button></div>`;
  c.innerHTML=html;
 }
 
@@ -952,14 +964,14 @@ async function renderStep5(container){
  slots.push({time:timeStr,taken:isTaken||isPast});
  }
 
- container.innerHTML=`<div class="step-title">Pick a time slot</div>
- <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">Duration: ${bk.duration} min · ${bk.groomer.name}</div>
+ container.innerHTML=`<div class="step-title">Pilih waktu</div>
+ <div style="font-size:12px;color:#6b7280;margin-bottom:1rem">${fmtDate(bk.date)} · ${bk.groomer.name} · ${bk.duration} min</div>
  ${slots.length?`<div class="slot-grid">${slots.map(s=>`
  <div class="slot${s.taken?' taken':bk.time===s.time?' selected':''}" onclick="${s.taken?'':'selectTime(\''+s.time+'\')'}">
  ${s.time}
- </div>`).join('')}</div>`:'<div class="empty">No slots available for this duration.</div>'}
+ </div>`).join('')}</div>`:'<div class="empty">Tidak ada slot tersedia.</div>'}
  <div class="form-actions" style="margin-top:1rem">
- <button class="btn btn-g" onclick="bk.step=4;renderStep()">← Back</button>
+ <button class="btn btn-g" onclick="bk.step=4;renderStep()">&#8592; Ganti groomer</button>
  </div>`;
 }
 
