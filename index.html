@@ -73,6 +73,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .overlay.open{display:flex}
 .modal{background:var(--surface);border-radius:16px;padding:1.5rem;width:100%;max-width:500px;max-height:88vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.15)}
 .modal-title{font-size:16px;font-weight:600;margin-bottom:1.25rem}
+.modal-close{position:absolute;top:1rem;right:1rem;width:28px;height:28px;border:none;background:var(--subtle);border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--muted);line-height:1}
+.modal-close:hover{background:var(--border);color:var(--text)}
+.modal{position:relative}
 .fg{display:flex;flex-direction:column;gap:4px}
 .fg.full{grid-column:1/-1}
 .fg label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
@@ -468,6 +471,7 @@ tbody tr:hover{background:var(--subtle)}
 <!-- ADD/EDIT CUSTOMER -->
 <div class="overlay" id="ov-cust">
  <div class="modal">
+ <button class="modal-close" onclick="cm('ov-cust')" title="Close">&#x2715;</button>
  <div class="modal-title" id="cust-title">Add customer</div>
  <div class="form-grid">
  <div class="fg"><label>Owner name *</label><input id="cf-owner" placeholder="Sarah"/></div>
@@ -488,6 +492,7 @@ tbody tr:hover{background:var(--subtle)}
 <!-- ADD/EDIT DOG -->
 <div class="overlay" id="ov-dog">
  <div class="modal">
+ <button class="modal-close" onclick="cm('ov-dog')" title="Close">&#x2715;</button>
  <div class="modal-title" id="dog-title">Add dog</div>
  <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">For customer: <strong id="dog-cust-lbl"></strong></div>
  <div class="form-grid">
@@ -590,6 +595,7 @@ tbody tr:hover{background:var(--subtle)}
 <!-- GROOMER -->
 <div class="overlay" id="ov-groomer">
  <div class="modal" style="max-width:380px">
+ <button class="modal-close" onclick="cm('ov-groomer')" title="Close">&#x2715;</button>
  <div class="modal-title" id="groomer-title">Add groomer</div>
  <div class="form-grid">
  <div class="fg full"><label>Name *</label><input id="gf-name" placeholder="e.g. Pak Budi"/></div>
@@ -627,6 +633,7 @@ tbody tr:hover{background:var(--subtle)}
 <!-- BANK SETTINGS -->
 <div class="overlay" id="ov-bank">
  <div class="modal" style="max-width:380px">
+ <button class="modal-close" onclick="cm('ov-bank')" title="Close">&#x2715;</button>
  <div class="modal-title">Bank settings (for invoices)</div>
  <div class="form-grid">
  <div class="fg full"><label>Bank name</label><input id="bf-name" placeholder="Krom Bank"/></div>
