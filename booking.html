@@ -3,24 +3,24 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>🐾 Home Paw Grooming</title>
+<title>Home Paw Grooming</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
-  /* Home Paw brand palette — from poster */
-  --brown:#3d1f0d;         /* deep dark brown */
-  --brown-lt:#f9d9a8;      /* light orange card bg */
-  --brown-md:#e8822a;      /* orange accent */
-  --green:#e8822a;--green-lt:#fdefd8;--green-dk:#c46d1a;
-  --red:#fee2e2;--red-t:#991b1b;--amber:#fef3c7;--amb-t:#92400e;
-  --blue-lt:#eff6ff;--blue-t:#1e40af;
-  --bg:#f5ead8;            /* warm cream */
-  --surface:#fffdf9;       /* off-white */
-  --border:#e8d5b7;        /* warm beige border */
-  --text:#3d1f0d;          /* dark brown */
-  --muted:#8b6347;         /* medium warm brown */
-  --subtle:#fdf3e7;        /* very light cream */
-  --r:8px;--rl:14px;--sh:0 1px 3px rgba(61,31,13,.1);
+ /* Home Paw brand palette — from poster */
+ --brown:#3d1f0d; /* deep dark brown */
+ --brown-lt:#f9d9a8; /* light orange card bg */
+ --brown-md:#e8822a; /* orange accent */
+ --green:#e8822a;--green-lt:#fdefd8;--green-dk:#c46d1a;
+ --red:#fee2e2;--red-t:#991b1b;--amber:#fef3c7;--amb-t:#92400e;
+ --blue-lt:#eff6ff;--blue-t:#1e40af;
+ --bg:#f5ead8; /* warm cream */
+ --surface:#fffdf9; /* off-white */
+ --border:#e8d5b7; /* warm beige border */
+ --text:#3d1f0d; /* dark brown */
+ --muted:#8b6347; /* medium warm brown */
+ --subtle:#fdf3e7; /* very light cream */
+ --r:8px;--rl:14px;--sh:0 1px 3px rgba(61,31,13,.1);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
@@ -151,229 +151,229 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <body>
 
 <script>
-const SUPABASE_URL  = "https://cwqrpslypcjgjuxagglc.supabase.co";
+const SUPABASE_URL = "https://cwqrpslypcjgjuxagglc.supabase.co";
 const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
 </script>
 
 <!-- AUTH -->
 <div id="screen-auth">
-  <div class="auth-wrap" id="view-login">
-    <div class="auth-box">
-      <div class="auth-logo">🐾</div>
-      <div class="auth-brand">Home Paw Grooming</div>
-      <div class="auth-tagline">happy grooming starts at home</div>
-      <div class="auth-err" id="login-err"></div>
-      <div class="auth-fg"><label>Email</label><input id="l-email" type="email" placeholder="your@email.com" autocomplete="email"/></div>
-      <div class="auth-fg"><label>Password</label><input id="l-pass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/></div>
-      <button class="auth-btn" onclick="doLogin()">Sign in</button>
-      <div class="auth-link"><a href="#" onclick="showView('view-forgot');return false">Forgot password?</a></div>
-      <div class="auth-switch">Don't have an account? <a href="#" onclick="showView('view-signup');return false">Sign up</a></div>
-    </div>
-  </div>
+ <div class="auth-wrap" id="view-login">
+ <div class="auth-box">
+ <div class="auth-logo"></div>
+ <div class="auth-brand">Home Paw Grooming</div>
+ <div class="auth-tagline">happy grooming starts at home</div>
+ <div class="auth-err" id="login-err"></div>
+ <div class="auth-fg"><label>Email</label><input id="l-email" type="email" placeholder="your@email.com" autocomplete="email"/></div>
+ <div class="auth-fg"><label>Password</label><input id="l-pass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+ <button class="auth-btn" onclick="doLogin()">Sign in</button>
+ <div class="auth-link"><a href="#" onclick="showView('view-forgot');return false">Forgot password?</a></div>
+ <div class="auth-switch">Don't have an account? <a href="#" onclick="showView('view-signup');return false">Sign up</a></div>
+ </div>
+ </div>
 
-  <div class="auth-wrap" id="view-signup" style="display:none">
-    <div class="auth-box">
-      <div class="auth-logo">🐾</div>
-      <div class="auth-brand">Create account</div>
-      <div class="auth-tagline">Join Home Paw Grooming</div>
-      <div class="auth-err" id="signup-err"></div>
-      <div class="auth-fg"><label>Full name</label><input id="su-name" placeholder="Sarah"/></div>
-      <div class="auth-fg"><label>Email</label><input id="su-email" type="email" placeholder="your@email.com"/></div>
-      <div class="auth-fg"><label>Password</label><input id="su-pass" type="password" placeholder="Min. 6 characters"/></div>
-      <div class="auth-fg"><label>WhatsApp</label><input id="su-wa" placeholder="08xxxxxxxxxx"/></div>
-      <div class="auth-fg"><label>Area</label><input id="su-area" placeholder="e.g. Kemang"/></div>
-      <button class="auth-btn" onclick="doSignup()">Create account</button>
-      <div class="auth-switch">Already have an account? <a href="#" onclick="showView('view-login');return false">Sign in</a></div>
-    </div>
-  </div>
+ <div class="auth-wrap" id="view-signup" style="display:none">
+ <div class="auth-box">
+ <div class="auth-logo"></div>
+ <div class="auth-brand">Create account</div>
+ <div class="auth-tagline">Join Home Paw Grooming</div>
+ <div class="auth-err" id="signup-err"></div>
+ <div class="auth-fg"><label>Full name</label><input id="su-name" placeholder="Sarah"/></div>
+ <div class="auth-fg"><label>Email</label><input id="su-email" type="email" placeholder="your@email.com"/></div>
+ <div class="auth-fg"><label>Password</label><input id="su-pass" type="password" placeholder="Min. 6 characters"/></div>
+ <div class="auth-fg"><label>WhatsApp</label><input id="su-wa" placeholder="08xxxxxxxxxx"/></div>
+ <div class="auth-fg"><label>Area</label><input id="su-area" placeholder="e.g. Kemang"/></div>
+ <button class="auth-btn" onclick="doSignup()">Create account</button>
+ <div class="auth-switch">Already have an account? <a href="#" onclick="showView('view-login');return false">Sign in</a></div>
+ </div>
+ </div>
 
-  <div class="auth-wrap" id="view-forgot" style="display:none">
-    <div class="auth-box">
-      <div class="auth-logo">🔑</div>
-      <div class="auth-brand">Reset password</div>
-      <div class="auth-tagline">We'll send a reset link to your email</div>
-      <div class="auth-err" id="forgot-err"></div>
-      <div class="auth-ok" id="forgot-ok">Reset link sent! Check your email.</div>
-      <div class="auth-fg"><label>Email</label><input id="f-email" type="email" placeholder="your@email.com"/></div>
-      <button class="auth-btn" onclick="doForgot()">Send reset link</button>
-      <div class="auth-switch"><a href="#" onclick="showView('view-login');return false">← Back to login</a></div>
-    </div>
-  </div>
+ <div class="auth-wrap" id="view-forgot" style="display:none">
+ <div class="auth-box">
+ <div class="auth-logo"></div>
+ <div class="auth-brand">Reset password</div>
+ <div class="auth-tagline">We'll send a reset link to your email</div>
+ <div class="auth-err" id="forgot-err"></div>
+ <div class="auth-ok" id="forgot-ok">Reset link sent! Check your email.</div>
+ <div class="auth-fg"><label>Email</label><input id="f-email" type="email" placeholder="your@email.com"/></div>
+ <button class="auth-btn" onclick="doForgot()">Send reset link</button>
+ <div class="auth-switch"><a href="#" onclick="showView('view-login');return false">← Back to login</a></div>
+ </div>
+ </div>
 
-  <div class="auth-wrap" id="view-reset" style="display:none">
-    <div class="auth-box">
-      <div class="auth-logo">🔒</div>
-      <div class="auth-brand">Set new password</div>
-      <div class="auth-tagline">Choose a strong new password</div>
-      <div class="auth-err" id="reset-err"></div>
-      <div class="auth-fg"><label>New password</label><input id="r-pass" type="password" placeholder="Min. 6 characters"/></div>
-      <div class="auth-fg"><label>Confirm</label><input id="r-pass2" type="password" placeholder="Repeat password"/></div>
-      <button class="auth-btn" onclick="doReset()">Update password</button>
-    </div>
-  </div>
+ <div class="auth-wrap" id="view-reset" style="display:none">
+ <div class="auth-box">
+ <div class="auth-logo"></div>
+ <div class="auth-brand">Set new password</div>
+ <div class="auth-tagline">Choose a strong new password</div>
+ <div class="auth-err" id="reset-err"></div>
+ <div class="auth-fg"><label>New password</label><input id="r-pass" type="password" placeholder="Min. 6 characters"/></div>
+ <div class="auth-fg"><label>Confirm</label><input id="r-pass2" type="password" placeholder="Repeat password"/></div>
+ <button class="auth-btn" onclick="doReset()">Update password</button>
+ </div>
+ </div>
 </div>
 
 <!-- APP -->
 <div id="screen-app" style="display:none">
-  <nav class="nav">
-    <div class="nav-brand">🐾 Home Paw</div>
-    <div class="nav-tabs">
-      <button class="nav-tab active" onclick="sw('dogs')" id="tab-dogs">🐕 My Dogs</button>
-      <button class="nav-tab" onclick="sw('book')" id="tab-book">📅 Book</button>
-      <button class="nav-tab" onclick="sw('appointments')" id="tab-appointments">🗓️ Appointments</button>
-      <button class="nav-tab" onclick="sw('profile')" id="tab-profile">👤 My Profile</button>
-    </div>
-    <button class="btn btn-g btn-sm" onclick="doSignOut()">Sign out</button>
-  </nav>
-  <div class="page">
+ <nav class="nav">
+ <div class="nav-brand">Home Paw Grooming</div>
+ <div class="nav-tabs">
+ <button class="nav-tab active" onclick="sw('dogs')" id="tab-dogs"> My Dogs</button>
+ <button class="nav-tab" onclick="sw('book')" id="tab-book"> Book</button>
+ <button class="nav-tab" onclick="sw('appointments')" id="tab-appointments">️ Appointments</button>
+ <button class="nav-tab" onclick="sw('profile')" id="tab-profile"> My Profile</button>
+ </div>
+ <button class="btn btn-g btn-sm" onclick="doSignOut()">Sign out</button>
+ </nav>
+ <div class="page">
 
-    <!-- MY DOGS -->
-    <div class="sec active" id="sec-dogs">
-      <div id="welcome-bar" class="welcome-bar" style="display:none">
-        <div class="welcome-name" id="welcome-name"></div>
-        <div class="welcome-sub">Welcome back! Ready to book a grooming session?</div>
-      </div>
-      <div class="dog-grid" id="my-dog-grid"><div class="loading"><span class="spin"></span>Loading…</div></div>
-    </div>
+ <!-- MY DOGS -->
+ <div class="sec active" id="sec-dogs">
+ <div id="welcome-bar" class="welcome-bar" style="display:none">
+ <div class="welcome-name" id="welcome-name"></div>
+ <div class="welcome-sub">Welcome back! Ready to book a grooming session?</div>
+ </div>
+ <div class="dog-grid" id="my-dog-grid"><div class="loading"><span class="spin"></span>Loading…</div></div>
+ </div>
 
-    <!-- BOOK -->
-    <div class="sec" id="sec-book">
-      <div class="step-bar" id="step-bar"></div>
-      <div id="step-content"></div>
-    </div>
+ <!-- BOOK -->
+ <div class="sec" id="sec-book">
+ <div class="step-bar" id="step-bar"></div>
+ <div id="step-content"></div>
+ </div>
 
-    <!-- APPOINTMENTS -->
-    <div class="sec" id="sec-appointments">
-      <div style="font-size:16px;font-weight:600;margin-bottom:1rem">My appointments</div>
-      <div id="appt-list"><div class="loading"><span class="spin"></span>Loading…</div></div>
-    </div>
+ <!-- APPOINTMENTS -->
+ <div class="sec" id="sec-appointments">
+ <div style="font-size:16px;font-weight:600;margin-bottom:1rem">My appointments</div>
+ <div id="appt-list"><div class="loading"><span class="spin"></span>Loading…</div></div>
+ </div>
 
 
-    <!-- PROFILE -->
-    <div class="sec" id="sec-profile">
-      <div style="font-size:16px;font-weight:600;margin-bottom:1rem">My profile</div>
+ <!-- PROFILE -->
+ <div class="sec" id="sec-profile">
+ <div style="font-size:16px;font-weight:600;margin-bottom:1rem">My profile</div>
 
-      <!-- Customer info -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;margin-bottom:1rem">
-        <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.9rem;display:flex;align-items:center;gap:6px">
-          👤 Personal information
-        </div>
-        <div class="form-grid">
-          <div class="fg"><label>Full name</label><input id="p-name" placeholder="Sarah"/></div>
-          <div class="fg"><label>WhatsApp</label><input id="p-wa" placeholder="08xxxxxxxxxx"/></div>
-          <div class="fg full"><label>Address</label><input id="p-addr" placeholder="Jl. Kemang Raya No.10, Jakarta Selatan"/></div>
-          <div class="fg"><label>Area</label><input id="p-area" placeholder="e.g. Kemang"/></div>
-          <div class="fg"><label>Email</label><input id="p-email" disabled style="background:#f0e8dd;color:var(--muted)"/></div>
-        </div>
-        <div style="margin-top:1rem">
-          <button class="btn btn-p" onclick="saveProfile()">💾 Save profile</button>
-          <span id="p-saved" style="font-size:12px;color:var(--green-dk);margin-left:.75rem;display:none">✓ Saved!</span>
-        </div>
-      </div>
+ <!-- Customer info -->
+ <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;margin-bottom:1rem">
+ <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.9rem;display:flex;align-items:center;gap:6px">
+ Personal information
+ </div>
+ <div class="form-grid">
+ <div class="fg"><label>Full name</label><input id="p-name" placeholder="Sarah"/></div>
+ <div class="fg"><label>WhatsApp</label><input id="p-wa" placeholder="08xxxxxxxxxx"/></div>
+ <div class="fg full"><label>Address</label><input id="p-addr" placeholder="Jl. Kemang Raya No.10, Jakarta Selatan"/></div>
+ <div class="fg"><label>Area</label><input id="p-area" placeholder="e.g. Kemang"/></div>
+ <div class="fg"><label>Email</label><input id="p-email" disabled style="background:#f0e8dd;color:var(--muted)"/></div>
+ </div>
+ <div style="margin-top:1rem">
+ <button class="btn btn-p" onclick="saveProfile()"> Save profile</button>
+ <span id="p-saved" style="font-size:12px;color:var(--green-dk);margin-left:.75rem;display:none"> Saved!</span>
+ </div>
+ </div>
 
-      <!-- Dogs section -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem">
-        <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.9rem">
-          🐕 My dogs
-        </div>
-        <div class="dog-grid" id="profile-dog-grid"></div>
-      </div>
-    </div>
+ <!-- Dogs section -->
+ <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem">
+ <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.9rem">
+ My dogs
+ </div>
+ <div class="dog-grid" id="profile-dog-grid"></div>
+ </div>
+ </div>
 
-  </div>
+ </div>
 </div>
 
 <!-- DOG FORM -->
 <div class="overlay" id="ov-dog">
-  <div class="modal">
-    <div class="modal-title" id="dog-modal-title">Add dog</div>
-    <div class="fg"><label>Dog name *</label><input id="d-name" placeholder="Buddy"/></div>
-    <div class="fg"><label>Breed</label><input id="d-breed" placeholder="Poodle"/></div>
-    <div class="fg"><label>Size *</label>
-      <select id="d-size">
-        <option value="">Select size…</option>
-        <option value="XS">XS (&lt;5kg)</option>
-        <option value="S">S (5–10kg)</option>
-        <option value="M">M (11–15kg)</option>
-        <option value="L">L (16–25kg)</option>
-      </select>
-    </div>
-    <div class="fg"><label>Coat</label>
-      <select id="d-coat">
-        <option value="">Select…</option>
-        <option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option>
-      </select>
-    </div>
-    <div class="fg"><label>Gender</label>
-      <select id="d-gender"><option value="">Select…</option><option>Male</option><option>Female</option></select>
-    </div>
-    <div class="fg"><label>Age</label><input id="d-age" placeholder="e.g. 2 years"/></div>
-    <div class="fg"><label>Notes / preferences</label><textarea id="d-prefs" placeholder="e.g. Anxious around clippers"></textarea></div>
-    <div class="form-actions">
-      <button class="btn btn-p" onclick="saveDog()" id="dog-save-btn">Save dog</button>
-      <button class="btn btn-g" onclick="cm('ov-dog')">Cancel</button>
-    </div>
-  </div>
+ <div class="modal">
+ <div class="modal-title" id="dog-modal-title">Add dog</div>
+ <div class="fg"><label>Dog name *</label><input id="d-name" placeholder="Buddy"/></div>
+ <div class="fg"><label>Breed</label><input id="d-breed" placeholder="Poodle"/></div>
+ <div class="fg"><label>Size *</label>
+ <select id="d-size">
+ <option value="">Select size…</option>
+ <option value="XS">XS (&lt;5kg)</option>
+ <option value="S">S (5–10kg)</option>
+ <option value="M">M (11–15kg)</option>
+ <option value="L">L (16–25kg)</option>
+ </select>
+ </div>
+ <div class="fg"><label>Coat</label>
+ <select id="d-coat">
+ <option value="">Select…</option>
+ <option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option>
+ </select>
+ </div>
+ <div class="fg"><label>Gender</label>
+ <select id="d-gender"><option value="">Select…</option><option>Male</option><option>Female</option></select>
+ </div>
+ <div class="fg"><label>Age</label><input id="d-age" placeholder="e.g. 2 years"/></div>
+ <div class="fg"><label>Notes / preferences</label><textarea id="d-prefs" placeholder="e.g. Anxious around clippers"></textarea></div>
+ <div class="form-actions">
+ <button class="btn btn-p" onclick="saveDog()" id="dog-save-btn">Save dog</button>
+ <button class="btn btn-g" onclick="cm('ov-dog')">Cancel</button>
+ </div>
+ </div>
 </div>
 
 <!-- RECEIPT MODAL -->
 <div class="overlay" id="ov-receipt">
-  <div class="modal" style="max-width:460px">
-    <div id="receipt-content"></div>
-    <div style="display:flex;gap:8px;margin-top:1rem;flex-wrap:wrap">
-      <button class="btn btn-p" onclick="downloadReceipt()">⬇️ Download PDF</button>
-      <button class="btn btn-green" id="gcal-btn" onclick="addToGCal()">📅 Add to Google Calendar</button>
-      <button class="btn btn-g" onclick="cm('ov-receipt');sw('appointments')">Close</button>
-    </div>
-  </div>
+ <div class="modal" style="max-width:460px">
+ <div id="receipt-content"></div>
+ <div style="display:flex;gap:8px;margin-top:1rem;flex-wrap:wrap">
+ <button class="btn btn-p" onclick="downloadReceipt()">⬇️ Download PDF</button>
+ <button class="btn btn-green" id="gcal-btn" onclick="addToGCal()"> Add to Google Calendar</button>
+ <button class="btn btn-g" onclick="cm('ov-receipt');sw('appointments')">Close</button>
+ </div>
+ </div>
 </div>
 
 <script>
 const {createClient}=supabase;
 const db=createClient(SUPABASE_URL,SUPABASE_ANON);
-let currentUser=null, userProfile=null, myDogs=[], myAppts=[], allGroomers=[], editDogId=null;
+let currentUser=null, userProfile=null, myDogs=[], myAppts=[], allGroomers=[], editDogId=null, myCustomerId=null;
 
 // Booking state
-let bk={step:1,dog:null,date:null,area:null,groomer:null,time:null,services:{base:'basic',styling:null,addons:[]},duration:0,price:0};
+let bk={step:1,dog:null,date:null,groomer:null,time:null,services:{base:'basic',styling:null,addons:[]},duration:0,price:0};
 let calPickerMonth=new Date();
 let changeApptId=null;
 
 // Pricing table
 const PRICES={
-  base:{XS:120000,S:140000,M:190000,L:250000},
-  styling:{XS:100000,S:100000,M:120000,L:140000},
-  botak:{XS:60000,S:60000,M:70000,L:80000},
-  dematting:{XS:50000,S:50000,M:50000,L:50000},
-  deshedding:{XS:50000,S:50000,M:50000,L:50000},
-  antifungal:{XS:50000,S:50000,M:55000,L:60000},
-  antikutu:{XS:25000,S:25000,M:30000,L:35000},
-  whitening:{XS:15000,S:15000,M:20000,L:25000}
+ base:{XS:120000,S:140000,M:190000,L:250000},
+ styling:{XS:100000,S:100000,M:120000,L:140000},
+ botak:{XS:60000,S:60000,M:70000,L:80000},
+ dematting:{XS:50000,S:50000,M:50000,L:50000},
+ deshedding:{XS:50000,S:50000,M:50000,L:50000},
+ antifungal:{XS:50000,S:50000,M:55000,L:60000},
+ antikutu:{XS:25000,S:25000,M:30000,L:35000},
+ whitening:{XS:15000,S:15000,M:20000,L:25000}
 };
 const DURATION={
-  base:{XS:60,S:60,M:90,L:120},
-  styling:{XS:30,S:30,M:30,L:30},
-  botak:{XS:15,S:15,M:15,L:15},
-  dematting:{XS:15,S:15,M:15,L:15},
-  deshedding:{XS:15,S:15,M:15,L:30}
+ base:{XS:60,S:60,M:90,L:120},
+ styling:{XS:30,S:30,M:30,L:30},
+ botak:{XS:15,S:15,M:15,L:15},
+ dematting:{XS:15,S:15,M:15,L:15},
+ deshedding:{XS:15,S:15,M:15,L:30}
 };
 
 function calcDuration(size,styling,addons){
-  if(!size)return 60;
-  let d=DURATION.base[size]||60;
-  if(styling==='styling')d+=DURATION.styling[size]||30;
-  if(styling==='botak')d+=DURATION.botak[size]||15;
-  if(addons.includes('dematting'))d+=DURATION.dematting[size]||15;
-  if(addons.includes('deshedding'))d+=DURATION.deshedding[size]||15;
-  return d;
+ if(!size)return 60;
+ let d=DURATION.base[size]||60;
+ if(styling==='styling')d+=DURATION.styling[size]||30;
+ if(styling==='botak')d+=DURATION.botak[size]||15;
+ if(addons.includes('dematting'))d+=DURATION.dematting[size]||15;
+ if(addons.includes('deshedding'))d+=DURATION.deshedding[size]||15;
+ return d;
 }
 
 function calcPrice(size,styling,addons){
-  if(!size)return 0;
-  let p=PRICES.base[size]||0;
-  if(styling==='styling')p+=PRICES.styling[size]||0;
-  if(styling==='botak')p+=PRICES.botak[size]||0;
-  addons.forEach(a=>{if(PRICES[a])p+=PRICES[a][size]||0;});
-  return p;
+ if(!size)return 0;
+ let p=PRICES.base[size]||0;
+ if(styling==='styling')p+=PRICES.styling[size]||0;
+ if(styling==='botak')p+=PRICES.botak[size]||0;
+ addons.forEach(a=>{if(PRICES[a])p+=PRICES[a][size]||0;});
+ return p;
 }
 
 function fmtRp(n){return'Rp '+n.toLocaleString('id-ID')}
@@ -381,763 +381,762 @@ function iso(d){return d.toISOString().split('T')[0]}
 function fmtDate(d){return new Date(d+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
 function cm(id){document.getElementById(id).classList.remove('open')}
 function om(id){document.getElementById(id).classList.add('open')}
-function sizeBadge(s){if(!s)return'';const cl=s==='L'?'bl':s==='M'?'bm':'bs';return`<span class="badge ${cl}">${s}</span>`}
+function sizeBadge(s){if(!s)return'';const cl=['Large','XL'].includes(s)?'bl':s==='Medium'?'bm':'bs';return`<span class="badge ${cl}">${s}</span>`}
 
 // ── AUTH ─────────────────────────────────────────────────────
 function showView(id){
-  ['view-login','view-signup','view-forgot','view-reset'].forEach(v=>{
-    document.getElementById(v).style.display=v===id?'flex':'none';
-  });
+ ['view-login','view-signup','view-forgot','view-reset'].forEach(v=>{
+ document.getElementById(v).style.display=v===id?'flex':'none';
+ });
 }
 function showApp(){
-  document.getElementById('screen-auth').style.display='none';
-  document.getElementById('screen-app').style.display='block';
-  loadMyData();
+ document.getElementById('screen-auth').style.display='none';
+ document.getElementById('screen-app').style.display='block';
+ loadMyData();
 }
 function showAuth(view){
-  document.getElementById('screen-app').style.display='none';
-  document.getElementById('screen-auth').style.display='block';
-  showView(view||'view-login');
+ document.getElementById('screen-app').style.display='none';
+ document.getElementById('screen-auth').style.display='block';
+ showView(view||'view-login');
 }
 
 async function initAuth(){
-  const hash=window.location.hash;
-  if(hash.includes('type=recovery')){
-    window.history.replaceState({},document.title,window.location.pathname);
-    showAuth('view-reset');
-    return;
-  }
-  const {data:{session}}=await db.auth.getSession();
-  if(session){currentUser=session.user;showApp();}
-  else{showAuth('view-login');}
+ const hash=window.location.hash;
+ if(hash.includes('type=recovery')){
+ window.history.replaceState({},document.title,window.location.pathname);
+ showAuth('view-reset');
+ return;
+ }
+ const {data:{session}}=await db.auth.getSession();
+ if(session){currentUser=session.user;showApp();}
+ else{showAuth('view-login');}
 }
 
 db.auth.onAuthStateChange((event,session)=>{
-  if(event==='PASSWORD_RECOVERY'){
-    window.history.replaceState({},document.title,window.location.pathname);
-    showAuth('view-reset');
-  } else if(event==='SIGNED_IN'&&session){
-    currentUser=session.user;
-    showApp();
-  } else if(event==='SIGNED_OUT'){
-    currentUser=null;userProfile=null;myDogs=[];myAppts=[];
-    showAuth('view-login');
-  }
+ if(event==='PASSWORD_RECOVERY'){
+ window.history.replaceState({},document.title,window.location.pathname);
+ showAuth('view-reset');
+ } else if(event==='SIGNED_IN'&&session){
+ currentUser=session.user;
+ showApp();
+ } else if(event==='SIGNED_OUT'){
+ currentUser=null;userProfile=null;myDogs=[];myAppts=[];
+ showAuth('view-login');
+ }
 });
 
 async function doLogin(){
-  const email=document.getElementById('l-email').value.trim();
-  const pass=document.getElementById('l-pass').value;
-  const err=document.getElementById('login-err');
-  err.style.display='none';
-  if(!email||!pass){err.textContent='Please enter email and password.';err.style.display='block';return}
-  const {error}=await db.auth.signInWithPassword({email,password:pass});
-  if(error){err.textContent=error.message;err.style.display='block';}
+ const email=document.getElementById('l-email').value.trim();
+ const pass=document.getElementById('l-pass').value;
+ const err=document.getElementById('login-err');
+ err.style.display='none';
+ if(!email||!pass){err.textContent='Please enter email and password.';err.style.display='block';return}
+ const {error}=await db.auth.signInWithPassword({email,password:pass});
+ if(error){err.textContent=error.message;err.style.display='block';}
 }
 
 async function doSignup(){
-  const name=document.getElementById('su-name').value.trim();
-  const email=document.getElementById('su-email').value.trim();
-  const pass=document.getElementById('su-pass').value;
-  const wa=document.getElementById('su-wa').value.trim();
-  const area=document.getElementById('su-area').value.trim();
-  const err=document.getElementById('signup-err');
-  err.style.display='none';
-  if(!name||!email||!pass){err.textContent='Name, email and password required.';err.style.display='block';return}
-  if(pass.length<6){err.textContent='Password must be at least 6 characters.';err.style.display='block';return}
-  const {data,error}=await db.auth.signUp({email,password:pass,options:{data:{name}}});
-  if(error){err.textContent=error.message;err.style.display='block';return}
-  if(data.user){
-    await db.from('customer_profiles').upsert({id:data.user.id,name,phone:wa,area});
-  }
+ const name=document.getElementById('su-name').value.trim();
+ const email=document.getElementById('su-email').value.trim();
+ const pass=document.getElementById('su-pass').value;
+ const wa=document.getElementById('su-wa').value.trim();
+ const kota=document.getElementById('su-kota').value;
+ const err=document.getElementById('signup-err');
+ err.style.display='none';
+ if(!name||!email||!pass){err.textContent='Nama, email, dan password wajib diisi.';err.style.display='block';return}
+ if(!kota){err.textContent='Pilih kota/area kamu.';err.style.display='block';return}
+ if(pass.length<6){err.textContent='Password minimal 6 karakter.';err.style.display='block';return}
+ const {data,error}=await db.auth.signUp({email,password:pass,options:{data:{name}}});
+ if(error){err.textContent=error.message;err.style.display='block';return}
+ if(data.user){
+  const {data:cust}=await db.from('customers').insert({owner:name,wa,kota}).select().single();
+  if(cust) await db.from('customer_auth').insert({id:data.user.id,customer_id:cust.id});
+ }
+ alert('Pendaftaran berhasil! Silakan cek email untuk verifikasi lalu login.');
+ showView('view-login');
 }
 
 async function doForgot(){
-  const email=document.getElementById('f-email').value.trim();
-  const err=document.getElementById('forgot-err');
-  const ok=document.getElementById('forgot-ok');
-  err.style.display='none';ok.style.display='none';
-  if(!email){err.textContent='Please enter your email.';err.style.display='block';return}
-  const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+window.location.pathname});
-  if(error){err.textContent=error.message;err.style.display='block';}
-  else{ok.style.display='block';}
+ const email=document.getElementById('f-email').value.trim();
+ const err=document.getElementById('forgot-err');
+ const ok=document.getElementById('forgot-ok');
+ err.style.display='none';ok.style.display='none';
+ if(!email){err.textContent='Please enter your email.';err.style.display='block';return}
+ const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+window.location.pathname});
+ if(error){err.textContent=error.message;err.style.display='block';}
+ else{ok.style.display='block';}
 }
 
 async function doReset(){
-  const p1=document.getElementById('r-pass').value;
-  const p2=document.getElementById('r-pass2').value;
-  const err=document.getElementById('reset-err');
-  err.style.display='none';
-  if(p1.length<6){err.textContent='Password must be at least 6 characters.';err.style.display='block';return}
-  if(p1!==p2){err.textContent='Passwords do not match.';err.style.display='block';return}
-  const {error}=await db.auth.updateUser({password:p1});
-  if(error){err.textContent=error.message;err.style.display='block';}
-  else{alert('Password updated!');await db.auth.signOut();}
+ const p1=document.getElementById('r-pass').value;
+ const p2=document.getElementById('r-pass2').value;
+ const err=document.getElementById('reset-err');
+ err.style.display='none';
+ if(p1.length<6){err.textContent='Password must be at least 6 characters.';err.style.display='block';return}
+ if(p1!==p2){err.textContent='Passwords do not match.';err.style.display='block';return}
+ const {error}=await db.auth.updateUser({password:p1});
+ if(error){err.textContent=error.message;err.style.display='block';}
+ else{alert('Password updated!');await db.auth.signOut();}
 }
 
 async function doSignOut(){await db.auth.signOut();}
 
 // ── DATA ─────────────────────────────────────────────────────
 async function loadMyData(){
-  if(!currentUser)return;
-  const [pr,dr,ar,gr]=await Promise.all([
-    db.from('customer_profiles').select('*').eq('id',currentUser.id).single(),
-    db.from('dogs').select('*').eq('customer_id',currentUser.id).order('created_at'),
-    db.from('appointments').select('*,dogs(name,emoji,breed,size,area,address),groomers(name)')
-      .eq('customer_id',currentUser.id).order('appt_date',{ascending:false}),
-    db.from('groomers').select('*').order('created_at')
-  ]);
-  userProfile=pr.data;myDogs=dr.data||[];myAppts=ar.data||[];allGroomers=gr.data||[];
-  renderWelcome();
-  renderMyDogs();
-  loadProfileForm();
+ if(!currentUser)return;
+ const {data:authRow}=await db.from('customer_auth').select('customer_id').eq('id',currentUser.id).single();
+ myCustomerId=authRow?.customer_id||null;
+ const [pr,dr,ar,gr]=await Promise.all([
+ myCustomerId
+  ? db.from('customers').select('*').eq('id',myCustomerId).single()
+  : Promise.resolve({data:null}),
+ myCustomerId
+  ? db.from('dogs').select('*').eq('customer_id',myCustomerId).order('created_at')
+  : Promise.resolve({data:[]}),
+ myCustomerId
+  ? db.from('appointments').select('*,dogs(name,breed,size),groomers(name)')
+    .eq('customer_id',myCustomerId).order('appt_date',{ascending:false})
+  : Promise.resolve({data:[]}),
+ db.from('groomers').select('*').eq('active',true).order('created_at')
+ ]);
+ userProfile=pr.data;myDogs=dr.data||[];myAppts=ar.data||[];allGroomers=gr.data||[];
+ renderWelcome();
+ renderMyDogs();
+ loadProfileForm();
 }
 
 function renderWelcome(){
-  const wb=document.getElementById('welcome-bar');
-  const wn=document.getElementById('welcome-name');
-  const name=userProfile?.name||currentUser?.email||'there';
-  wn.textContent='Welcome back, '+name+'! 👋';
-  wb.style.display='block';
+ const wb=document.getElementById('welcome-bar');
+ const wn=document.getElementById('welcome-name');
+ const name=userProfile?.owner||currentUser?.email||'there';
+ wn.textContent='Welcome back, '+name+'! ';
+ wb.style.display='block';
 }
 
 // ── TABS ─────────────────────────────────────────────────────
 function sw(tab){
-  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
-  document.getElementById('tab-'+tab).classList.add('active');
-  document.getElementById('sec-'+tab).classList.add('active');
-  if(tab==='appointments')renderAppts();
-  if(tab==='profile'){loadProfileForm();}
-  if(tab==='book')startBooking();
+ document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+ document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
+ document.getElementById('tab-'+tab).classList.add('active');
+ document.getElementById('sec-'+tab).classList.add('active');
+ if(tab==='appointments')renderAppts();
+ if(tab==='profile'){loadProfileForm();}
+ if(tab==='book')startBooking();
 }
 
 // ── MY DOGS ──────────────────────────────────────────────────
 function renderMyDogs(){
-  const g=document.getElementById('my-dog-grid');
-  let html=myDogs.map(d=>`
-    <div class="dog-card" onclick="editDog('${d.id}')">
-      <div class="dog-av">${d.emoji||'🐶'}</div>
-      <div class="dog-nm">${d.name}</div>
-      <div class="dog-br">${d.breed||'—'}</div>
-      ${sizeBadge(d.size)}
-      <div style="display:flex;gap:6px;justify-content:center;margin-top:.75rem">
-        <button class="btn btn-p btn-sm" onclick="event.stopPropagation();bookForDog('${d.id}')">📅 Book</button>
-        <button class="btn btn-g btn-sm" onclick="event.stopPropagation();editDog('${d.id}')">✏️ Edit</button>
-      </div>
-    </div>`).join('');
-  html+=`<div class="dog-card add-card" onclick="openAddDog()">
-    <div style="font-size:28px;margin-bottom:6px">+</div>
-    <div style="font-size:13px;font-weight:500">Add dog</div>
-  </div>`;
-  g.innerHTML=html;
+ const g=document.getElementById('my-dog-grid');
+ let html=myDogs.map(d=>`
+ <div class="dog-card" onclick="editDog('${d.id}')">
+ <div class="dog-av">${d.emoji||''}</div>
+ <div class="dog-nm">${d.name}</div>
+ <div class="dog-br">${d.breed||'—'}</div>
+ ${sizeBadge(d.size)}
+ <div style="display:flex;gap:6px;justify-content:center;margin-top:.75rem">
+ <button class="btn btn-p btn-sm" onclick="event.stopPropagation();bookForDog('${d.id}')"> Book</button>
+ <button class="btn btn-g btn-sm" onclick="event.stopPropagation();editDog('${d.id}')">️ Edit</button>
+ </div>
+ </div>`).join('');
+ html+=`<div class="dog-card add-card" onclick="openAddDog()">
+ <div style="font-size:28px;margin-bottom:6px">+</div>
+ <div style="font-size:13px;font-weight:500">Add dog</div>
+ </div>`;
+ g.innerHTML=html;
 }
 
 function openAddDog(){
-  editDogId=null;
-  document.getElementById('dog-modal-title').textContent='Add dog';
-  document.getElementById('dog-save-btn').textContent='Save dog';
-  ['d-name','d-breed','d-age','d-prefs'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('d-size').value='';
-  document.getElementById('d-coat').value='';
-  document.getElementById('d-gender').value='';
-  om('ov-dog');
+ editDogId=null;
+ document.getElementById('dog-modal-title').textContent='Add dog';
+ document.getElementById('dog-save-btn').textContent='Save dog';
+ ['d-name','d-breed','d-age','d-prefs'].forEach(id=>document.getElementById(id).value='');
+ document.getElementById('d-size').value='';
+ document.getElementById('d-coat').value='';
+ document.getElementById('d-gender').value='';
+ om('ov-dog');
 }
 
 function editDog(id){
-  const d=myDogs.find(x=>x.id===id);if(!d)return;
-  editDogId=id;
-  document.getElementById('dog-modal-title').textContent='Edit dog';
-  document.getElementById('dog-save-btn').textContent='Update';
-  document.getElementById('d-name').value=d.name||'';
-  document.getElementById('d-breed').value=d.breed||'';
-  document.getElementById('d-size').value=d.size||'';
-  document.getElementById('d-coat').value=d.coat||'';
-  document.getElementById('d-gender').value=d.gender||'';
-  document.getElementById('d-age').value=d.age||'';
-  document.getElementById('d-prefs').value=d.prefs||'';
-  om('ov-dog');
+ const d=myDogs.find(x=>x.id===id);if(!d)return;
+ editDogId=id;
+ document.getElementById('dog-modal-title').textContent='Edit dog';
+ document.getElementById('dog-save-btn').textContent='Update';
+ document.getElementById('d-name').value=d.name||'';
+ document.getElementById('d-breed').value=d.breed||'';
+ document.getElementById('d-size').value=d.size||'';
+ document.getElementById('d-coat').value=d.coat||'';
+ document.getElementById('d-gender').value=d.gender||'';
+ document.getElementById('d-age').value=d.age||'';
+ document.getElementById('d-prefs').value=d.prefs||'';
+ om('ov-dog');
 }
 
 async function saveDog(){
-  const name=document.getElementById('d-name').value.trim();
-  const size=document.getElementById('d-size').value;
-  if(!name||!size){alert('Dog name and size are required.');return}
-  const p={name,size,
-    breed:document.getElementById('d-breed').value.trim(),
-    coat:document.getElementById('d-coat').value,
-    gender:document.getElementById('d-gender').value,
-    age:document.getElementById('d-age').value.trim(),
-    prefs:document.getElementById('d-prefs').value.trim(),
-    emoji:'🐶',
-    customer_id:currentUser.id
-  };
-  if(editDogId){await db.from('dogs').update(p).eq('id',editDogId);}
-  else{await db.from('dogs').insert(p);}
-  cm('ov-dog');await loadMyData();
+ const name=document.getElementById('d-name').value.trim();
+ const size=document.getElementById('d-size').value;
+ if(!name||!size){alert('Dog name and size are required.');return}
+ const p={name,size,
+ breed:document.getElementById('d-breed').value.trim(),
+ coat:document.getElementById('d-coat').value,
+ gender:document.getElementById('d-gender').value,
+ age:document.getElementById('d-age').value.trim(),
+ prefs:document.getElementById('d-prefs').value.trim(),
+ emoji:'',
+ customer_id:myCustomerId
+ };
+ if(editDogId){await db.from('dogs').update(p).eq('id',editDogId);}
+ else{await db.from('dogs').insert(p);}
+ cm('ov-dog');await loadMyData();
 }
 
 function bookForDog(dogId){
-  bk={step:1,dog:null,date:null,area:null,groomer:null,time:null,services:{base:'basic',styling:null,addons:[]},duration:0,price:0};
-  changeApptId=null;
-  sw('book');
-  // Pre-select dog
-  const d=myDogs.find(x=>x.id===dogId);
-  if(d){bk.dog=d;bk.step=2;}
-  renderStep();
+ bk={step:1,dog:null,date:null,groomer:null,time:null,services:{base:'basic',styling:null,addons:[]},duration:0,price:0};
+ changeApptId=null;
+ sw('book');
+ // Pre-select dog
+ const d=myDogs.find(x=>x.id===dogId);
+ if(d){bk.dog=d;bk.step=2;}
+ renderStep();
 }
 
 // ── BOOKING FLOW ─────────────────────────────────────────────
 const STEPS=['Dog','Service','Date','Groomer','Time','Confirm'];
 
 function startBooking(){
-  if(!bk.dog)bk.step=1;
-  renderStep();
+ if(!bk.dog)bk.step=1;
+ renderStep();
 }
 
 function renderStepBar(){
-  document.getElementById('step-bar').innerHTML=STEPS.map((s,i)=>{
-    const n=i+1;
-    let cls='step';
-    if(n===bk.step)cls+=' active';
-    else if(n<bk.step)cls+=' done';
-    return`<div class="${cls}">${n<bk.step?'✓ ':''} ${s}</div>`;
-  }).join('');
+ document.getElementById('step-bar').innerHTML=STEPS.map((s,i)=>{
+ const n=i+1;
+ let cls='step';
+ if(n===bk.step)cls+=' active';
+ else if(n<bk.step)cls+=' done';
+ return`<div class="${cls}">${n<bk.step?' ':''} ${s}</div>`;
+ }).join('');
 }
 
 function renderStep(){
-  renderStepBar();
-  const c=document.getElementById('step-content');
-  switch(bk.step){
-    case 1: c.innerHTML=renderStep1();break;
-    case 2: c.innerHTML=renderStep2();break;
-    case 3: c.innerHTML=renderStep3();calPickerMonth=bk.date?new Date(bk.date+'T00:00:00'):new Date();renderCalPicker();break;
-    case 4: c.innerHTML=renderStep4();break;
-    case 5: renderStep5(c);break;
-    case 6: c.innerHTML=renderStep6();break;
-  }
+ renderStepBar();
+ const c=document.getElementById('step-content');
+ switch(bk.step){
+ case 1: c.innerHTML=renderStep1();break;
+ case 2: c.innerHTML=renderStep2();break;
+ case 3: c.innerHTML=renderStep3();calPickerMonth=bk.date?new Date(bk.date+'T00:00:00'):new Date();renderCalPicker();break;
+ case 4: c.innerHTML=renderStep4();break;
+ case 5: renderStep5(c);break;
+ case 6: c.innerHTML=renderStep6();break;
+ }
 }
 
 function renderStep1(){
-  if(!myDogs.length)return`<div class="empty"><span class="empty-icon">🐕</span>Add a dog first in the My Dogs tab!</div>`;
-  return`<div class="step-title">Select your dog</div>
-    <div class="dog-grid">${myDogs.map(d=>`
-      <div class="dog-card${bk.dog?.id===d.id?' selected':''}" onclick="selectDog('${d.id}')">
-        <div class="dog-av">${d.emoji||'🐶'}</div>
-        <div class="dog-nm">${d.name}</div>
-        <div class="dog-br">${d.breed||'—'}</div>
-        ${sizeBadge(d.size)}
-      </div>`).join('')}
-    </div>`;
+ if(!myDogs.length)return`<div class="empty"><span class="empty-icon"></span>Add a dog first in the My Dogs tab!</div>`;
+ return`<div class="step-title">Select your dog</div>
+ <div class="dog-grid">${myDogs.map(d=>`
+ <div class="dog-card${bk.dog?.id===d.id?' selected':''}" onclick="selectDog('${d.id}')">
+ <div class="dog-av">${d.emoji||''}</div>
+ <div class="dog-nm">${d.name}</div>
+ <div class="dog-br">${d.breed||'—'}</div>
+ ${sizeBadge(d.size)}
+ </div>`).join('')}
+ </div>`;
 }
 
 function selectDog(id){
-  bk.dog=myDogs.find(x=>x.id===id);
-  bk.step=2;renderStep();
+ bk.dog=myDogs.find(x=>x.id===id);
+ bk.step=2;renderStep();
 }
 
 function renderStep2(){
-  const sz=bk.dog?.size||'M';
-  const addons=['dematting','deshedding','antifungal','antikutu','whitening'];
-  const addonLabels={dematting:'Dematting',deshedding:'Deshedding',antifungal:'Anti Fungal',antikutu:'Anti Kutu',whitening:'Whitening Shampoo'};
-  const addonDur={dematting:'+15 min',deshedding:sz==='L'?'+30 min':'+15 min',antifungal:'—',antikutu:'—',whitening:'—'};
-  return`<div class="step-title">Select services for ${bk.dog?.name}</div>
-    <div class="svc-block">
-      <div class="svc-lbl">Base service (required)</div>
-      <div class="svc-option selected"><input type="radio" checked disabled/><div class="svc-name">Basic Grooming</div><div class="svc-dur">${DURATION.base[sz]} min · ${fmtRp(PRICES.base[sz])}</div></div>
-    </div>
-    <div class="svc-block">
-      <div class="svc-lbl">Styling (optional — pick one)</div>
-      ${['styling','botak'].map(k=>`
-        <div class="svc-option${bk.services.styling===k?' selected':''}" onclick="selectStyling('${k}')">
-          <input type="radio" ${bk.services.styling===k?'checked':''} onchange="selectStyling('${k}')"/>
-          <div class="svc-name">${k==='styling'?'Styling / Cukur Pendek':'Shaving / Cukur Botak'}</div>
-          <div class="svc-dur">+${DURATION[k][sz]} min · +${fmtRp(PRICES[k][sz])}</div>
-        </div>`).join('')}
-      <div class="svc-option${!bk.services.styling?' selected':''}" onclick="selectStyling(null)">
-        <input type="radio" ${!bk.services.styling?'checked':''}/>
-        <div class="svc-name">None</div><div class="svc-dur">—</div>
-      </div>
-    </div>
-    <div class="svc-block">
-      <div class="svc-lbl">Add-ons (optional)</div>
-      ${addons.map(k=>`
-        <div class="svc-option${bk.services.addons.includes(k)?' selected':''}" onclick="toggleAddon('${k}')">
-          <input type="checkbox" ${bk.services.addons.includes(k)?'checked':''}/>
-          <div class="svc-name">${addonLabels[k]}</div>
-          <div class="svc-dur">${addonDur[k]}${PRICES[k]?` · +${fmtRp(PRICES[k][sz])}`:'  · Gratis'}</div>
-        </div>`).join('')}
-      <div class="svc-option${bk.services.addons.includes('parfume')?' selected':''}" onclick="toggleAddon('parfume')">
-        <input type="checkbox" ${bk.services.addons.includes('parfume')?'checked':''}/>
-        <div class="svc-name">Parfume</div>
-        <div class="svc-dur">Gratis</div>
-      </div>
-    </div>
-    <div style="margin-top:.75rem">
-      <span class="dur-badge" id="dur-badge">⏱ ${calcDuration(sz,bk.services.styling,bk.services.addons)} min total</span>
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-p" onclick="bk.step=3;renderStep()">Next →</button>
-      <button class="btn btn-g" onclick="bk.step=1;renderStep()">← Back</button>
-    </div>`;
+ const sz=bk.dog?.size||'M';
+ const addons=['dematting','deshedding','antifungal','antikutu','whitening'];
+ const addonLabels={dematting:'Dematting',deshedding:'Deshedding',antifungal:'Anti Fungal',antikutu:'Anti Kutu',whitening:'Whitening Shampoo'};
+ const addonDur={dematting:'+15 min',deshedding:sz==='L'?'+30 min':'+15 min',antifungal:'—',antikutu:'—',whitening:'—'};
+ return`<div class="step-title">Select services for ${bk.dog?.name}</div>
+ <div class="svc-block">
+ <div class="svc-lbl">Base service (required)</div>
+ <div class="svc-option selected"><input type="radio" checked disabled/><div class="svc-name">Basic Grooming</div><div class="svc-dur">${DURATION.base[sz]} min · ${fmtRp(PRICES.base[sz])}</div></div>
+ </div>
+ <div class="svc-block">
+ <div class="svc-lbl">Styling (optional — pick one)</div>
+ ${['styling','botak'].map(k=>`
+ <div class="svc-option${bk.services.styling===k?' selected':''}" onclick="selectStyling('${k}')">
+ <input type="radio" ${bk.services.styling===k?'checked':''} onchange="selectStyling('${k}')"/>
+ <div class="svc-name">${k==='styling'?'Styling / Cukur Pendek':'Shaving / Cukur Botak'}</div>
+ <div class="svc-dur">+${DURATION[k][sz]} min · +${fmtRp(PRICES[k][sz])}</div>
+ </div>`).join('')}
+ <div class="svc-option${!bk.services.styling?' selected':''}" onclick="selectStyling(null)">
+ <input type="radio" ${!bk.services.styling?'checked':''}/>
+ <div class="svc-name">None</div><div class="svc-dur">—</div>
+ </div>
+ </div>
+ <div class="svc-block">
+ <div class="svc-lbl">Add-ons (optional)</div>
+ ${addons.map(k=>`
+ <div class="svc-option${bk.services.addons.includes(k)?' selected':''}" onclick="toggleAddon('${k}')">
+ <input type="checkbox" ${bk.services.addons.includes(k)?'checked':''}/>
+ <div class="svc-name">${addonLabels[k]}</div>
+ <div class="svc-dur">${addonDur[k]}${PRICES[k]?` · +${fmtRp(PRICES[k][sz])}`:' · Gratis'}</div>
+ </div>`).join('')}
+ <div class="svc-option${bk.services.addons.includes('parfume')?' selected':''}" onclick="toggleAddon('parfume')">
+ <input type="checkbox" ${bk.services.addons.includes('parfume')?'checked':''}/>
+ <div class="svc-name">Parfume</div>
+ <div class="svc-dur">Gratis</div>
+ </div>
+ </div>
+ <div style="margin-top:.75rem">
+ <span class="dur-badge" id="dur-badge">⏱ ${calcDuration(sz,bk.services.styling,bk.services.addons)} min total</span>
+ </div>
+ <div class="form-actions">
+ <button class="btn btn-p" onclick="bk.step=3;renderStep()">Next →</button>
+ <button class="btn btn-g" onclick="bk.step=1;renderStep()">← Back</button>
+ </div>`;
 }
 
 function selectStyling(val){
-  bk.services.styling=val;
-  updateDurBadge();
-  document.querySelectorAll('.svc-option').forEach(el=>{
-    const inp=el.querySelector('input[type=radio]');
-    if(inp&&!inp.disabled){
-      const v=el.getAttribute('onclick')?.match(/'([^']+)'/)?.[1]||null;
-      const sel=v===val||(val===null&&el.textContent.includes('None'));
-      el.classList.toggle('selected',sel);
-      inp.checked=sel;
-    }
-  });
+ bk.services.styling=val;
+ updateDurBadge();
+ document.querySelectorAll('.svc-option').forEach(el=>{
+ const inp=el.querySelector('input[type=radio]');
+ if(inp&&!inp.disabled){
+ const v=el.getAttribute('onclick')?.match(/'([^']+)'/)?.[1]||null;
+ const sel=v===val||(val===null&&el.textContent.includes('None'));
+ el.classList.toggle('selected',sel);
+ inp.checked=sel;
+ }
+ });
 }
 
 function toggleAddon(key){
-  const idx=bk.services.addons.indexOf(key);
-  if(idx>-1)bk.services.addons.splice(idx,1);
-  else bk.services.addons.push(key);
-  updateDurBadge();
-  // Re-render to sync UI
-  const step2=document.getElementById('step-content');
-  if(step2)step2.innerHTML=renderStep2();
+ const idx=bk.services.addons.indexOf(key);
+ if(idx>-1)bk.services.addons.splice(idx,1);
+ else bk.services.addons.push(key);
+ updateDurBadge();
+ // Re-render to sync UI
+ const step2=document.getElementById('step-content');
+ if(step2)step2.innerHTML=renderStep2();
 }
 
 function updateDurBadge(){
-  const sz=bk.dog?.size||'M';
-  const d=calcDuration(sz,bk.services.styling,bk.services.addons);
-  const badge=document.getElementById('dur-badge');
-  if(badge)badge.textContent=`⏱ ${d} min total`;
+ const sz=bk.dog?.size||'M';
+ const d=calcDuration(sz,bk.services.styling,bk.services.addons);
+ const badge=document.getElementById('dur-badge');
+ if(badge)badge.textContent=`⏱ ${d} min total`;
 }
 
 function renderStep3(){
-  return`<div class="step-title">Pick a date</div>
-    <div class="month-nav">
-      <button class="btn btn-g btn-sm" onclick="calPickerMonth.setMonth(calPickerMonth.getMonth()-1);renderCalPicker()">←</button>
-      <span class="month-title" id="picker-month-title"></span>
-      <button class="btn btn-g btn-sm" onclick="calPickerMonth.setMonth(calPickerMonth.getMonth()+1);renderCalPicker()">→</button>
-    </div>
-    <div id="date-picker-grid"></div>
-    <div class="form-actions" style="margin-top:1rem">
-      <button class="btn btn-g" onclick="bk.step=2;renderStep()">← Back</button>
-    </div>`;
+ return`<div class="step-title">Pick a date</div>
+ <div class="month-nav">
+ <button class="btn btn-g btn-sm" onclick="calPickerMonth.setMonth(calPickerMonth.getMonth()-1);renderCalPicker()">←</button>
+ <span class="month-title" id="picker-month-title"></span>
+ <button class="btn btn-g btn-sm" onclick="calPickerMonth.setMonth(calPickerMonth.getMonth()+1);renderCalPicker()">→</button>
+ </div>
+ <div id="date-picker-grid"></div>
+ <div class="form-actions" style="margin-top:1rem">
+ <button class="btn btn-g" onclick="bk.step=2;renderStep()">← Back</button>
+ </div>`;
 }
 
 function renderCalPicker(){
-  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const y=calPickerMonth.getFullYear(), m=calPickerMonth.getMonth();
-  document.getElementById('picker-month-title').textContent=
-    calPickerMonth.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
-  const firstDay=new Date(y,m,1).getDay();
-  const offset=firstDay===0?6:firstDay-1;
-  const daysInMonth=new Date(y,m+1,0).getDate();
-  const today=new Date();today.setHours(0,0,0,0);
-  let html=`<div class="date-grid">${days.map(d=>`<div class="date-dh">${d}</div>`).join('')}`;
-  for(let i=0;i<offset;i++)html+=`<div class="date-cell empty-cell"></div>`;
-  for(let day=1;day<=daysInMonth;day++){
-    const d=new Date(y,m,day);
-    const isoD=iso(d);
-    const isPast=d<today;
-    const isSel=isoD===bk.date;
-    const isToday=d.getTime()===today.getTime();
-    html+=`<div class="date-cell${isPast?' disabled':''} ${isSel?' selected':''} ${isToday?' today':''}" onclick="${isPast?'':'selectDate(\''+isoD+'\')'}">${day}</div>`;
-  }
-  html+=`</div>`;
-  document.getElementById('date-picker-grid').innerHTML=html;
+ const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+ const y=calPickerMonth.getFullYear(), m=calPickerMonth.getMonth();
+ document.getElementById('picker-month-title').textContent=
+ calPickerMonth.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+ const firstDay=new Date(y,m,1).getDay();
+ const offset=firstDay===0?6:firstDay-1;
+ const daysInMonth=new Date(y,m+1,0).getDate();
+ const today=new Date();today.setHours(0,0,0,0);
+ let html=`<div class="date-grid">${days.map(d=>`<div class="date-dh">${d}</div>`).join('')}`;
+ for(let i=0;i<offset;i++)html+=`<div class="date-cell empty-cell"></div>`;
+ for(let day=1;day<=daysInMonth;day++){
+ const d=new Date(y,m,day);
+ const isoD=iso(d);
+ const isPast=d<today;
+ const isSel=isoD===bk.date;
+ const isToday=d.getTime()===today.getTime();
+ html+=`<div class="date-cell${isPast?' disabled':''} ${isSel?' selected':''} ${isToday?' today':''}" onclick="${isPast?'':'selectDate(\''+isoD+'\')'}">${day}</div>`;
+ }
+ html+=`</div>`;
+ document.getElementById('date-picker-grid').innerHTML=html;
 }
 
 async function selectDate(isoD){
-  bk.date=isoD;bk.area=null;bk.groomer=null;bk.time=null;
-  bk.step=4;renderStep();
+ bk.date=isoD;bk.groomer=null;bk.time=null;
+ bk.step=4;renderStep();
 }
 
 async function renderStep4(){
-  // Load groomer schedules for selected date
-  const {data:scheds}=await db.from('groomer_schedules')
-    .select('*,groomers(id,name,emoji,phone)')
-    .eq('date',bk.date).eq('is_off',false);
-
-  if(!scheds||!scheds.length){
-    return`<div class="step-title">Choose groomer</div>
-      <div class="empty"><span class="empty-icon">😕</span>No groomers available on this date.<br>Please pick another date.</div>
-      <div class="form-actions"><button class="btn btn-g" onclick="bk.step=3;renderStep()">← Back</button></div>`;
-  }
-
-  // Get unique areas
-  const areas=[...new Set(scheds.flatMap(s=>s.areas||[]))].sort();
-  const c=document.getElementById('step-content');
-
-  let html=`<div class="step-title">Choose groomer for ${fmtDate(bk.date)}</div>`;
-
-  if(areas.length){
-    html+=`<div class="fg" style="margin-bottom:1rem">
-      <label>Area</label>
-      <select id="area-select" onchange="filterGroomersByArea(${JSON.stringify(scheds).replace(/"/g,'&quot;')})">
-        <option value="">All areas</option>
-        ${areas.map(a=>`<option value="${a}" ${a===bk.area?'selected':''}>${a}</option>`).join('')}
-      </select>
-    </div>`;
-  }
-
-  html+=`<div id="groomer-options">${renderGroomerOptions(scheds)}</div>
-    <div class="form-actions">
-      <button class="btn btn-g" onclick="bk.step=3;renderStep()">← Back</button>
-    </div>`;
-  c.innerHTML=html;
+ const {data:scheds}=await db.from('groomer_schedules')
+  .select('*,groomers(id,name,phone,color)')
+  .eq('date',bk.date).eq('is_off',false);
+ const custKota=userProfile?.kota||'';
+ // Only show groomers serving customer's kota (empty kota_served = serves all)
+ const available=(scheds||[]).filter(s=>{
+  if(!s.groomers)return false;
+  const ks=s.kota_served||[];
+  return ks.length===0||ks.includes(custKota);
+ });
+ const c=document.getElementById('step-content');
+ if(!available.length){
+  c.innerHTML=`<div class="step-title">Pilih groomer</div>
+   <div class="empty">Tidak ada groomer tersedia di <strong>${custKota||'area kamu'}</strong> tanggal ini. Coba tanggal lain.</div>
+   <div class="form-actions"><button class="btn btn-g" onclick="bk.step=3;renderStep()">Kembali</button></div>`;
+  return;
+ }
+ let html=`<div class="step-title">Pilih groomer — ${fmtDate(bk.date)}</div>`;
+ html+=`<div style="font-size:12px;color:var(--muted);margin-bottom:.9rem">Melayani area: <strong>${custKota}</strong></div>`;
+ html+=`<div id="groomer-options">${renderGroomerOptions(available)}</div>
+  <div class="form-actions"><button class="btn btn-g" onclick="bk.step=3;renderStep()">Kembali</button></div>`;
+ c.innerHTML=html;
 }
 
 function renderGroomerOptions(scheds){
-  const filtered=bk.area?scheds.filter(s=>(s.areas||[]).includes(bk.area)):scheds;
-  if(!filtered.length)return`<div class="empty" style="padding:1rem">No groomers in this area.</div>`;
-  return filtered.map(s=>{
-    const gr=s.groomers;if(!gr)return'';
-    const sel=bk.groomer?.id===gr.id;
-    return`<div class="svc-option${sel?' selected':''}" onclick="selectGroomer('${gr.id}','${gr.name}','${gr.emoji||'✂️'}')">
-      <div style="font-size:20px">${gr.emoji||'✂️'}</div>
-      <div class="svc-name">${gr.name}</div>
-      <div class="svc-dur">${(s.areas||[]).join(', ')||'All areas'}</div>
-    </div>`;
-  }).join('');
+ if(!scheds.length)return`<div class="empty" style="padding:1rem">Tidak ada groomer di area ini.</div>`;
+ return scheds.map(s=>{
+  const gr=s.groomers;if(!gr)return'';
+  const sel=bk.groomer?.id===gr.id;
+  const dot=`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${gr.color||'#16a34a'};margin-right:8px;flex-shrink:0"></span>`;
+  return`<div class="svc-option${sel?' selected':''}" onclick="selectGroomer('${gr.id}','${gr.name}')">
+   ${dot}
+   <div class="svc-name">${gr.name}</div>
+   <div class="svc-dur">${(s.kota_served||[]).slice(0,3).join(', ')||'Semua area'}</div>
+  </div>`;
+ }).join('');
 }
 
-function filterGroomersByArea(scheds){
-  bk.area=document.getElementById('area-select').value||null;
-  document.getElementById('groomer-options').innerHTML=renderGroomerOptions(scheds);
-}
+function selectGroomer(id,name){
+ bk.groomer={id,name};
+ bk.step=5;renderStep();
 
-function selectGroomer(id,name,emoji){
-  bk.groomer={id,name,emoji};
-  bk.step=5;renderStep();
 }
 
 async function renderStep5(container){
-  const sz=bk.dog?.size||'M';
-  bk.duration=calcDuration(sz,bk.services.styling,bk.services.addons);
-  bk.price=calcPrice(sz,bk.services.styling,bk.services.addons);
+ const sz=bk.dog?.size||'M';
+ bk.duration=calcDuration(sz,bk.services.styling,bk.services.addons);
+ bk.price=calcPrice(sz,bk.services.styling,bk.services.addons);
 
-  // Load existing appointments for that day + groomer to block slots
-  const {data:takenAppts}=await db.from('appointments')
-    .select('appt_time,duration_mins')
-    .eq('appt_date',bk.date)
-    .eq('groomer_id',bk.groomer.id);
+ // Load existing appointments for that day + groomer to block slots
+ const {data:takenAppts}=await db.from('appointments')
+ .select('appt_time,duration_mins')
+ .eq('appt_date',bk.date)
+ .eq('groomer_id',bk.groomer.id);
 
-  // Build blocked ranges
-  const blocked=[];
-  (takenAppts||[]).forEach(a=>{
-    if(!a.appt_time)return;
-    const [hh,mm]=a.appt_time.split(':').map(Number);
-    const start=hh*60+mm;
-    const end=start+(a.duration_mins||60)+30; // +30 travel buffer
-    blocked.push({start,end});
-  });
+ // Build blocked ranges
+ const blocked=[];
+ (takenAppts||[]).forEach(a=>{
+ if(!a.appt_time)return;
+ const [hh,mm]=a.appt_time.split(':').map(Number);
+ const start=hh*60+mm;
+ const end=start+(a.duration_mins||60)+30; // +30 travel buffer
+ blocked.push({start,end});
+ });
 
-  // Generate slots 08:30–18:00 in 30-min increments
-  const slots=[];
-  for(let t=8*60+30;t+bk.duration<=18*60;t+=30){
-    const hh=Math.floor(t/60);
-    const mm=t%60;
-    const timeStr=`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
-    const end=t+bk.duration;
-    const isTaken=blocked.some(b=>t<b.end&&end>b.start);
-    // Skip if date is today and time is past
-    let isPast=false;
-    const now=new Date();
-    const today=iso(now);
-    if(bk.date===today&&(hh<now.getHours()||(hh===now.getHours()&&mm<=now.getMinutes())))isPast=true;
-    slots.push({time:timeStr,taken:isTaken||isPast});
-  }
+ // Generate slots 08:30–18:00 in 30-min increments
+ const slots=[];
+ for(let t=8*60+30;t+bk.duration<=18*60;t+=30){
+ const hh=Math.floor(t/60);
+ const mm=t%60;
+ const timeStr=`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+ const end=t+bk.duration;
+ const isTaken=blocked.some(b=>t<b.end&&end>b.start);
+ // Skip if date is today and time is past
+ let isPast=false;
+ const now=new Date();
+ const today=iso(now);
+ if(bk.date===today&&(hh<now.getHours()||(hh===now.getHours()&&mm<=now.getMinutes())))isPast=true;
+ slots.push({time:timeStr,taken:isTaken||isPast});
+ }
 
-  container.innerHTML=`<div class="step-title">Pick a time slot</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">Duration: ${bk.duration} min · ${bk.groomer.emoji} ${bk.groomer.name}</div>
-    ${slots.length?`<div class="slot-grid">${slots.map(s=>`
-      <div class="slot${s.taken?' taken':bk.time===s.time?' selected':''}" onclick="${s.taken?'':'selectTime(\''+s.time+'\')'}">
-        ${s.time}
-      </div>`).join('')}</div>`:'<div class="empty">No slots available for this duration.</div>'}
-    <div class="form-actions" style="margin-top:1rem">
-      <button class="btn btn-g" onclick="bk.step=4;renderStep()">← Back</button>
-    </div>`;
+ container.innerHTML=`<div class="step-title">Pick a time slot</div>
+ <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">Duration: ${bk.duration} min · ${bk.groomer.emoji} ${bk.groomer.name}</div>
+ ${slots.length?`<div class="slot-grid">${slots.map(s=>`
+ <div class="slot${s.taken?' taken':bk.time===s.time?' selected':''}" onclick="${s.taken?'':'selectTime(\''+s.time+'\')'}">
+ ${s.time}
+ </div>`).join('')}</div>`:'<div class="empty">No slots available for this duration.</div>'}
+ <div class="form-actions" style="margin-top:1rem">
+ <button class="btn btn-g" onclick="bk.step=4;renderStep()">← Back</button>
+ </div>`;
 }
 
 function selectTime(time){
-  bk.time=time;
-  bk.step=6;renderStep();
+ bk.time=time;
+ bk.step=6;renderStep();
 }
 
 function renderStep6(){
-  const sz=bk.dog?.size||'M';
-  bk.duration=calcDuration(sz,bk.services.styling,bk.services.addons);
-  bk.price=calcPrice(sz,bk.services.styling,bk.services.addons);
-  const endTime=calcEndTime(bk.time,bk.duration);
-  const services=buildServiceList(sz);
+ const sz=bk.dog?.size||'M';
+ bk.duration=calcDuration(sz,bk.services.styling,bk.services.addons);
+ bk.price=calcPrice(sz,bk.services.styling,bk.services.addons);
+ const endTime=calcEndTime(bk.time,bk.duration);
+ const services=buildServiceList(sz);
 
-  return`<div class="step-title">Confirm booking</div>
-    <div style="background:var(--subtle);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;margin-bottom:1rem">
-      <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Dog</span><span>${bk.dog?.emoji||'🐶'} ${bk.dog?.name} (${sz})</span></div>
-      <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Date</span><span>${fmtDate(bk.date)}</span></div>
-      <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Time</span><span>${bk.time} – ${endTime}</span></div>
-      <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Groomer</span><span>${bk.groomer?.emoji||'✂️'} ${bk.groomer?.name}</span></div>
-      <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Services</span><span style="text-align:right;max-width:200px">${services.map(s=>s.name).join(', ')}</span></div>
-      <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;font-weight:600"><span>Total</span><span style="color:var(--brown)">${fmtRp(bk.price)}</span></div>
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-p" onclick="confirmBooking()">✅ Confirm booking</button>
-      <button class="btn btn-g" onclick="bk.step=5;renderStep()">← Back</button>
-    </div>`;
+ return`<div class="step-title">Confirm booking</div>
+ <div style="background:var(--subtle);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;margin-bottom:1rem">
+ <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Dog</span><span>${bk.dog?.emoji||''} ${bk.dog?.name} (${sz})</span></div>
+ <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Date</span><span>${fmtDate(bk.date)}</span></div>
+ <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Time</span><span>${bk.time} – ${endTime}</span></div>
+ <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Groomer</span><span>${bk.groomer?.emoji||'️'} ${bk.groomer?.name}</span></div>
+ <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">Services</span><span style="text-align:right;max-width:200px">${services.map(s=>s.name).join(', ')}</span></div>
+ <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;font-weight:600"><span>Total</span><span style="color:var(--brown)">${fmtRp(bk.price)}</span></div>
+ </div>
+ <div class="form-actions">
+ <button class="btn btn-p" onclick="confirmBooking()"> Confirm booking</button>
+ <button class="btn btn-g" onclick="bk.step=5;renderStep()">← Back</button>
+ </div>`;
 }
 
 function calcEndTime(startTime,durMins){
-  if(!startTime)return'—';
-  const [hh,mm]=startTime.split(':').map(Number);
-  const total=hh*60+mm+(durMins||60);
-  return`${String(Math.floor(total/60)).padStart(2,'0')}:${String(total%60).padStart(2,'0')}`;
+ if(!startTime)return'—';
+ const [hh,mm]=startTime.split(':').map(Number);
+ const total=hh*60+mm+(durMins||60);
+ return`${String(Math.floor(total/60)).padStart(2,'0')}:${String(total%60).padStart(2,'0')}`;
 }
 
 function buildServiceList(sz){
-  const list=[{name:'Basic Grooming',dur:DURATION.base[sz],price:PRICES.base[sz]}];
-  if(bk.services.styling==='styling')list.push({name:'Styling',dur:DURATION.styling[sz],price:PRICES.styling[sz]});
-  if(bk.services.styling==='botak')list.push({name:'Shaving/Botak',dur:DURATION.botak[sz],price:PRICES.botak[sz]});
-  bk.services.addons.forEach(a=>{
-    const labels={dematting:'Dematting',deshedding:'Deshedding',antifungal:'Anti Fungal',antikutu:'Anti Kutu',whitening:'Whitening Shampoo'};
-    if(labels[a])list.push({name:labels[a],dur:DURATION[a]?.[sz]||0,price:PRICES[a]?.[sz]||0});
-  });
-  list.push({name:'Parfume',dur:0,price:0,free:true});
-  return list;
+ const list=[{name:'Basic Grooming',dur:DURATION.base[sz],price:PRICES.base[sz]}];
+ if(bk.services.styling==='styling')list.push({name:'Styling',dur:DURATION.styling[sz],price:PRICES.styling[sz]});
+ if(bk.services.styling==='botak')list.push({name:'Shaving/Botak',dur:DURATION.botak[sz],price:PRICES.botak[sz]});
+ bk.services.addons.forEach(a=>{
+ const labels={dematting:'Dematting',deshedding:'Deshedding',antifungal:'Anti Fungal',antikutu:'Anti Kutu',whitening:'Whitening Shampoo'};
+ if(labels[a])list.push({name:labels[a],dur:DURATION[a]?.[sz]||0,price:PRICES[a]?.[sz]||0});
+ });
+ list.push({name:'Parfume',dur:0,price:0,free:true});
+ return list;
 }
 
 async function confirmBooking(){
-  if(!currentUser||!bk.dog||!bk.date||!bk.time||!bk.groomer)return;
-  const sz=bk.dog.size||'M';
-  const services=buildServiceList(sz);
-  const serviceBase=bk.services.styling||'basic';
-  const serviceAddons=bk.services.addons;
+ if(!currentUser||!bk.dog||!bk.date||!bk.time||!bk.groomer)return;
+ const sz=bk.dog.size||'M';
+ const services=buildServiceList(sz);
+ const serviceBase=bk.services.styling||'basic';
+ const serviceAddons=bk.services.addons;
 
-  const payload={
-    dog_id:bk.dog.id,
-    customer_id:currentUser.id,
-    groomer_id:bk.groomer.id,
-    appt_date:bk.date,
-    appt_time:bk.time,
-    duration_mins:bk.duration,
-    price_total:bk.price,
-    service_base:serviceBase,
-    service_addon:serviceAddons,
-    status:'pending'
-  };
+ const payload={
+ dog_id:bk.dog.id,
+ customer_id:myCustomerId,
+ groomer_id:bk.groomer.id,
+ appt_date:bk.date,
+ appt_time:bk.time,
+ duration_mins:bk.duration,
+ price_total:bk.price,
+ service_base:serviceBase,
+ service_addon:serviceAddons,
+ status:'pending'
+ };
 
-  if(changeApptId){
-    await db.from('appointments').update(payload).eq('id',changeApptId);
-  } else {
-    const {data}=await db.from('appointments').insert(payload).select().single();
-    if(data)changeApptId=data.id;
-  }
+ if(changeApptId){
+ await db.from('appointments').update(payload).eq('id',changeApptId);
+ } else {
+ const {data}=await db.from('appointments').insert(payload).select().single();
+ if(data)changeApptId=data.id;
+ }
 
-  await loadMyData();
-  showReceipt();
+ await loadMyData();
+ showReceipt();
 }
 
 function showReceipt(){
-  const sz=bk.dog?.size||'M';
-  const services=buildServiceList(sz);
-  const endTime=calcEndTime(bk.time,bk.duration);
-  const dog=bk.dog;
-  const profile=userProfile;
+ const sz=bk.dog?.size||'M';
+ const services=buildServiceList(sz);
+ const endTime=calcEndTime(bk.time,bk.duration);
+ const dog=bk.dog;
+ const profile=userProfile;
 
-  let svcRows=services.map(s=>`
-    <div class="receipt-svc-row">
-      <div><div style="font-size:12px;font-weight:500">${s.name}</div>${s.dur?`<div style="font-size:10px;color:var(--muted)">${s.dur} min</div>`:''}</div>
-      <div style="font-size:12px;font-weight:500">${s.free?'Gratis':fmtRp(s.price)}</div>
-    </div>`).join('');
+ let svcRows=services.map(s=>`
+ <div class="receipt-svc-row">
+ <div><div style="font-size:12px;font-weight:500">${s.name}</div>${s.dur?`<div style="font-size:10px;color:var(--muted)">${s.dur} min</div>`:''}</div>
+ <div style="font-size:12px;font-weight:500">${s.free?'Gratis':fmtRp(s.price)}</div>
+ </div>`).join('');
 
-  document.getElementById('receipt-content').innerHTML=`
-    <div class="receipt" id="printable-receipt">
-      <div class="receipt-header">
-        <div class="receipt-brand">🐾 HOME PAW</div>
-        <div class="receipt-tagline">happy grooming starts at home</div>
-      </div>
-      <div class="receipt-section">
-        <div class="receipt-lbl">Booking info</div>
-        <div class="receipt-row"><span class="lft">Tanggal</span><span class="rgt">${fmtDate(bk.date)}</span></div>
-        <div class="receipt-row"><span class="lft">Jam</span><span class="rgt">${bk.time} – ${endTime}</span></div>
-        <div class="receipt-row"><span class="lft">Groomer</span><span class="rgt">${bk.groomer?.emoji||'✂️'} ${bk.groomer?.name}</span></div>
-        <div class="receipt-row"><span class="lft">Status</span><span class="rgt" style="color:var(--amb-t)">Pending confirmation</span></div>
-      </div>
-      <div class="receipt-section">
-        <div class="receipt-lbl">Info pelanggan</div>
-        <div class="receipt-row"><span class="lft">Owner</span><span class="rgt">${profile?.name||currentUser?.email||'—'}</span></div>
-        <div class="receipt-row"><span class="lft">Nama anjing</span><span class="rgt">${dog?.emoji||'🐶'} ${dog?.name}</span></div>
-        <div class="receipt-row"><span class="lft">Ras / ukuran</span><span class="rgt">${dog?.breed||'—'} · ${sz}</span></div>
-        ${profile?.address?`<div class="receipt-row"><span class="lft">Alamat</span><span class="rgt">${profile.address}</span></div>`:''}
-      </div>
-      <div class="receipt-section">
-        <div class="receipt-lbl">Layanan</div>
-        ${svcRows}
-      </div>
-      <div class="receipt-section">
-        <div class="receipt-row"><span class="lft" style="color:var(--muted)">Total durasi</span><span class="rgt">${bk.duration} menit</span></div>
-        <div class="receipt-total"><span>Total</span><span class="rgt">${fmtRp(bk.price)}</span></div>
-      </div>
-      <div class="receipt-section" style="text-align:center">
-        <div style="font-size:12px;color:var(--muted)">Terima kasih sudah mempercayakan perawatan anjing Anda 🐾</div>
-        <div style="font-size:12px;font-weight:600;color:var(--brown);margin-top:3px">Home Paw Grooming</div>
-      </div>
-    </div>`;
-  om('ov-receipt');
+ document.getElementById('receipt-content').innerHTML=`
+ <div class="receipt" id="printable-receipt">
+ <div class="receipt-header">
+ <div class="receipt-brand"> HOME PAW</div>
+ <div class="receipt-tagline">happy grooming starts at home</div>
+ </div>
+ <div class="receipt-section">
+ <div class="receipt-lbl">Booking info</div>
+ <div class="receipt-row"><span class="lft">Tanggal</span><span class="rgt">${fmtDate(bk.date)}</span></div>
+ <div class="receipt-row"><span class="lft">Jam</span><span class="rgt">${bk.time} – ${endTime}</span></div>
+ <div class="receipt-row"><span class="lft">Groomer</span><span class="rgt">${bk.groomer?.emoji||'️'} ${bk.groomer?.name}</span></div>
+ <div class="receipt-row"><span class="lft">Status</span><span class="rgt" style="color:var(--amb-t)">Pending confirmation</span></div>
+ </div>
+ <div class="receipt-section">
+ <div class="receipt-lbl">Info pelanggan</div>
+ <div class="receipt-row"><span class="lft">Owner</span><span class="rgt">${profile?.name||currentUser?.email||'—'}</span></div>
+ <div class="receipt-row"><span class="lft">Nama anjing</span><span class="rgt">${dog?.emoji||''} ${dog?.name}</span></div>
+ <div class="receipt-row"><span class="lft">Ras / ukuran</span><span class="rgt">${dog?.breed||'—'} · ${sz}</span></div>
+ ${profile?.address?`<div class="receipt-row"><span class="lft">Alamat</span><span class="rgt">${profile.address}</span></div>`:''}
+ </div>
+ <div class="receipt-section">
+ <div class="receipt-lbl">Layanan</div>
+ ${svcRows}
+ </div>
+ <div class="receipt-section">
+ <div class="receipt-row"><span class="lft" style="color:var(--muted)">Total durasi</span><span class="rgt">${bk.duration} menit</span></div>
+ <div class="receipt-total"><span>Total</span><span class="rgt">${fmtRp(bk.price)}</span></div>
+ </div>
+ <div class="receipt-section" style="text-align:center">
+ <div style="font-size:12px;color:var(--muted)">Terima kasih sudah mempercayakan perawatan anjing Anda </div>
+ <div style="font-size:12px;font-weight:600;color:var(--brown);margin-top:3px">Home Paw Grooming</div>
+ </div>
+ </div>`;
+ om('ov-receipt');
 }
 
 async function downloadReceipt(){
-  // Simple print-to-PDF approach
-  const content=document.getElementById('printable-receipt');
-  const win=window.open('','_blank');
-  win.document.write(`<!DOCTYPE html><html><head><title>Receipt - Home Paw Grooming</title>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:-apple-system,sans-serif;padding:20px;background:#fff}
-    .receipt{max-width:420px;margin:0 auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}
-    .receipt-header{background:#7c3f1e;padding:1.1rem;text-align:center;color:#fff}
-    .receipt-brand{font-size:18px;font-weight:700}
-    .receipt-tagline{font-size:10px;opacity:.8;text-transform:uppercase;letter-spacing:1.5px;margin-top:2px}
-    .receipt-section{padding:.9rem 1.1rem;border-bottom:1px solid #e5e7eb}
-    .receipt-lbl{font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
-    .receipt-row{display:flex;justify-content:space-between;padding:3px 0;font-size:12px}
-    .receipt-svc-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e5e7eb;font-size:12px}
-    .receipt-total{display:flex;justify-content:space-between;padding:8px 0;font-size:15px;font-weight:600}
-  </style></head><body>${content.outerHTML}<script>window.onload=function(){window.print();}<\/script></body></html>`);
-  win.document.close();
+ // Simple print-to-PDF approach
+ const content=document.getElementById('printable-receipt');
+ const win=window.open('','_blank');
+ win.document.write(`<!DOCTYPE html><html><head><title>Receipt - Home Paw Grooming</title>
+ <style>
+ *{box-sizing:border-box;margin:0;padding:0}
+ body{font-family:-apple-system,sans-serif;padding:20px;background:#fff}
+ .receipt{max-width:420px;margin:0 auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}
+ .receipt-header{background:#7c3f1e;padding:1.1rem;text-align:center;color:#fff}
+ .receipt-brand{font-size:18px;font-weight:700}
+ .receipt-tagline{font-size:10px;opacity:.8;text-transform:uppercase;letter-spacing:1.5px;margin-top:2px}
+ .receipt-section{padding:.9rem 1.1rem;border-bottom:1px solid #e5e7eb}
+ .receipt-lbl{font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+ .receipt-row{display:flex;justify-content:space-between;padding:3px 0;font-size:12px}
+ .receipt-svc-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e5e7eb;font-size:12px}
+ .receipt-total{display:flex;justify-content:space-between;padding:8px 0;font-size:15px;font-weight:600}
+ </style></head><body>${content.outerHTML}<script>window.onload=function(){window.print();}<\/script></body></html>`);
+ win.document.close();
 }
 
 function addToGCal(){
-  if(!bk.date||!bk.time)return;
-  const [hh,mm]=bk.time.split(':').map(Number);
-  const startDT=bk.date.replace(/-/g,'')+'T'+String(hh).padStart(2,'0')+String(mm).padStart(2,'0')+'00';
-  const totalMins=hh*60+mm+bk.duration;
-  const endH=Math.floor(totalMins/60), endM=totalMins%60;
-  const endDT=bk.date.replace(/-/g,'')+'T'+String(endH).padStart(2,'0')+String(endM).padStart(2,'0')+'00';
-  const title=encodeURIComponent(`Grooming ${bk.dog?.name} - Home Paw`);
-  const details=encodeURIComponent(`Groomer: ${bk.groomer?.name}\nLayanan: ${buildServiceList(bk.dog?.size||'M').map(s=>s.name).join(', ')}\nTotal: ${fmtRp(bk.price)}`);
-  const loc=encodeURIComponent(userProfile?.address||'');
-  const url=`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDT}/${endDT}&details=${details}&location=${loc}`;
-  window.open(url,'_blank');
+ if(!bk.date||!bk.time)return;
+ const [hh,mm]=bk.time.split(':').map(Number);
+ const startDT=bk.date.replace(/-/g,'')+'T'+String(hh).padStart(2,'0')+String(mm).padStart(2,'0')+'00';
+ const totalMins=hh*60+mm+bk.duration;
+ const endH=Math.floor(totalMins/60), endM=totalMins%60;
+ const endDT=bk.date.replace(/-/g,'')+'T'+String(endH).padStart(2,'0')+String(endM).padStart(2,'0')+'00';
+ const title=encodeURIComponent(`Grooming ${bk.dog?.name} - Home Paw`);
+ const details=encodeURIComponent(`Groomer: ${bk.groomer?.name}\nLayanan: ${buildServiceList(bk.dog?.size||'M').map(s=>s.name).join(', ')}\nTotal: ${fmtRp(bk.price)}`);
+ const loc=encodeURIComponent(userProfile?.address||'');
+ const url=`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDT}/${endDT}&details=${details}&location=${loc}`;
+ window.open(url,'_blank');
 }
 
 // ── APPOINTMENTS ─────────────────────────────────────────────
 async function renderAppts(){
-  if(!currentUser)return;
-  const {data}=await db.from('appointments')
-    .select('*,dogs(name,emoji,breed,size),groomers(name,emoji)')
-    .eq('customer_id',currentUser.id)
-    .order('appt_date',{ascending:false});
+ if(!currentUser)return;
+ const {data}=await db.from('appointments')
+ .select('*,dogs(name,emoji,breed,size),groomers(name,emoji)')
+ .eq('customer_id',currentUser.id)
+ .order('appt_date',{ascending:false});
 
-  const list=document.getElementById('appt-list');
-  if(!data||!data.length){list.innerHTML='<div class="empty"><span class="empty-icon">📭</span>No appointments yet.</div>';return}
+ const list=document.getElementById('appt-list');
+ if(!data||!data.length){list.innerHTML='<div class="empty"><span class="empty-icon"></span>No appointments yet.</div>';return}
 
-  const now=new Date();
-  const upcoming=data.filter(a=>new Date(a.appt_date+'T23:59:59')>=now);
-  const past=data.filter(a=>new Date(a.appt_date+'T23:59:59')<now);
+ const now=new Date();
+ const upcoming=data.filter(a=>new Date(a.appt_date+'T23:59:59')>=now);
+ const past=data.filter(a=>new Date(a.appt_date+'T23:59:59')<now);
 
-  function apptCard(a,isUpcoming){
-    const endTime=calcEndTime(a.appt_time?.slice(0,5),a.duration_mins);
-    const statusCls={'pending':'st-pending','confirmed':'st-confirmed','done':'st-done'}[a.status||'pending']||'st-pending';
-    const statusLbl={'pending':'Pending','confirmed':'Confirmed','done':'Done'}[a.status||'pending']||'Pending';
-    return`<div class="appt-card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
-        <div style="font-size:13px;font-weight:600">${fmtDate(a.appt_date)}</div>
-        <span class="appt-status ${statusCls}">${statusLbl}</span>
-      </div>
-      <div style="font-size:13px;margin-bottom:4px">${a.dogs?.emoji||'🐶'} <strong>${a.dogs?.name||'—'}</strong> · ${a.dogs?.size||'—'}</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">⏰ ${a.appt_time?.slice(0,5)||'—'} – ${endTime} · ${a.groomers?.emoji||'✂️'} ${a.groomers?.name||'—'}</div>
-      ${a.price_total?`<div style="font-size:12px;font-weight:600;color:var(--brown)">${fmtRp(a.price_total)}</div>`:''}
-      ${isUpcoming&&a.status!=='done'?`<div style="display:flex;gap:6px;margin-top:.75rem">
-        <button class="btn btn-p btn-sm" onclick="changeAppt('${a.id}')">✏️ Change booking</button>
-      </div>`:''}
-    </div>`;
-  }
+ function apptCard(a,isUpcoming){
+ const endTime=calcEndTime(a.appt_time?.slice(0,5),a.duration_mins);
+ const statusCls={'pending':'st-pending','confirmed':'st-confirmed','done':'st-done'}[a.status||'pending']||'st-pending';
+ const statusLbl={'pending':'Pending','confirmed':'Confirmed','done':'Done'}[a.status||'pending']||'Pending';
+ return`<div class="appt-card">
+ <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+ <div style="font-size:13px;font-weight:600">${fmtDate(a.appt_date)}</div>
+ <span class="appt-status ${statusCls}">${statusLbl}</span>
+ </div>
+ <div style="font-size:13px;margin-bottom:4px">${a.dogs?.emoji||''} <strong>${a.dogs?.name||'—'}</strong> · ${a.dogs?.size||'—'}</div>
+ <div style="font-size:12px;color:var(--muted);margin-bottom:4px">⏰ ${a.appt_time?.slice(0,5)||'—'} – ${endTime} · ${a.groomers?.emoji||'️'} ${a.groomers?.name||'—'}</div>
+ ${a.price_total?`<div style="font-size:12px;font-weight:600;color:var(--brown)">${fmtRp(a.price_total)}</div>`:''}
+ ${isUpcoming&&a.status!=='done'?`<div style="display:flex;gap:6px;margin-top:.75rem">
+ <button class="btn btn-p btn-sm" onclick="changeAppt('${a.id}')">️ Change booking</button>
+ </div>`:''}
+ </div>`;
+ }
 
-  let html='';
-  if(upcoming.length){html+=`<div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem">Upcoming</div>${upcoming.map(a=>apptCard(a,true)).join('')}`;}
-  if(past.length){html+=`<div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:1rem 0 .5rem">Past</div>${past.map(a=>apptCard(a,false)).join('')}`;}
-  list.innerHTML=html;
+ let html='';
+ if(upcoming.length){html+=`<div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem">Upcoming</div>${upcoming.map(a=>apptCard(a,true)).join('')}`;}
+ if(past.length){html+=`<div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:1rem 0 .5rem">Past</div>${past.map(a=>apptCard(a,false)).join('')}`;}
+ list.innerHTML=html;
 }
 
 async function changeAppt(id){
-  // Load appointment and pre-fill booking state
-  const {data:a}=await db.from('appointments').select('*,dogs(*)').eq('id',id).single();
-  if(!a)return;
-  changeApptId=id;
-  const dog=myDogs.find(d=>d.id===a.dog_id)||a.dogs;
-  bk={
-    step:1,
-    dog:dog,
-    date:a.appt_date,
-    area:null,
-    groomer:null,
-    time:a.appt_time?.slice(0,5)||null,
-    services:{
-      base:'basic',
-      styling:a.service_base&&a.service_base!=='basic'?a.service_base:null,
-      addons:a.service_addon||[]
-    },
-    duration:a.duration_mins||60,
-    price:a.price_total||0
-  };
-  sw('book');
+ // Load appointment and pre-fill booking state
+ const {data:a}=await db.from('appointments').select('*,dogs(*)').eq('id',id).single();
+ if(!a)return;
+ changeApptId=id;
+ const dog=myDogs.find(d=>d.id===a.dog_id)||a.dogs;
+ bk={
+ step:1,
+ dog:dog,
+ date:a.appt_date,
+ area:null,
+ groomer:null,
+ time:a.appt_time?.slice(0,5)||null,
+ services:{
+ base:'basic',
+ styling:a.service_base&&a.service_base!=='basic'?a.service_base:null,
+ addons:a.service_addon||[]
+ },
+ duration:a.duration_mins||60,
+ price:a.price_total||0
+ };
+ sw('book');
 }
 
 
 // ── PROFILE ──────────────────────────────────────────────────
 function renderProfileDogs(){
-  const g=document.getElementById('profile-dog-grid');
-  if(!g)return;
-  let html=myDogs.map(d=>`
-    <div class="dog-card" onclick="editDog('${d.id}')">
-      <div class="dog-av">${d.emoji||'🐶'}</div>
-      <div class="dog-nm">${d.name}</div>
-      <div class="dog-br">${d.breed||'—'}</div>
-      ${sizeBadge(d.size)}
-      <div style="display:flex;gap:6px;justify-content:center;margin-top:.75rem">
-        <button class="btn btn-p btn-sm" onclick="event.stopPropagation();bookForDog('${d.id}')">📅 Book</button>
-        <button class="btn btn-g btn-sm" onclick="event.stopPropagation();editDog('${d.id}')">✏️ Edit</button>
-      </div>
-    </div>`).join('');
-  html+=`<div class="dog-card add-card" onclick="openAddDog()">
-    <div style="font-size:28px;margin-bottom:6px">+</div>
-    <div style="font-size:13px;font-weight:500">Add dog</div>
-  </div>`;
-  g.innerHTML=html;
+ const g=document.getElementById('profile-dog-grid');
+ if(!g)return;
+ let html=myDogs.map(d=>`
+ <div class="dog-card" onclick="editDog('${d.id}')">
+ <div class="dog-av">${d.emoji||''}</div>
+ <div class="dog-nm">${d.name}</div>
+ <div class="dog-br">${d.breed||'—'}</div>
+ ${sizeBadge(d.size)}
+ <div style="display:flex;gap:6px;justify-content:center;margin-top:.75rem">
+ <button class="btn btn-p btn-sm" onclick="event.stopPropagation();bookForDog('${d.id}')"> Book</button>
+ <button class="btn btn-g btn-sm" onclick="event.stopPropagation();editDog('${d.id}')">️ Edit</button>
+ </div>
+ </div>`).join('');
+ html+=`<div class="dog-card add-card" onclick="openAddDog()">
+ <div style="font-size:28px;margin-bottom:6px">+</div>
+ <div style="font-size:13px;font-weight:500">Add dog</div>
+ </div>`;
+ g.innerHTML=html;
 }
 
 function loadProfileForm(){
-  if(!currentUser)return;
-  document.getElementById('p-email').value=currentUser.email||'';
-  if(userProfile){
-    document.getElementById('p-name').value=userProfile.name||'';
-    document.getElementById('p-wa').value=userProfile.phone||'';
-    document.getElementById('p-addr').value=userProfile.address||'';
-    document.getElementById('p-area').value=userProfile.area||'';
-  }
-  renderProfileDogs();
+ if(!currentUser)return;
+ document.getElementById('p-email').value=currentUser.email||'';
+ if(userProfile){
+ document.getElementById('p-name').value=userProfile.name||'';
+ document.getElementById('p-wa').value=userProfile.phone||'';
+ document.getElementById('p-addr').value=userProfile.address||'';
+ document.getElementById('p-area').value=userProfile.area||'';
+ }
+ renderProfileDogs();
 }
 
 async function saveProfile(){
-  if(!currentUser)return;
-  const p={
-    id:currentUser.id,
-    name:document.getElementById('p-name').value.trim(),
-    phone:document.getElementById('p-wa').value.trim(),
-    address:document.getElementById('p-addr').value.trim(),
-    area:document.getElementById('p-area').value.trim()
-  };
-  const{error}=await db.from('customer_profiles').upsert(p);
-  if(error){alert('Error saving: '+error.message);return;}
-  userProfile={...userProfile,...p};
-  // Show saved confirmation
-  const saved=document.getElementById('p-saved');
-  saved.style.display='inline';
-  setTimeout(()=>{saved.style.display='none';},2000);
-  // Update welcome bar
-  renderWelcome();
+ if(!currentUser)return;
+ const p={
+ id:currentUser.id,
+ name:document.getElementById('p-name').value.trim(),
+ phone:document.getElementById('p-wa').value.trim(),
+ address:document.getElementById('p-addr').value.trim(),
+ area:document.getElementById('p-area').value.trim()
+ };
+ if(!myCustomerId){alert('Akun belum terhubung. Hubungi admin.');return;}
+  const{error}=await db.from('customers').update(p).eq('id',myCustomerId);
+ if(error){alert('Error saving: '+error.message);return;}
+ userProfile={...userProfile,...p};
+ // Show saved confirmation
+ const saved=document.getElementById('p-saved');
+ saved.style.display='inline';
+ setTimeout(()=>{saved.style.display='none';},2000);
+ // Update welcome bar
+ renderWelcome();
 }
 
 // ── INIT ─────────────────────────────────────────────────────
