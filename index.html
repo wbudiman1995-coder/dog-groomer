@@ -131,6 +131,11 @@ tbody tr:hover{background:var(--subtle)}
 .ts-slot:hover{background:rgba(22,163,74,.08)!important}
 .ts-slot.half-slot{border-bottom:1px dashed #f4f4f4}
 .appt-block{position:absolute;left:3px;right:3px;border-radius:5px;padding:3px 7px;font-size:11px;cursor:grab;overflow:hidden;z-index:2;border-left:3px solid;line-height:1.35;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.appt-block.status-confirmed{background:#dbeafe!important;border-left-color:#3b82f6!important;color:#1e40af!important}
+.appt-block.status-done{background:#dcfce7!important;border-left-color:#16a34a!important;color:#15803d!important}
+.appt-block.mass-selected{outline:2px solid #f59e0b;outline-offset:1px;z-index:3}
+.cal-groomer-tab{padding:5px 14px;border-radius:20px;border:1.5px solid var(--border);font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;background:var(--surface);color:var(--text)}
+.cal-groomer-tab.active{color:#fff;border-color:transparent}
 .appt-block:active{cursor:grabbing;opacity:.7}
 .appt-block.dragging{opacity:.3}
 .ab-time{font-size:9px;font-weight:700;opacity:.75}
@@ -277,12 +282,21 @@ tbody tr:hover{background:var(--subtle)}
 
  <div class="sec" id="sec-calendar">
  <div class="cal-nav">
- <button class="btn btn-g btn-sm" onclick="calPrev()">Prev week</button>
- <span class="cal-title" id="cal-title"></span>
- <button class="btn btn-g btn-sm" onclick="calNext()">Next week</button>
+  <button class="btn btn-g btn-sm" onclick="calPrev()">&#8592; Prev</button>
+  <span class="cal-title" id="cal-title"></span>
+  <button class="btn btn-g btn-sm" onclick="calNext()">Next &#8594;</button>
+  <button class="btn btn-g btn-sm" onclick="goToday()">Today</button>
  </div>
- <div class="day-strip" id="day-strip"></div>
- <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Click a time slot to book. Drag appointment block to reschedule. Click block to edit.</div>
+ <!-- Groomer filter tabs -->
+ <div id="cal-groomer-tabs" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px"></div>
+ <!-- Mass select toolbar -->
+ <div id="cal-mass-toolbar" style="display:none;background:#fffbeb;border:1px solid #fde68a;border-radius:var(--r);padding:8px 12px;margin-bottom:8px;display:none;align-items:center;gap:10px;font-size:13px">
+  <span id="cal-mass-count" style="font-weight:600"></span>
+  <button class="btn btn-g btn-sm" onclick="massMove()">Move to…</button>
+  <button class="btn btn-d btn-sm" onclick="massDelete()">Delete selected</button>
+  <button class="btn btn-g btn-sm" onclick="clearMassSelect()">Cancel</button>
+ </div>
+ <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Click slot to book · Drag to reschedule · Click block to edit · Hold Shift+click to multi-select</div>
  <div class="cal-outer" id="cal-outer" ondragover="onDragOver(event)" ondrop="onDrop(event)"></div>
  </div>
 
@@ -1053,99 +1067,186 @@ function isBlocked(gid,date,start,dur,skipIds,custId){
  });
 }
 
-/* ---- CALENDAR RENDER ---- */
+/* ---- CALENDAR STATE ---- */
+let calGroomerFilter=null; // null=all, groomer.id=single
+let massSelected=new Set(); // appt ids selected
+
+function goToday(){calStart=weekStart(new Date());calDay=iso(new Date());renderCal();}
+
+function renderGroomerTabs(){
+ const tabs=document.getElementById('cal-groomer-tabs');
+ if(!tabs)return;
+ const active=groomers.filter(g=>g.active);
+ tabs.innerHTML=`<button class="cal-groomer-tab${!calGroomerFilter?' active':''}"
+  style="${!calGroomerFilter?'background:#374151;':'background:var(--surface)'}"
+  onclick="calGroomerFilter=null;renderCal()">All</button>`+
+  active.map(g=>`<button class="cal-groomer-tab${calGroomerFilter===g.id?' active':''}"
+  style="${calGroomerFilter===g.id?'background:'+g.color+';':''}"
+  onclick="calGroomerFilter='${g.id}';renderCal()">${esc(g.name)}</button>`).join('');
+}
+
+/* ---- CALENDAR RENDER (WEEKLY) ---- */
 function renderCal(){
+ renderGroomerTabs();
  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
  const end=new Date(calStart);end.setDate(end.getDate()+6);
  document.getElementById('cal-title').textContent=
-  calStart.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+
-  end.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+  calStart.toLocaleDateString('id-ID',{day:'numeric',month:'short'})+' – '+
+  end.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
  const today=new Date();today.setHours(0,0,0,0);
- const todayIso=iso(today);
 
  const wdays=[];
  for(let i=0;i<7;i++){
   const d=new Date(calStart);d.setDate(d.getDate()+i);
   wdays.push({d,iso_:iso(d),lbl:days[i],num:d.getDate(),isToday:d.getTime()===today.getTime()});
  }
- if(!wdays.find(w=>w.iso_===calDay))calDay=wdays[0].iso_;
 
- // Day strip
- document.getElementById('day-strip').innerHTML=wdays.map(w=>
-  `<button class="day-btn${w.iso_===calDay?' active':''}${w.isToday&&w.iso_!==calDay?' today-btn':''}" onclick="selectDay('${w.iso_}')">${w.lbl} ${w.num}</button>`
- ).join('');
-
- const activeG=groomers.filter(g=>g.active);
+ const activeG=calGroomerFilter
+  ? groomers.filter(g=>g.active&&g.id===calGroomerFilter)
+  : groomers.filter(g=>g.active);
  const outer=document.getElementById('cal-outer');
- if(!activeG.length){outer.innerHTML='<div class="empty">No active groomers. Add in Groomers tab.</div>';return}
+ if(!activeG.length){outer.innerHTML='<div class="empty">No active groomers.</div>';return}
 
- const selDay=wdays.find(w=>w.iso_===calDay)||wdays[0];
  const slots=[];for(let m=SSTART;m<SEND;m+=SSTEP)slots.push(m);
  const totalH=slots.length*SH;
- const nCols=activeG.length;
+ const nDays=7;
 
- let html=`<div class="tsgrid" style="grid-template-columns:50px repeat(${nCols},1fr)">`;
- // header
- html+=`<div class="ts-header" style="grid-template-columns:50px repeat(${nCols},1fr);grid-column:1/${nCols+2}">`;
- html+=`<div class="ts-corner">${selDay.lbl}<br><strong style="font-size:15px">${selDay.num}</strong></div>`;
- activeG.forEach(g=>{
-  html+=`<div class="ts-col-hdr"><div class="ts-gcol-name" style="display:flex;align-items:center;justify-content:center;gap:6px">
-   <span style="width:9px;height:9px;border-radius:50%;background:${g.color||'#16a34a'};display:inline-block"></span>
-   ${esc(g.name)}</div></div>`;
- });
- html+=`</div>`;
- // body row
- html+=`<div style="grid-column:1/${nCols+2};display:grid;grid-template-columns:50px repeat(${nCols},1fr)">`;
- // time col
- html+=`<div class="ts-time-col" style="height:${totalH}px">`;
- slots.forEach(m=>{
-  const half=m%60!==0;
-  html+=`<div class="ts-time-lbl${half?' half':''}" style="height:${SH}px">${half?'&nbsp;':m2t(m)}</div>`;
- });
- html+=`</div>`;
- // groomer cols
- activeG.forEach(g=>{
-  html+=`<div class="ts-gcol" style="height:${totalH}px">`;
-  // slot backgrounds (clickable)
-  slots.forEach((m,i)=>{
-   const half=m%60!==0;
-   const top=i*SH;
-   html+=`<div class="ts-slot${half?' half-slot':''}" style="top:${top}px;${selDay.isToday?'background:rgba(22,163,74,.02)':''}"
-    data-g="${g.id}" data-date="${selDay.iso_}" data-m="${m}"
-    onclick="openAppt('${selDay.iso_}','${g.id}',${m})"></div>`;
-  });
-  // appointment blocks
-  const dayAppts=appts.filter(a=>a.appt_date===selDay.iso_&&a.groomer_id===g.id);
-  dayAppts.forEach(a=>{
-   const sm=t2m(a.appt_time||'09:00');
-   const dur=a.duration_mins||60;
-   const top=((sm-SSTART)/SSTEP)*SH;
-   const h=Math.max((dur/SSTEP)*SH-2,28);
-   const col=g.color||'#16a34a';
-   const bg=col+'1a';
-   const d=dogs.find(x=>x.id===a.dog_id)||{};
-   const owner=d.customer_id?getOwnerName(d.customer_id):'';
-   const cust=d.customer_id?custs.find(x=>x.id===d.customer_id):null;
-   const kecamatan=cust?.kecamatan||cust?.area||'';
-   const kotaLabel=cust?.kota||'';
-   const areaLabel=[kecamatan,kotaLabel].filter(Boolean).join(', ');
-   const statusDot=a.status==='confirmed'?'dot-confirmed':a.status==='done'?'dot-done':'dot-pending';
-   html+=`<div class="appt-block" draggable="true"
-    ondragstart="onDragStart(event,'${a.id}')" ondragend="onDragEnd(event)"
-    onclick="event.stopPropagation();openApptEdit('${a.id}')"
-    style="top:${top}px;height:${h}px;background:${bg};border-left-color:${col};color:${col}">
-    <span class="ab-time"><span class="appt-status-dot ${statusDot}"></span>${m2t(sm)}–${m2t(sm+dur)}</span>
-    <span class="ab-name">${esc(a.dogs?.name||d.name||'?')}</span>
-    <span class="ab-svc">${esc(owner)}${a.service_base?' · '+esc(a.service_base.split(',')[0]):''}${areaLabel?' · '+esc(areaLabel):''}</span>
+ // Build: time col + 7 day-columns, each day column subdivided into groomer sub-cols
+ const nSubCols=activeG.length;
+ const dayColW=`repeat(${nSubCols},1fr)`;
+
+ let html=`<div style="display:grid;grid-template-columns:50px repeat(${nDays},minmax(0,1fr));min-width:600px">`;
+
+ // Header row: corner + day headers
+ html+=`<div style="grid-column:1;background:var(--surface);position:sticky;top:0;z-index:10;border-bottom:1px solid var(--border)"></div>`;
+ wdays.forEach(w=>{
+  html+=`<div style="display:grid;grid-template-columns:${dayColW};border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10;background:var(--surface)">`;
+  activeG.forEach((g,gi)=>{
+   const isFirst=gi===0;
+   html+=`<div style="text-align:center;padding:6px 2px;font-size:11px;border-right:1px solid var(--border);${gi===0?'border-left:1px solid var(--border)':''};${w.isToday?'background:#f0fdf4':''}">
+    ${isFirst?`<div style="font-weight:600;font-size:12px;${w.isToday?'color:var(--green-dk)':''}">${w.lbl} ${w.num}</div>`:'<div style="height:18px"></div>'}
+    <div style="display:flex;align-items:center;justify-content:center;gap:3px;font-size:10px;color:${g.color||'#16a34a'}">
+     <span style="width:7px;height:7px;border-radius:50%;background:${g.color||'#16a34a'};display:inline-block"></span>${esc(g.name)}
+    </div>
    </div>`;
   });
   html+=`</div>`;
  });
- html+=`</div></div>`;
+
+ // Body: time labels + day cols
+ html+=`<div style="grid-column:1;height:${totalH}px;position:relative;border-right:1px solid var(--border)">`;
+ slots.forEach(m=>{
+  const half=m%60!==0;
+  const top=((m-SSTART)/SSTEP)*SH;
+  html+=`<div style="position:absolute;top:${top}px;height:${SH}px;width:100%;font-size:9px;color:var(--muted);padding-right:4px;text-align:right;border-top:1px solid ${half?'transparent':'var(--border)'};">${half?'':m2t(m)}</div>`;
+ });
+ html+=`</div>`;
+
+ // Day columns
+ wdays.forEach(w=>{
+  html+=`<div style="display:grid;grid-template-columns:${dayColW};height:${totalH}px;position:relative;${w.isToday?'background:rgba(22,163,74,.025)':''}">`;
+  activeG.forEach((g,gi)=>{
+   html+=`<div style="position:relative;height:${totalH}px;border-right:1px solid var(--border);${gi===0?'border-left:1px solid var(--border)':''}">`;
+   // Slot backgrounds
+   slots.forEach((m,si)=>{
+    const top=si*SH;
+    html+=`<div style="position:absolute;top:${top}px;height:${SH}px;width:100%;border-top:1px solid ${m%60?'transparent':'var(--border)'};box-sizing:border-box;cursor:pointer"
+     onclick="openAppt('${w.iso_}','${g.id}',${m})"></div>`;
+   });
+   // Appointments
+   const dayAppts=appts.filter(a=>a.appt_date===w.iso_&&a.groomer_id===g.id);
+   dayAppts.forEach(a=>{
+    const sm=t2m(a.appt_time||'09:00');
+    const dur=a.duration_mins||60;
+    const top=Math.max(0,((sm-SSTART)/SSTEP)*SH);
+    const ht=Math.max((dur/SSTEP)*SH-2,22);
+    const col=a.status==='confirmed'?'#3b82f6':a.status==='done'?'#16a34a':(g.color||'#16a34a');
+    const bg=a.status==='confirmed'?'#dbeafe':a.status==='done'?'#dcfce7':col+'1a';
+    const textCol=a.status==='confirmed'?'#1e40af':a.status==='done'?'#15803d':col;
+    const d=dogs.find(x=>x.id===a.dog_id)||{};
+    const owner=d.customer_id?getOwnerName(d.customer_id):'';
+    const cust=d.customer_id?custs.find(x=>x.id===d.customer_id):null;
+    const areaLabel=[cust?.kecamatan,cust?.kota].filter(Boolean).join(', ');
+    const statusDot=a.status==='confirmed'?'dot-confirmed':a.status==='done'?'dot-done':'dot-pending';
+    const isMSel=massSelected.has(a.id);
+    html+=`<div class="appt-block${isMSel?' mass-selected':''}"
+     draggable="true"
+     ondragstart="onDragStart(event,'${a.id}')" ondragend="onDragEnd(event)"
+     onclick="event.stopPropagation();handleApptClick(event,'${a.id}')"
+     style="top:${top}px;height:${ht}px;background:${bg};border-left-color:${col};color:${textCol}">
+     <span class="ab-time"><span class="appt-status-dot ${statusDot}"></span>${m2t(sm)}–${m2t(sm+dur)}</span>
+     <span class="ab-name">${esc(a.dogs?.name||d.name||'?')}</span>
+     <span class="ab-svc">${esc(owner)}${a.service_base?' · '+esc(a.service_base.split(',')[0]):''}${areaLabel?' · '+esc(areaLabel):''}</span>
+    </div>`;
+   });
+   html+=`</div>`;
+  });
+  html+=`</div>`;
+ });
+ html+=`</div>`;
  outer.innerHTML=html;
+ updateMassToolbar();
 }
 
-function selectDay(d){calDay=d;renderCal()}
+function handleApptClick(event,apptId){
+ if(event.shiftKey||event.ctrlKey||event.metaKey){
+  // Mass select mode
+  if(massSelected.has(apptId)) massSelected.delete(apptId);
+  else massSelected.add(apptId);
+  updateMassToolbar();
+  renderCal();
+ } else if(massSelected.size>0){
+  // Already in mass select mode — add/remove
+  if(massSelected.has(apptId)) massSelected.delete(apptId);
+  else massSelected.add(apptId);
+  updateMassToolbar();
+  renderCal();
+ } else {
+  openApptEdit(apptId);
+ }
+}
+
+function updateMassToolbar(){
+ const toolbar=document.getElementById('cal-mass-toolbar');
+ const count=document.getElementById('cal-mass-count');
+ if(!toolbar)return;
+ if(massSelected.size>0){
+  toolbar.style.display='flex';
+  count.textContent=`${massSelected.size} appointment${massSelected.size>1?'s':''} selected`;
+ } else {
+  toolbar.style.display='none';
+ }
+}
+
+function clearMassSelect(){
+ massSelected.clear();
+ updateMassToolbar();
+ renderCal();
+}
+
+async function massDelete(){
+ if(!massSelected.size)return;
+ if(!confirm(`Delete ${massSelected.size} appointment(s)?`))return;
+ const ids=[...massSelected];
+ const {error}=await db.from('appointments').delete().in('id',ids);
+ if(error){alert('Error: '+error.message);return}
+ massSelected.clear();
+ await loadAll();
+}
+
+async function massMove(){
+ if(!massSelected.size)return;
+ // Prompt for new date
+ const newDate=prompt('Move all selected to date (YYYY-MM-DD):',iso(new Date()));
+ if(!newDate||!/^\d{4}-\d{2}-\d{2}$/.test(newDate)){alert('Invalid date format');return}
+ const ids=[...massSelected];
+ const {error}=await db.from('appointments').update({appt_date:newDate}).in('id',ids);
+ if(error){alert('Error: '+error.message);return}
+ massSelected.clear();
+ calDay=newDate;
+ calStart=weekStart(new Date(newDate+'T00:00:00'));
+ await loadAll();
+}
 
 /* ---- DRAG DROP ---- */
 let draggedId=null;
