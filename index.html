@@ -714,7 +714,8 @@ const AREAS = {
  'BSD': ['Serpong','Setu','Cisauk','Pagedangan'],
  'Kota Tangerang': ['Batuceper','Benda','Ciledug','Cipondoh','Cibodas','Jatiuwung','Karang Tengah','Karawaci','Larangan','Neglasari','Periuk','Pinang','Tangerang'],
  'Tangerang Selatan': ['Ciputat','Ciputat Timur','Pamulang','Pondok Aren','Serpong','Serpong Utara','Setu'],
- 'Kabupaten Tangerang': ['Balaraja','Cikupa','Cisauk','Curug','Kelapa Dua','Kosambi','Legok','Pagedangan','Panongan','Rajeg','Sepatan','Tigaraksa']
+ 'Kabupaten Tangerang': ['Balaraja','Cikupa','Cisauk','Curug','Kelapa Dua','Kosambi','Legok','Pagedangan','Panongan','Rajeg','Sepatan','Tigaraksa'],
+ 'Depok': ['Beji','Bojongsari','Cilodong','Cimanggis','Cinere','Cipayung','Limo','Pancoran Mas','Sawangan','Sukmajaya','Tapos']
 };
 function populateKotaSelect(sel){
  sel.innerHTML='<option value="">Pilih kota…</option>'+Object.keys(AREAS).map(k=>`<option value="${k}">${k}</option>`).join('');
@@ -1124,6 +1125,10 @@ function renderCal(){
    const bg=col+'1a';
    const d=dogs.find(x=>x.id===a.dog_id)||{};
    const owner=d.customer_id?getOwnerName(d.customer_id):'';
+   const cust=d.customer_id?custs.find(x=>x.id===d.customer_id):null;
+   const kecamatan=cust?.kecamatan||cust?.area||'';
+   const kotaLabel=cust?.kota||'';
+   const areaLabel=[kecamatan,kotaLabel].filter(Boolean).join(', ');
    const statusDot=a.status==='confirmed'?'dot-confirmed':a.status==='done'?'dot-done':'dot-pending';
    html+=`<div class="appt-block" draggable="true"
     ondragstart="onDragStart(event,'${a.id}')" ondragend="onDragEnd(event)"
@@ -1131,7 +1136,7 @@ function renderCal(){
     style="top:${top}px;height:${h}px;background:${bg};border-left-color:${col};color:${col}">
     <span class="ab-time"><span class="appt-status-dot ${statusDot}"></span>${m2t(sm)}–${m2t(sm+dur)}</span>
     <span class="ab-name">${esc(a.dogs?.name||d.name||'?')}</span>
-    <span class="ab-svc">${esc(owner)}${a.service_base?' · '+esc(a.service_base.split(',')[0]):''}</span>
+    <span class="ab-svc">${esc(owner)}${a.service_base?' · '+esc(a.service_base.split(',')[0]):''}${areaLabel?' · '+esc(areaLabel):''}</span>
    </div>`;
   });
   html+=`</div>`;
@@ -2615,10 +2620,14 @@ function buildMsg(g,ga,date,pickup,pickupTime,extra){
   const gmaps=c.gmaps_link||buildGLink(c.address,c.kota);
   lines.push(`Jam ${time}`);
   lines.push(`Client ${i+1}: ${c.owner||'?'}`);
-  lines.push(`Dog: ${d.breed||'?'} - ${d.name||'?'}`);
+  lines.push(`Dog: ${d.breed||'?'} - ${d.name||'?'} (${d.size||'?'})`);
   lines.push(`Alamat: ${addr||'-'}`);
-  if(gmaps)lines.push(`Google Link: ${gmaps}`);
-  if(a.appt_note)lines.push(`Catatan: ${a.appt_note}`);
+  if(gmaps) lines.push(`Google Link: ${gmaps}`);
+  if(a.appt_note) lines.push(`Catatan sesi: ${a.appt_note}`);
+  // Customer-level notes
+  if(c.prefs) lines.push(`Catatan owner: ${c.prefs}`);
+  // Dog-level prefs
+  if(d.prefs) lines.push(`Catatan anjing: ${d.prefs}`);
   lines.push('');
  });
  if(extra){lines.push('Note:',extra,'')}
