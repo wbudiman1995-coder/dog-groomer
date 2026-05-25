@@ -288,6 +288,7 @@ tbody tr:hover{background:var(--subtle)}
  <div class="toolbar"><span class="toolbar-title">Grooming history</span></div>
  <div class="filter-bar">
  <input id="hs" placeholder="Search…" oninput="renderHist()" style="min-width:160px"/>
+ <select id="hc" onchange="onHistCustChange()"><option value="">All customers</option></select>
  <select id="hd" onchange="renderHist()"><option value="">All dogs</option></select>
  <select id="hsort" onchange="renderHist()"><option value="desc">Newest first</option><option value="asc">Oldest first</option></select>
  </div>
@@ -862,6 +863,15 @@ async function loadAll() {
  // Rebuild dropdowns
  const opts=dogs.map(d=>`<option value="${d.id}">${esc(d.name)} (${esc(getOwnerName(d.customer_id))})</option>`).join('');
  const hdEl=document.getElementById('hd'); if(hdEl) hdEl.innerHTML='<option value="">All dogs</option>'+opts;
+ // History customer dropdown (Batch G — item 9)
+ const hcEl=document.getElementById('hc');
+ if(hcEl){
+  const prev=hcEl.value;
+  const cOpts=[...custs].sort((a,b)=>(a.owner||'').localeCompare(b.owner||''))
+   .map(c=>`<option value="${c.id}">${esc(c.owner)}${c.customer_code?' ('+esc(c.customer_code)+')':''}</option>`).join('');
+  hcEl.innerHTML='<option value="">All customers</option>'+cOpts;
+  if(prev&&custs.find(c=>c.id===prev)) hcEl.value=prev; // restore selection across reloads
+ }
  const apptDogEl=document.getElementById('appt-dog'); if(apptDogEl) apptDogEl.innerHTML='<option value="">Select dog…</option>'+opts;
  const gopts=groomers.filter(g=>g.active).map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
  const apptGrEl=document.getElementById('appt-groomer'); if(apptGrEl) apptGrEl.innerHTML='<option value="">Select groomer…</option>'+gopts;
@@ -1101,11 +1111,32 @@ async function addVisit(dogId){
 }
 
 /* HISTORY */
+function onHistCustChange(){
+ // When customer filter changes, narrow the dog dropdown to that customer's dogs.
+ const cid=document.getElementById('hc').value;
+ const hdEl=document.getElementById('hd');
+ if(!hdEl) return;
+ const prev=hdEl.value;
+ const filteredDogs=cid?dogs.filter(d=>d.customer_id===cid):dogs;
+ const opts=filteredDogs.map(d=>`<option value="${d.id}">${esc(d.name)} (${esc(getOwnerName(d.customer_id))})</option>`).join('');
+ hdEl.innerHTML='<option value="">All dogs</option>'+opts;
+ // If the previously selected dog still belongs to this customer (or no customer filter), keep it
+ if(prev&&filteredDogs.find(d=>d.id===prev)) hdEl.value=prev;
+ else hdEl.value='';
+ renderHist();
+}
+
 function renderHist(){
  const s=document.getElementById('hs').value.toLowerCase();
+ const cf=document.getElementById('hc')?.value||'';
  const df=document.getElementById('hd').value;
  const sort=document.getElementById('hsort').value;
  let rows=[...visits];
+ // Customer filter (item 9): keep visits whose dog belongs to selected customer
+ if(cf){
+  const custDogIds=new Set(dogs.filter(d=>d.customer_id===cf).map(d=>d.id));
+  rows=rows.filter(v=>custDogIds.has(v.dog_id));
+ }
  if(df) rows=rows.filter(v=>v.dog_id===df);
  if(s) rows=rows.filter(v=>{
  const d=dogs.find(x=>x.id===v.dog_id);
