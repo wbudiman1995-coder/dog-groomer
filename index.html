@@ -2369,7 +2369,7 @@ function renderInvDogServices(){
  <div style="margin-top:.75rem;border-top:1px solid var(--border);padding-top:.75rem">
   <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Groomer notes (saved to history)</div>
   <textarea placeholder="e.g. Found flea, kulit sensitif, minta lion cut next time…"
-   onchange="onDogNoteChange('${did}',this.value)"
+   oninput="onDogNoteChange('${did}',this.value)"
    style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--subtle);min-height:44px;font-family:inherit;resize:vertical">${esc((invDogNotes||{})[did]||'')}</textarea>
   <div style="font-size:10px;color:var(--muted);margin-top:2px">Past visits: ${visits.filter(v=>v.dog_id===did).length}</div>
   <div style="margin-top:8px">
@@ -2388,6 +2388,8 @@ function renderInvDogServices(){
 function onDogNoteChange(did,val){
  if(!window.invDogNotes)window.invDogNotes={};
  invDogNotes[did]=val;
+ // Batch I fix: refresh preview so page 2 appears/updates as notes are typed
+ renderInvoicePreview();
 }
 
 function onSvcToggle(did,svc,checked){
@@ -3066,18 +3068,22 @@ ${(()=>{
   const photos=buildPhotoHTML(d.dog_id);
   if(!notes&&!photos)return '';
   return `<div style="margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #f0f0f0">
-   <div style="font-size:14px;font-weight:700;margin-bottom:6px">${d.name} <span style="font-size:11px;color:#aaa;font-weight:400">${d.breed||''} · ${d.size||''}</span></div>
+   <div style="font-size:14px;font-weight:700;margin-bottom:6px">${d.name} <span style="font-size:11px;color:#aaa;font-weight:400">${d.breed||''} \u00B7 ${d.size||''}</span></div>
    ${notes?`<div style="font-size:12px;color:#555;background:#f9f9f9;padding:8px 10px;border-radius:5px;margin-bottom:8px;border-left:3px solid #e07b39">${notes}</div>`:''}
    ${photos}
   </div>`;
  }).filter(Boolean).join('');
  if(!dogSections)return '';
- return `<div class="inv-wrap" style="page-break-before:always">
+ // Visible page-break separator for on-screen preview; ignored in print
+ const sepStyle=forPrint?'':'border-top:2px dashed #d4d4d4;margin:32px 0 0;padding-top:8px';
+ const sepLabel=forPrint?'':'<div style="text-align:center;font-size:10px;color:#aaa;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Halaman 2</div>';
+ return `<div style="${sepStyle}">${sepLabel}</div>
+ <div class="inv-wrap" style="page-break-before:always">
   <div class="top-bar">
    <img src="${HP_LOGO}" alt="HomePaw" style="height:120px;width:auto"/>
    <div class="inv-label">CATATAN GROOMER</div>
   </div>
-  <div style="font-size:11px;color:#aaa;margin-bottom:16px">Ref: ${rec.invoice_number} · ${rec.owner_name}</div>
+  <div style="font-size:11px;color:#aaa;margin-bottom:16px">Ref: ${rec.invoice_number} \u00B7 ${rec.owner_name}</div>
   ${dogSections}
  </div>`;
 })()}`;
@@ -3623,7 +3629,7 @@ function onPhotosAdd(did,input){
   reader.onload=e=>{
    invPhotos[did].push({data:e.target.result,label:''});
    loaded++;
-   if(loaded===files.length) renderPhotoGrid(did);
+   if(loaded===files.length){renderPhotoGrid(did);renderInvoicePreview();}
   };
   reader.readAsDataURL(file);
  });
@@ -3647,10 +3653,12 @@ function deletePhoto(did,idx){
  if(!invPhotos[did])return;
  invPhotos[did].splice(idx,1);
  renderPhotoGrid(did);
+ renderInvoicePreview();
 }
 
 function setPhotoLabel(did,idx,val){
  if(invPhotos[did]&&invPhotos[did][idx]) invPhotos[did][idx].label=val;
+ renderInvoicePreview();
 }
 
 function buildPhotoHTML(did){
