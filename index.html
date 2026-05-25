@@ -2211,6 +2211,20 @@ function openInvoiceForEdit(id){
  });
 }
 
+// Batch I — block double invoicing.
+// Returns a Map<invoiceNumber, true> if ANY dog in the given dog_id list
+// already appears on an invoice with matching invoice_date. Used by both
+// "Load today's schedule" and "Load from appointment" pickers.
+function findInvoiceForDogsOnDate(dogIds,dateStr){
+ if(!dogIds||!dogIds.length||!dateStr) return null;
+ for(const inv of invoices){
+  if(inv.invoice_date!==dateStr) continue;
+  const invDogIds=(inv.dogs||[]).map(d=>d.dog_id).filter(Boolean);
+  if(invDogIds.some(id=>dogIds.includes(id))) return inv;
+ }
+ return null;
+}
+
 function loadInvFromToday(){
  const todayStr=iso(new Date());
  const todayAppts=appts.filter(a=>a.appt_date===todayStr)
@@ -2236,14 +2250,23 @@ function loadInvFromToday(){
   const dogNames=cm_.appts.map(a=>a._dog.name).join(', ');
   const g=groomers.find(x=>x.id===cm_.groomer_id);
   const times=cm_.appts.map(a=>(a.appt_time||'').slice(0,5)).join(', ');
-  return `<div style="padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer"
-   onmouseover="this.style.background='#dcfce7'" onmouseout="this.style.background=''"
-   onclick="applyInvCustomer('${cid}','${todayStr}')">
+  // Batch I: check if any of these dogs already invoiced today
+  const dogIds=cm_.appts.map(a=>a._dog.id);
+  const existingInv=findInvoiceForDogsOnDate(dogIds,todayStr);
+  const locked=!!existingInv;
+  const hoverStyle=locked?'':"onmouseover=\"this.style.background='#dcfce7'\" onmouseout=\"this.style.background=''\"";
+  const clickHandler=locked?'':`onclick="applyInvCustomer('${cid}','${todayStr}')"`;
+  const lockedBanner=locked
+   ? `<div style="font-size:11px;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:4px;padding:3px 8px;margin-top:4px;display:inline-block">Sudah ada invoice ${esc(existingInv.invoice_number)}</div>`
+   : '';
+  return `<div style="padding:12px 16px;border-bottom:1px solid var(--border);${locked?'opacity:.55;cursor:not-allowed;background:#f9fafb':'cursor:pointer'}"
+   ${hoverStyle} ${clickHandler}>
    <div style="display:flex;justify-content:space-between;align-items:baseline">
     <strong style="font-size:14px">${esc(c.owner)}</strong>
     <span style="font-size:11px;color:#16a34a;font-weight:600">${esc(c.customer_code||'')}</span>
    </div>
    <div style="font-size:12px;color:#6b7280;margin-top:2px">${esc(dogNames)} · ${times}${g?' · '+esc(g.name):''}</div>
+   ${lockedBanner}
   </div>`;
  }).join('');
 
@@ -2796,38 +2819,50 @@ async function saveInvoiceAndAppts(){
  await loadAll();
 }
 
-function buildServiceRows(dogsData){
+function buildServiceRows(dogsData,counter){
  let rows='';
  dogsData.forEach(d=>{
   const dogSubtotal=d.services.reduce((a,s)=>a+s.price,0);
   let dogDisc=0;
   if(d.disc_type==='percent') dogDisc=Math.round(dogSubtotal*(d.disc_value||0)/100);
   else if(d.disc_type==='fixed') dogDisc=Math.round(d.disc_value||0);
-  const isFree=dogSubtotal===0||dogDisc>=dogSubtotal;
-  const discLabel=d.disc_type==='percent'&&d.disc_value?` (${d.disc_value}% off)`:(dogDisc>0?` (diskon ${fmtRp(dogDisc)})`:'');
+  const isFree=dogSubtotal===0;
   // Split services: first = main (Basic/Wash), rest = add-ons
   const mainSvc=d.services[0];
   const addons=d.services.slice(1).filter(s=>s.price>0||s.name!=='Parfume'||d.services.length===1);
   const addonStr=addons.length?' + '+addons.map(s=>s.name.replace('Basic Grooming','').trim()||s.name).join(' + '):'';
-  const mainAmt=isFree?'FREE':fmtRp(dogSubtotal-dogDisc);
-  const mainRate=isFree?'FREE':fmtRp(dogSubtotal);
-  if(mainSvc){
-   rows+=`<tr style="border-top:2px solid #f0f0f0">
-    <td class="svc-name" style="padding-top:14px">
-     <strong>${d.name} \u2014 ${mainSvc.name}${discLabel}</strong>
-     <div class="svc-sub">Mandi, blow dry, trim, telinga &amp; kuku${addonStr}</div>
-    </td>
-    <td class="svc-qty" style="padding-top:14px">1</td>
-    <td class="svc-rate" style="padding-top:14px">${mainRate}</td>
-    <td class="svc-amt" style="padding-top:14px">${mainAmt}</td></tr>`;
+  if(!mainSvc) return;
+  const n=++counter.n;
+  const rateStr=isFree?'GRATIS':fmtRp(dogSubtotal);
+  const amtStr=isFree?'GRATIS':fmtRp(dogSubtotal);
+  rows+=`<tr style="border-top:2px solid #f0f0f0">
+   <td class="svc-num" style="padding-top:14px">${n}</td>
+   <td class="svc-name" style="padding-top:14px">
+    <strong>${d.name} \u2014 ${mainSvc.name}</strong>
+    <div class="svc-sub">Mandi, blow dry, trim, telinga &amp; kuku${addonStr}</div>
+   </td>
+   <td class="svc-qty" style="padding-top:14px">1</td>
+   <td class="svc-rate" style="padding-top:14px">${rateStr}</td>
+   <td class="svc-amt" style="padding-top:14px">${amtStr}</td></tr>`;
+  if(dogDisc>0){
+   const discLabel=d.disc_type==='percent'&&d.disc_value
+    ? `Diskon ${d.disc_value}%`
+    : `Diskon`;
+   rows+=`<tr class="svc-disc-row">
+    <td></td>
+    <td class="svc-disc-label">${discLabel}</td>
+    <td></td>
+    <td></td>
+    <td style="text-align:right;color:#15803d;font-weight:600">\u2014 ${fmtRp(dogDisc)}</td>
+   </tr>`;
   }
  });
  return rows;
 }
 
-function buildAdvanceRows(rec){
+function buildAdvanceRows(rec,counter){
  if(!rec.is_advance) return '';
- let rows='<tr style="border-top:2px solid #f0f0f0"><td colspan="4" style="padding:10px 10px 4px;font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase">Advance Booking</td></tr>';
+ let rows='<tr style="border-top:2px solid #f0f0f0"><td colspan="5" style="padding:10px 10px 4px;font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase">Pembayaran di muka (Advance booking)</td></tr>';
  (rec.dogs||[]).forEach(d=>{
   if(!d.advance) return;
   const ad=d.advance;
@@ -2835,17 +2870,29 @@ function buildAdvanceRows(rec){
   let disc=0;
   if(ad.disc_type==='percent') disc=Math.round(gross*ad.disc_value/100);
   else if(ad.disc_type==='fixed') disc=Math.round(ad.disc_value*ad.sessions);
-  const total=Math.max(0,gross-disc);
-  const discLabel=ad.disc_type==='percent'&&ad.disc_value?` (${ad.disc_value}% off)`:'';
+  const n=++counter.n;
   rows+=`<tr>
+   <td class="svc-num" style="padding-top:10px">${n}</td>
    <td class="svc-name" style="padding-top:10px">
-    <strong>${d.name} — ${ad.service_type}${discLabel}</strong>
-    <div class="svc-sub">${ad.sessions} sesi · ${fmtRp(ad.price_per_session)}/sesi</div>
+    <strong>${d.name} \u2014 ${ad.service_type}</strong>
+    <div class="svc-sub">Paket ${ad.sessions} sesi \u00B7 ${fmtRp(ad.price_per_session)}/sesi</div>
    </td>
    <td class="svc-qty" style="padding-top:10px">${ad.sessions}</td>
    <td class="svc-rate" style="padding-top:10px">${fmtRp(ad.price_per_session)}</td>
-   <td class="svc-amt" style="padding-top:10px">${total===0?'FREE':fmtRp(total)}</td>
+   <td class="svc-amt" style="padding-top:10px">${fmtRp(gross)}</td>
   </tr>`;
+  if(disc>0){
+   const discLabel=ad.disc_type==='percent'&&ad.disc_value
+    ? `Diskon ${ad.disc_value}% paket`
+    : `Diskon paket`;
+   rows+=`<tr class="svc-disc-row">
+    <td></td>
+    <td class="svc-disc-label">${discLabel}</td>
+    <td></td>
+    <td></td>
+    <td style="text-align:right;color:#15803d;font-weight:600">\u2014 ${fmtRp(disc)}</td>
+   </tr>`;
+  }
  });
  return rows;
 }
@@ -2875,15 +2922,18 @@ function buildTokenBalanceHTML(custId){
 
 function buildInvoiceHTML(rec, custObj, bankObj, forPrint){
  const bn=bankObj.bank_name||'BCA';
- const ba=bankObj.bank_account||'770055777787';
+ const baRaw=bankObj.bank_account||'770055777787';
+ // Format account number with spaces every 4 digits (Iris item 5)
+ const ba=baRaw.replace(/\s/g,'').replace(/(.{4})/g,'$1 ').trim();
  const bh=bankObj.bank_holder||'Xavier Fidelia Ali';
  const invDate=new Date(rec.invoice_date+'T00:00:00');
  const dueDate=new Date(invDate); dueDate.setDate(dueDate.getDate()+1);
  const fmtID=(d)=>new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
  const fullAddr=[custObj.address,custObj.kecamatan,custObj.kota].filter(Boolean).join(', ');
- const serviceRows=buildServiceRows(rec.dogs);
+ const counter={n:0};
+ const serviceRows=buildServiceRows(rec.dogs,counter);
  // Advance booking rows
- const advRows=buildAdvanceRows(rec);
+ const advRows=buildAdvanceRows(rec,counter);
  // Token balance for this customer
  const custTokenBalance=buildTokenBalanceHTML(rec.customer_id);
  const pad=forPrint?'48px 52px':'28px 32px';
@@ -2908,8 +2958,12 @@ function buildInvoiceHTML(rec, custObj, bankObj, forPrint){
 .svc-table thead tr{border-bottom:1px solid #e8e8e8}
 .svc-table th{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;padding:7px 10px;text-align:left}
 .svc-table td{padding:10px 10px;vertical-align:top}
-.svc-name{width:55%}.svc-qty{width:10%;text-align:center}.svc-rate{width:17%;text-align:right;color:#aaa}.svc-amt{width:18%;text-align:right;font-weight:700;color:#1a1a1a}
+.svc-num{width:5%;color:#aaa;font-weight:600}
+.svc-name{width:50%}.svc-qty{width:10%;text-align:center}.svc-rate{width:17%;text-align:right;color:#aaa}.svc-amt{width:18%;text-align:right;font-weight:700;color:#1a1a1a}
 .svc-sub{font-size:10px;color:#bbb;margin-top:2px;font-weight:400}
+.svc-disc-row td{padding:0 10px 8px;color:#15803d;font-size:11px}
+.svc-disc-label{padding-left:12px}
+.svc-disc-label::before{content:"\u21B3 ";color:#15803d}
 .totals-wrap{display:flex;justify-content:flex-end;margin-bottom:28px}
 .totals-box{min-width:240px}
 .tot-row{display:flex;justify-content:space-between;padding:3px 0;font-size:13px;color:#555}
@@ -2931,22 +2985,22 @@ ${forPrint?'@media print{.inv-wrap{padding:24px 28px}}':''}
 <div class="inv-wrap">
 <div class="top-bar">
  <img src="${HP_LOGO}" alt="HomePaw" style="height:120px;width:auto"/>
- <div class="inv-label">+ INVOICE</div>
+ <div class="inv-label">INVOICE</div>
 </div>
 <div class="meta-row">
- <div class="meta-item"><div class="meta-lbl">Invoice No.</div><div class="meta-val">${rec.invoice_number}</div></div>
- <div class="meta-item"><div class="meta-lbl">Issue Date</div><div class="meta-val">${fmtID(invDate)}</div></div>
- <div class="meta-item"><div class="meta-lbl">Due Date</div><div class="meta-val">${fmtID(dueDate)}</div></div>
+ <div class="meta-item"><div class="meta-lbl">No. Invoice</div><div class="meta-val">${rec.invoice_number}</div></div>
+ <div class="meta-item"><div class="meta-lbl">Tanggal</div><div class="meta-val">${fmtID(invDate)}</div></div>
+ <div class="meta-item"><div class="meta-lbl">Jatuh tempo</div><div class="meta-val" style="color:#dc2626">${fmtID(dueDate)}</div></div>
  <div class="meta-item"><div class="meta-lbl">Groomer</div><div class="meta-val">${rec.groomer_name||'-'}</div></div>
 </div>
 <div class="bill-row">
  <div>
-  <div class="bill-lbl">Billed To</div>
+  <div class="bill-lbl">Ditagih kepada</div>
   <div class="bill-name">${rec.owner_name}</div>
   <div class="bill-addr">${fullAddr||'-'}${custObj.wa?'<br>+62'+custObj.wa.replace(/^0/,''):''}</div>
  </div>
  <div>
-  <div class="bill-lbl">Dog Info</div>
+  <div class="bill-lbl">Info anjing</div>
   <div class="bill-name">${rec.dogs.map(d=>d.name).join(' &amp; ')}</div>
   <div class="bill-addr">
    Breed: ${rec.dogs.map(d=>d.breed||'?').join(' &amp; ')}<br>
@@ -2956,46 +3010,46 @@ ${forPrint?'@media print{.inv-wrap{padding:24px 28px}}':''}
 </div>
 <table class="svc-table">
  <thead><tr>
-  <th>Service</th><th style="text-align:center">QTY</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th>
+  <th>#</th><th>Layanan</th><th style="text-align:center">Qty</th><th style="text-align:right">Harga</th><th style="text-align:right">Jumlah</th>
  </tr></thead>
  <tbody>${serviceRows}${advRows}</tbody>
 </table>
 ${custTokenBalance}
 <div class="totals-wrap">
  <div class="totals-box">
-  <div class="tot-row"><span>Subtotal grooming</span><span>${fmtRp(rec.subtotal)}</span></div>
-  ${rec.discount_amount?`<div class="tot-row"><span>Diskon grooming</span><span>— ${fmtRp(rec.discount_amount)}</span></div>`:''}
   ${(()=>{
-   // Item 10: split advance booking subtotal + discount on preview
-   const adv=(rec.dogs||[]).filter(d=>d.advance);
-   if(!adv.length) return '';
-   let gross=0,disc=0;
-   adv.forEach(d=>{
+   // Recompute pre-discount + total discount for the cleaner totals box.
+   // Regular grooming subtotal already excludes discount (rec.subtotal = perSession sum)
+   // Advance booking: sum gross + sum discount across all dogs
+   let advGross=0, advDisc=0;
+   (rec.dogs||[]).filter(d=>d.advance).forEach(d=>{
     const a=d.advance;
     const g=(a.price_per_session||0)*(a.sessions||0);
-    gross+=g;
-    if(a.disc_type==='percent') disc+=Math.round(g*(a.disc_value||0)/100);
-    else if(a.disc_type==='fixed') disc+=Math.round((a.disc_value||0)*(a.sessions||0));
+    advGross+=g;
+    if(a.disc_type==='percent') advDisc+=Math.round(g*(a.disc_value||0)/100);
+    else if(a.disc_type==='fixed') advDisc+=Math.round((a.disc_value||0)*(a.sessions||0));
    });
-   const sessLabel=adv.map(d=>`${d.advance.sessions} sesi ${d.name}`).join(' · ');
+   const grandSub=(rec.subtotal||0)+advGross;
+   const grandDisc=(rec.discount_amount||0)+advDisc;
    let out='';
-   out+=`<div class="tot-row"><span>Advance booking <span style="font-size:10px;color:#aaa">(${esc(sessLabel)})</span></span><span>${fmtRp(gross)}</span></div>`;
-   if(disc>0) out+=`<div class="tot-row"><span>Diskon advance booking</span><span>— ${fmtRp(disc)}</span></div>`;
+   out+=`<div class="tot-row"><span>Subtotal (sebelum diskon)</span><span>${fmtRp(grandSub)}</span></div>`;
+   if(grandDisc>0) out+=`<div class="tot-row" style="color:#15803d"><span>Total diskon</span><span>\u2014 ${fmtRp(grandDisc)}</span></div>`;
+   out+=`<div class="tot-final"><span>Total</span><span>${fmtRp(rec.total)}</span></div>`;
    return out;
   })()}
-  <div class="tot-final"><span>Total</span><span>${fmtRp(rec.total)}</span></div>
  </div>
 </div>
 <div class="pay-section">
  <div>
-  <div class="pay-lbl">+ Payment Details</div>
-  <div class="pay-bank">${bn} — a/n ${bh}</div>
+  <div class="pay-lbl">Cara bayar</div>
+  <div class="pay-bank">${bn} \u2014 a/n ${bh}</div>
   <div class="pay-acc">${ba}</div>
   <div class="pay-note">Transfer sesuai nominal.<br>Kirim bukti via WhatsApp / DM Instagram.</div>
  </div>
  <div>
-  <div class="pay-due-lbl">Amount Due</div>
+  <div class="pay-due-lbl">Jumlah tagihan</div>
   <div class="pay-due-val">${fmtRp(rec.total)}</div>
+  <div style="font-size:10px;color:#dc2626;margin-top:4px;text-align:right;font-weight:600">Bayar sebelum ${fmtID(dueDate)}</div>
  </div>
 </div>
 <div class="inv-footer">
@@ -3021,7 +3075,7 @@ ${(()=>{
  return `<div class="inv-wrap" style="page-break-before:always">
   <div class="top-bar">
    <img src="${HP_LOGO}" alt="HomePaw" style="height:120px;width:auto"/>
-   <div class="inv-label">+ GROOMER NOTES</div>
+   <div class="inv-label">CATATAN GROOMER</div>
   </div>
   <div style="font-size:11px;color:#aaa;margin-bottom:16px">Ref: ${rec.invoice_number} · ${rec.owner_name}</div>
   ${dogSections}
@@ -3635,14 +3689,22 @@ function openInvApptPicker(){
   const c=d.customer_id?custs.find(x=>x.id===d.customer_id)||{}:{};
   const g=groomers.find(x=>x.id===a.groomer_id)||{};
   const isToday=a.appt_date===today;
-  return `<div style="padding:10px 14px;border-bottom:1px solid #e5e7eb;cursor:pointer"
-   onmouseover="this.style.background='#dcfce7'" onmouseout="this.style.background=''"
-   onclick="loadInvFromAppointment('${a.id}')">
+  // Batch I: locked if this dog already invoiced on this date
+  const existingInv=findInvoiceForDogsOnDate([a.dog_id],a.appt_date);
+  const locked=!!existingInv;
+  const hoverStyle=locked?'':"onmouseover=\"this.style.background='#dcfce7'\" onmouseout=\"this.style.background=''\"";
+  const clickHandler=locked?'':`onclick="loadInvFromAppointment('${a.id}')"`;
+  const lockedBanner=locked
+   ? `<div style="font-size:11px;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:4px;padding:3px 8px;margin-top:4px;display:inline-block">Sudah ada invoice ${esc(existingInv.invoice_number)}</div>`
+   : '';
+  return `<div style="padding:10px 14px;border-bottom:1px solid #e5e7eb;${locked?'opacity:.55;cursor:not-allowed;background:#f9fafb':'cursor:pointer'}"
+   ${hoverStyle} ${clickHandler}>
    <div style="display:flex;justify-content:space-between">
     <strong>${esc(c.owner||'?')}</strong>
     <span style="font-size:11px;color:${isToday?'#15803d':'#6b7280'}">${isToday?'Today':fmtD(a.appt_date)}</span>
    </div>
    <div style="font-size:12px;color:#6b7280">${esc(d.name||'?')} · ${esc(a.service_base||'Basic Grooming')} · ${(a.appt_time||'').slice(0,5)} · ${esc(g.name||'-')}</div>
+   ${lockedBanner}
   </div>`;
  }).join('');
  om('ov-inv-appt-picker');
