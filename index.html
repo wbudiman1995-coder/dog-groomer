@@ -181,6 +181,20 @@ tbody tr:hover{background:var(--subtle)}
 .ab-badge-S{background:#fef9c3;color:#ca8a04}
 .ab-badge-A{background:#f3e8ff;color:#9333ea}
 .ab-badge-F{background:#d1fae5;color:#059669}
+/* Batch L3 — photo zones */
+.photo-zone{border:2px dashed var(--border);border-radius:8px;padding:10px;background:var(--subtle);cursor:pointer;transition:all .15s;min-height:80px;position:relative}
+.photo-zone:hover{border-color:var(--green);background:#f0fdf4}
+.photo-zone.drag-over{border-color:var(--green);border-style:solid;background:#dcfce7}
+.photo-zone-issue{background:#fffbeb;border-color:#fde68a;cursor:default}
+.photo-zone-issue:hover{background:#fef3c7}
+.photo-zone-issue.drag-over{border-color:#92400e;background:#fde68a}
+.photo-zone-label{font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);margin-bottom:2px}
+.photo-zone-hint{font-size:10px;color:var(--muted);margin-bottom:6px}
+.photo-zone-grid{display:flex;flex-wrap:wrap;gap:6px}
+.photo-zone-thumb{position:relative;display:inline-block}
+.photo-zone-thumb img{width:80px;height:60px;object-fit:cover;border-radius:5px;border:1px solid var(--border);background:#fff;display:block}
+.photo-zone-del{position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:50%;border:none;background:rgba(0,0,0,.7);color:#fff;cursor:pointer;font-size:11px;line-height:1;display:flex;align-items:center;justify-content:center}
+.photo-zone-tag{font-size:9px;text-align:center;color:#92400e;font-weight:600;margin-top:2px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* BOOKING WIZARD STEPS */
 .step-dot{width:18px;height:6px;border-radius:3px;transition:background .2s}
 .svc-check-row{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--subtle);border-radius:6px;margin-bottom:5px;cursor:pointer;border:1px solid transparent;transition:all .12s}
@@ -2469,17 +2483,50 @@ function renderInvDogServices(){
    oninput="onDogNoteChange('${did}',this.value)"
    style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--subtle);min-height:44px;font-family:inherit;resize:vertical">${esc((invDogNotes||{})[did]||'')}</textarea>
   <div style="font-size:10px;color:var(--muted);margin-top:2px">Past visits: ${visits.filter(v=>v.dog_id===did).length}</div>
-  <div style="margin-top:8px">
-   <div id="photo-grid-${did}" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
-   <label style="font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:5px 12px;background:var(--subtle);border:1px solid var(--border);border-radius:5px">
-    + Add photo
-    <input type="file" accept="image/*" multiple style="display:none" onchange="onPhotosAdd('${did}',this)"/>
-   </label>
+  <div class="photo-zones" data-did="${did}" style="margin-top:10px">
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <div class="photo-zone" data-zone="before" data-did="${did}"
+     ondragover="onPhotoDragOver(event)" ondragleave="onPhotoDragLeave(event)"
+     ondrop="onPhotoDrop(event,'${did}','before')"
+     onclick="document.getElementById('pf-before-${did}').click()">
+     <div class="photo-zone-label">BEFORE</div>
+     <div class="photo-zone-hint">Drop / paste / click</div>
+     <div id="photo-grid-${did}-before" class="photo-zone-grid"></div>
+     <input type="file" id="pf-before-${did}" accept="image/*" multiple style="display:none" onchange="onPhotosAdd('${did}','before',this)"/>
+    </div>
+    <div class="photo-zone" data-zone="after" data-did="${did}"
+     ondragover="onPhotoDragOver(event)" ondragleave="onPhotoDragLeave(event)"
+     ondrop="onPhotoDrop(event,'${did}','after')"
+     onclick="document.getElementById('pf-after-${did}').click()">
+     <div class="photo-zone-label">AFTER</div>
+     <div class="photo-zone-hint">Drop / paste / click</div>
+     <div id="photo-grid-${did}-after" class="photo-zone-grid"></div>
+     <input type="file" id="pf-after-${did}" accept="image/*" multiple style="display:none" onchange="onPhotosAdd('${did}','after',this)"/>
+    </div>
+   </div>
+   <div class="photo-zone photo-zone-issue" data-zone="issue" data-did="${did}"
+    ondragover="onPhotoDragOver(event)" ondragleave="onPhotoDragLeave(event)"
+    ondrop="onPhotoDrop(event,'${did}','issue')"
+    style="margin-top:8px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <div>
+      <div class="photo-zone-label" style="color:#92400e">ISSUES (opsional)</div>
+      <div class="photo-zone-hint" style="margin:0">Kalau ada masalah: kutu, luka, jamur, telinga, dll</div>
+     </div>
+     <button type="button" onclick="event.stopPropagation();document.getElementById('pf-issue-${did}').click()" class="btn btn-g btn-sm">+ Add photo</button>
+    </div>
+    <div id="photo-grid-${did}-issue" class="photo-zone-grid" style="margin-top:6px"></div>
+    <input type="file" id="pf-issue-${did}" accept="image/*" multiple style="display:none" onchange="onPhotosAdd('${did}','issue',this)"/>
+   </div>
   </div>
  </div>
  </div>`;
  }).join('');
  recalcInvoice();
+ // Render any existing photos for restored invoices
+ invSelectedDogs.forEach(did=>{
+  ['before','after','issue'].forEach(z=>renderPhotoGridZone(did,z));
+ });
 }
 
 function onDogNoteChange(did,val){
@@ -3512,28 +3559,59 @@ function generateReminders(){
 
 function buildMsg(g,ga,date,pickup,pickupTime,extra){
  const lines=[];
- lines.push(`Malam Mas ${g.name}, berikut jadwal untuk besok ya:`,'');
- if(pickup&&pickupTime){lines.push(`Jam ${pickupTime}`,`Ke ${pickup}`,'')}
- ga.forEach((a,i)=>{
+ lines.push(`Malam Mas ${g.name}, jadwal besok:`,'');
+ if(pickup&&pickupTime){lines.push(`${pickupTime} \u2014 Pickup`,`Ke ${pickup}`,'')}
+
+ // Group appointments by customer_id
+ const groups=new Map(); // customerId -> {customer, dogs: [{appt, dog}]}
+ ga.forEach(a=>{
   const d=dogs.find(x=>x.id===a.dog_id)||{};
-  const c=d.customer_id?custs.find(x=>x.id===d.customer_id)||{}:{};
-  const time=(a.appt_time||'').slice(0,5);
+  const cid=d.customer_id||('__nocust__'+a.id);
+  if(!groups.has(cid)){
+   const c=d.customer_id?custs.find(x=>x.id===d.customer_id)||{}:{};
+   groups.set(cid,{customer:c,items:[]});
+  }
+  groups.get(cid).items.push({appt:a,dog:d});
+ });
+ // Sort groups by earliest appt_time
+ const ordered=[...groups.values()].sort((a,b)=>{
+  const ta=Math.min(...a.items.map(x=>t2m(x.appt.appt_time||'00:00')));
+  const tb=Math.min(...b.items.map(x=>t2m(x.appt.appt_time||'00:00')));
+  return ta-tb;
+ });
+ // Within each group, sort items by time
+ ordered.forEach(grp=>grp.items.sort((a,b)=>(a.appt.appt_time||'').localeCompare(b.appt.appt_time||'')));
+
+ ordered.forEach(grp=>{
+  const c=grp.customer;
+  const items=grp.items;
+  const firstTime=(items[0].appt.appt_time||'').slice(0,5);
+  const lastTime=(items[items.length-1].appt.appt_time||'').slice(0,5);
+  const timeLabel=items.length>1?`${firstTime}\u2013${lastTime}`:firstTime;
   const addr=[c.address,c.kecamatan,c.kota].filter(Boolean).join(', ');
   const gmaps=c.gmaps_link||buildGLink(c.address,c.kota);
-  lines.push(`Jam ${time}`);
-  lines.push(`Client ${i+1}: ${c.owner||'?'}`);
-  lines.push(`Dog: ${d.breed||'?'} - ${d.name||'?'} (${d.size||'?'})`);
+
+  lines.push(`${timeLabel} \u2014 ${c.owner||'?'}`);
   lines.push(`Alamat: ${addr||'-'}`);
-  if(gmaps) lines.push(`Google Link: ${gmaps}`);
-  if(a.appt_note) lines.push(`Catatan sesi: ${a.appt_note}`);
-  // Customer-level notes
+  if(gmaps) lines.push(`Maps: ${gmaps}`);
   if(c.prefs) lines.push(`Catatan owner: ${c.prefs}`);
-  // Dog-level prefs
-  if(d.prefs) lines.push(`Catatan anjing: ${d.prefs}`);
+  lines.push(items.length>1?'Dogs:':'Dog:');
+  items.forEach(({appt:a,dog:d})=>{
+   const t=(a.appt_time||'').slice(0,5);
+   const dogLine=items.length>1
+    ? `  \u2022 ${t} \u2014 ${d.name||'?'} (${d.breed||'?'} \u00B7 ${d.size||'?'})`
+    : `  \u2022 ${d.name||'?'} (${d.breed||'?'} \u00B7 ${d.size||'?'})`;
+   lines.push(dogLine);
+   const notes=[];
+   if(a.appt_note) notes.push('sesi: '+a.appt_note);
+   if(d.prefs) notes.push(d.prefs);
+   if(notes.length) lines.push(`     \u21B3 ${notes.join(' | ')}`);
+  });
   lines.push('');
  });
+
  if(extra){lines.push('Note:',extra,'')}
- lines.push('Kalau ada pertanyaan bisa langsung ke sini ya, thanks');
+ lines.push('Kalau ada pertanyaan, langsung ke sini ya. Thanks.');
  return lines.join('\n');
 }
 
@@ -3716,66 +3794,194 @@ async function autoLogPastAppointments(){
  if(toLog.length||apptWithTokens.length) await loadAll();
 }
 
-/* ========== PHOTOS (unlimited per dog) ========== */
-function onPhotosAdd(did,input){
+/* ========== PHOTOS — zones: before / after / issue (Batch L3) ========== */
+// invPhotos[did] = [{data, zone, label}]
+//   zone: 'before' | 'after' | 'issue'
+//   label: free text (issue tag like "kutu", "luka", or '')
+
+const ISSUE_TAGS=['Kutu','Luka','Jamur','Telinga','Kulit','Lainnya'];
+
+function onPhotosAdd(did,zone,input){
  const files=Array.from(input.files);if(!files.length)return;
- if(!invPhotos[did]) invPhotos[did]=[];
- let loaded=0;
- files.forEach(file=>{
-  const reader=new FileReader();
-  reader.onload=e=>{
-   invPhotos[did].push({data:e.target.result,label:''});
-   loaded++;
-   if(loaded===files.length){renderPhotoGrid(did);renderInvoicePreview();}
-  };
-  reader.readAsDataURL(file);
- });
+ addPhotosFromFiles(did,zone,files);
  input.value='';
 }
 
-function renderPhotoGrid(did){
- const grid=document.getElementById('photo-grid-'+did);
- if(!grid)return;
- const photos=invPhotos[did]||[];
- grid.innerHTML=photos.map((p,i)=>`
-  <div style="position:relative;display:inline-block">
-   <img src="${p.data}" style="width:120px;height:90px;object-fit:contain;border-radius:6px;border:1px solid var(--border);background:#f9f9f9"/>
-   <button onclick="deletePhoto('${did}',${i})" style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center" title="Delete">&#x2715;</button>
-   <input value="${esc(p.label)}" placeholder="e.g. Before, Flea" oninput="setPhotoLabel('${did}',${i},this.value)"
-    style="width:120px;font-size:10px;padding:2px 5px;border:1px solid var(--border);border-radius:4px;margin-top:3px;display:block"/>
-  </div>`).join('');
+function addPhotosFromFiles(did,zone,files){
+ if(!invPhotos[did]) invPhotos[did]=[];
+ let loaded=0;
+ const photoFiles=files.filter(f=>f.type.startsWith('image/'));
+ if(!photoFiles.length) return;
+ photoFiles.forEach(file=>{
+  const reader=new FileReader();
+  reader.onload=e=>{
+   const photo={data:e.target.result,zone,label:''};
+   invPhotos[did].push(photo);
+   loaded++;
+   if(loaded===photoFiles.length){
+    renderPhotoGridZone(did,zone);
+    renderInvoicePreview();
+    // For issue photos, prompt tag selection after upload
+    if(zone==='issue'){
+     const idx=invPhotos[did].length-1;
+     promptIssueTag(did,idx);
+    }
+   }
+  };
+  reader.readAsDataURL(file);
+ });
+}
+
+function renderPhotoGridZone(did,zone){
+ const grid=document.getElementById(`photo-grid-${did}-${zone}`);
+ if(!grid) return;
+ const photos=(invPhotos[did]||[]).filter(p=>(p.zone||'before')===zone);
+ grid.innerHTML=photos.map(p=>{
+  const idx=invPhotos[did].indexOf(p);
+  const tagHtml=zone==='issue'&&p.label?`<div class="photo-zone-tag">${esc(p.label)}</div>`:'';
+  return `<div class="photo-zone-thumb">
+   <img src="${p.data}" alt=""/>
+   <button class="photo-zone-del" onclick="event.stopPropagation();deletePhoto('${did}',${idx})" title="Delete">&#x2715;</button>
+   ${tagHtml}
+  </div>`;
+ }).join('');
 }
 
 function deletePhoto(did,idx){
  if(!invPhotos[did])return;
- invPhotos[did].splice(idx,1);
- renderPhotoGrid(did);
+ const removed=invPhotos[did].splice(idx,1)[0];
+ const z=removed?(removed.zone||'before'):null;
+ // Re-render all zones since indexes shifted
+ ['before','after','issue'].forEach(zone=>renderPhotoGridZone(did,zone));
  renderInvoicePreview();
 }
 
-function setPhotoLabel(did,idx,val){
- if(invPhotos[did]&&invPhotos[did][idx]) invPhotos[did][idx].label=val;
+function promptIssueTag(did,idx){
+ const p=invPhotos[did]&&invPhotos[did][idx]; if(!p) return;
+ const opts=ISSUE_TAGS.map((t,i)=>`${i+1}. ${t}`).join('\n');
+ const choice=prompt('Tag issue:\n\n'+opts+'\n\nEnter number or custom text:','');
+ if(choice===null) return; // cancel keeps untagged
+ const num=parseInt(choice);
+ p.label=(num>=1&&num<=ISSUE_TAGS.length)?ISSUE_TAGS[num-1]:choice.trim();
+ renderPhotoGridZone(did,'issue');
  renderInvoicePreview();
 }
+
+// Drag-and-drop zone handlers
+function onPhotoDragOver(e){
+ e.preventDefault();
+ e.stopPropagation();
+ e.currentTarget.classList.add('drag-over');
+}
+
+function onPhotoDragLeave(e){
+ e.currentTarget.classList.remove('drag-over');
+}
+
+function onPhotoDrop(e,did,zone){
+ e.preventDefault();
+ e.stopPropagation();
+ e.currentTarget.classList.remove('drag-over');
+ const files=Array.from(e.dataTransfer.files||[]);
+ if(files.length){
+  addPhotosFromFiles(did,zone,files);
+  return;
+ }
+ // Try image URL from cross-tab drag (e.g. WhatsApp Web)
+ const items=e.dataTransfer.items;
+ if(items){
+  for(const it of items){
+   if(it.kind==='string'&&it.type==='text/uri-list'){
+    it.getAsString(url=>{
+     if(url) fetchAndAddPhoto(did,zone,url);
+    });
+    return;
+   }
+  }
+ }
+}
+
+async function fetchAndAddPhoto(did,zone,url){
+ try{
+  const r=await fetch(url);
+  const blob=await r.blob();
+  if(!blob.type.startsWith('image/')){alert('Bukan file gambar.');return}
+  const file=new File([blob],'pasted.png',{type:blob.type});
+  addPhotosFromFiles(did,zone,[file]);
+ }catch(err){
+  alert('Gagal mengunduh gambar dari URL (CORS). Gunakan paste atau drag file langsung.');
+ }
+}
+
+// Global paste listener — paste image into currently focused/hovered zone
+let _activePhotoZone=null;
+function setActivePhotoZone(did,zone){_activePhotoZone={did,zone};}
+
+document.addEventListener('paste',function(e){
+ // Only act if on invoice tab AND there's a focus/hover hint
+ const onInvoice=document.getElementById('tab-invoice')?.classList.contains('active');
+ if(!onInvoice) return;
+ const items=e.clipboardData?.items||[];
+ const imageItems=[];
+ for(const it of items){
+  if(it.type&&it.type.startsWith('image/')){
+   const file=it.getAsFile();
+   if(file) imageItems.push(file);
+  }
+ }
+ if(!imageItems.length) return;
+ // Determine target zone — prefer hovered zone, else fall back to first selected dog's BEFORE
+ let did,zone;
+ if(_activePhotoZone){did=_activePhotoZone.did;zone=_activePhotoZone.zone;}
+ else if(invSelectedDogs[0]){did=invSelectedDogs[0];zone='before';}
+ else return;
+ e.preventDefault();
+ addPhotosFromFiles(did,zone,imageItems);
+});
+
+// Track which zone the mouse is over for paste targeting
+document.addEventListener('mouseover',function(e){
+ const z=e.target.closest?.('.photo-zone');
+ if(z){
+  const did=z.getAttribute('data-did');
+  const zone=z.getAttribute('data-zone');
+  if(did&&zone) setActivePhotoZone(did,zone);
+ }
+});
 
 function buildPhotoHTML(did){
  const photos=Array.isArray(invPhotos[did])?invPhotos[did]:[];
  if(!photos.length) return '';
- const imgs=photos.map(p=>`<div style="flex:1;min-width:100px;max-width:180px">
-  ${p.label?`<div style="font-size:9px;color:#aaa;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px">${esc(p.label)}</div>`:''}
-  <img src="${p.data}" style="width:100%;height:auto;border-radius:6px;display:block"/>
- </div>`).join('');
- return `<div style="display:flex;flex-wrap:wrap;gap:10px;margin:8px 0">${imgs}</div>`;
+ const byZone={before:[],after:[],issue:[]};
+ photos.forEach(p=>{
+  const z=p.zone||'before';
+  if(byZone[z]) byZone[z].push(p);
+  else byZone.before.push(p);
+ });
+ const renderRow=(label,arr,color)=>{
+  if(!arr.length) return '';
+  const imgs=arr.map(p=>`<div style="flex:1;min-width:100px;max-width:180px">
+   ${p.label?`<div style="font-size:9px;color:${color};letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;font-weight:600">${esc(p.label)}</div>`:''}
+   <img src="${p.data}" style="width:100%;height:auto;border-radius:6px;display:block"/>
+  </div>`).join('');
+  return `<div style="margin:8px 0">
+   <div style="font-size:10px;color:${color};letter-spacing:1.5px;font-weight:700;margin-bottom:4px">${label}</div>
+   <div style="display:flex;flex-wrap:wrap;gap:10px">${imgs}</div>
+  </div>`;
+ };
+ return renderRow('BEFORE',byZone.before,'#888')
+  +renderRow('AFTER',byZone.after,'#888')
+  +renderRow('ISSUES DITEMUKAN',byZone.issue,'#92400e');
 }
 
-// Legacy compat
+// Legacy compat (old onPhotoUpload calls)
 function onPhotoUpload(did,type,input){
  const file=input.files[0];if(!file)return;
+ if(!invPhotos[did]) invPhotos[did]=[];
  const reader=new FileReader();
  reader.onload=e=>{
-  if(!invPhotos[did]) invPhotos[did]=[];
-  invPhotos[did].push({data:e.target.result,label:type});
-  renderPhotoGrid(did);
+  invPhotos[did].push({data:e.target.result,zone:type==='Issue'?'issue':(type.toLowerCase().includes('after')?'after':'before'),label:''});
+  renderPhotoGridZone(did,'before');renderPhotoGridZone(did,'after');renderPhotoGridZone(did,'issue');
  };
  reader.readAsDataURL(file);
 }
