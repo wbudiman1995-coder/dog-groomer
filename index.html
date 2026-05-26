@@ -175,8 +175,12 @@ tbody tr:hover{background:var(--subtle)}
 .appt-block.dragging{opacity:.3}
 .ab-time{font-size:9px;font-weight:700;opacity:.75}
 .ab-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
-.ab-kota{font-size:9px;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;font-style:italic}
+.ab-kota{font-size:10px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;font-weight:500}
 .ab-svc{font-size:10px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.ab-badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;margin-left:4px;line-height:1;vertical-align:middle}
+.ab-badge-S{background:#fef9c3;color:#ca8a04}
+.ab-badge-A{background:#f3e8ff;color:#9333ea}
+.ab-badge-F{background:#d1fae5;color:#059669}
 /* BOOKING WIZARD STEPS */
 .step-dot{width:18px;height:6px;border-radius:3px;transition:background .2s}
 .svc-check-row{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--subtle);border-radius:6px;margin-bottom:5px;cursor:pointer;border:1px solid transparent;transition:all .12s}
@@ -414,6 +418,12 @@ tbody tr:hover{background:var(--subtle)}
   <button class="btn btn-g btn-sm" onclick="clearMassSelect()">Cancel</button>
  </div>
  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Click slot to book · Drag to reschedule · Click block to edit · Hold Shift+click to multi-select</div>
+ <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;font-size:10px;color:var(--muted)">
+  <span>Legend:</span>
+  <span style="display:flex;align-items:center;gap:3px"><span class="ab-badge ab-badge-S">S</span> Subscription</span>
+  <span style="display:flex;align-items:center;gap:3px"><span class="ab-badge ab-badge-A">A</span> Advance (token)</span>
+  <span style="display:flex;align-items:center;gap:3px"><span class="ab-badge ab-badge-F">F</span> Free session</span>
+ </div>
  <div class="cal-outer" id="cal-outer" ondragover="onDragOver(event)" ondrop="onDrop(event)"></div>
  </div>
 
@@ -1494,12 +1504,18 @@ function renderCal(){
     const isMSel=massSelected.has(a.id);
     // session_source coloring overrides default only when confirmed (pending keeps groomer color)
     const srcClass=(a.status==='confirmed'&&a.session_source&&a.session_source!=='normal')?' src-'+a.session_source:'';
+    // Batch K: badge for session_source on confirmed blocks
+    const srcBadge=(a.status==='confirmed'&&a.session_source&&a.session_source!=='normal')
+     ? (a.session_source==='subscription'?'<span class="ab-badge ab-badge-S">S</span>'
+       :a.session_source==='advance'?'<span class="ab-badge ab-badge-A">A</span>'
+       :a.session_source==='free'?'<span class="ab-badge ab-badge-F">F</span>':'')
+     : '';
     html+=`<div class="appt-block${isMSel?' mass-selected':''}${srcClass}"
      draggable="true"
      ondragstart="onDragStart(event,'${a.id}')" ondragend="onDragEnd(event)"
      onclick="event.stopPropagation();handleApptClick(event,'${a.id}')"
      style="top:${top}px;height:${ht}px;background:${bg};border-left-color:${col};color:${textCol}">
-     <span class="ab-time"><span class="appt-status-dot ${statusDot}"></span>${m2t(sm)}</span>
+     <span class="ab-time"><span class="appt-status-dot ${statusDot}"></span>${m2t(sm)}${srcBadge}</span>
      <span class="ab-name">${esc(a.dogs?.name||d.name||'?')}</span>
      ${kotaLabel?`<span class="ab-kota">${esc(kotaLabel)}</span>`:''}
      <span class="ab-svc">${esc(owner)}${a.service_base?' · '+esc(a.service_base.split(',')[0]):''}</span>
@@ -3805,6 +3821,25 @@ function loadInvFromAppointment(apptId){
  const cid=d.customer_id;if(!cid){alert('Customer not linked');return;}
  // Apply using applyInvCustomer which handles multi-dog
  applyInvCustomer(cid,a.appt_date);
+ // Batch K: auto-pre-fill discount + note based on session_source
+ const src=a.session_source||'normal';
+ const ditEl=document.getElementById('inv-disc-type');
+ const divEl=document.getElementById('inv-disc-value');
+ const ntEl=document.getElementById('inv-notes');
+ if(src==='subscription'){
+  if(ditEl) ditEl.value='percent';
+  if(divEl) divEl.value=100;
+  if(ntEl&&!ntEl.value.trim()) ntEl.value='Sesi subscription — sudah dibayar via langganan';
+  recalcInvoice();
+ } else if(src==='free'){
+  if(ditEl) ditEl.value='percent';
+  if(divEl) divEl.value=100;
+  if(ntEl&&!ntEl.value.trim()) ntEl.value='Sesi gratis (kompliment)';
+  recalcInvoice();
+ } else if(src==='advance'&&a.token_id){
+  // Token balance already shows in preview via buildTokenBalanceHTML
+  if(ntEl&&!ntEl.value.trim()) ntEl.value='Menggunakan token prepaid';
+ }
 }
 
 /* ========== BATCH H — AUTH GATE ========== */
