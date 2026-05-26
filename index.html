@@ -195,6 +195,37 @@ tbody tr:hover{background:var(--subtle)}
 .photo-zone-thumb img{width:80px;height:60px;object-fit:cover;border-radius:5px;border:1px solid var(--border);background:#fff;display:block}
 .photo-zone-del{position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:50%;border:none;background:rgba(0,0,0,.7);color:#fff;cursor:pointer;font-size:11px;line-height:1;display:flex;align-items:center;justify-content:center}
 .photo-zone-tag{font-size:9px;text-align:center;color:#92400e;font-weight:600;margin-top:2px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Batch L5 — Customer 360 slide-in panel */
+.c360-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;opacity:0;transition:opacity .2s;pointer-events:none}
+.c360-backdrop.open{opacity:1;pointer-events:auto}
+.c360-panel{position:fixed;top:0;right:0;height:100vh;width:520px;max-width:100vw;background:var(--surface);box-shadow:-2px 0 12px rgba(0,0,0,.15);z-index:201;transform:translateX(100%);transition:transform .25s ease-out;display:flex;flex-direction:column;overflow:hidden}
+.c360-panel.open{transform:translateX(0)}
+@media (max-width: 600px){.c360-panel{width:100vw}}
+.c360-header{padding:14px 18px;border-bottom:1px solid var(--border);background:var(--subtle);flex-shrink:0}
+.c360-header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.c360-title{font-size:16px;font-weight:600;color:var(--text)}
+.c360-close{background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted);padding:4px 8px;line-height:1;border-radius:4px}
+.c360-close:hover{background:var(--border);color:var(--text)}
+.c360-subtitle{font-size:12px;color:var(--muted);margin-bottom:8px}
+.c360-stats{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;font-size:11px}
+.c360-stat{background:var(--surface);padding:3px 8px;border-radius:4px;border:1px solid var(--border)}
+.c360-actions{display:flex;flex-wrap:wrap;gap:6px}
+.c360-actions a,.c360-actions button{font-size:12px;padding:5px 10px;border-radius:5px;border:1px solid var(--border);background:var(--surface);color:var(--text);text-decoration:none;cursor:pointer;font-weight:500}
+.c360-actions a:hover,.c360-actions button:hover{background:var(--subtle);border-color:var(--green)}
+.c360-tabs{display:flex;gap:2px;padding:0 14px;border-bottom:1px solid var(--border);background:var(--surface);overflow-x:auto;flex-shrink:0}
+.c360-tab{padding:9px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.c360-tab.active{color:var(--green-dk);border-bottom-color:var(--green)}
+.c360-tab:hover:not(.active){color:var(--text)}
+.c360-body{flex:1;overflow-y:auto;padding:14px 18px;background:var(--bg)}
+.c360-section-lbl{font-size:10px;font-weight:600;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin:14px 0 6px}
+.c360-section-lbl:first-child{margin-top:0}
+.c360-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:8px;font-size:13px}
+.c360-card-title{font-weight:600;font-size:13px;color:var(--text);margin-bottom:4px}
+.c360-card-meta{font-size:11px;color:var(--muted);line-height:1.5}
+.c360-empty{padding:20px;text-align:center;color:var(--muted);font-size:12px;font-style:italic}
+.c360-link{color:var(--green-dk);text-decoration:underline;cursor:pointer;font-weight:600}
+.c360-clickable{cursor:pointer;color:var(--green-dk);font-weight:600}
+.c360-clickable:hover{text-decoration:underline}
 /* BOOKING WIZARD STEPS */
 .step-dot{width:18px;height:6px;border-radius:3px;transition:background .2s}
 .svc-check-row{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--subtle);border-radius:6px;margin-bottom:5px;cursor:pointer;border:1px solid transparent;transition:all .12s}
@@ -1157,7 +1188,7 @@ function renderCusts(){
  const srcCell=c.source?`<span class="badge ${srcBadge[c.source]||'bs'}">${esc(srcLabel[c.source]||c.source)}</span>`:'<span style="font-size:11px;color:var(--muted)">—</span>';
  return `<tr>
  <td><span class="id-pill">${esc(c.customer_code||'—')}</span></td>
- <td><strong>${esc(c.owner)}</strong>${subsBadgeHTML(c.id)}</td>
+ <td><strong class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner)}</strong>${subsBadgeHTML(c.id)}</td>
  <td>${c.wa?`<a class="wa-lnk" href="https://wa.me/62${c.wa.replace(/^0/,'')}" target="_blank">${esc(c.wa)}</a>`:'—'}</td>
  <td>${esc(c.area)||'—'}</td>
  <td>${srcCell}</td>
@@ -3310,7 +3341,7 @@ function renderFinancial(){
  return `<tr class="${rowClass}">
  <td><span class="id-pill">${esc(i.invoice_number)}</span></td>
  <td>${i.invoice_date?fmtD(i.invoice_date):'-'}</td>
- <td><strong>${esc(i.owner_name)}</strong></td>
+ <td>${i.customer_id?`<strong class="c360-clickable" onclick="openCust360('${i.customer_id}')">${esc(i.owner_name)}</strong>`:`<strong>${esc(i.owner_name)}</strong>`}</td>
  <td style="font-size:12px">${esc(dogNames)}</td>
  <td><strong>${fmtRp(i.total)}</strong></td>
  <td><span class="badge ${isPaid?'bs':'bm'}">${i.status}</span></td>
@@ -3423,7 +3454,7 @@ function renderMembership(){
    ?'<span class="kind-pill kind-subs">SUBS</span>'
    :'<span class="kind-pill kind-token">TOKEN</span>';
   return `<tr style="${r.status==='expired'?'opacity:.6':''}">
-   <td><strong>${esc(owner)}</strong> ${code?`<span class="id-pill">${esc(code)}</span>`:''}</td>
+   <td>${c?`<strong class="c360-clickable" onclick="openCust360('${c.id}')">${esc(owner)}</strong>`:`<strong>${esc(owner)}</strong>`} ${code?`<span class="id-pill">${esc(code)}</span>`:''}</td>
    <td>${dogLabel}</td>
    <td>${kindPill}</td>
    <td><span class="badge bs">${esc((r.type||'').toUpperCase())}</span></td>
@@ -4582,7 +4613,7 @@ function renderVisits(){
    : `<button class="icon-btn view" onclick="invoiceVisit('${v.id}')">+ Invoice</button>`;
   return `<tr>
    <td>${fmtD(v.visited_at)}</td>
-   <td><strong>${esc(c.owner||'?')}</strong>${c.customer_code?` <span style="font-size:10px;color:var(--muted)">${esc(c.customer_code)}</span>`:''}</td>
+   <td><strong class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner||'?')}</strong>${c.customer_code?` <span style="font-size:10px;color:var(--muted)">${esc(c.customer_code)}</span>`:''}</td>
    <td>${esc(d.name||'?')}</td>
    <td>${esc(v.service_type||'-')}</td>
    <td>${esc(d.size||'-')}</td>
@@ -4602,9 +4633,242 @@ function invoiceVisit(visitId){
  applyInvCustomer(cid,v.visited_at);
 }
 
+/* ========== BATCH L5 — CUSTOMER 360 PANEL ========== */
+
+let c360CurrentCustId=null, c360CurrentTab='dogs';
+
+function openCust360(custId){
+ const c=custs.find(x=>x.id===custId);
+ if(!c){alert('Customer not found');return}
+ c360CurrentCustId=custId;
+ c360CurrentTab='dogs';
+ // Refresh active state on tabs
+ document.querySelectorAll('.c360-tab').forEach(b=>b.classList.toggle('active',b.getAttribute('data-c360-tab')==='dogs'));
+ renderCust360Header(c);
+ renderCust360Body();
+ document.getElementById('c360-backdrop').classList.add('open');
+ document.getElementById('c360-panel').classList.add('open');
+}
+
+function closeCust360(){
+ document.getElementById('c360-backdrop').classList.remove('open');
+ document.getElementById('c360-panel').classList.remove('open');
+ c360CurrentCustId=null;
+}
+
+function c360SwTab(tab){
+ c360CurrentTab=tab;
+ document.querySelectorAll('.c360-tab').forEach(b=>b.classList.toggle('active',b.getAttribute('data-c360-tab')===tab));
+ renderCust360Body();
+}
+
+// Close on ESC
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'&&c360CurrentCustId) closeCust360();
+});
+
+function lifetimeSpend(custId){
+ return invoices
+  .filter(i=>i.customer_id===custId&&i.status==='paid')
+  .reduce((s,i)=>s+(i.total||0),0);
+}
+
+function renderCust360Header(c){
+ const dogList=dogs.filter(d=>d.customer_id===c.id);
+ const lifetime=lifetimeSpend(c.id);
+ const srcLabel={ads:'Ads',free_session:'Free session',organic:'Organic'};
+ const srcBadge=c.source?`<span class="c360-stat"><strong>Source:</strong> ${esc(srcLabel[c.source]||c.source)}</span>`:'';
+ const waLink=c.wa?`https://wa.me/62${c.wa.replace(/^0/,'').replace(/\D/g,'')}`:null;
+ const gmaps=c.gmaps_link||(c.address?'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent([c.address,c.kota,'Jakarta'].filter(Boolean).join(', ')):null);
+ const addrLine=[c.kota,c.kecamatan].filter(Boolean).join(' \u00B7 ');
+ const wa=c.wa?'+62 '+c.wa.replace(/^0/,''):'';
+ const html=`
+ <div class="c360-header-top">
+  <div class="c360-title">${esc(c.customer_code||'CUST-???')} \u00B7 ${esc(c.owner||'?')}${subsBadgeHTML(c.id)}</div>
+  <button class="c360-close" onclick="closeCust360()" title="Close (ESC)">&#x2715;</button>
+ </div>
+ <div class="c360-subtitle">${esc(wa)}${wa&&addrLine?' \u00B7 ':''}${esc(addrLine)}</div>
+ <div class="c360-stats">
+  ${srcBadge}
+  <span class="c360-stat"><strong>Dogs:</strong> ${dogList.length}</span>
+  <span class="c360-stat"><strong>Lifetime:</strong> ${fmtRp(lifetime)}</span>
+ </div>
+ <div class="c360-actions">
+  ${waLink?`<a href="${waLink}" target="_blank">WhatsApp</a>`:''}
+  ${gmaps?`<a href="${gmaps}" target="_blank">Open in Maps</a>`:''}
+  <button onclick="closeCust360();openEditCust('${c.id}')">Edit profile</button>
+ </div>`;
+ document.getElementById('c360-header').innerHTML=html;
+}
+
+function renderCust360Body(){
+ const c=custs.find(x=>x.id===c360CurrentCustId); if(!c) return;
+ const body=document.getElementById('c360-body');
+ if(c360CurrentTab==='dogs') body.innerHTML=c360RenderDogs(c);
+ else if(c360CurrentTab==='visits') body.innerHTML=c360RenderVisits(c);
+ else if(c360CurrentTab==='invoices') body.innerHTML=c360RenderInvoices(c);
+ else if(c360CurrentTab==='membership') body.innerHTML=c360RenderMembership(c);
+ else if(c360CurrentTab==='notes') body.innerHTML=c360RenderNotes(c);
+}
+
+function c360RenderDogs(c){
+ const list=dogs.filter(d=>d.customer_id===c.id);
+ // Active sessions summary across this customer's dogs
+ let activeBlock='';
+ const activeBits=[];
+ list.forEach(d=>{
+  const subs=subscriptions.filter(s=>s.customer_id===c.id&&s.dog_id===d.id&&s.status==='active');
+  subs.forEach(s=>{
+   const left=Math.max(0,(s.sessions_total||0)-(s.sessions_used||0));
+   activeBits.push(`<div>\u2022 ${esc(d.name)} (${esc(d.size||'?')}) \u2014 Subs ${esc(s.type||'?')}: ${left}/${s.sessions_total||0} left</div>`);
+  });
+ });
+ const custTokens=tokens.filter(t=>t.customer_id===c.id);
+ custTokens.forEach(t=>{
+  const left=Math.max(0,(t.sessions_total||0)-(t.sessions_used||0));
+  if(left>0) activeBits.push(`<div>\u2022 Token (${esc(t.dog_size||'any size')}) \u2014 ${left}/${t.sessions_total} left</div>`);
+ });
+ if(activeBits.length){
+  activeBlock=`<div class="c360-section-lbl">Active sessions</div><div class="c360-card">${activeBits.join('')}</div>`;
+ }
+ // Upcoming appointments
+ const today=iso(new Date());
+ const upcoming=appts.filter(a=>{
+  const dogIds=list.map(d=>d.id);
+  return dogIds.includes(a.dog_id)&&a.appt_date>=today&&a.status!=='done';
+ }).sort((a,b)=>(a.appt_date+a.appt_time).localeCompare(b.appt_date+b.appt_time));
+ let upcomingBlock='';
+ if(upcoming.length){
+  upcomingBlock=`<div class="c360-section-lbl">Upcoming</div>`+upcoming.map(a=>{
+   const d=list.find(x=>x.id===a.dog_id)||{};
+   const g=groomers.find(x=>x.id===a.groomer_id);
+   return `<div class="c360-card"><div class="c360-card-title">${fmtD(a.appt_date)} \u00B7 ${(a.appt_time||'').slice(0,5)} \u2014 ${esc(d.name||'?')}</div><div class="c360-card-meta">${esc(a.service_base||'')}${g?' \u00B7 '+esc(g.name):''} \u00B7 <span class="badge ${a.status==='confirmed'?'bs':'bm'}">${esc(a.status)}</span></div></div>`;
+  }).join('');
+ }
+ // Dog cards
+ const dogsBlock=list.length
+  ? `<div class="c360-section-lbl">Dogs (${list.length})</div>`+list.map(d=>{
+   const visitCount=visits.filter(v=>v.dog_id===d.id).length;
+   return `<div class="c360-card">
+    <div class="c360-card-title">${esc(d.name)} <span style="font-weight:400;font-size:11px;color:var(--muted)">${esc(d.dog_code||'')}</span></div>
+    <div class="c360-card-meta">${esc(d.breed||'?')} \u00B7 ${esc(d.size||'?')}${d.age?' \u00B7 '+esc(d.age):''}${d.weight?' \u00B7 '+esc(d.weight):''}${d.coat?' \u00B7 '+esc(d.coat):''}</div>
+    ${d.prefs?`<div class="c360-card-meta" style="margin-top:4px;font-style:italic">${esc(d.prefs)}</div>`:''}
+    <div class="c360-card-meta" style="margin-top:4px">${visitCount} visit${visitCount!==1?'s':''}</div>
+   </div>`;
+  }).join('')
+  : `<div class="c360-empty">No dogs yet for this customer.</div>`;
+ return activeBlock+upcomingBlock+dogsBlock;
+}
+
+function c360RenderVisits(c){
+ const dogIds=dogs.filter(d=>d.customer_id===c.id).map(d=>d.id);
+ const list=visits.filter(v=>dogIds.includes(v.dog_id))
+  .sort((a,b)=>(b.visited_at||'').localeCompare(a.visited_at||''));
+ if(!list.length) return `<div class="c360-empty">No visits logged yet.</div>`;
+ return `<div class="c360-section-lbl">Visit log (${list.length})</div>`+list.map(v=>{
+  const d=dogs.find(x=>x.id===v.dog_id)||v.dogs||{};
+  const inv=findInvoiceForDogsOnDate([v.dog_id],v.visited_at);
+  const invHTML=inv
+   ? `<span class="c360-clickable" onclick="closeCust360();openInvoiceForEdit('${inv.id}')">${esc(inv.invoice_number)}</span> <span class="badge ${inv.status==='paid'?'bs':'bl'}">${esc(inv.status)}</span>`
+   : `<span class="badge bm">Belum invoice</span>`;
+  return `<div class="c360-card">
+   <div class="c360-card-title">${fmtD(v.visited_at)} \u2014 ${esc(d.name||'?')}</div>
+   <div class="c360-card-meta">${esc(v.service_type||'-')} \u00B7 ${invHTML}</div>
+   ${v.note?`<div class="c360-card-meta" style="margin-top:3px;font-style:italic">${esc(v.note)}</div>`:''}
+  </div>`;
+ }).join('');
+}
+
+function c360RenderInvoices(c){
+ const list=invoices.filter(i=>i.customer_id===c.id)
+  .sort((a,b)=>(b.invoice_date||'').localeCompare(a.invoice_date||''));
+ if(!list.length) return `<div class="c360-empty">No invoices yet.</div>`;
+ const paid=list.filter(i=>i.status==='paid').reduce((s,i)=>s+(i.total||0),0);
+ const unpaid=list.filter(i=>i.status==='unpaid').reduce((s,i)=>s+(i.total||0),0);
+ return `<div class="c360-section-lbl">Invoices (${list.length})</div>
+ <div class="c360-card"><div class="c360-card-meta"><strong>Paid:</strong> ${fmtRp(paid)} \u00B7 <strong>Unpaid:</strong> ${fmtRp(unpaid)}</div></div>
+ `+list.map(i=>{
+  const dogNames=(i.dogs||[]).map(d=>d.name).join(', ');
+  return `<div class="c360-card" style="border-left:3px solid ${i.status==='paid'?'#16a34a':'#dc2626'}">
+   <div class="c360-card-title"><span class="c360-clickable" onclick="closeCust360();openInvoiceForEdit('${i.id}')">${esc(i.invoice_number)}</span> \u00B7 ${fmtRp(i.total||0)} <span class="badge ${i.status==='paid'?'bs':'bl'}">${esc(i.status)}</span></div>
+   <div class="c360-card-meta">${fmtD(i.invoice_date)} \u00B7 ${esc(dogNames)}</div>
+  </div>`;
+ }).join('');
+}
+
+function c360RenderMembership(c){
+ const custSubs=subscriptions.filter(s=>s.customer_id===c.id);
+ const custTokens=tokens.filter(t=>t.customer_id===c.id);
+ let html='';
+ if(custSubs.length){
+  html+=`<div class="c360-section-lbl">Subscriptions (${custSubs.length})</div>`+custSubs.map(s=>{
+   const d=dogs.find(x=>x.id===s.dog_id);
+   const left=Math.max(0,(s.sessions_total||0)-(s.sessions_used||0));
+   return `<div class="c360-card">
+    <div class="c360-card-title">${d?esc(d.name):'(dog deleted)'} \u2014 ${esc(s.type||'?')}</div>
+    <div class="c360-card-meta">${left}/${s.sessions_total} left \u00B7 ${esc(s.status||'?')} \u00B7 Expires: ${fmtD(s.expires_at)}</div>
+    ${s.source_invoice?`<div class="c360-card-meta">From invoice: ${esc(s.source_invoice)}</div>`:''}
+   </div>`;
+  }).join('');
+ }
+ if(custTokens.length){
+  html+=`<div class="c360-section-lbl">Tokens (${custTokens.length})</div>`+custTokens.map(t=>{
+   const left=Math.max(0,(t.sessions_total||0)-(t.sessions_used||0));
+   return `<div class="c360-card">
+    <div class="c360-card-title">Token \u2014 ${esc(t.service_type||'any')} (${esc(t.dog_size||'any size')})</div>
+    <div class="c360-card-meta">${left}/${t.sessions_total} left${t.expires_at?' \u00B7 Expires: '+fmtD(t.expires_at):''}</div>
+    ${t.source_invoice?`<div class="c360-card-meta">From invoice: ${esc(t.source_invoice)}</div>`:''}
+   </div>`;
+  }).join('');
+ }
+ return html||`<div class="c360-empty">No subscriptions or tokens.</div>`;
+}
+
+function c360RenderNotes(c){
+ return `<div class="c360-section-lbl">Customer notes</div>
+ <div class="c360-card">
+  <textarea id="c360-notes-input" oninput="c360UpdateNotes('${c.id}',this.value)"
+   placeholder="Customer-level notes, contact preferences, behavior, etc."
+   style="width:100%;min-height:120px;padding:8px 10px;border:1px solid var(--border);border-radius:5px;font-size:13px;font-family:inherit;background:var(--bg);resize:vertical">${esc(c.prefs||'')}</textarea>
+  <div style="font-size:11px;color:var(--muted);margin-top:6px" id="c360-notes-status">Auto-save on blur.</div>
+ </div>
+ ${c.address?`<div class="c360-section-lbl">Address</div><div class="c360-card"><div class="c360-card-meta">${esc(c.address)}</div></div>`:''}`;
+}
+
+let _c360NotesTimer=null;
+function c360UpdateNotes(custId,val){
+ // Debounced save: wait 800ms after last keystroke
+ if(_c360NotesTimer) clearTimeout(_c360NotesTimer);
+ const statusEl=document.getElementById('c360-notes-status');
+ if(statusEl) statusEl.textContent='Saving...';
+ _c360NotesTimer=setTimeout(async()=>{
+  const {error}=await db.from('customers').update({prefs:val}).eq('id',custId);
+  if(error){if(statusEl) statusEl.textContent='Error: '+error.message;return}
+  // Update local cache
+  const c=custs.find(x=>x.id===custId);
+  if(c) c.prefs=val;
+  if(statusEl){statusEl.textContent='Saved.';setTimeout(()=>{if(statusEl)statusEl.textContent='Auto-save on blur.'},1200);}
+ },800);
+}
+
 /* ========== BOOT ========== */
 // Don't call loadAll() directly anymore — let checkAuthState() decide.
 checkAuthState();
 </script>
+
+<!-- Batch L5 — Customer 360 slide-in panel -->
+<div class="c360-backdrop" id="c360-backdrop" onclick="closeCust360()"></div>
+<div class="c360-panel" id="c360-panel" role="dialog" aria-modal="true">
+ <div class="c360-header" id="c360-header"></div>
+ <div class="c360-tabs">
+  <button class="c360-tab active" data-c360-tab="dogs" onclick="c360SwTab('dogs')">Dogs</button>
+  <button class="c360-tab" data-c360-tab="visits" onclick="c360SwTab('visits')">Visits</button>
+  <button class="c360-tab" data-c360-tab="invoices" onclick="c360SwTab('invoices')">Invoices</button>
+  <button class="c360-tab" data-c360-tab="membership" onclick="c360SwTab('membership')">Membership</button>
+  <button class="c360-tab" data-c360-tab="notes" onclick="c360SwTab('notes')">Notes</button>
+ </div>
+ <div class="c360-body" id="c360-body"></div>
+</div>
+
 </body>
 </html>
