@@ -870,6 +870,7 @@ tbody tr:hover{background:var(--subtle)}
    <div class="form-actions">
     <button class="btn btn-p" onclick="saveAppt()" id="appt-save-btn">Save appointment</button>
     <button class="btn btn-b btn-sm" id="appt-confirm-btn" style="display:none" onclick="confirmApptFromModal()">Mark confirmed</button>
+    <button class="btn btn-g btn-sm" id="appt-invoice-btn" style="display:none" onclick="invoiceFromApptModal()"></button>
     <button class="btn btn-d btn-sm" id="appt-del-btn" style="display:none" onclick="delApptFromModal()">Delete</button>
     <button class="btn btn-g btn-sm" onclick="wizNext(3)">Back</button>
    </div>
@@ -1864,6 +1865,8 @@ function openAppt(dateISO,groomerId,startMins){
  document.getElementById('appt-title').textContent='Schedule appointment';
  document.getElementById('appt-save-btn').textContent='Save appointment';
  document.getElementById('appt-del-btn').style.display='none';
+ const invBtnNew=document.getElementById('appt-invoice-btn');
+ if(invBtnNew) invBtnNew.style.display='none';
  document.getElementById('appt-note').value='';
  document.getElementById('appt-cust').value='';
  document.getElementById('appt-cust-search').value='';
@@ -1890,12 +1893,49 @@ function openApptEdit(id){
   if(a.status==='pending'){confirmBtn.style.display='inline-flex';confirmBtn.textContent='Mark confirmed';}
   else{confirmBtn.style.display='none';}
  }
+ // Batch M2 — +Invoice button: show on confirmed/done, hide if already invoiced
+ const invBtn=document.getElementById('appt-invoice-btn');
+ if(invBtn){
+  const d=dogs.find(x=>x.id===a.dog_id);
+  const linked=d&&d.customer_id;
+  if(!linked||a.status==='pending'){
+   invBtn.style.display='none';
+  } else {
+   const existing=findInvoiceForDogsOnDate([a.dog_id],a.appt_date);
+   if(existing){
+    invBtn.style.display='inline-flex';
+    invBtn.textContent=`Open invoice ${existing.invoice_number}`;
+    invBtn.setAttribute('data-existing-inv',existing.id);
+   } else {
+    invBtn.style.display='inline-flex';
+    invBtn.textContent='+ Create invoice';
+    invBtn.removeAttribute('data-existing-inv');
+   }
+  }
+ }
  document.getElementById('appt-note').value=a.appt_note||'';
  const cs=document.getElementById('appt-cust');
  cs.innerHTML='<option value="">Select customer…</option>'+
   custs.map(c=>`<option value="${c.id}" ${c.id===wiz.custId?'selected':''}>${esc(c.customer_code||'?')} – ${esc(c.owner)}</option>`).join('');
  wizShow(4);renderWizSummary();
  om('ov-appt');
+}
+
+// Batch M2 — one-click invoice from appointment modal
+function invoiceFromApptModal(){
+ if(!wiz.editId) return;
+ const a=appts.find(x=>x.id===wiz.editId); if(!a) return;
+ const btn=document.getElementById('appt-invoice-btn');
+ const existingId=btn?.getAttribute('data-existing-inv');
+ cm('ov-appt');
+ sw('invoice');
+ if(existingId){
+  // Open existing invoice for edit
+  openInvoiceForEdit(existingId);
+ } else {
+  // Pre-fill from appointment (uses Batch K auto-fill for session_source)
+  loadInvFromAppointment(a.id);
+ }
 }
 
 async function confirmApptFromModal(){
