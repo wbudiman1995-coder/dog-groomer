@@ -328,7 +328,6 @@ tbody tr:hover{background:var(--subtle)}
  <div class="nav-brand">Groomer CRM</div>
  <div class="nav-tabs">
  <button class="nav-tab active" onclick="sw('database')" id="tab-database">Database</button>
- <button class="nav-tab" onclick="sw('history')" id="tab-history">History</button>
  <button class="nav-tab" onclick="sw('calendar')" id="tab-calendar">Calendar</button>
  <button class="nav-tab" onclick="sw('groomers')" id="tab-groomers">Groomers</button>
  <button class="nav-tab" onclick="sw('invoice')" id="tab-invoice">Invoice</button>
@@ -398,20 +397,6 @@ tbody tr:hover{background:var(--subtle)}
  <tbody id="dogs-body"></tbody></table>
  </div>
  </div>
- </div>
- </div>
-
- <div class="sec" id="sec-history">
- <div class="toolbar"><span class="toolbar-title">Grooming history</span></div>
- <div class="filter-bar">
- <input id="hs" placeholder="Search…" oninput="renderHist()" style="min-width:160px"/>
- <select id="hc" onchange="onHistCustChange()"><option value="">All customers</option></select>
- <select id="hd" onchange="renderHist()"><option value="">All dogs</option></select>
- <select id="hsort" onchange="renderHist()"><option value="desc">Newest first</option><option value="asc">Oldest first</option></select>
- </div>
- <div class="tbl-wrap">
- <table><thead><tr><th>Dog</th><th>Owner</th><th>Date</th><th>Service</th><th>Area</th><th>Size</th></tr></thead>
- <tbody id="hist-body"></tbody></table>
  </div>
  </div>
 
@@ -565,6 +550,7 @@ tbody tr:hover{background:var(--subtle)}
  </div>
  <div class="subtabs">
   <button class="subtab active" id="fstab-invoices" onclick="swFin('invoices')">Invoices</button>
+  <button class="subtab" id="fstab-visits" onclick="swFin('visits')">Visits</button>
   <button class="subtab" id="fstab-payroll" onclick="swFin('payroll')">Payroll</button>
   <button class="subtab" id="fstab-bank" onclick="swFin('bank')">Bank</button>
  </div>
@@ -587,6 +573,27 @@ tbody tr:hover{background:var(--subtle)}
  </tr></thead>
  <tbody id="fin-body"></tbody></table>
  </div>
+ </div>
+
+ <div class="subsec" id="fsec-visits">
+  <div class="filter-bar">
+   <input id="vs-search" placeholder="Search…" oninput="renderVisits()" style="min-width:160px"/>
+   <select id="vs-cust" onchange="onVisitsCustChange()"><option value="">All customers</option></select>
+   <select id="vs-dog" onchange="renderVisits()"><option value="">All dogs</option></select>
+   <select id="vs-inv-status" onchange="renderVisits()">
+    <option value="">All visits</option>
+    <option value="invoiced">Invoiced only</option>
+    <option value="not_invoiced">Not invoiced only</option>
+   </select>
+   <select id="vs-sort" onchange="renderVisits()"><option value="desc">Newest first</option><option value="asc">Oldest first</option></select>
+  </div>
+  <div id="vs-totals" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:.9rem"></div>
+  <div class="tbl-wrap">
+   <table><thead><tr>
+    <th>Date</th><th>Customer</th><th>Dog</th><th>Service</th><th>Size</th><th>Invoice</th><th></th>
+   </tr></thead>
+   <tbody id="vs-body"></tbody></table>
+  </div>
  </div>
 
  <div class="subsec" id="fsec-payroll">
@@ -1018,12 +1025,17 @@ function onKotaChange(){
 }
 
 function sw(tab) {
+ // Batch L4: history tab is gone; redirect to Financial > Visits
+ if(tab==='history'){
+  sw('financial');
+  setTimeout(()=>swFin('visits'),0);
+  return;
+ }
  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
  document.getElementById('tab-'+tab).classList.add('active');
  document.getElementById('sec-'+tab).classList.add('active');
  if(tab==='database') renderCusts();
- if(tab==='history') renderHist();
  if(tab==='calendar') renderCal();
  if(tab==='groomers') renderGroomers();
  if(tab==='invoice') initInvoiceTab();
@@ -1083,10 +1095,16 @@ async function loadAll() {
  // Re-render active tab
  const activeTab=document.querySelector('.nav-tab.active')?.id?.replace('tab-','');
  if(activeTab==='database') renderCusts();
- else if(activeTab==='history') renderHist();
  else if(activeTab==='calendar') renderCal();
  else if(activeTab==='groomers') renderGroomers();
- else if(activeTab==='financial') renderFinancial();
+ else if(activeTab==='financial'){
+  // Re-render whichever financial subtab is active
+  const fsub=document.querySelector('#sec-financial > .subtabs > .subtab.active')?.id?.replace('fstab-','')||'invoices';
+  if(fsub==='invoices') renderFinancial();
+  else if(fsub==='visits') renderVisits();
+  else if(fsub==='payroll') renderPayroll();
+  else if(fsub==='bank') renderBankDisplay();
+ }
  else if(activeTab==='reminders') generateReminders();
  else if(activeTab==='membership') renderMembership();
  else if(activeTab==='access') renderAccess();
@@ -3651,9 +3669,14 @@ function scheduleRender(){
   _renderPending=false;
   const t=document.querySelector('.nav-tab.active')?.id?.replace('tab-','');
   if(t==='calendar')renderCal();
-  else if(t==='history')renderHist();
   else if(t==='groomers')renderGroomers();
-  else if(t==='financial')renderFinancial();
+  else if(t==='financial'){
+   const fsub=document.querySelector('#sec-financial > .subtabs > .subtab.active')?.id?.replace('fstab-','')||'invoices';
+   if(fsub==='visits') renderVisits();
+   else if(fsub==='payroll') renderPayroll();
+   else if(fsub==='bank') renderBankDisplay();
+   else renderFinancial();
+  }
   else if(t==='reminders')generateReminders();
   else if(t==='membership')renderMembership();
   else if(t==='access')renderAccess();
@@ -4288,6 +4311,7 @@ function swFin(sub){
  document.querySelectorAll('#sec-financial > .subsec').forEach(s=>s.classList.remove('active'));
  const sec=document.getElementById('fsec-'+sub); if(sec) sec.classList.add('active');
  if(sub==='invoices') renderFinancial();
+ else if(sub==='visits') renderVisits();
  else if(sub==='payroll') renderPayroll();
  else if(sub==='bank') renderBankDisplay();
 }
@@ -4467,6 +4491,115 @@ async function savePayrollSettings(){
  payrollSettings.rate_per_dog=rate;
  cm('ov-payroll-settings');
  renderPayroll();
+}
+
+/* ========== BATCH L4 — VISITS subtab (replaces History tab) ========== */
+
+function onVisitsCustChange(){
+ // Mirrors Batch G logic for History — narrows dog dropdown when customer picked
+ const cid=document.getElementById('vs-cust')?.value||'';
+ const dogSel=document.getElementById('vs-dog'); if(!dogSel) return;
+ const prev=dogSel.value;
+ if(!cid){
+  dogSel.innerHTML='<option value="">All dogs</option>'+[...new Set(dogs.map(d=>d.name).filter(Boolean))].sort().map(n=>`<option>${esc(n)}</option>`).join('');
+ } else {
+  const myDogs=dogs.filter(d=>d.customer_id===cid);
+  dogSel.innerHTML='<option value="">All dogs (this customer)</option>'+myDogs.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join('');
+ }
+ // Restore previous selection if still valid
+ const opts=[...dogSel.options].map(o=>o.value);
+ if(opts.includes(prev)) dogSel.value=prev;
+ renderVisits();
+}
+
+function populateVisitsCustomerDropdown(){
+ const sel=document.getElementById('vs-cust'); if(!sel) return;
+ const prev=sel.value;
+ sel.innerHTML='<option value="">All customers</option>'+
+  [...custs].sort((a,b)=>(a.owner||'').localeCompare(b.owner||'')).map(c=>`<option value="${c.id}">${esc(c.owner)}${c.customer_code?' ('+esc(c.customer_code)+')':''}</option>`).join('');
+ if(prev) sel.value=prev;
+}
+
+function renderVisits(){
+ populateVisitsCustomerDropdown();
+ const search=(document.getElementById('vs-search')?.value||'').toLowerCase();
+ const custFilter=document.getElementById('vs-cust')?.value||'';
+ const dogFilter=document.getElementById('vs-dog')?.value||'';
+ const invFilter=document.getElementById('vs-inv-status')?.value||'';
+ const sortDir=document.getElementById('vs-sort')?.value||'desc';
+
+ // Map each visit to {visit, dog, customer, invoice}
+ const rows=visits.map(v=>{
+  const dog=dogs.find(x=>x.id===v.dog_id)||v.dogs||{};
+  const cust=dog.customer_id?custs.find(x=>x.id===dog.customer_id)||{}:{};
+  const inv=v.visited_at?findInvoiceForDogsOnDate([v.dog_id],v.visited_at):null;
+  return {visit:v,dog,cust,inv};
+ });
+
+ let filtered=rows.filter(r=>{
+  if(custFilter && r.cust.id!==custFilter) return false;
+  if(dogFilter){
+   // dogFilter could be a dog id (when customer selected) or a name (all customers mode)
+   if(dogFilter.length===36){ if(r.dog.id!==dogFilter) return false; }
+   else { if(r.dog.name!==dogFilter) return false; }
+  }
+  if(invFilter==='invoiced' && !r.inv) return false;
+  if(invFilter==='not_invoiced' && r.inv) return false;
+  if(search){
+   const blob=`${r.cust.owner||''} ${r.dog.name||''} ${r.visit.service_type||''} ${r.cust.area||''} ${r.cust.customer_code||''}`.toLowerCase();
+   if(!blob.includes(search)) return false;
+  }
+  return true;
+ });
+
+ filtered.sort((a,b)=>{
+  const da=a.visit.visited_at||''; const db=b.visit.visited_at||'';
+  return sortDir==='desc'?db.localeCompare(da):da.localeCompare(db);
+ });
+
+ // Totals
+ const totEl=document.getElementById('vs-totals');
+ const invCount=filtered.filter(r=>r.inv).length;
+ const notInvCount=filtered.length-invCount;
+ if(totEl){
+  totEl.innerHTML=`<span class="badge bs">${filtered.length} visits</span>
+   <span class="badge bs">${invCount} invoiced</span>
+   <span class="badge bm">${notInvCount} belum invoice</span>`;
+ }
+
+ const tb=document.getElementById('vs-body');
+ if(!filtered.length){
+  tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted)">Tidak ada visit yang cocok dengan filter.</td></tr>';
+  return;
+ }
+ tb.innerHTML=filtered.map(r=>{
+  const v=r.visit, d=r.dog, c=r.cust, inv=r.inv;
+  const invCell=inv
+   ? `<a href="#" onclick="event.preventDefault();openInvoiceForEdit('${inv.id}');return false" style="color:var(--green-dk);font-weight:600">${esc(inv.invoice_number)}</a> <span class="badge ${inv.status==='paid'?'bs':'bl'}">${esc(inv.status)}</span>`
+   : `<span class="badge bm">Belum invoice</span>`;
+  const actionCell=inv
+   ? ''
+   : `<button class="icon-btn view" onclick="invoiceVisit('${v.id}')">+ Invoice</button>`;
+  return `<tr>
+   <td>${fmtD(v.visited_at)}</td>
+   <td><strong>${esc(c.owner||'?')}</strong>${c.customer_code?` <span style="font-size:10px;color:var(--muted)">${esc(c.customer_code)}</span>`:''}</td>
+   <td>${esc(d.name||'?')}</td>
+   <td>${esc(v.service_type||'-')}</td>
+   <td>${esc(d.size||'-')}</td>
+   <td>${invCell}</td>
+   <td>${actionCell}</td>
+  </tr>`;
+ }).join('');
+}
+
+function invoiceVisit(visitId){
+ const v=visits.find(x=>x.id===visitId); if(!v){alert('Visit not found');return}
+ const d=dogs.find(x=>x.id===v.dog_id); if(!d){alert('Dog not found');return}
+ const cid=d.customer_id; if(!cid){alert('Customer not linked');return}
+ // Switch to invoice tab
+ sw('invoice');
+ // Pre-fill from this visit's customer + date
+ applyInvCustomer(cid,v.visited_at);
 }
 
 /* ========== BOOT ========== */
