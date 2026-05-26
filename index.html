@@ -358,7 +358,8 @@ tbody tr:hover{background:var(--subtle)}
 <nav class="nav">
  <div class="nav-brand">Groomer CRM</div>
  <div class="nav-tabs">
- <button class="nav-tab active" onclick="sw('database')" id="tab-database">Database</button>
+ <button class="nav-tab active" onclick="sw('dashboard')" id="tab-dashboard">Dashboard</button>
+ <button class="nav-tab" onclick="sw('database')" id="tab-database">Database</button>
  <button class="nav-tab" onclick="sw('calendar')" id="tab-calendar">Calendar</button>
  <button class="nav-tab" onclick="sw('groomers')" id="tab-groomers">Groomers</button>
  <button class="nav-tab" onclick="sw('invoice')" id="tab-invoice">Invoice</button>
@@ -375,7 +376,38 @@ tbody tr:hover{background:var(--subtle)}
 </nav>
 
 <div class="page">
- <div class="sec active" id="sec-database">
+ <div class="sec active" id="sec-dashboard">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:1rem">
+   <div>
+    <div style="font-size:18px;font-weight:600">Dashboard</div>
+    <div style="font-size:11px;color:var(--muted)" id="dash-period-lbl">—</div>
+   </div>
+   <div style="display:flex;gap:8px;align-items:center">
+    <select id="dash-period" onchange="renderDashboard()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:13px">
+     <option value="cycle">Current payroll cycle</option>
+     <option value="prev_cycle">Previous cycle</option>
+     <option value="this_month">This calendar month</option>
+     <option value="last_month">Last calendar month</option>
+     <option value="last_30">Last 30 days</option>
+     <option value="last_90">Last 90 days</option>
+    </select>
+   </div>
+  </div>
+  <div id="dash-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:1.2rem"></div>
+  <div id="dash-actions" style="margin-bottom:1.2rem"></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px">
+   <div class="card" style="padding:14px">
+    <div style="font-size:11px;font-weight:600;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Source ROI</div>
+    <div id="dash-source-roi"></div>
+   </div>
+   <div class="card" style="padding:14px">
+    <div style="font-size:11px;font-weight:600;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Cycle comparison</div>
+    <div id="dash-comparison"></div>
+   </div>
+  </div>
+ </div>
+
+ <div class="sec" id="sec-database">
  <div class="toolbar">
  <span class="toolbar-title">Database</span>
  <button class="btn btn-p" onclick="openAddCust()">+ Add customer</button>
@@ -1067,6 +1099,7 @@ function sw(tab) {
  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
  document.getElementById('tab-'+tab).classList.add('active');
  document.getElementById('sec-'+tab).classList.add('active');
+ if(tab==='dashboard') renderDashboard();
  if(tab==='database') renderCusts();
  if(tab==='calendar') renderCal();
  if(tab==='groomers') renderGroomers();
@@ -1126,7 +1159,8 @@ async function loadAll() {
  const apptGrEl=document.getElementById('appt-groomer'); if(apptGrEl) apptGrEl.innerHTML='<option value="">Select groomer…</option>'+gopts;
  // Re-render active tab
  const activeTab=document.querySelector('.nav-tab.active')?.id?.replace('tab-','');
- if(activeTab==='database') renderCusts();
+ if(activeTab==='dashboard') renderDashboard();
+ else if(activeTab==='database') renderCusts();
  else if(activeTab==='calendar') renderCal();
  else if(activeTab==='groomers') renderGroomers();
  else if(activeTab==='financial'){
@@ -3739,7 +3773,8 @@ function scheduleRender(){
  requestAnimationFrame(()=>{
   _renderPending=false;
   const t=document.querySelector('.nav-tab.active')?.id?.replace('tab-','');
-  if(t==='calendar')renderCal();
+  if(t==='dashboard')renderDashboard();
+  else if(t==='calendar')renderCal();
   else if(t==='groomers')renderGroomers();
   else if(t==='financial'){
    const fsub=document.querySelector('#sec-financial > .subtabs > .subtab.active')?.id?.replace('fstab-','')||'invoices';
@@ -4889,6 +4924,230 @@ function c360UpdateNotes(custId,val){
   if(c) c.prefs=val;
   if(statusEl){statusEl.textContent='Saved.';setTimeout(()=>{if(statusEl)statusEl.textContent='Auto-save on blur.'},1200);}
  },800);
+}
+
+/* ========== BATCH M3 — DASHBOARD ========== */
+
+function getDashboardPeriod(){
+ const sel=document.getElementById('dash-period')?.value||'cycle';
+ const today=new Date();
+ if(sel==='cycle'){
+  const c=getPayrollCycle(today);
+  return {start:c.start,end:c.end,label:c.label};
+ }
+ if(sel==='prev_cycle'){
+  const prev=new Date(today.getFullYear(),today.getMonth()-1,today.getDate());
+  const c=getPayrollCycle(prev);
+  return {start:c.start,end:c.end,label:c.label};
+ }
+ const monthName=(d)=>d.toLocaleDateString('id-ID',{month:'short',year:'numeric'});
+ if(sel==='this_month'){
+  const s=new Date(today.getFullYear(),today.getMonth(),1);
+  const e=new Date(today.getFullYear(),today.getMonth()+1,0);
+  return {start:iso(s),end:iso(e),label:monthName(s)};
+ }
+ if(sel==='last_month'){
+  const s=new Date(today.getFullYear(),today.getMonth()-1,1);
+  const e=new Date(today.getFullYear(),today.getMonth(),0);
+  return {start:iso(s),end:iso(e),label:monthName(s)};
+ }
+ if(sel==='last_30'){
+  const e=new Date(today);const s=new Date(today);s.setDate(s.getDate()-29);
+  return {start:iso(s),end:iso(e),label:'30 hari terakhir'};
+ }
+ if(sel==='last_90'){
+  const e=new Date(today);const s=new Date(today);s.setDate(s.getDate()-89);
+  return {start:iso(s),end:iso(e),label:'90 hari terakhir'};
+ }
+ const c=getPayrollCycle(today);
+ return {start:c.start,end:c.end,label:c.label};
+}
+
+function previousPeriod(period){
+ // Shift the period by its own length backward
+ const s=new Date(period.start);
+ const e=new Date(period.end);
+ const days=Math.round((e-s)/(86400000))+1;
+ const ps=new Date(s); ps.setDate(ps.getDate()-days);
+ const pe=new Date(s); pe.setDate(pe.getDate()-1);
+ return {start:iso(ps),end:iso(pe)};
+}
+
+function dashboardInvoicesIn(period){
+ return invoices.filter(i=>i.invoice_date&&i.invoice_date>=period.start&&i.invoice_date<=period.end);
+}
+
+function dashboardComputeMetrics(period){
+ const invs=dashboardInvoicesIn(period);
+ const totalInv=invs.reduce((s,i)=>s+(i.total||0),0);
+ const paidInv=invs.filter(i=>i.status==='paid').reduce((s,i)=>s+(i.total||0),0);
+ const unpaidInv=invs.filter(i=>i.status!=='paid').reduce((s,i)=>s+(i.total||0),0);
+ // Payroll for the period: count dogs invoiced in window × rate
+ let dogCount=0;
+ invs.forEach(i=>{(i.dogs||[]).forEach(()=>dogCount++)});
+ const rate=payrollSettings.rate_per_dog||20000;
+ const payrollTotal=dogCount*rate;
+ // Dogs counted (unique)
+ const uniqueCustomers=new Set(invs.map(i=>i.customer_id).filter(Boolean));
+ const dogsServed=dogCount;
+ // New customers in window
+ const newCust=custs.filter(c=>c.created_at&&c.created_at.slice(0,10)>=period.start&&c.created_at.slice(0,10)<=period.end).length;
+ return {totalInv,paidInv,unpaidInv,payrollTotal,dogsServed,uniqueCustomers:uniqueCustomers.size,newCust,invs};
+}
+
+function dashboardSourceROI(period){
+ // For each source: customers with paid invoice in window, total revenue, LTV
+ const invs=dashboardInvoicesIn(period).filter(i=>i.status==='paid');
+ const bySource={};
+ invs.forEach(i=>{
+  const c=custs.find(x=>x.id===i.customer_id);
+  const src=c?.source||'_untagged';
+  if(!bySource[src]) bySource[src]={customers:new Set(),revenue:0};
+  if(i.customer_id) bySource[src].customers.add(i.customer_id);
+  bySource[src].revenue+=(i.total||0);
+ });
+ const labels={ads:'Ads',free_session:'Free session',organic:'Organic',_untagged:'Not tagged'};
+ const rows=Object.entries(bySource).map(([src,d])=>({
+  src,
+  label:labels[src]||src,
+  customers:d.customers.size,
+  revenue:d.revenue,
+  ltv:d.customers.size?Math.round(d.revenue/d.customers.size):0
+ }));
+ rows.sort((a,b)=>b.revenue-a.revenue);
+ return rows;
+}
+
+function renderDashboard(){
+ const period=getDashboardPeriod();
+ const lbl=document.getElementById('dash-period-lbl');
+ if(lbl) lbl.textContent=`${period.label} \u00B7 ${fmtD(period.start)} \u2014 ${fmtD(period.end)}`;
+ const m=dashboardComputeMetrics(period);
+
+ // ROW 1 — Money pulse cards
+ const cardsEl=document.getElementById('dash-cards');
+ if(cardsEl){
+  cardsEl.innerHTML=`
+   <div class="card" style="padding:14px;border-left:4px solid #6366f1">
+    <div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Total invoiced</div>
+    <div style="font-size:20px;font-weight:700;color:var(--text)">${fmtRp(m.totalInv)}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.invs.length} invoice${m.invs.length!==1?'s':''} \u00B7 ${m.dogsServed} dogs</div>
+   </div>
+   <div class="card" style="padding:14px;border-left:4px solid #16a34a">
+    <div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Paid</div>
+    <div style="font-size:20px;font-weight:700;color:#15803d">${fmtRp(m.paidInv)}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.invs.filter(i=>i.status==='paid').length} paid</div>
+   </div>
+   <div class="card" style="padding:14px;border-left:4px solid #dc2626">
+    <div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Unpaid</div>
+    <div style="font-size:20px;font-weight:700;color:#991b1b">${fmtRp(m.unpaidInv)}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.invs.filter(i=>i.status!=='paid').length} outstanding</div>
+   </div>
+   <div class="card" style="padding:14px;border-left:4px solid #ca8a04">
+    <div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Payroll est.</div>
+    <div style="font-size:20px;font-weight:700;color:#854d0e">${fmtRp(m.payrollTotal)}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.dogsServed} \u00D7 ${fmtRp(payrollSettings.rate_per_dog||20000)}</div>
+   </div>`;
+ }
+
+ // ROW 2 — Action items
+ const actionsEl=document.getElementById('dash-actions');
+ if(actionsEl){
+  // Visits without invoice (in period)
+  const visitsInPeriod=visits.filter(v=>v.visited_at&&v.visited_at>=period.start&&v.visited_at<=period.end);
+  const uninvoicedVisits=visitsInPeriod.filter(v=>!findInvoiceForDogsOnDate([v.dog_id],v.visited_at));
+  // Subs expiring within 7 days from today
+  const today=iso(new Date());
+  const in7=new Date();in7.setDate(in7.getDate()+7);const in7Str=iso(in7);
+  const expiringSubs=subscriptions.filter(s=>s.status==='active'&&s.expires_at&&s.expires_at>=today&&s.expires_at<=in7Str);
+  // Tokens expiring same window
+  const expiringTokens=tokens.filter(t=>t.expires_at&&t.expires_at>=today&&t.expires_at<=in7Str&&(t.sessions_used||0)<(t.sessions_total||0));
+  const items=[];
+  if(uninvoicedVisits.length){
+   items.push(`<div class="card" style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;background:#fef2f2;border-left:4px solid #dc2626;margin-bottom:6px">
+    <div><strong>${uninvoicedVisits.length} visit${uninvoicedVisits.length!==1?'s':''} belum di-invoice</strong><div style="font-size:11px;color:var(--muted)">Dalam periode ini</div></div>
+    <button class="btn btn-p btn-sm" onclick="goToUninvoiced()">View</button>
+   </div>`);
+  }
+  if(expiringSubs.length+expiringTokens.length){
+   const n=expiringSubs.length+expiringTokens.length;
+   items.push(`<div class="card" style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;background:#fef3c7;border-left:4px solid #ca8a04;margin-bottom:6px">
+    <div><strong>${n} membership expiring dalam 7 hari</strong><div style="font-size:11px;color:var(--muted)">${expiringSubs.length} subscription, ${expiringTokens.length} token</div></div>
+    <button class="btn btn-g btn-sm" onclick="goToExpiringMemb()">View</button>
+   </div>`);
+  }
+  if(!items.length){
+   actionsEl.innerHTML='<div class="card" style="padding:10px 14px;background:#dcfce7;border-left:4px solid #16a34a;color:#15803d;font-size:13px">No action items — everything looks healthy.</div>';
+  } else {
+   actionsEl.innerHTML=items.join('');
+  }
+ }
+
+ // ROW 3 — Source ROI
+ const roiEl=document.getElementById('dash-source-roi');
+ if(roiEl){
+  const rows=dashboardSourceROI(period);
+  if(!rows.length){
+   roiEl.innerHTML='<div style="color:var(--muted);font-size:12px;padding:10px">Belum ada invoice yang di-paid dalam periode ini.</div>';
+  } else {
+   const totalRev=rows.reduce((s,r)=>s+r.revenue,0);
+   roiEl.innerHTML=`<table style="width:100%;font-size:13px;border-collapse:collapse">
+    <thead><tr style="border-bottom:1px solid var(--border);text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">
+     <th style="padding:5px 6px">Source</th><th style="padding:5px 6px;text-align:right">Customers</th><th style="padding:5px 6px;text-align:right">Revenue</th><th style="padding:5px 6px;text-align:right">LTV</th><th style="padding:5px 6px;text-align:right">%</th>
+    </tr></thead>
+    <tbody>${rows.map(r=>{
+     const pct=totalRev?Math.round(r.revenue/totalRev*100):0;
+     return `<tr>
+      <td style="padding:6px"><strong>${esc(r.label)}</strong></td>
+      <td style="padding:6px;text-align:right">${r.customers}</td>
+      <td style="padding:6px;text-align:right">${fmtRp(r.revenue)}</td>
+      <td style="padding:6px;text-align:right">${fmtRp(r.ltv)}</td>
+      <td style="padding:6px;text-align:right;color:var(--muted)">${pct}%</td>
+     </tr>`;
+    }).join('')}</tbody></table>`;
+  }
+ }
+
+ // ROW 4 — Cycle comparison
+ const compEl=document.getElementById('dash-comparison');
+ if(compEl){
+  const prev=previousPeriod(period);
+  const mPrev=dashboardComputeMetrics(prev);
+  const delta=(curr,prevVal)=>{
+   if(!prevVal&&!curr) return '—';
+   if(!prevVal) return '<span style="color:#15803d">new</span>';
+   const d=Math.round((curr-prevVal)/prevVal*100);
+   const color=d>0?'#15803d':(d<0?'#991b1b':'var(--muted)');
+   const sign=d>0?'+':'';
+   return `<span style="color:${color}">${sign}${d}%</span>`;
+  };
+  compEl.innerHTML=`<table style="width:100%;font-size:13px;border-collapse:collapse">
+   <thead><tr style="border-bottom:1px solid var(--border);text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">
+    <th style="padding:5px 6px">Metric</th><th style="padding:5px 6px;text-align:right">This</th><th style="padding:5px 6px;text-align:right">Previous</th><th style="padding:5px 6px;text-align:right">Δ</th>
+   </tr></thead>
+   <tbody>
+    <tr><td style="padding:6px">Total invoiced</td><td style="padding:6px;text-align:right">${fmtRp(m.totalInv)}</td><td style="padding:6px;text-align:right;color:var(--muted)">${fmtRp(mPrev.totalInv)}</td><td style="padding:6px;text-align:right">${delta(m.totalInv,mPrev.totalInv)}</td></tr>
+    <tr><td style="padding:6px">Paid revenue</td><td style="padding:6px;text-align:right">${fmtRp(m.paidInv)}</td><td style="padding:6px;text-align:right;color:var(--muted)">${fmtRp(mPrev.paidInv)}</td><td style="padding:6px;text-align:right">${delta(m.paidInv,mPrev.paidInv)}</td></tr>
+    <tr><td style="padding:6px">Dogs served</td><td style="padding:6px;text-align:right">${m.dogsServed}</td><td style="padding:6px;text-align:right;color:var(--muted)">${mPrev.dogsServed}</td><td style="padding:6px;text-align:right">${delta(m.dogsServed,mPrev.dogsServed)}</td></tr>
+    <tr><td style="padding:6px">Unique customers</td><td style="padding:6px;text-align:right">${m.uniqueCustomers}</td><td style="padding:6px;text-align:right;color:var(--muted)">${mPrev.uniqueCustomers}</td><td style="padding:6px;text-align:right">${delta(m.uniqueCustomers,mPrev.uniqueCustomers)}</td></tr>
+    <tr><td style="padding:6px">New customers</td><td style="padding:6px;text-align:right">${m.newCust}</td><td style="padding:6px;text-align:right;color:var(--muted)">${mPrev.newCust}</td><td style="padding:6px;text-align:right">${delta(m.newCust,mPrev.newCust)}</td></tr>
+   </tbody></table>`;
+ }
+}
+
+function goToUninvoiced(){
+ sw('financial');
+ setTimeout(()=>{
+  swFin('visits');
+  const f=document.getElementById('vs-inv-status'); if(f){f.value='not_invoiced';renderVisits();}
+ },50);
+}
+
+function goToExpiringMemb(){
+ sw('membership');
+ setTimeout(()=>{
+  const f=document.getElementById('memb-filter'); if(f){f.value='active';renderMembership();}
+ },50);
 }
 
 /* ========== BOOT ========== */
