@@ -197,6 +197,16 @@ const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
    <option>Depok</option>
   </select>
  </div>
+ <div class="auth-fg"><label>Bagaimana Anda mengetahui kami? *</label>
+  <select id="su-source" style="padding:9px 11px;border:1px solid #e8d5b7;border-radius:8px;font-size:14px;background:#fdf3e7;width:100%;color:#3d1f0d">
+   <option value="">Pilih salah satu...</option>
+   <option value="ads">Iklan Instagram / Google</option>
+   <option value="free_session">Promo session gratis</option>
+   <option value="recommendation">Rekomendasi teman / keluarga</option>
+   <option value="search">Searching di Google</option>
+   <option value="other">Lainnya</option>
+  </select>
+ </div>
  <button class="auth-btn" onclick="doSignup()">Daftar sekarang</button>
  <div class="auth-switch">Already have an account? <a href="#" onclick="showView('view-login');return false">Sign in</a></div>
  </div>
@@ -476,12 +486,17 @@ async function doSignup(){
  const pass=document.getElementById('su-pass').value;
  const wa=document.getElementById('su-wa').value.trim();
  const kota=document.getElementById('su-kota').value;
+ const sourceRaw=document.getElementById('su-source')?.value||'';
  const err=document.getElementById('signup-err');
  const btn=document.querySelector('#view-signup .auth-btn');
  err.style.display='none';
  if(!name||!email||!pass){err.textContent='Nama, email, dan password wajib diisi.';err.style.display='block';return}
  if(!kota){err.textContent='Pilih kota/area kamu.';err.style.display='block';return}
+ if(!sourceRaw){err.textContent='Mohon pilih bagaimana Anda mengetahui kami.';err.style.display='block';return}
  if(pass.length<6){err.textContent='Password minimal 6 karakter.';err.style.display='block';return}
+ // Map UI choice to backend source tag
+ const sourceMap={ads:'ads',free_session:'free_session',recommendation:'organic',search:'organic',other:'organic'};
+ const source=sourceMap[sourceRaw]||null;
  if(btn){btn.disabled=true;btn.textContent='Mendaftar...';}
  try{
   const {data,error}=await db.auth.signUp({email,password:pass,options:{data:{name}}});
@@ -489,7 +504,7 @@ async function doSignup(){
   if(data.user){
    const {count:cnt}=await db.from('customers').select('*',{count:'exact',head:true});
    const newCode='CUST-'+String((cnt||0)+1).padStart(3,'0');
-   const {data:cust,error:ce}=await db.from('customers').insert({owner:name,wa,kota,customer_code:newCode}).select().single();
+   const {data:cust,error:ce}=await db.from('customers').insert({owner:name,wa,kota,customer_code:newCode,source,prefs:sourceRaw!==source?'Sumber detail: '+sourceRaw:null}).select().single();
    if(ce){err.textContent='Akun dibuat tapi profil gagal tersimpan: '+ce.message;err.style.display='block';return}
    if(cust){
     const {error:ae}=await db.from('customer_auth').insert({id:data.user.id,customer_id:cust.id});
@@ -497,7 +512,6 @@ async function doSignup(){
    }
   }
   err.style.display='none';
-  // Show success
   const ok=document.getElementById('signup-ok');
   if(ok){ok.textContent='Pendaftaran berhasil! Cek email untuk verifikasi, lalu login.';ok.style.display='block';}
   else{alert('Pendaftaran berhasil! Cek email untuk verifikasi lalu login.');}
