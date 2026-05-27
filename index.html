@@ -999,10 +999,10 @@ tbody tr:hover{background:var(--subtle)}
     <div id="wiz-token-list"></div>
     <div style="font-size:10px;color:#a16207;margin-top:5px">Select a token to apply to this appointment. Will be deducted automatically when appointment is completed.</div>
    </div>
-   <!-- Free session checkbox (Batch C item 20 / Q3) -->
-   <div style="margin-bottom:.75rem;display:flex;align-items:center;gap:8px">
-    <input type="checkbox" id="wiz-free" onchange="onWizFreeToggle()" style="cursor:pointer"/>
-    <label for="wiz-free" style="font-size:12px;cursor:pointer;margin:0">Mark as free session (complimentary, no charge)</label>
+   <!-- Per-dog free session checkboxes (Batch O.1 — was single global checkbox in C/Q3) -->
+   <div id="wiz-free-per-dog" style="margin-bottom:.75rem;padding:8px 10px;background:#dcfce7;border:1px solid #86efac;border-radius:6px;display:none">
+    <div style="font-size:11px;font-weight:600;color:#15803d;margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase">Free sessions (per dog)</div>
+    <div id="wiz-free-dogs-list"></div>
    </div>
    <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px" id="wiz-dur-info"></div>
    <div id="wiz-slots" style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;max-height:200px;overflow-y:auto"></div>
@@ -1161,6 +1161,15 @@ function iso(d){
  return `${y}-${m}-${dd}`;
 }
 function fmtD(d){return new Date(d+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})}
+
+// Batch O.1 — shared helper for cross-surface session_source badges
+function sessionSourceBadge(src){
+ if(!src||src==='normal') return '';
+ if(src==='subscription') return '<span class="ab-badge ab-badge-S" style="margin-left:5px">S</span>';
+ if(src==='advance') return '<span class="ab-badge ab-badge-A" style="margin-left:5px">A</span>';
+ if(src==='free') return '<span class="ab-badge ab-badge-F" style="margin-left:5px">F</span>';
+ return '';
+}
 function cm(id){document.getElementById(id).classList.remove('open')}
 function om(id){document.getElementById(id).classList.add('open')}
 function esc(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -1757,10 +1766,14 @@ function renderCal(){
     const kotaLabel=cust?.kota||'';
     const statusDot=a.status==='confirmed'?'dot-confirmed':a.status==='done'?'dot-done':'dot-pending';
     const isMSel=massSelected.has(a.id);
-    // session_source coloring overrides default only when confirmed (pending keeps groomer color)
-    const srcClass=(a.status==='confirmed'&&a.session_source&&a.session_source!=='normal')?' src-'+a.session_source:'';
-    // Batch K: badge for session_source on confirmed blocks
-    const srcBadge=(a.status==='confirmed'&&a.session_source&&a.session_source!=='normal')
+    // session_source coloring overrides default. Free shows on all statuses (admin marks manually);
+    // subs/advance only show when confirmed (system-derived from booking flow).
+    const showOverlay = a.session_source && a.session_source!=='normal' && (
+     a.session_source==='free' || a.status==='confirmed' || a.status==='done'
+    );
+    const srcClass = showOverlay ? ' src-'+a.session_source : '';
+    // Batch K + O.1: badge for session_source
+    const srcBadge = showOverlay
      ? (a.session_source==='subscription'?'<span class="ab-badge ab-badge-S">S</span>'
        :a.session_source==='advance'?'<span class="ab-badge ab-badge-A">A</span>'
        :a.session_source==='free'?'<span class="ab-badge ab-badge-F">F</span>':'')
@@ -2008,8 +2021,7 @@ function wizNext(n){
  } else if(n===3){
   if(!wiz.dogSvcs.length){alert('Select at least one dog');return}
   wizShow(3);renderWizSlots();renderWizTokens();renderWizSessionSummary();
-  const freeCb=document.getElementById('wiz-free');
-  if(freeCb) freeCb.checked=!!wiz.isFree;
+  renderWizFreePerDog();
  } else if(n===4){
   if(!wiz.groomerId){alert('Select a groomer');return}
   if(wiz.startMins===null){alert('Select a time slot');return}
@@ -2169,7 +2181,7 @@ function populateWizCustList(){
 }
 
 function openAppt(dateISO,groomerId,startMins){
- wiz={step:1,custId:null,dogSvcs:[],groomerId:groomerId||null,date:dateISO||iso(new Date()),startMins:startMins??null,editId:null,tokenId:null,isFree:false};
+ wiz={step:1,custId:null,dogSvcs:[],groomerId:groomerId||null,date:dateISO||iso(new Date()),startMins:startMins??null,editId:null,tokenId:null,isFree:false,freeDogs:new Set()};
  document.getElementById('appt-title').textContent='Schedule appointment';
  document.getElementById('appt-save-btn').textContent='Save appointment';
  document.getElementById('appt-del-btn').style.display='none';
@@ -2190,9 +2202,7 @@ function openAppt(dateISO,groomerId,startMins){
 function openApptEdit(id){
  const a=appts.find(x=>x.id===id);if(!a)return;
  const d=dogs.find(x=>x.id===a.dog_id);
- wiz={step:4,custId:d?.customer_id||null,dogSvcs:d?[{did:d.id,svc:a.service_base||'Basic Grooming',customDur:null}]:[],groomerId:a.groomer_id,date:a.appt_date,startMins:t2m(a.appt_time||'09:00'),editId:id,tokenId:a.token_id||null,isFree:a.session_source==='free'};
- const freeCb=document.getElementById('wiz-free');
- if(freeCb) freeCb.checked=wiz.isFree;
+ wiz={step:4,custId:d?.customer_id||null,dogSvcs:d?[{did:d.id,svc:a.service_base||'Basic Grooming',customDur:null}]:[],groomerId:a.groomer_id,date:a.appt_date,startMins:t2m(a.appt_time||'09:00'),editId:id,tokenId:a.token_id||null,isFree:a.session_source==='free',freeDogs:a.session_source==='free'&&d?new Set([d.id]):new Set()};
  document.getElementById('appt-title').textContent='Edit appointment';
  document.getElementById('appt-save-btn').textContent='Update';
  document.getElementById('appt-del-btn').style.display='inline-flex';
@@ -2264,10 +2274,11 @@ async function saveAppt(){
  wiz.dogSvcs.forEach((ds,i)=>{
   const d=dogs.find(x=>x.id===ds.did);
   const dur=getWizDogDur(ds);
-  // Derive session_source per dog (subs are now per-dog).
-  // Priority: free > token > subscription (per dog) > normal
+  // Derive session_source per dog (subs are now per-dog, free is per-dog).
+  // Priority: free > token > subscription > normal
   let sessSrc='normal';
-  if(wiz.isFree) sessSrc='free';
+  const isThisDogFree = wiz.freeDogs ? wiz.freeDogs.has(ds.did) : !!wiz.isFree;
+  if(isThisDogFree) sessSrc='free';
   else if(wiz.tokenId) sessSrc='advance';
   else if(ds.did){
    const hasActiveSubs=subscriptions.some(s=>s.dog_id===ds.did&&s.status==='active');
@@ -4120,13 +4131,50 @@ function renderWizSessionSummary(){
  wrap.innerHTML=parts.join('');
 }
 
-function onWizFreeToggle(){
- wiz.isFree=!!document.getElementById('wiz-free')?.checked;
- // Free + token are mutually exclusive
- if(wiz.isFree&&wiz.tokenId){
-  wiz.tokenId=null;
-  renderWizTokens();
+// Batch O.1 — render per-dog free checkboxes in step 3
+function renderWizFreePerDog(){
+ const wrap=document.getElementById('wiz-free-per-dog');
+ const list=document.getElementById('wiz-free-dogs-list');
+ if(!wrap||!list) return;
+ if(!wiz.dogSvcs.length){wrap.style.display='none';return}
+ // Initialize freeDogs set
+ if(!wiz.freeDogs) wiz.freeDogs=new Set();
+ wrap.style.display='block';
+ list.innerHTML=wiz.dogSvcs.map(ds=>{
+  const d=dogs.find(x=>x.id===ds.did)||{};
+  const isFree=wiz.freeDogs.has(ds.did);
+  return `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer">
+   <input type="checkbox" ${isFree?'checked':''} onchange="onWizDogFreeToggle('${ds.did}',this.checked)" style="cursor:pointer"/>
+   <span style="font-size:12px">Free session: <strong>${esc(d.name||'?')}</strong></span>
+  </label>`;
+ }).join('');
+}
+
+function onWizDogFreeToggle(did,on){
+ if(!wiz.freeDogs) wiz.freeDogs=new Set();
+ if(on){
+  wiz.freeDogs.add(did);
+  // Free + token mutually exclusive — clear token if any dog is now free
+  if(wiz.tokenId){
+   wiz.tokenId=null;
+   renderWizTokens();
+  }
+ } else {
+  wiz.freeDogs.delete(did);
  }
+ // Update wiz.isFree as derived (true if ANY dog is free, used by legacy code in invoice loader)
+ wiz.isFree=wiz.freeDogs.size>0;
+}
+
+// Backward-compat: legacy single-toggle handler — sets ALL dogs as free
+function onWizFreeToggle(){
+ const checked=!!document.getElementById('wiz-free')?.checked;
+ if(!wiz.freeDogs) wiz.freeDogs=new Set();
+ if(checked) wiz.dogSvcs.forEach(ds=>wiz.freeDogs.add(ds.did));
+ else wiz.freeDogs.clear();
+ wiz.isFree=checked;
+ if(checked&&wiz.tokenId){wiz.tokenId=null;renderWizTokens();}
+ renderWizFreePerDog();
 }
 
 function renderWizTokens(){
@@ -4161,10 +4209,11 @@ function renderWizTokens(){
 
 function selectWizToken(id){
  wiz.tokenId=id||null;
- if(wiz.tokenId&&wiz.isFree){
+ // Free + token mutually exclusive
+ if(wiz.tokenId){
   wiz.isFree=false;
-  const cb=document.getElementById('wiz-free');
-  if(cb) cb.checked=false;
+  if(wiz.freeDogs) wiz.freeDogs.clear();
+  renderWizFreePerDog();
  }
 }
 
@@ -4908,23 +4957,26 @@ function renderVisits(){
  const invFilter=document.getElementById('vs-inv-status')?.value||'';
  const sortDir=document.getElementById('vs-sort')?.value||'desc';
 
- // Map each visit to {visit, dog, customer, invoice}
+ // Map each visit to {visit, dog, customer, invoice, manualBilled, sessionSrc}
  const rows=visits.map(v=>{
   const dog=dogs.find(x=>x.id===v.dog_id)||v.dogs||{};
   const cust=dog.customer_id?custs.find(x=>x.id===dog.customer_id)||{}:{};
   const inv=v.visited_at?findInvoiceForDogsOnDate([v.dog_id],v.visited_at):null;
-  return {visit:v,dog,cust,inv};
+  // Batch O.1 — find linked appointment for session_source
+  const linkedAppt=appts.find(a=>a.dog_id===v.dog_id&&a.appt_date===v.visited_at);
+  return {visit:v,dog,cust,inv,manualBilled:!!v.is_billed_manually,sessionSrc:linkedAppt?.session_source};
  });
 
  let filtered=rows.filter(r=>{
   if(custFilter && r.cust.id!==custFilter) return false;
   if(dogFilter){
-   // dogFilter could be a dog id (when customer selected) or a name (all customers mode)
    if(dogFilter.length===36){ if(r.dog.id!==dogFilter) return false; }
    else { if(r.dog.name!==dogFilter) return false; }
   }
-  if(invFilter==='invoiced' && !r.inv) return false;
-  if(invFilter==='not_invoiced' && r.inv) return false;
+  // Batch O.1 — treat manualBilled as "invoiced" for filter purposes
+  const isBilled = !!r.inv || r.manualBilled;
+  if(invFilter==='invoiced' && !isBilled) return false;
+  if(invFilter==='not_invoiced' && isBilled) return false;
   if(search){
    const blob=`${r.cust.owner||''} ${r.dog.name||''} ${r.visit.service_type||''} ${r.cust.area||''} ${r.cust.customer_code||''}`.toLowerCase();
    if(!blob.includes(search)) return false;
@@ -4939,12 +4991,14 @@ function renderVisits(){
 
  // Totals
  const totEl=document.getElementById('vs-totals');
- const invCount=filtered.filter(r=>r.inv).length;
- const notInvCount=filtered.length-invCount;
+ const billedCount=filtered.filter(r=>r.inv||r.manualBilled).length;
+ const notBilledCount=filtered.length-billedCount;
+ const manualBilledCount=filtered.filter(r=>r.manualBilled).length;
  if(totEl){
   totEl.innerHTML=`<span class="badge bs">${filtered.length} visits</span>
-   <span class="badge bs">${invCount} invoiced</span>
-   <span class="badge bm">${notInvCount} belum invoice</span>`;
+   <span class="badge bs">${billedCount} billed</span>
+   <span class="badge bm">${notBilledCount} belum billed</span>
+   ${manualBilledCount?`<span class="badge bl">${manualBilledCount} manual billed</span>`:''}`;
  }
 
  const tb=document.getElementById('vs-body');
@@ -4954,22 +5008,65 @@ function renderVisits(){
  }
  tb.innerHTML=filtered.map(r=>{
   const v=r.visit, d=r.dog, c=r.cust, inv=r.inv;
-  const invCell=inv
-   ? `<a href="#" onclick="event.preventDefault();openInvoiceForEdit('${inv.id}');return false" style="color:var(--green-dk);font-weight:600">${esc(inv.invoice_number)}</a> <span class="badge ${inv.status==='paid'?'bs':'bl'}">${esc(inv.status)}</span>`
-   : `<span class="badge bm">Belum invoice</span>`;
-  const actionCell=inv
-   ? ''
-   : `<button class="icon-btn view" onclick="invoiceVisit('${v.id}')">+ Invoice</button>`;
+  const srcBadge=sessionSourceBadge(r.sessionSrc);
+  let invCell;
+  if(inv){
+   invCell=`<a href="#" onclick="event.preventDefault();openInvoiceForEdit('${inv.id}');return false" style="color:var(--green-dk);font-weight:600">${esc(inv.invoice_number)}</a> <span class="badge ${inv.status==='paid'?'bs':'bl'}">${esc(inv.status)}</span>`;
+  } else if(r.manualBilled){
+   const amt=v.billed_amount?` (${fmtRp(v.billed_amount)})`:'';
+   invCell=`<span class="badge bs" title="${esc(v.billed_note||'')}">Manual billed${amt}</span>`;
+  } else {
+   invCell=`<span class="badge bm">Belum invoice</span>`;
+  }
+  let actionCell='';
+  if(!inv){
+   if(r.manualBilled){
+    actionCell=`<button class="icon-btn" onclick="unmarkVisitBilled('${v.id}')">Undo manual</button>`;
+   } else {
+    actionCell=`<button class="icon-btn view" onclick="invoiceVisit('${v.id}')">+ Invoice</button>
+     <button class="icon-btn" onclick="markVisitManualBilled('${v.id}')" style="margin-left:4px">Mark billed</button>`;
+   }
+  }
   return `<tr>
    <td>${fmtD(v.visited_at)}</td>
    <td><strong class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner||'?')}</strong>${c.customer_code?` <span style="font-size:10px;color:var(--muted)">${esc(c.customer_code)}</span>`:''}</td>
-   <td>${esc(d.name||'?')}</td>
+   <td>${esc(d.name||'?')}${srcBadge}</td>
    <td>${esc(v.service_type||'-')}</td>
    <td>${esc(d.size||'-')}</td>
    <td>${invCell}</td>
    <td>${actionCell}</td>
   </tr>`;
  }).join('');
+}
+
+// Batch O.1 — Mark visit as manually billed (no invoice created)
+async function markVisitManualBilled(visitId){
+ const v=visits.find(x=>x.id===visitId); if(!v){alert('Visit not found');return}
+ const amtStr=prompt('Berapa jumlah yang ditagih? (kosong/0 = tidak track jumlah, mis. dicover subs lain):\n\nMasukkan dalam rupiah (e.g. 140000):','0');
+ if(amtStr===null) return; // cancelled
+ const amount=parseInt(amtStr.replace(/[^0-9]/g,''))||0;
+ const note=prompt('Catatan (opsional, mis. "Dibayar tunai via WA"):','')||'';
+ const {error}=await db.from('visits').update({
+  is_billed_manually:true,
+  billed_amount:amount,
+  billed_at:new Date().toISOString(),
+  billed_note:note
+ }).eq('id',visitId);
+ if(error){alert('Error: '+error.message);return}
+ await loadAll(); renderVisits();
+ showToast('Visit ditandai sebagai manual billed','success');
+}
+
+async function unmarkVisitBilled(visitId){
+ if(!confirm('Hapus tanda manual-billed dari visit ini?')) return;
+ const {error}=await db.from('visits').update({
+  is_billed_manually:false,
+  billed_amount:0,
+  billed_at:null,
+  billed_note:null
+ }).eq('id',visitId);
+ if(error){alert('Error: '+error.message);return}
+ await loadAll(); renderVisits();
 }
 
 function invoiceVisit(visitId){
@@ -5117,11 +5214,20 @@ function c360RenderVisits(c){
  return `<div class="c360-section-lbl">Visit log (${list.length})</div>`+list.map(v=>{
   const d=dogs.find(x=>x.id===v.dog_id)||v.dogs||{};
   const inv=findInvoiceForDogsOnDate([v.dog_id],v.visited_at);
-  const invHTML=inv
-   ? `<span class="c360-clickable" onclick="closeCust360();openInvoiceForEdit('${inv.id}')">${esc(inv.invoice_number)}</span> <span class="badge ${inv.status==='paid'?'bs':'bl'}">${esc(inv.status)}</span>`
-   : `<span class="badge bm">Belum invoice</span>`;
+  // Batch O.1 — find related appointment to derive session_source badge
+  const linkedAppt=appts.find(a=>a.dog_id===v.dog_id&&a.appt_date===v.visited_at);
+  const srcBadge=linkedAppt?sessionSourceBadge(linkedAppt.session_source):'';
+  let invHTML;
+  if(inv){
+   invHTML=`<span class="c360-clickable" onclick="closeCust360();openInvoiceForEdit('${inv.id}')">${esc(inv.invoice_number)}</span> <span class="badge ${inv.status==='paid'?'bs':'bl'}">${esc(inv.status)}</span>`;
+  } else if(v.is_billed_manually){
+   const amt=v.billed_amount?` (${fmtRp(v.billed_amount)})`:'';
+   invHTML=`<span class="badge bs">Manual billed${amt}</span>`;
+  } else {
+   invHTML=`<span class="badge bm">Belum invoice</span>`;
+  }
   return `<div class="c360-card">
-   <div class="c360-card-title">${fmtD(v.visited_at)} \u2014 ${esc(d.name||'?')}</div>
+   <div class="c360-card-title">${fmtD(v.visited_at)} \u2014 ${esc(d.name||'?')}${srcBadge}</div>
    <div class="c360-card-meta">${esc(v.service_type||'-')} \u00B7 ${invHTML}</div>
    ${v.note?`<div class="c360-card-meta" style="margin-top:3px;font-style:italic">${esc(v.note)}</div>`:''}
   </div>`;
@@ -5256,17 +5362,18 @@ function dashboardComputeMetrics(period){
  const totalInv=invs.reduce((s,i)=>s+(i.total||0),0);
  const paidInv=invs.filter(i=>i.status==='paid').reduce((s,i)=>s+(i.total||0),0);
  const unpaidInv=invs.filter(i=>i.status!=='paid').reduce((s,i)=>s+(i.total||0),0);
- // Payroll for the period: count dogs invoiced in window × rate
+ // Batch O.1 — include manual-billed visit amounts in revenue
+ const manualVisits=visits.filter(v=>v.is_billed_manually&&v.visited_at&&v.visited_at>=period.start&&v.visited_at<=period.end);
+ const manualBilledTotal=manualVisits.reduce((s,v)=>s+(v.billed_amount||0),0);
+ // Payroll for the period: count dogs invoiced in window × rate (excludes manual-billed since they may not be groomer-handled)
  let dogCount=0;
  invs.forEach(i=>{(i.dogs||[]).forEach(()=>dogCount++)});
  const rate=payrollSettings.rate_per_dog||20000;
  const payrollTotal=dogCount*rate;
- // Dogs counted (unique)
  const uniqueCustomers=new Set(invs.map(i=>i.customer_id).filter(Boolean));
  const dogsServed=dogCount;
- // New customers in window
  const newCust=custs.filter(c=>c.created_at&&c.created_at.slice(0,10)>=period.start&&c.created_at.slice(0,10)<=period.end).length;
- return {totalInv,paidInv,unpaidInv,payrollTotal,dogsServed,uniqueCustomers:uniqueCustomers.size,newCust,invs};
+ return {totalInv:totalInv+manualBilledTotal,paidInv:paidInv+manualBilledTotal,unpaidInv,payrollTotal,dogsServed,uniqueCustomers:uniqueCustomers.size,newCust,invs,manualBilledTotal,manualBilledCount:manualVisits.length};
 }
 
 function dashboardSourceROI(period){
@@ -5305,7 +5412,7 @@ function renderDashboard(){
    <div class="card" style="padding:14px;border-left:4px solid #6366f1">
     <div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Total invoiced</div>
     <div style="font-size:20px;font-weight:700;color:var(--text)">${fmtRp(m.totalInv)}</div>
-    <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.invs.length} invoice${m.invs.length!==1?'s':''} \u00B7 ${m.dogsServed} dogs</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.invs.length} invoice${m.invs.length!==1?'s':''} \u00B7 ${m.dogsServed} dogs${m.manualBilledCount?` \u00B7 +${m.manualBilledCount} manual`:''}</div>
    </div>
    <div class="card" style="padding:14px;border-left:4px solid #16a34a">
     <div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Paid</div>
@@ -5329,7 +5436,8 @@ function renderDashboard(){
  if(actionsEl){
   // Visits without invoice (in period)
   const visitsInPeriod=visits.filter(v=>v.visited_at&&v.visited_at>=period.start&&v.visited_at<=period.end);
-  const uninvoicedVisits=visitsInPeriod.filter(v=>!findInvoiceForDogsOnDate([v.dog_id],v.visited_at));
+  // Batch O.1 — exclude manual-billed visits from "needs invoice" alert
+  const uninvoicedVisits=visitsInPeriod.filter(v=>!v.is_billed_manually&&!findInvoiceForDogsOnDate([v.dog_id],v.visited_at));
   // Subs expiring within 7 days from today
   const today=iso(new Date());
   const in7=new Date();in7.setDate(in7.getDate()+7);const in7Str=iso(in7);
