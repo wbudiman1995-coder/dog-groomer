@@ -540,6 +540,8 @@ tbody tr:hover{background:var(--subtle)}
   <option value="ads">Ads</option>
   <option value="free_session">Free session</option>
   <option value="organic">Organic</option>
+  <option value="family">Family</option>
+  <option value="friend">Friend</option>
   <option value="__none__">Not set</option>
  </select>
  </div>
@@ -570,7 +572,7 @@ tbody tr:hover{background:var(--subtle)}
  </div>
  <div class="tbl-wrap" style="margin-top:.9rem">
  <table><thead><tr>
- <th>Dog ID</th><th>Name</th><th>Breed</th><th>Age</th><th>Weight</th><th>Preferences</th><th></th>
+ <th>Dog ID</th><th>Name</th><th>Breed</th><th>Age</th><th>Weight</th><th>Color</th><th>Preferences</th><th></th>
  </tr></thead>
  <tbody id="dogs-body"></tbody></table>
  </div>
@@ -805,9 +807,14 @@ tbody tr:hover{background:var(--subtle)}
 
  <div class="sec" id="sec-reminders">
  <div class="toolbar">
-  <span class="toolbar-title">Groomer reminders</span>
+  <span class="toolbar-title">Reminders</span>
+ </div>
+ <div class="subtabs">
+  <button class="subtab active" id="rstab-groomer" onclick="swRem('groomer')">Groomer reminders</button>
+  <button class="subtab" id="rstab-customer" onclick="swRem('customer')">Customer reminders</button>
  </div>
 
+ <div class="subsec active" id="rsec-groomer">
  <!-- Controls -->
  <div class="card" style="padding:1rem;margin-bottom:1rem">
   <div class="form-grid">
@@ -831,6 +838,27 @@ tbody tr:hover{background:var(--subtle)}
  </div>
 
  <div id="rem-cards"></div>
+ </div>
+
+ <div class="subsec" id="rsec-customer">
+  <div class="card" style="padding:1rem;margin-bottom:1rem">
+   <div class="form-grid">
+    <div class="fg">
+     <label>Tanggal appointment</label>
+     <input type="date" id="cust-rem-date" onchange="generateCustomerReminders()"/>
+    </div>
+    <div class="fg">
+     <label>Greeting (opsional)</label>
+     <input id="cust-rem-greeting" placeholder="default: Halo kak [Nama]" oninput="generateCustomerReminders()"/>
+    </div>
+    <div class="fg full">
+     <label>Closing (opsional)</label>
+     <input id="cust-rem-closing" placeholder="default: Sampai jumpa besok ya kak!" oninput="generateCustomerReminders()"/>
+    </div>
+   </div>
+  </div>
+  <div id="cust-rem-cards"></div>
+ </div>
  </div>
 
  <div class="sec" id="sec-membership">
@@ -910,6 +938,8 @@ tbody tr:hover{background:var(--subtle)}
    <option value="ads">Ads (iklan)</option>
    <option value="free_session">Free session</option>
    <option value="organic">Organic</option>
+   <option value="family">Family</option>
+   <option value="friend">Friend</option>
   </select>
  </div>
  <div class="fg"></div>
@@ -934,6 +964,7 @@ tbody tr:hover{background:var(--subtle)}
  <div class="fg"><label>Weight</label><input id="df-weight" placeholder="e.g. 8 kg"/></div>
  <div class="fg"><label>Size</label><select id="df-size"><option value="">Select…</option><option>XS</option><option>Small</option><option>Medium</option><option>Large</option><option>XL</option></select></div>
  <div class="fg"><label>Coat</label><select id="df-coat"><option value="">Select…</option><option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option></select></div>
+ <div class="fg"><label>Coat color</label><input id="df-coat-color" placeholder="e.g. White, Black & white, Golden"/></div>
  <div class="fg full"><label>Preferences / notes</label><textarea id="df-prefs" placeholder="e.g. Anxious around clippers. Lion cut."></textarea></div>
  </div>
  <div class="form-actions">
@@ -1346,8 +1377,8 @@ function renderCusts(){
  }
  const tb=document.getElementById('cust-body');
  if(!rows.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--muted)">No customers yet. Click "+ Add customer" above.</td></tr>';return}
- const srcLabel={ads:'Ads',free_session:'Free session',organic:'Organic'};
- const srcBadge={ads:'bm',free_session:'bs',organic:'bs'};
+ const srcLabel={ads:'Ads',free_session:'Free session',organic:'Organic',family:'Family',friend:'Friend'};
+ const srcBadge={ads:'bm',free_session:'bs',organic:'bs',family:'bl',friend:'bl'};
  tb.innerHTML=rows.map(c=>{
  const dc=dogsOf(c.id).length;
  const gm=gmapsUrl(c.address,c.gmaps_link);
@@ -1385,13 +1416,14 @@ function renderDogsTable(){
  document.getElementById('cb-meta').innerHTML=`<span class="id-pill">${esc(c.customer_code||'—')}</span> · ${esc(c.area)||'—'} · ${c.wa?esc(c.wa):'no WA'}`;
  const list=dogsOf(currentCustId);
  const tb=document.getElementById('dogs-body');
- if(!list.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--muted)">No dogs yet. Click "+ Add dog" above.</td></tr>';return}
+ if(!list.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--muted)">No dogs yet. Click "+ Add dog" above.</td></tr>';return}
  tb.innerHTML=list.map(d=>`<tr>
  <td><span class="id-pill">${esc(d.dog_code||'—')}</span></td>
  <td><strong>${esc(d.name)}</strong></td>
  <td>${esc(d.breed)||'—'}</td>
  <td>${calcAge(d.age, d.created_at)||'—'}</td>
  <td>${esc(d.weight)||'—'}</td>
+ <td>${esc(d.coat_color)||'—'}</td>
  <td style="max-width:240px;font-size:12px;color:var(--muted)">${esc(d.prefs)||'—'}</td>
  <td><div class="row-actions">
  <button class="icon-btn" onclick="openEditDog('${d.id}')">Edit</button>
@@ -1477,7 +1509,7 @@ function openAddDog(){
  document.getElementById('dog-title').textContent='Add dog';
  document.getElementById('dog-save-btn').textContent='Save dog';
  document.getElementById('dog-cust-lbl').textContent=c?c.owner:'—';
- ['df-name','df-breed','df-age','df-weight','df-prefs'].forEach(id=>document.getElementById(id).value='');
+ ['df-name','df-breed','df-age','df-weight','df-prefs','df-coat-color'].forEach(id=>document.getElementById(id).value='');
  document.getElementById('df-size').value='';
  document.getElementById('df-coat').value='';
  om('ov-dog');
@@ -1496,6 +1528,7 @@ function openEditDog(id){
  document.getElementById('df-weight').value=d.weight||'';
  document.getElementById('df-size').value=d.size||'';
  document.getElementById('df-coat').value=d.coat||'';
+ document.getElementById('df-coat-color').value=d.coat_color||'';
  document.getElementById('df-prefs').value=d.prefs||'';
  om('ov-dog');
 }
@@ -1511,6 +1544,7 @@ async function saveDog(){
  weight:document.getElementById('df-weight').value.trim(),
  size:document.getElementById('df-size').value,
  coat:document.getElementById('df-coat').value,
+ coat_color:document.getElementById('df-coat-color').value.trim()||null,
  prefs:document.getElementById('df-prefs').value.trim()
  };
  if(dogEditId){
@@ -3919,7 +3953,132 @@ async function saveBankSettings(){
 function initReminders(){
  const di=document.getElementById('rem-date');
  if(!di.value){const t=new Date();t.setDate(t.getDate()+1);di.value=iso(t)}
+ const di2=document.getElementById('cust-rem-date');
+ if(di2&&!di2.value){const t=new Date();t.setDate(t.getDate()+1);di2.value=iso(t)}
  generateReminders();
+ generateCustomerReminders();
+}
+
+// Batch O.2 — Customer reminders subtab
+function swRem(sub){
+ document.querySelectorAll('#sec-reminders > .subtabs > .subtab').forEach(b=>b.classList.remove('active'));
+ const tab=document.getElementById('rstab-'+sub); if(tab) tab.classList.add('active');
+ document.querySelectorAll('#sec-reminders > .subsec').forEach(s=>s.classList.remove('active'));
+ const sec=document.getElementById('rsec-'+sub); if(sec) sec.classList.add('active');
+ if(sub==='groomer') generateReminders();
+ else if(sub==='customer') generateCustomerReminders();
+}
+
+function generateCustomerReminders(){
+ const date=document.getElementById('cust-rem-date')?.value;
+ const greetingTpl=document.getElementById('cust-rem-greeting')?.value.trim()||'';
+ const closingTpl=document.getElementById('cust-rem-closing')?.value.trim()||'Sampai jumpa besok ya kak!';
+ const wrap=document.getElementById('cust-rem-cards');
+ if(!wrap) return;
+ if(!date){wrap.innerHTML='<div style="color:var(--muted);font-size:13px">Pilih tanggal dulu.</div>';return}
+
+ // Find all confirmed/pending appointments for that date
+ const apptsForDay=appts.filter(a=>a.appt_date===date&&a.status!=='done').sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
+ if(!apptsForDay.length){
+  wrap.innerHTML=`<div class="empty">Tidak ada appointment pada ${esc(fmtIDlong(date))}.</div>`;
+  return;
+ }
+
+ // Group by customer_id
+ const byCust={};
+ apptsForDay.forEach(a=>{
+  const dog=dogs.find(d=>d.id===a.dog_id)||a.dogs;
+  const cid=dog?.customer_id||a.customer_id;
+  if(!cid) return;
+  if(!byCust[cid]) byCust[cid]={cust:custs.find(c=>c.id===cid),appts:[]};
+  byCust[cid].appts.push(a);
+ });
+
+ const cards=Object.values(byCust).filter(g=>g.cust).map(group=>{
+  const c=group.cust;
+  const sortedAppts=group.appts.sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
+  const ownerName=c.owner||'';
+  const greeting=greetingTpl||`Halo kak ${ownerName.split(' ')[0]||ownerName}`;
+
+  // Build message body — single vs multi dog
+  let msg=`${greeting},\n\nIzin reminder untuk appointment besok:\n`;
+  if(sortedAppts.length===1){
+   const a=sortedAppts[0];
+   const dog=dogs.find(d=>d.id===a.dog_id)||a.dogs||{};
+   const startT=(a.appt_time||'').slice(0,5);
+   const endMin=t2m(startT)+(a.duration_mins||60);
+   const endT=m2t(endMin);
+   const svc=a.service_base||'Basic Grooming';
+   const note=(a.appt_note||'').replace(/\s*\(\d+\/\d+\)\s*$/,'').trim();
+   msg+=`\nNama: ${dog.name||'?'}\nJam: ${startT} - ${endT}\nService: ${svc}\nSpecial note: ${note||'(no notes)'}\n`;
+  } else {
+   sortedAppts.forEach(a=>{
+    const dog=dogs.find(d=>d.id===a.dog_id)||a.dogs||{};
+    const startT=(a.appt_time||'').slice(0,5);
+    const endMin=t2m(startT)+(a.duration_mins||60);
+    const endT=m2t(endMin);
+    const svc=a.service_base||'Basic Grooming';
+    const note=(a.appt_note||'').replace(/\s*\(\d+\/\d+\)\s*$/,'').trim();
+    msg+=`\nNama: ${dog.name||'?'}\nJam: ${startT} - ${endT}\nService: ${svc}\nSpecial note: ${note||'(no notes)'}\n`;
+   });
+  }
+  msg+=`\n${closingTpl}`;
+
+  // Time range header for card display
+  const firstT=(sortedAppts[0].appt_time||'').slice(0,5);
+  const lastA=sortedAppts[sortedAppts.length-1];
+  const lastStart=t2m((lastA.appt_time||'').slice(0,5));
+  const lastEnd=m2t(lastStart+(lastA.duration_mins||60));
+  const timeRange=sortedAppts.length===1?`${firstT}`:`${firstT} - ${lastEnd}`;
+  const kotaLabel=c.kota||c.area||'';
+  const dogCount=sortedAppts.length;
+
+  // WhatsApp deep link
+  const waPhone=c.wa?'62'+c.wa.replace(/^0/,'').replace(/\D/g,''):null;
+  const waLink=waPhone?`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`:null;
+
+  return `<div class="card" style="padding:1rem;margin-bottom:.8rem">
+   <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:.5rem;align-items:center">
+    <div>
+     <strong>${esc(c.owner||'?')}</strong>
+     ${c.customer_code?`<span class="id-pill" style="margin-left:5px">${esc(c.customer_code)}</span>`:''}
+     <span style="font-size:11px;color:var(--muted);margin-left:6px">${esc(kotaLabel)} \u00B7 ${timeRange} \u00B7 ${dogCount} dog${dogCount!==1?'s':''}</span>
+    </div>
+    <div style="display:flex;gap:6px">
+     <button class="btn btn-g btn-sm" onclick="copyCustomerReminder(this,'${c.id}')">Copy message</button>
+     ${waLink?`<a class="btn btn-p btn-sm" href="${waLink}" target="_blank">WhatsApp</a>`:`<span style="font-size:11px;color:var(--muted);align-self:center">No WA</span>`}
+    </div>
+   </div>
+   <textarea readonly id="cust-rem-msg-${c.id}" style="width:100%;min-height:${sortedAppts.length===1?'140px':'200px'};font-family:'Inter','Segoe UI',sans-serif;font-size:12px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);resize:vertical;line-height:1.5">${esc(msg)}</textarea>
+  </div>`;
+ }).join('');
+
+ if(!cards){
+  wrap.innerHTML=`<div class="empty">Tidak ada customer dengan appointment pada tanggal ini.</div>`;
+ } else {
+  wrap.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${Object.keys(byCust).length} customer reminder${Object.keys(byCust).length!==1?'s':''} untuk ${esc(fmtIDlong(date))}</div>`+cards;
+ }
+}
+
+function copyCustomerReminder(btn,custId){
+ const ta=document.getElementById('cust-rem-msg-'+custId);
+ if(!ta) return;
+ ta.select();
+ try{
+  document.execCommand('copy');
+  const orig=btn.textContent;
+  btn.textContent='Copied!';
+  btn.style.background='#16a34a';
+  btn.style.color='#fff';
+  setTimeout(()=>{btn.textContent=orig;btn.style.background='';btn.style.color='';},1500);
+ }catch(e){
+  // Fallback for browsers that don't support execCommand
+  navigator.clipboard?.writeText(ta.value).then(()=>{
+   const orig=btn.textContent;
+   btn.textContent='Copied!';
+   setTimeout(()=>{btn.textContent=orig;},1500);
+  });
+ }
 }
 
 function fmtIDlong(d){
@@ -5122,7 +5281,7 @@ function lifetimeSpend(custId){
 function renderCust360Header(c){
  const dogList=dogs.filter(d=>d.customer_id===c.id);
  const lifetime=lifetimeSpend(c.id);
- const srcLabel={ads:'Ads',free_session:'Free session',organic:'Organic'};
+ const srcLabel={ads:'Ads',free_session:'Free session',organic:'Organic',family:'Family',friend:'Friend'};
  const srcBadge=c.source?`<span class="c360-stat"><strong>Source:</strong> ${esc(srcLabel[c.source]||c.source)}</span>`:'';
  const waLink=c.wa?`https://wa.me/62${c.wa.replace(/^0/,'').replace(/\D/g,'')}`:null;
  const gmaps=c.gmaps_link||(c.address?'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent([c.address,c.kota,'Jakarta'].filter(Boolean).join(', ')):null);
@@ -5197,7 +5356,7 @@ function c360RenderDogs(c){
    const visitCount=visits.filter(v=>v.dog_id===d.id).length;
    return `<div class="c360-card">
     <div class="c360-card-title">${esc(d.name)} <span style="font-weight:400;font-size:11px;color:var(--muted)">${esc(d.dog_code||'')}</span></div>
-    <div class="c360-card-meta">${esc(d.breed||'?')} \u00B7 ${esc(d.size||'?')}${d.age?' \u00B7 '+esc(d.age):''}${d.weight?' \u00B7 '+esc(d.weight):''}${d.coat?' \u00B7 '+esc(d.coat):''}</div>
+    <div class="c360-card-meta">${esc(d.breed||'?')} \u00B7 ${esc(d.size||'?')}${d.age?' \u00B7 '+esc(d.age):''}${d.weight?' \u00B7 '+esc(d.weight):''}${d.coat?' \u00B7 '+esc(d.coat):''}${d.coat_color?' \u00B7 '+esc(d.coat_color):''}</div>
     ${d.prefs?`<div class="c360-card-meta" style="margin-top:4px;font-style:italic">${esc(d.prefs)}</div>`:''}
     <div class="c360-card-meta" style="margin-top:4px">${visitCount} visit${visitCount!==1?'s':''}</div>
    </div>`;
@@ -5387,7 +5546,7 @@ function dashboardSourceROI(period){
   if(i.customer_id) bySource[src].customers.add(i.customer_id);
   bySource[src].revenue+=(i.total||0);
  });
- const labels={ads:'Ads',free_session:'Free session',organic:'Organic',_untagged:'Not tagged'};
+ const labels={ads:'Ads',free_session:'Free session',organic:'Organic',family:'Family',friend:'Friend',_untagged:'Not tagged'};
  const rows=Object.entries(bySource).map(([src,d])=>({
   src,
   label:labels[src]||src,
