@@ -1201,6 +1201,33 @@ function sessionSourceBadge(src){
  if(src==='free') return '<span class="ab-badge ab-badge-F" style="margin-left:5px">F</span>';
  return '';
 }
+
+// Batch O.3 — Paw membership tier helpers
+const PAW_TIER={
+ monthly:   {label:'Paw Basic',     freq:'1x/bulan',     sessions:1, discount:5},
+ biweekly:  {label:'Paw Essential', freq:'1x/2 minggu',  sessions:2, discount:10},
+ weekly:    {label:'Paw Prime',     freq:'1x/minggu',    sessions:4, discount:15}
+};
+function tierLabel(t){return PAW_TIER[t]?.label||t}
+function tierFreq(t){return PAW_TIER[t]?.freq||''}
+function tierSessions(t){return PAW_TIER[t]?.sessions||1}
+function tierDiscount(t){return PAW_TIER[t]?.discount||0}
+function tierMonthlyPrice(t, dogSize){
+ // Upfront fee = base Basic Grooming price × sessions × (1 - discount/100)
+ const base=priceFor('Basic Grooming',dogSize);
+ const sess=tierSessions(t);
+ const disc=tierDiscount(t)/100;
+ return Math.round(base*sess*(1-disc));
+}
+
+const MEMBERSHIP_TNC=[
+ 'Setiap membership berlaku untuk 1 pet dan tidak dapat dialihkan ke pet lainnya',
+ 'Membership bersifat non-refundable dan tidak dapat dipindahkan ke bulan berikutnya',
+ 'Invoice akan ditagihkan tiap awal bulan dan jatuh tempo di tanggal 5 setiap bulan',
+ 'Jika terjadi keterlambatan pembayaran, harga grooming akan dikenakan harga normal',
+ 'Penjadwalan grooming dapat ditentukan oleh member namun dapat berubah untuk menyesuaikan jadwal rutin member lainnya',
+ 'Perubahan jadwal wajib dilakukan minimal H-2 sebelum jadwal. Melebihi itu sesi akan dihitung hangus'
+];
 function cm(id){document.getElementById(id).classList.remove('open')}
 function om(id){document.getElementById(id).classList.add('open')}
 function esc(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -3044,8 +3071,9 @@ function renderAdvanceDogs(){
    <div style="font-weight:600;font-size:13px;margin-bottom:8px">${esc(d.name)} <span style="font-size:11px;color:var(--muted);font-weight:400">${esc(d.size||'?')}</span></div>
    <div style="display:flex;gap:14px;font-size:12px;margin-bottom:10px;flex-wrap:wrap">
     <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="adv-type-${did}" value="prepaid" ${ad.subs_type==='prepaid'?'checked':''} onchange="onAdvDogChange('${did}','subs_type','prepaid')"/>Prepaid (token, flexible)</label>
-    <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="adv-type-${did}" value="weekly" ${ad.subs_type==='weekly'?'checked':''} onchange="onAdvDogChange('${did}','subs_type','weekly')"/>Subscription Mingguan</label>
-    <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="adv-type-${did}" value="biweekly" ${ad.subs_type==='biweekly'?'checked':''} onchange="onAdvDogChange('${did}','subs_type','biweekly')"/>Subscription 2 Mingguan</label>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="adv-type-${did}" value="monthly" ${ad.subs_type==='monthly'?'checked':''} onchange="onAdvDogChange('${did}','subs_type','monthly')"/>Paw Basic <span style="color:var(--muted);font-size:11px">(1x/bln, 5%)</span></label>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="adv-type-${did}" value="biweekly" ${ad.subs_type==='biweekly'?'checked':''} onchange="onAdvDogChange('${did}','subs_type','biweekly')"/>Paw Essential <span style="color:var(--muted);font-size:11px">(1x/2mgg, 10%)</span></label>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="adv-type-${did}" value="weekly" ${ad.subs_type==='weekly'?'checked':''} onchange="onAdvDogChange('${did}','subs_type','weekly')"/>Paw Prime <span style="color:var(--muted);font-size:11px">(1x/mgg, 15%)</span></label>
    </div>
    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;align-items:end">
     <div class="fg">
@@ -3093,7 +3121,24 @@ function onAdvDogChange(did,field,val){
   invAdvanceDogs[did].price_per_session=priceFor(val,d?.size);
   renderAdvanceDogs(); return;
  }
- if(field==='subs_type'||field==='disc_type'){
+ if(field==='subs_type'){
+  invAdvanceDogs[did].subs_type=val;
+  // Batch O.3 — Paw tier auto-config
+  if(val==='monthly'||val==='biweekly'||val==='weekly'){
+   invAdvanceDogs[did].sessions=tierSessions(val);
+   invAdvanceDogs[did].service_type='Basic Grooming'; // tier discount only applies to Basic
+   invAdvanceDogs[did].price_per_session=priceFor('Basic Grooming',d?.size);
+   invAdvanceDogs[did].disc_type='percent';
+   invAdvanceDogs[did].disc_value=tierDiscount(val);
+  } else if(val==='prepaid'){
+   // Reset to defaults so user can edit freely
+   invAdvanceDogs[did].disc_value=0;
+  }
+  renderAdvanceDogs();
+  recalcInvoice();
+  return;
+ }
+ if(field==='disc_type'){
   invAdvanceDogs[did][field]=val;
   renderAdvanceDogs();
   recalcInvoice();
@@ -3292,7 +3337,7 @@ async function createTokensFromInvoice(rec){
 // create subscriptions rows — one per dog, with 1-month expiry from paid date.
 async function createSubscriptionsFromInvoice(rec){
  if(!rec.is_advance||!rec.dogs) return;
- const subsDogs=rec.dogs.filter(d=>d.advance&&['weekly','biweekly'].includes(d.advance.subs_type)&&d.advance.sessions>0);
+ const subsDogs=rec.dogs.filter(d=>d.advance&&['weekly','biweekly','monthly'].includes(d.advance.subs_type)&&d.advance.sessions>0);
  if(!subsDogs.length) return;
  // Use today as started_at if invoice_date is in the future or missing; else use invoice_date.
  const todayISO=iso(new Date());
@@ -3646,6 +3691,31 @@ ${custTokenBalance}
 </div>
 </div>
 ${(()=>{
+ // Batch O.3 — TnC page when membership is involved
+ // Show TnC if: (a) any dog has advance.subs_type in weekly/biweekly/monthly (newly purchased)
+ //              OR (b) any dog has an active subscription (existing member)
+ const hasNewMembership = (rec.dogs||[]).some(d=>d.advance&&['weekly','biweekly','monthly'].includes(d.advance.subs_type));
+ const hasActiveMembership = (rec.dogs||[]).some(d=>{
+  return subscriptions.some(s=>s.dog_id===d.dog_id&&s.status==='active');
+ });
+ if(!hasNewMembership&&!hasActiveMembership) return '';
+ const tncItems=MEMBERSHIP_TNC.map((t,i)=>`<li style="margin-bottom:8px;line-height:1.5">${t}</li>`).join('');
+ const sepStyle=forPrint?'':'border-top:2px dashed #d4d4d4;margin:32px 0 0;padding-top:8px';
+ const sepLabel=forPrint?'':'<div style="text-align:center;font-size:10px;color:#aaa;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Syarat &amp; Ketentuan Membership</div>';
+ return `<div style="${sepStyle}">${sepLabel}</div>
+ <div class="inv-wrap" style="page-break-before:always">
+  <div class="top-bar">
+   <img src="${HP_LOGO}" alt="HomePaw" style="height:120px;width:auto"/>
+   <div class="inv-label">SYARAT &amp; KETENTUAN MEMBERSHIP</div>
+  </div>
+  <div style="font-size:11px;color:#aaa;margin-bottom:16px">Ref: ${rec.invoice_number} \u00B7 ${rec.owner_name}</div>
+  <ol style="font-size:12px;color:#333;padding-left:22px;margin:0">${tncItems}</ol>
+  <div style="margin-top:24px;padding:12px 14px;background:#fef3c7;border-left:4px solid #ca8a04;border-radius:5px;font-size:11px;color:#78350f;line-height:1.5">
+   <strong>Catatan:</strong> Dengan menerima invoice ini, customer menyetujui seluruh syarat &amp; ketentuan di atas.
+  </div>
+ </div>`;
+})()}
+${(()=>{
  // Page 2: groomer notes + before/after photos (if any)
  const hasContent=rec.dogs.some(d=>d.groomer_notes||(Array.isArray(invPhotos[d.dog_id])&&invPhotos[d.dog_id].length>0));
  if(!hasContent)return '';
@@ -3850,7 +3920,7 @@ function renderMembership(){
    <td>${c?`<strong class="c360-clickable" onclick="openCust360('${c.id}')">${esc(owner)}</strong>`:`<strong>${esc(owner)}</strong>`} ${code?`<span class="id-pill">${esc(code)}</span>`:''}</td>
    <td>${dogLabel}</td>
    <td>${kindPill}</td>
-   <td><span class="badge bs">${esc((r.type||'').toUpperCase())}</span></td>
+   <td><span class="badge bs">${r._kind==='subscription'?esc(tierLabel(r.type)):esc((r.type||'').toUpperCase())}</span></td>
    <td>${sessText}</td>
    <td>${r.started_at?fmtD(r.started_at):'-'}</td>
    <td>${r.expires_at?fmtD(r.expires_at):'<span style="color:var(--muted)">no expiry</span>'}</td>
@@ -5325,7 +5395,7 @@ function c360RenderDogs(c){
   const subs=subscriptions.filter(s=>s.customer_id===c.id&&s.dog_id===d.id&&s.status==='active');
   subs.forEach(s=>{
    const left=Math.max(0,(s.sessions_total||0)-(s.sessions_used||0));
-   activeBits.push(`<div>\u2022 ${esc(d.name)} (${esc(d.size||'?')}) \u2014 Subs ${esc(s.type||'?')}: ${left}/${s.sessions_total||0} left</div>`);
+   activeBits.push(`<div>\u2022 ${esc(d.name)} (${esc(d.size||'?')}) \u2014 ${esc(tierLabel(s.type))}: ${left}/${s.sessions_total||0} left</div>`);
   });
  });
  const custTokens=tokens.filter(t=>t.customer_id===c.id);
@@ -5419,7 +5489,7 @@ function c360RenderMembership(c){
    const d=dogs.find(x=>x.id===s.dog_id);
    const left=Math.max(0,(s.sessions_total||0)-(s.sessions_used||0));
    return `<div class="c360-card">
-    <div class="c360-card-title">${d?esc(d.name):'(dog deleted)'} \u2014 ${esc(s.type||'?')}</div>
+    <div class="c360-card-title">${d?esc(d.name):'(dog deleted)'} \u2014 ${esc(tierLabel(s.type))}</div>
     <div class="c360-card-meta">${left}/${s.sessions_total} left \u00B7 ${esc(s.status||'?')} \u00B7 Expires: ${fmtD(s.expires_at)}</div>
     ${s.source_invoice?`<div class="c360-card-meta">From invoice: ${esc(s.source_invoice)}</div>`:''}
    </div>`;
