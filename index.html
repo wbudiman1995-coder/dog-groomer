@@ -3520,29 +3520,61 @@ async function saveInvoiceAndAppts(){
 
 function buildServiceRows(dogsData,counter){
  let rows='';
+ // Read invoice-level discount config to determine if base-only mode is active
+ const inv=window._currentInvoiceForRender||{};
+ const baseOnly=!!inv.discount_base_only;
  dogsData.forEach(d=>{
   const dogSubtotal=d.services.reduce((a,s)=>a+s.price,0);
   let dogDisc=0;
   if(d.disc_type==='percent') dogDisc=Math.round(dogSubtotal*(d.disc_value||0)/100);
   else if(d.disc_type==='fixed') dogDisc=Math.round(d.disc_value||0);
   const isFree=dogSubtotal===0;
-  // Split services: first = main (Basic/Wash), rest = add-ons
-  const mainSvc=d.services[0];
-  const addons=d.services.slice(1).filter(s=>s.price>0||s.name!=='Parfume'||d.services.length===1);
-  const addonStr=addons.length?' + '+addons.map(s=>s.name.replace('Basic Grooming','').trim()||s.name).join(' + '):'';
-  if(!mainSvc) return;
+  if(!d.services||!d.services.length) return;
+  const mainSvc=d.services.find(s=>s.name==='Basic Grooming')||d.services[0];
+  const addons=d.services.filter(s=>s!==mainSvc);
   const n=++counter.n;
-  const rateStr=isFree?'GRATIS':fmtRp(dogSubtotal);
-  const amtStr=isFree?'GRATIS':fmtRp(dogSubtotal);
-  rows+=`<tr style="border-top:2px solid #f0f0f0">
-   <td class="svc-num" style="padding-top:14px">${n}</td>
-   <td class="svc-name" style="padding-top:14px">
-    <strong>${d.name} \u2014 ${mainSvc.name}</strong>
-    <div class="svc-sub">Mandi, blow dry, trim, telinga &amp; kuku${addonStr}</div>
-   </td>
-   <td class="svc-qty" style="padding-top:14px">1</td>
-   <td class="svc-rate" style="padding-top:14px">${rateStr}</td>
-   <td class="svc-amt" style="padding-top:14px">${amtStr}</td></tr>`;
+  // Batch O.5 — itemized: if there are addons, show base price as the main row amount,
+  // then each addon on its own row. Otherwise compact single row.
+  if(addons.length===0){
+   const rateStr=isFree?'GRATIS':fmtRp(mainSvc.price||0);
+   rows+=`<tr style="border-top:2px solid #f0f0f0">
+    <td class="svc-num" style="padding-top:14px">${n}</td>
+    <td class="svc-name" style="padding-top:14px">
+     <strong>${d.name} \u2014 ${mainSvc.name}</strong>
+     <div class="svc-sub">Mandi, blow dry, trim, telinga &amp; kuku</div>
+    </td>
+    <td class="svc-qty" style="padding-top:14px">1</td>
+    <td class="svc-rate" style="padding-top:14px">${rateStr}</td>
+    <td class="svc-amt" style="padding-top:14px">${rateStr}</td></tr>`;
+  } else {
+   // Main row: dog name + Basic Grooming line only
+   const mainPrice=mainSvc.price||0;
+   const mainRateStr=isFree?'GRATIS':fmtRp(mainPrice);
+   rows+=`<tr style="border-top:2px solid #f0f0f0">
+    <td class="svc-num" style="padding-top:14px">${n}</td>
+    <td class="svc-name" style="padding-top:14px">
+     <strong>${d.name} \u2014 ${mainSvc.name}</strong>
+     <div class="svc-sub">Mandi, blow dry, trim, telinga &amp; kuku</div>
+    </td>
+    <td class="svc-qty" style="padding-top:14px">1</td>
+    <td class="svc-rate" style="padding-top:14px">${mainRateStr}</td>
+    <td class="svc-amt" style="padding-top:14px">${mainRateStr}</td></tr>`;
+   // Add-on rows — each on its own line, indented
+   addons.forEach(a=>{
+    const addonPrice=a.price||0;
+    const addonName=a.name.replace('Basic Grooming','').trim()||a.name;
+    const note=baseOnly?'<span style="color:#92400e;font-size:10px;margin-left:6px">(tanpa diskon)</span>':'';
+    rows+=`<tr>
+     <td></td>
+     <td class="svc-name" style="padding:4px 10px;padding-left:24px;font-size:11px;color:#555">
+      + ${esc(addonName)}${note}
+     </td>
+     <td class="svc-qty" style="padding:4px 10px;font-size:11px;color:#555">1</td>
+     <td class="svc-rate" style="padding:4px 10px;font-size:11px;color:#555">${fmtRp(addonPrice)}</td>
+     <td class="svc-amt" style="padding:4px 10px;font-size:11px;color:#555">${fmtRp(addonPrice)}</td>
+    </tr>`;
+   });
+  }
   if(dogDisc>0){
    const discLabel=d.disc_type==='percent'&&d.disc_value
     ? `Diskon ${d.disc_value}%`
@@ -3640,6 +3672,7 @@ function buildInvoiceHTML(rec, custObj, bankObj, forPrint){
  const fmtID=(d)=>new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
  const fullAddr=[custObj.address,custObj.kecamatan,custObj.kota].filter(Boolean).join(', ');
  const counter={n:0};
+ window._currentInvoiceForRender=rec;
  const serviceRows=buildServiceRows(rec.dogs,counter);
  // Advance booking rows
  const advRows=buildAdvanceRows(rec,counter);
@@ -3742,7 +3775,10 @@ ${custTokenBalance}
    const grandDisc=(rec.discount_amount||0)+advDisc;
    let out='';
    out+=`<div class="tot-row"><span>Subtotal (sebelum diskon)</span><span>${fmtRp(grandSub)}</span></div>`;
-   if(grandDisc>0) out+=`<div class="tot-row" style="color:#15803d"><span>Total diskon</span><span>\u2014 ${fmtRp(grandDisc)}</span></div>`;
+   if(grandDisc>0){
+    const baseOnlyNote=rec.discount_base_only?'<div style="font-size:9px;color:#92400e;margin-top:-2px;text-align:right">(diskon hanya untuk Basic Grooming)</div>':'';
+    out+=`<div class="tot-row" style="color:#15803d"><span>Total diskon</span><span>\u2014 ${fmtRp(grandDisc)}</span></div>${baseOnlyNote}`;
+   }
    out+=`<div class="tot-final"><span>Total</span><span>${fmtRp(rec.total)}</span></div>`;
    return out;
   })()}
