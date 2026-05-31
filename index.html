@@ -510,6 +510,7 @@ tbody tr:hover{background:var(--subtle)}
   </div>
   <div id="dash-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:1.2rem"></div>
   <div id="dash-actions" style="margin-bottom:1.2rem"></div>
+  <div id="dash-subs-billing" style="margin-bottom:1.2rem"></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px">
    <div class="card" style="padding:14px">
     <div style="font-size:11px;font-weight:600;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Source ROI</div>
@@ -660,7 +661,7 @@ tbody tr:hover{background:var(--subtle)}
  <select id="inv-groomer" onchange="renderInvoicePreview()"><option value="">Pilih groomer…</option></select>
  </div>
  <div class="fg"><label>Or type manually</label><input id="inv-groomer-manual" placeholder="Nama groomer" oninput="renderInvoicePreview()"/></div>
- <div class="fg"><label>Tanggal invoice</label><input type="date" id="inv-date" onchange="renderInvoicePreview()"/></div>
+ <div class="fg"><label>Tanggal invoice</label><input type="date" id="inv-date" onchange="renderInvoicePreview();updateSubsBillingDate()"/></div>
  </div>
  </div>
 
@@ -703,6 +704,22 @@ tbody tr:hover{background:var(--subtle)}
  </div>
  <div class="fg"><label>Nilai (%)</label><input type="number" id="inv-disc-value" value="0" min="0" max="100" oninput="recalcInvoice()"/></div>
  </div>
+ <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+  <input type="checkbox" id="inv-disc-base-only" onchange="recalcInvoice()" style="cursor:pointer"/>
+  <label for="inv-disc-base-only" style="font-size:12px;cursor:pointer;margin:0;color:var(--muted)">Discount hanya untuk Basic Grooming (tidak termasuk add-on seperti Styling, Dematting, dll)</label>
+ </div>
+ </div>
+
+ <div class="card" style="padding:1rem;margin-bottom:1rem">
+  <div class="det-lbl">5b. Subscription billing</div>
+  <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">
+   <input type="checkbox" id="inv-subs-billing" onchange="onSubsBillingToggle()" style="cursor:pointer;margin-top:3px"/>
+   <div>
+    <label for="inv-subs-billing" style="font-size:13px;cursor:pointer;margin:0;font-weight:500">Tagihan subscription (jatuh tempo tanggal 5)</label>
+    <div style="font-size:11px;color:var(--muted);margin-top:2px">Jika invoice tanggal &le; 5: due date = tanggal 5 bulan ini. Jika &gt; 5: tidak ada due date otomatis (admin tulis manual di notes).</div>
+   </div>
+  </div>
+  <div id="inv-subs-due-preview" style="display:none;font-size:12px;color:#15803d;padding:6px 10px;background:#dcfce7;border-radius:5px;margin-top:6px">Due date akan otomatis ditampilkan di PDF</div>
  </div>
 
  <div class="card" style="padding:1rem;margin-bottom:1rem">
@@ -1808,7 +1825,9 @@ function renderCal(){
    // Slot backgrounds
    slots.forEach((m,si)=>{
     const top=si*SH;
-    html+=`<div style="position:absolute;top:${top}px;height:${SH}px;width:100%;border-top:1px solid ${m%60?'transparent':'var(--border)'};box-sizing:border-box;cursor:pointer"
+    html+=`<div data-date="${w.iso_}" data-g="${g.id}" data-m="${m}"
+     ondragover="onDragOver(event)" ondrop="onDrop(event)"
+     style="position:absolute;top:${top}px;height:${SH}px;width:100%;border-top:1px solid ${m%60?'transparent':'var(--border)'};box-sizing:border-box;cursor:pointer"
      onclick="openAppt('${w.iso_}','${g.id}',${m})"></div>`;
    });
    // Appointments
@@ -2711,6 +2730,8 @@ function resetInvoice(){
  if(g('inv-interval')) g('inv-interval').value='14';
  if(g('inv-disc-type')) g('inv-disc-type').value='percent';
  if(g('inv-disc-value')) g('inv-disc-value').value=0;
+ if(g('inv-disc-base-only')) g('inv-disc-base-only').checked=false;
+ if(g('inv-subs-billing')) g('inv-subs-billing').checked=false;
  if(g('inv-notes')) g('inv-notes').value='';
  recalcInvoice();
  updateInvoiceModeBanner();
@@ -2780,6 +2801,8 @@ function openInvoiceForEdit(id){
   const grEl=document.getElementById('inv-groomer'); if(grEl) grEl.value=inv.groomer_id||'';
   const ditEl=document.getElementById('inv-disc-type'); if(ditEl) ditEl.value=inv.discount_type||'';
   const divEl=document.getElementById('inv-disc-value'); if(divEl) divEl.value=inv.discount_value||0;
+  const dboEl=document.getElementById('inv-disc-base-only'); if(dboEl) dboEl.checked=!!inv.discount_base_only;
+  const sbEl=document.getElementById('inv-subs-billing'); if(sbEl){sbEl.checked=!!inv.is_subscription_billing;updateSubsBillingDate();}
   const ntEl=document.getElementById('inv-notes'); if(ntEl) ntEl.value=inv.notes||'';
   // Advance booking
   const hasAdv=(inv.dogs||[]).some(d=>d.advance);
@@ -3035,6 +3058,34 @@ function onIntervalChange(){
  if(wrap) wrap.style.display=v==='custom'?'':'none';
 }
 
+// Batch O.4 — Subscription billing toggle
+function onSubsBillingToggle(){
+ updateSubsBillingDate();
+ renderInvoicePreview();
+}
+function updateSubsBillingDate(){
+ const cb=document.getElementById('inv-subs-billing');
+ const preview=document.getElementById('inv-subs-due-preview');
+ if(!cb||!preview) return;
+ if(!cb.checked){preview.style.display='none';return}
+ const invDateStr=document.getElementById('inv-date')?.value;
+ if(!invDateStr){preview.style.display='none';return}
+ const invDate=new Date(invDateStr+'T00:00:00');
+ const day=invDate.getDate();
+ if(day<=5){
+  const due=new Date(invDate.getFullYear(),invDate.getMonth(),5);
+  preview.style.display='block';
+  preview.style.background='#dcfce7';
+  preview.style.color='#15803d';
+  preview.textContent='Due date: '+due.toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});
+ } else {
+  preview.style.display='block';
+  preview.style.background='#fef3c7';
+  preview.style.color='#92400e';
+  preview.textContent='Tanggal invoice setelah tanggal 5 — tidak ada due date otomatis. Admin tulis manual di catatan invoice.';
+ }
+}
+
 /* ===== TOKEN / ADVANCE BOOKING ===== */
 let invAdvanceDogs={}; // did -> {sessions, service_type, disc_type, disc_value, price_per_session}
 
@@ -3165,12 +3216,20 @@ function isAdvanceActive(){
 
 function calcInvoiceTotals(){
  let perSession=0;
+ let perSessionBaseOnly=0; // Batch O.4 — sum of Basic Grooming lines only
  let dogDiscAmount=0;
  invSelectedDogs.forEach(did=>{
   const ds=invDogServices[did]||{services:{}};
   let dogTotal=0;
-  Object.values(ds.services||{}).forEach(s=>{if(s.checked) dogTotal+=(s.price||0)});
+  let dogBaseOnly=0;
+  Object.entries(ds.services||{}).forEach(([name,s])=>{
+   if(!s.checked) return;
+   const p=s.price||0;
+   dogTotal+=p;
+   if(name==='Basic Grooming') dogBaseOnly+=p;
+  });
   perSession+=dogTotal;
+  perSessionBaseOnly+=dogBaseOnly;
   const dt=ds.disc_type, dv=ds.disc_value||0;
   if(dt==='percent') dogDiscAmount+=Math.round(dogTotal*dv/100);
   else if(dt==='fixed') dogDiscAmount+=Math.round(dv);
@@ -3194,12 +3253,17 @@ function calcInvoiceTotals(){
 
  const dtype=document.getElementById('inv-disc-type')?.value||'';
  const dval=parseFloat(document.getElementById('inv-disc-value')?.value)||0;
+ const baseOnly=!!document.getElementById('inv-disc-base-only')?.checked;
+ // Batch O.4 — when baseOnly, the discount base is only the Basic Grooming portion (minus per-dog discounts that already applied)
+ const discountBase = baseOnly
+  ? Math.max(0,perSessionBaseOnly-dogDiscAmount)
+  : (subtotal-dogDiscAmount);
  let globalDisc=0;
- if(dtype==='percent') globalDisc=Math.round((subtotal-dogDiscAmount)*dval/100);
- else if(dtype==='fixed') globalDisc=Math.round(dval);
+ if(dtype==='percent') globalDisc=Math.round(discountBase*dval/100);
+ else if(dtype==='fixed') globalDisc=Math.min(Math.round(dval),discountBase);
  const discAmount=dogDiscAmount+globalDisc;
  const total=Math.max(0,subtotal-discAmount)+advTotal;
- return {subtotal,perSession,sessions:1,discAmount,dogDiscAmount,globalDisc,advTotal,total};
+ return {subtotal,perSession,sessions:1,discAmount,dogDiscAmount,globalDisc,advTotal,total,baseOnly};
 }
 
 function recalcInvoice(){
@@ -3275,13 +3339,15 @@ function buildInvoiceRecord(){
   discount_type:document.getElementById('inv-disc-type')?.value||null,
   discount_value:parseFloat(document.getElementById('inv-disc-value')?.value)||0,
   discount_amount:t.discAmount,
+  discount_base_only:!!document.getElementById('inv-disc-base-only')?.checked,
   total:t.total,
   status:'unpaid',
   notes:document.getElementById('inv-notes').value.trim(),
   is_advance:isAdvanceActive(),
   advance_interval:document.getElementById('inv-interval')?.value||'none',
   advance_first_date:document.getElementById('inv-first-date')?.value||null,
-  subs_type:invSubsType
+  subs_type:invSubsType,
+  is_subscription_billing:!!document.getElementById('inv-subs-billing')?.checked
  };
 }
 
@@ -3560,7 +3626,17 @@ function buildInvoiceHTML(rec, custObj, bankObj, forPrint){
  const ba=baRaw.replace(/\s/g,'').replace(/(.{4})/g,'$1 ').trim();
  const bh=bankObj.bank_holder||'Xavier Fidelia Ali';
  const invDate=new Date(rec.invoice_date+'T00:00:00');
- const dueDate=new Date(invDate); dueDate.setDate(dueDate.getDate()+1);
+ // Batch O.4 — Subscription billing: due date = 5th of THIS month if invoice <= 5th, else no auto due
+ let dueDate=new Date(invDate); dueDate.setDate(dueDate.getDate()+1);
+ let hideDueDate=false;
+ if(rec.is_subscription_billing){
+  const day=invDate.getDate();
+  if(day<=5){
+   dueDate=new Date(invDate.getFullYear(),invDate.getMonth(),5);
+  } else {
+   hideDueDate=true;
+  }
+ }
  const fmtID=(d)=>new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
  const fullAddr=[custObj.address,custObj.kecamatan,custObj.kota].filter(Boolean).join(', ');
  const counter={n:0};
@@ -3623,7 +3699,7 @@ ${forPrint?'@media print{.inv-wrap{padding:24px 28px}}':''}
 <div class="meta-row">
  <div class="meta-item"><div class="meta-lbl">No. Invoice</div><div class="meta-val">${rec.invoice_number}</div></div>
  <div class="meta-item"><div class="meta-lbl">Tanggal</div><div class="meta-val">${fmtID(invDate)}</div></div>
- <div class="meta-item"><div class="meta-lbl">Jatuh tempo</div><div class="meta-val" style="color:#dc2626">${fmtID(dueDate)}</div></div>
+ <div class="meta-item"><div class="meta-lbl">Jatuh tempo</div><div class="meta-val" style="color:#dc2626">${hideDueDate?'<span style="color:#888;font-style:italic">manual</span>':fmtID(dueDate)}</div></div>
  <div class="meta-item"><div class="meta-lbl">Groomer</div><div class="meta-val">${rec.groomer_name||'-'}</div></div>
 </div>
 <div class="bill-row">
@@ -3682,7 +3758,7 @@ ${custTokenBalance}
  <div>
   <div class="pay-due-lbl">Jumlah tagihan</div>
   <div class="pay-due-val">${fmtRp(rec.total)}</div>
-  <div style="font-size:10px;color:#dc2626;margin-top:4px;text-align:right;font-weight:600">Bayar sebelum ${fmtID(dueDate)}</div>
+  <div style="font-size:10px;color:#dc2626;margin-top:4px;text-align:right;font-weight:600">${hideDueDate?'':'Bayar sebelum '+fmtID(dueDate)}</div>
  </div>
 </div>
 <div class="inv-footer">
@@ -4639,20 +4715,31 @@ function buildPhotoHTML(did){
   if(byZone[z]) byZone[z].push(p);
   else byZone.before.push(p);
  });
- const renderRow=(label,arr,color)=>{
-  if(!arr.length) return '';
-  const imgs=arr.map(p=>`<div style="flex:1;min-width:100px;max-width:180px">
-   ${p.label?`<div style="font-size:9px;color:${color};letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;font-weight:600">${esc(p.label)}</div>`:''}
-   <img src="${p.data}" style="width:100%;height:auto;border-radius:6px;display:block"/>
-  </div>`).join('');
-  return `<div style="margin:8px 0">
-   <div style="font-size:10px;color:${color};letter-spacing:1.5px;font-weight:700;margin-bottom:4px">${label}</div>
-   <div style="display:flex;flex-wrap:wrap;gap:10px">${imgs}</div>
+ // Batch O.4 — Before/After side-by-side, Issues below full-width
+ const buildCol=(label,arr,color)=>{
+  if(!arr.length) return `<div style="flex:1;min-width:0"><div style="font-size:10px;color:${color};letter-spacing:1.5px;font-weight:700;margin-bottom:6px">${label}</div><div style="aspect-ratio:4/3;background:#f5f5f5;border:1px dashed #ddd;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:10px">No photo</div></div>`;
+  const imgs=arr.map(p=>`<img src="${p.data}" style="width:100%;height:auto;border-radius:6px;display:block;margin-bottom:6px"/>`).join('');
+  return `<div style="flex:1;min-width:0">
+   <div style="font-size:10px;color:${color};letter-spacing:1.5px;font-weight:700;margin-bottom:6px">${label}</div>
+   ${imgs}
   </div>`;
  };
- return renderRow('BEFORE',byZone.before,'#888')
-  +renderRow('AFTER',byZone.after,'#888')
-  +renderRow('ISSUES DITEMUKAN',byZone.issue,'#92400e');
+ const baRow=(byZone.before.length||byZone.after.length)
+  ? `<div style="display:flex;gap:10px;margin:8px 0">${buildCol('BEFORE',byZone.before,'#888')}${buildCol('AFTER',byZone.after,'#888')}</div>`
+  : '';
+ // Issues row stays full-width with each photo in a flex line
+ let issueRow='';
+ if(byZone.issue.length){
+  const imgs=byZone.issue.map(p=>`<div style="flex:1;min-width:100px;max-width:180px">
+   ${p.label?`<div style="font-size:9px;color:#92400e;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;font-weight:600">${esc(p.label)}</div>`:''}
+   <img src="${p.data}" style="width:100%;height:auto;border-radius:6px;display:block"/>
+  </div>`).join('');
+  issueRow=`<div style="margin:8px 0">
+   <div style="font-size:10px;color:#92400e;letter-spacing:1.5px;font-weight:700;margin-bottom:4px">ISSUES DITEMUKAN</div>
+   <div style="display:flex;flex-wrap:wrap;gap:10px">${imgs}</div>
+  </div>`;
+ }
+ return baRow+issueRow;
 }
 
 // Legacy compat (old onPhotoUpload calls)
@@ -5744,6 +5831,143 @@ function renderDashboard(){
     <tr><td style="padding:6px">New customers</td><td style="padding:6px;text-align:right">${m.newCust}</td><td style="padding:6px;text-align:right;color:var(--muted)">${mPrev.newCust}</td><td style="padding:6px;text-align:right">${delta(m.newCust,mPrev.newCust)}</td></tr>
    </tbody></table>`;
  }
+
+ // Batch O.4 — Monthly subscription billing
+ renderSubsBilling();
+}
+
+// Batch O.4 — Render subscription billing UI on dashboard
+function renderSubsBilling(){
+ const el=document.getElementById('dash-subs-billing'); if(!el) return;
+ // Find active subscriptions, group by customer
+ const today=new Date();
+ const todayISO=iso(today);
+ const activeSubs=subscriptions.filter(s=>s.status==='active'&&(!s.expires_at||s.expires_at>=todayISO));
+ if(!activeSubs.length){el.innerHTML='';return}
+
+ // Group by customer
+ const byCust={};
+ activeSubs.forEach(s=>{
+  if(!byCust[s.customer_id]) byCust[s.customer_id]={cust:custs.find(c=>c.id===s.customer_id),subs:[]};
+  byCust[s.customer_id].subs.push(s);
+ });
+
+ // For each customer, check if a subscription-billing invoice already exists for THIS month
+ const monthStart=new Date(today.getFullYear(),today.getMonth(),1);
+ const monthEnd=new Date(today.getFullYear(),today.getMonth()+1,0);
+ const msISO=iso(monthStart), meISO=iso(monthEnd);
+ const monthName=monthStart.toLocaleDateString('id-ID',{month:'long',year:'numeric'});
+
+ const rows=Object.values(byCust).filter(g=>g.cust).map(group=>{
+  const c=group.cust;
+  const subs=group.subs;
+  const billedThisMonth=invoices.some(i=>i.customer_id===c.id&&i.is_subscription_billing&&i.invoice_date>=msISO&&i.invoice_date<=meISO);
+  // Compute total amount: sum of (tier price × dog size) per subscription
+  let totalAmount=0;
+  const lineItems=subs.map(s=>{
+   const dog=dogs.find(d=>d.id===s.dog_id);
+   const size=dog?.size||'Medium';
+   const amt=tierMonthlyPrice(s.type,size);
+   totalAmount+=amt;
+   return {dog,sub:s,size,amount:amt};
+  });
+
+  return {c,subs,lineItems,totalAmount,billedThisMonth};
+ });
+
+ const pendingCount=rows.filter(r=>!r.billedThisMonth).length;
+ if(!rows.length||(pendingCount===0&&!rows.some(r=>r.billedThisMonth))){el.innerHTML='';return}
+
+ el.innerHTML=`<div class="card" style="padding:14px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+   <div>
+    <div style="font-size:13px;font-weight:600">Monthly subscription billing — ${esc(monthName)}</div>
+    <div style="font-size:11px;color:var(--muted)">${pendingCount} of ${rows.length} subscribers belum di-invoice bulan ini</div>
+   </div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:8px">
+   ${rows.map(r=>{
+    const dogNames=r.lineItems.map(li=>li.dog?.name||'?').join(', ');
+    const tierSummary=r.lineItems.map(li=>`${tierLabel(li.sub.type)} × ${li.size}`).join(' + ');
+    const status=r.billedThisMonth
+     ? `<span class="badge bs">Sudah dibilling</span>`
+     : `<button class="btn btn-p btn-sm" onclick="createSubsBillingInvoice('${r.c.id}')">Buat invoice</button>`;
+    const waLink=r.c.wa?`https://wa.me/62${r.c.wa.replace(/^0/,'').replace(/\D/g,'')}?text=${encodeURIComponent(buildSubsBillingMessage(r.c,r.lineItems,r.totalAmount,monthName))}`:null;
+    const waBtn=waLink?`<a class="btn btn-g btn-sm" href="${waLink}" target="_blank" style="margin-left:6px">WA</a>`:'';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:${r.billedThisMonth?'#dcfce7':'#fef3c7'};border-radius:5px;flex-wrap:wrap;gap:8px">
+     <div style="flex:1;min-width:0">
+      <div style="font-weight:600;font-size:13px"><span class="c360-clickable" onclick="openCust360('${r.c.id}')">${esc(r.c.owner)}</span> <span style="font-size:11px;color:var(--muted);font-weight:400">${esc(r.c.customer_code||'')}</span></div>
+      <div style="font-size:11px;color:var(--muted)">${esc(dogNames)} — ${esc(tierSummary)} — ${fmtRp(r.totalAmount)}</div>
+     </div>
+     <div style="display:flex;gap:6px;align-items:center">${status}${waBtn}</div>
+    </div>`;
+   }).join('')}
+  </div>
+ </div>`;
+}
+
+// Batch O.4 — Build WhatsApp message for subscription billing
+function buildSubsBillingMessage(cust,lineItems,totalAmount,monthName){
+ const firstName=(cust.owner||'').split(' ')[0]||cust.owner||'';
+ const lines=lineItems.map(li=>{
+  return `- ${li.dog?.name||'?'} (${li.size}) - ${tierLabel(li.sub.type)} - ${fmtRp(li.amount)}`;
+ }).join('\n');
+ const today=new Date();
+ const day=today.getDate();
+ const dueLine=day<=5
+  ? `Jatuh tempo: 5 ${monthName.split(' ')[0]} (5 hari lagi atau sebelumnya)`
+  : `Jatuh tempo: silakan WA balik untuk konfirmasi`;
+ return `Halo kak ${firstName},
+
+Berikut invoice subscription HomePaw untuk bulan ${monthName}:
+
+${lines}
+
+Total: ${fmtRp(totalAmount)}
+${dueLine}
+
+Transfer ke BCA: ${(bankSettings?.bank_account||'3720 4006 41')} a/n ${(bankSettings?.bank_holder||'Xavier Fidelia Ali')}
+
+Mohon kirim bukti transfer setelah pembayaran. Terima kasih!`;
+}
+
+// Batch O.4 — Pre-fill invoice tab for subscription billing for this customer
+async function createSubsBillingInvoice(custId){
+ const c=custs.find(x=>x.id===custId); if(!c){alert('Customer tidak ditemukan');return}
+ const today=new Date();
+ const todayISO=iso(today);
+ const activeSubs=subscriptions.filter(s=>s.customer_id===custId&&s.status==='active'&&(!s.expires_at||s.expires_at>=todayISO));
+ if(!activeSubs.length){alert('Customer tidak punya subscription aktif');return}
+ sw('invoice');
+ setTimeout(async()=>{
+  // Pre-fill customer
+  await applyInvCustomer(custId,todayISO);
+  // For each subscription, mark advance booking + pre-fill tier
+  const advCb=document.getElementById('inv-is-advance');
+  if(advCb){advCb.checked=true;onAdvanceToggle(true);}
+  // Reset selected dogs to ONLY the subscribed dogs
+  invSelectedDogs=activeSubs.map(s=>s.dog_id).filter(Boolean);
+  // Configure advance state for each
+  activeSubs.forEach(s=>{
+   const d=dogs.find(x=>x.id===s.dog_id);
+   if(!d) return;
+   invAdvanceDogs[s.dog_id]={
+    sessions:tierSessions(s.type),
+    service_type:'Basic Grooming',
+    disc_type:'percent',
+    disc_value:tierDiscount(s.type),
+    price_per_session:priceFor('Basic Grooming',d.size),
+    subs_type:s.type
+   };
+  });
+  // Toggle subscription billing checkbox
+  const sbCb=document.getElementById('inv-subs-billing');
+  if(sbCb){sbCb.checked=true;updateSubsBillingDate();}
+  // Renders
+  renderInvDogServices();
+  renderAdvanceDogs();
+  recalcInvoice();
+ },100);
 }
 
 function goToUninvoiced(){
