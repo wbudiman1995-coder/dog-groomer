@@ -511,6 +511,7 @@ tbody tr:hover{background:var(--subtle)}
   <div id="dash-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:1.2rem"></div>
   <div id="dash-actions" style="margin-bottom:1.2rem"></div>
   <div id="dash-subs-billing" style="margin-bottom:1.2rem"></div>
+  <div id="dash-followups" style="margin-bottom:1.2rem"></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px">
    <div class="card" style="padding:14px">
     <div style="font-size:11px;font-weight:600;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Source ROI</div>
@@ -962,6 +963,7 @@ tbody tr:hover{background:var(--subtle)}
  <div class="fg"></div>
  <div class="fg full"><label>Preferences / notes</label><textarea id="cf-prefs" placeholder="Customer-level notes, contact preferences, etc."></textarea></div>
  </div>
+ <div id="cf-edit-stamp"></div>
  <div class="form-actions">
  <button class="btn btn-p" onclick="saveCust()" id="cust-save-btn">Save customer</button>
  </div>
@@ -983,7 +985,18 @@ tbody tr:hover{background:var(--subtle)}
  <div class="fg"><label>Coat</label><select id="df-coat"><option value="">Select…</option><option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option></select></div>
  <div class="fg"><label>Coat color</label><input id="df-coat-color" placeholder="e.g. White, Black & white, Golden"/></div>
  <div class="fg full"><label>Preferences / notes</label><textarea id="df-prefs" placeholder="e.g. Anxious around clippers. Lion cut."></textarea></div>
+ <div class="fg full"><label>Skin condition history</label><textarea id="df-skin-history" placeholder="e.g. 12 May 2026 — flea behind ears, treated. 03 Apr — minor hot spot on belly." style="min-height:70px"></textarea></div>
+ <div class="fg full">
+  <label>Styling references <span style="font-size:10px;color:var(--muted);font-weight:400">(photos auto-expire 60 days, used in groomer reminders)</span></label>
+  <div id="df-styling-refs-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;min-height:20px"></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap">
+   <button type="button" class="btn btn-g btn-sm" onclick="document.getElementById('df-style-file').click()">Browse</button>
+   <button type="button" class="btn btn-g btn-sm" onclick="pasteStylingRef()">Paste from clipboard</button>
+   <input type="file" id="df-style-file" accept="image/*" multiple style="display:none" onchange="onStylingRefUpload(this)"/>
+  </div>
  </div>
+ </div>
+ <div id="df-edit-stamp"></div>
  <div class="form-actions">
  <button class="btn btn-p" onclick="saveDog()" id="dog-save-btn">Save dog</button>
  </div>
@@ -1001,12 +1014,14 @@ tbody tr:hover{background:var(--subtle)}
 
   <!-- Step 1: Customer -->
   <div id="wiz-1">
-   <div class="fg" style="margin-bottom:.9rem">
+   <div class="fg" style="margin-bottom:.9rem;position:relative">
     <label>Customer *</label>
-    <input id="appt-cust-search" list="appt-cust-list" placeholder="Type to search customer…"
+    <input id="appt-cust-search" placeholder="Type name, address, or dog…" autocomplete="off"
     oninput="onWizCustSearch(this.value)"
+    onfocus="onWizCustSearch(this.value)"
+    onblur="setTimeout(()=>{const dd=document.getElementById('appt-cust-dd');if(dd)dd.style.display='none'},200)"
     style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle)"/>
-   <datalist id="appt-cust-list"></datalist>
+   <div id="appt-cust-dd" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);max-height:280px;overflow-y:auto;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.1);margin-top:2px"></div>
    <input type="hidden" id="appt-cust"/>
    </div>
    <div id="wiz-cust-info" style="display:none;background:var(--green-lt);border-radius:var(--r);padding:8px 12px;font-size:12px;margin-bottom:.9rem"></div>
@@ -1219,6 +1234,162 @@ function sessionSourceBadge(src){
  return '';
 }
 
+// Batch O.6 — edit history stamp + display helpers
+function editStamp(){
+ const u=window._currentAuthUser;
+ return {updated_by:u?.id||null, updated_at:new Date().toISOString()};
+}
+function editStampHTML(rec){
+ if(!rec||!rec.updated_at) return '';
+ const when=new Date(rec.updated_at).toLocaleString('id-ID',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+ const who=rec.updated_by?(window._adminEmails?.[rec.updated_by]||'admin'):'';
+ return `<div style="font-size:10px;color:var(--muted);margin-top:8px;padding-top:6px;border-top:1px dashed var(--border)">Last edit${who?' by '+esc(who):''} on ${esc(when)}</div>`;
+}
+function daysSince(dateStr){
+ if(!dateStr) return null;
+ const d=new Date(dateStr+'T00:00:00');
+ const now=new Date(); now.setHours(0,0,0,0);
+ return Math.floor((now-d)/(86400000));
+}
+function lastGroomedDisplay(d){
+ if(!d?.last_groomed_at) return '<span style="color:var(--muted);font-style:italic">Belum pernah</span>';
+ const days=daysSince(d.last_groomed_at);
+ const color=days>=14?'#dc2626':days>=10?'#ca8a04':'var(--muted)';
+ return `<span style="color:${color}">${fmtD(d.last_groomed_at)} (${days} hari lalu)</span>`;
+}
+
+// Batch O.6 — Styling reference photos (Supabase Storage bucket "dog-style-refs")
+const STYLE_REFS_BUCKET='dog-style-refs';
+const STYLE_REFS_TTL_DAYS=60;
+let _stylingRefsBuffer=[];
+
+function isStyleRefExpired(ref){
+ if(!ref?.uploaded_at) return false;
+ const days=Math.floor((Date.now()-new Date(ref.uploaded_at).getTime())/(86400000));
+ return days>STYLE_REFS_TTL_DAYS;
+}
+
+function renderStylingRefsGrid(){
+ const grid=document.getElementById('df-styling-refs-grid');
+ if(!grid) return;
+ // Filter out expired (view-time cleanup)
+ const fresh=(_stylingRefsBuffer||[]).filter(r=>!isStyleRefExpired(r));
+ if(fresh.length!==(_stylingRefsBuffer||[]).length){
+  _stylingRefsBuffer=fresh; // soft-purge expired
+ }
+ if(!fresh.length){
+  grid.innerHTML='<div style="font-size:11px;color:var(--muted);font-style:italic;padding:6px 0">No styling references yet.</div>';
+  return;
+ }
+ grid.innerHTML=fresh.map((r,i)=>{
+  const days=Math.floor((Date.now()-new Date(r.uploaded_at).getTime())/(86400000));
+  const remaining=STYLE_REFS_TTL_DAYS-days;
+  return `<div style="position:relative;display:inline-block">
+   <img src="${esc(r.url)}" style="width:90px;height:90px;object-fit:cover;border-radius:6px;border:1px solid var(--border);background:#f5f5f5" alt="ref"/>
+   <button type="button" onclick="deleteStylingRef(${i})" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.7);color:#fff;cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center" title="Delete">&#x2715;</button>
+   <div style="font-size:9px;color:var(--muted);text-align:center;margin-top:2px">${remaining}d left</div>
+  </div>`;
+ }).join('');
+}
+
+async function uploadStylingRefFile(file){
+ if(!file||!file.type.startsWith('image/')){alert('File harus gambar.');return null}
+ // Compress before upload to save storage
+ const compressed=await compressImage(file,1200,0.85);
+ const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
+ const filename=`${dogEditId||'temp'}_${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext==='jpeg'?'jpg':ext}`;
+ const {data,error}=await db.storage.from(STYLE_REFS_BUCKET).upload(filename,compressed,{
+  cacheControl:'3600',
+  contentType:'image/jpeg',
+  upsert:false
+ });
+ if(error){
+  alert('Upload gagal: '+error.message+'\n\nPastikan storage bucket "'+STYLE_REFS_BUCKET+'" sudah dibuat di Supabase Dashboard > Storage.');
+  return null;
+ }
+ const {data:urlData}=db.storage.from(STYLE_REFS_BUCKET).getPublicUrl(filename);
+ return {url:urlData.publicUrl, uploaded_at:new Date().toISOString(), path:filename, label:''};
+}
+
+async function compressImage(file,maxDim,quality){
+ return new Promise((resolve,reject)=>{
+  const reader=new FileReader();
+  reader.onload=e=>{
+   const img=new Image();
+   img.onload=()=>{
+    let w=img.width,h=img.height;
+    if(w>h&&w>maxDim){h=Math.round(h*maxDim/w);w=maxDim}
+    else if(h>maxDim){w=Math.round(w*maxDim/h);h=maxDim}
+    const canvas=document.createElement('canvas');
+    canvas.width=w;canvas.height=h;
+    canvas.getContext('2d').drawImage(img,0,0,w,h);
+    canvas.toBlob(b=>resolve(b),'image/jpeg',quality);
+   };
+   img.onerror=reject;
+   img.src=e.target.result;
+  };
+  reader.onerror=reject;
+  reader.readAsDataURL(file);
+ });
+}
+
+async function onStylingRefUpload(inputEl){
+ const files=Array.from(inputEl.files||[]);
+ inputEl.value='';
+ if(!files.length) return;
+ for(const f of files){
+  const ref=await uploadStylingRefFile(f);
+  if(ref){_stylingRefsBuffer.push(ref);renderStylingRefsGrid();}
+ }
+}
+
+async function pasteStylingRef(){
+ try{
+  if(!navigator.clipboard||!navigator.clipboard.read){
+   alert('Browser ini tidak support paste-from-clipboard. Gunakan Browse atau update browser.');
+   return;
+  }
+  const items=await navigator.clipboard.read();
+  for(const item of items){
+   for(const type of item.types){
+    if(type.startsWith('image/')){
+     const blob=await item.getType(type);
+     const file=new File([blob],'pasted.png',{type});
+     const ref=await uploadStylingRefFile(file);
+     if(ref){_stylingRefsBuffer.push(ref);renderStylingRefsGrid();}
+     return;
+    }
+   }
+  }
+  alert('Tidak ada gambar di clipboard. Copy gambar dulu (Ctrl+C / right-click → Copy image).');
+ }catch(e){
+  if(e.name==='NotAllowedError'){
+   alert('Browser blokir akses clipboard. Klik allow saat browser bertanya, atau gunakan tombol Browse.');
+  } else {
+   alert('Paste gagal: '+e.message);
+  }
+ }
+}
+
+async function deleteStylingRef(idx){
+ const ref=_stylingRefsBuffer[idx]; if(!ref) return;
+ if(!confirm('Hapus styling reference ini?')) return;
+ // Best-effort delete from storage
+ if(ref.path){
+  try{await db.storage.from(STYLE_REFS_BUCKET).remove([ref.path])}catch(e){console.warn('storage delete failed:',e)}
+ }
+ _stylingRefsBuffer.splice(idx,1);
+ renderStylingRefsGrid();
+}
+
+// Update dogs.last_groomed_at when an invoice (or visit) is finalized
+async function bumpDogLastGroomed(dogId,visitDate){
+ if(!dogId||!visitDate) return;
+ const dog=dogs.find(d=>d.id===dogId);
+ if(dog&&dog.last_groomed_at&&dog.last_groomed_at>=visitDate) return; // already newer
+ await db.from('dogs').update({last_groomed_at:visitDate}).eq('id',dogId);
+}
+
 // Batch O.3 — Paw membership tier helpers
 const PAW_TIER={
  monthly:   {label:'Paw Basic',     freq:'1x/bulan',     sessions:1, discount:5},
@@ -1345,6 +1516,9 @@ async function loadAll() {
  db.from('groomer_payouts').select('*').order('cycle_start',{ascending:false})
  ]);
  custs=cr.data||[]; dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[]; groomers=gr.data||[]; invoices=ir.data||[]; bankSettings=br.data||{}; tokens=tr.data||[]; subscriptions=sr.data||[]; adminUsers=aur.data||[];
+ // Batch O.6 — admin email lookup cache for edit-history display
+ window._adminEmails={};
+ adminUsers.forEach(a=>{window._adminEmails[a.id]=a.email||a.name||'admin'});
  if(psr.data) payrollSettings=psr.data;
  groomerPayouts=gpr.data||[];
  refreshAccessBadge();
@@ -1485,6 +1659,7 @@ function openAddCust(){
  const srcEl=document.getElementById('cf-source'); if(srcEl) srcEl.value='';
  populateKotaSelect(document.getElementById('cf-kota'));
  populateKecSelect(document.getElementById('cf-kec'),'');
+ const stampEl=document.getElementById('cf-edit-stamp'); if(stampEl) stampEl.innerHTML='';
  om('ov-cust');
 }
 
@@ -1503,6 +1678,7 @@ function openEditCust(id){
  document.getElementById('cf-kota').value=c.kota||'';
  populateKecSelect(document.getElementById('cf-kec'),c.kota||'');
  document.getElementById('cf-kec').value=c.kecamatan||'';
+ const stampEl=document.getElementById('cf-edit-stamp'); if(stampEl) stampEl.innerHTML=editStampHTML(c);
  om('ov-cust');
 }
 
@@ -1521,7 +1697,8 @@ async function saveCust(){
  area:[kota,kec].filter(Boolean).join(' - '),
  gmaps_link:document.getElementById('cf-gmaps').value.trim(),
  prefs:document.getElementById('cf-prefs').value.trim(),
- source:source||null
+ source:source||null,
+ ...editStamp()
  };
  if(custEditId){
  await db.from('customers').update(p).eq('id',custEditId);
@@ -1549,11 +1726,14 @@ async function delCust(id,name){
 function openAddDog(){
  if(!currentCustId){alert('Select a customer first.');return}
  dogEditId=null;
+ _stylingRefsBuffer=[];
+ renderStylingRefsGrid();
+ const stampEl=document.getElementById('df-edit-stamp'); if(stampEl) stampEl.innerHTML='';
  const c=custs.find(x=>x.id===currentCustId);
  document.getElementById('dog-title').textContent='Add dog';
  document.getElementById('dog-save-btn').textContent='Save dog';
  document.getElementById('dog-cust-lbl').textContent=c?c.owner:'—';
- ['df-name','df-breed','df-age','df-weight','df-prefs','df-coat-color'].forEach(id=>document.getElementById(id).value='');
+ ['df-name','df-breed','df-age','df-weight','df-prefs','df-coat-color','df-skin-history'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=''});
  document.getElementById('df-size').value='';
  document.getElementById('df-coat').value='';
  om('ov-dog');
@@ -1574,6 +1754,10 @@ function openEditDog(id){
  document.getElementById('df-coat').value=d.coat||'';
  document.getElementById('df-coat-color').value=d.coat_color||'';
  document.getElementById('df-prefs').value=d.prefs||'';
+ const sh=document.getElementById('df-skin-history'); if(sh) sh.value=d.skin_history||'';
+ _stylingRefsBuffer=Array.isArray(d.styling_refs)?[...d.styling_refs]:[];
+ renderStylingRefsGrid();
+ const stampEl=document.getElementById('df-edit-stamp'); if(stampEl) stampEl.innerHTML=editStampHTML(d);
  om('ov-dog');
 }
 
@@ -1589,7 +1773,10 @@ async function saveDog(){
  size:document.getElementById('df-size').value,
  coat:document.getElementById('df-coat').value,
  coat_color:document.getElementById('df-coat-color').value.trim()||null,
- prefs:document.getElementById('df-prefs').value.trim()
+ prefs:document.getElementById('df-prefs').value.trim(),
+ skin_history:document.getElementById('df-skin-history')?.value.trim()||null,
+ styling_refs:_stylingRefsBuffer||[],
+ ...editStamp()
  };
  if(dogEditId){
  await db.from('dogs').update(p).eq('id',dogEditId);
@@ -2112,18 +2299,51 @@ function wizNext(n){
 }
 
 function onWizCustSearch(val){
- const match=custs.find(c=>
-  c.owner.toLowerCase()===val.toLowerCase()||
-  (c.customer_code||'').toLowerCase()===val.toLowerCase()
- );
- if(match){
-  document.getElementById('appt-cust').value=match.id;
-  onWizCustChange();
- } else {
+ const q=(val||'').toLowerCase().trim();
+ const dd=document.getElementById('appt-cust-dd');
+ if(!dd) return;
+ // Filter customers — match against owner, kota, kecamatan, address, dog names
+ const matches=custs.map(c=>{
+  const myDogs=dogs.filter(d=>d.customer_id===c.id);
+  const dogNames=myDogs.map(d=>d.name).filter(Boolean).join(' ');
+  const blob=`${c.owner||''} ${c.kota||''} ${c.kecamatan||''} ${c.address||''} ${c.area||''} ${c.wa||''} ${dogNames}`.toLowerCase();
+  const score=q?(blob.includes(q)?1:0):1;
+  return {c,myDogs,score};
+ }).filter(m=>m.score>0)
+   .sort((a,b)=>(a.c.owner||'').localeCompare(b.c.owner||''))
+   .slice(0,20);
+ if(!matches.length){
+  dd.innerHTML=`<div style="padding:10px;font-size:12px;color:var(--muted);font-style:italic">No customer matches "${esc(val)}". Type 3+ characters or try another spelling.</div>`;
+  dd.style.display='block';
   document.getElementById('appt-cust').value='';
   wiz.custId=null;
   document.getElementById('wiz-cust-info').style.display='none';
+  return;
  }
+ dd.innerHTML=matches.map(({c,myDogs})=>{
+  const addr=[c.address,c.kecamatan,c.kota].filter(Boolean).join(', ')||'(no address)';
+  const dogNames=myDogs.map(d=>d.name).filter(Boolean).join(', ')||'(no dogs)';
+  return `<div onclick="pickWizCust('${c.id}')" style="padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px" onmouseover="this.style.background='var(--subtle)'" onmouseout="this.style.background=''">
+   <div style="font-weight:600">${esc(c.owner||'?')}</div>
+   <div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(addr)}</div>
+   <div style="font-size:11px;color:var(--green-dk);margin-top:1px"> ${esc(dogNames)}</div>
+  </div>`;
+ }).join('');
+ dd.style.display='block';
+
+ // Exact match auto-pick (when user finishes typing exact name)
+ const exact=matches.find(m=>m.c.owner.toLowerCase()===q);
+ if(exact){
+  document.getElementById('appt-cust').value=exact.c.id;
+ }
+}
+
+function pickWizCust(id){
+ const c=custs.find(x=>x.id===id); if(!c) return;
+ const dd=document.getElementById('appt-cust-dd'); if(dd) dd.style.display='none';
+ document.getElementById('appt-cust-search').value=c.owner||'';
+ document.getElementById('appt-cust').value=id;
+ onWizCustChange();
 }
 
 function onWizCustChange(){
@@ -2144,15 +2364,23 @@ function renderWizDogs(){
  wrap.innerHTML=cdogs.map(d=>{
   const ds=wiz.dogSvcs.find(x=>x.did===d.id);
   const sel=ds?.svc||'Basic Grooming';
+  // Batch O.6 — skin history + last groomed banner
+  const lastG=d.last_groomed_at?`<div style="font-size:11px;color:${daysSince(d.last_groomed_at)>=14?'#dc2626':'var(--muted)'};margin-top:3px">Last groomed: ${fmtD(d.last_groomed_at)} (${daysSince(d.last_groomed_at)} hari lalu)</div>`:'<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:3px">Belum pernah grooming</div>';
+  const skinHistory=d.skin_history?`<div style="font-size:11px;color:#92400e;background:#fef3c7;padding:6px 8px;border-radius:5px;margin-top:6px;border-left:3px solid #ca8a04"><strong>Catatan kondisi kulit:</strong><br>${esc(d.skin_history).replace(/\n/g,'<br>')}</div>`:'';
+  const stylingCount=(d.styling_refs||[]).filter(r=>!isStyleRefExpired(r)).length;
+  const stylingBadge=stylingCount?`<span style="font-size:10px;background:#dcfce7;color:#15803d;padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:600">${stylingCount} styling ref</span>`:'';
   return `<div style="padding:10px;background:var(--subtle);border-radius:var(--r);margin-bottom:6px;border:2px solid ${ds?'var(--green-md)':'var(--border)'}">
    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:${ds?'8px':'0'}">
     <input type="checkbox" ${ds?'checked':''} onchange="onWizDogToggle('${d.id}',this.checked)" style="width:16px;height:16px"/>
-    <div>
+    <div style="flex:1">
      <strong>${esc(d.name)}</strong>
-     <span style="font-size:11px;color:var(--muted);margin-left:5px">${esc(d.breed||'-')} · ${esc(d.size||'?')}</span>
+     <span style="font-size:11px;color:var(--muted);margin-left:5px">${esc(d.breed||'-')} \u00B7 ${esc(d.size||'?')}</span>
+     ${stylingBadge}
+     ${lastG}
     </div>
    </label>
-   <div id="wiz-svc-${d.id}" style="display:${ds?'flex':'none'};gap:8px;align-items:center;margin-left:24px">
+   ${skinHistory}
+   <div id="wiz-svc-${d.id}" style="display:${ds?'flex':'none'};gap:8px;align-items:center;margin-left:24px;margin-top:8px">
     <select style="flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:var(--r);font-size:12px" onchange="onWizSvc('${d.id}',this.value)">
      ${SVC_LIST.map(s=>`<option ${s===sel?'selected':''}>${s}</option>`).join('')}
     </select>
@@ -2256,8 +2484,7 @@ function renderWizSummary(){
 }
 
 function populateWizCustList(){
- document.getElementById('appt-cust-list').innerHTML=
-  custs.map(c=>`<option value="${esc(c.owner)}">${esc(c.customer_code||'?')} – ${esc(c.owner)}</option>`).join('');
+ // Batch O.6 — superseded by custom dropdown. Kept as no-op for legacy callers.
 }
 
 function openAppt(dateISO,groomerId,startMins){
@@ -2368,7 +2595,8 @@ async function saveAppt(){
    dog_id:ds.did,groomer_id:wiz.groomerId,appt_date:wiz.date,
    appt_time:m2t(cursor)+':00',service_base:ds.svc,duration_mins:dur,
    appt_note:note+(wiz.dogSvcs.length>1?` (${i+1}/${wiz.dogSvcs.length})`:''),
-   token_id:wiz.tokenId||null,token_used:false,session_source:sessSrc
+   token_id:wiz.tokenId||null,token_used:false,session_source:sessSrc,
+   ...editStamp()
   });
   cursor+=dur;
  });
@@ -2979,20 +3207,26 @@ function renderInvDogServices(){
    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
     <div class="photo-zone" data-zone="before" data-did="${did}"
      ondragover="onPhotoDragOver(event)" ondragleave="onPhotoDragLeave(event)"
-     ondrop="onPhotoDrop(event,'${did}','before')"
-     onclick="document.getElementById('pf-before-${did}').click()">
+     ondrop="onPhotoDrop(event,'${did}','before')">
      <div class="photo-zone-label">BEFORE</div>
-     <div class="photo-zone-hint">Drop / paste / click</div>
+     <div class="photo-zone-hint">Drop or pick action below</div>
      <div id="photo-grid-${did}-before" class="photo-zone-grid"></div>
+     <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">
+      <button type="button" onclick="document.getElementById('pf-before-${did}').click()" class="btn btn-g btn-sm" style="font-size:11px;padding:4px 8px">Browse</button>
+      <button type="button" onclick="pasteInvoicePhoto('${did}','before')" class="btn btn-g btn-sm" style="font-size:11px;padding:4px 8px">Paste</button>
+     </div>
      <input type="file" id="pf-before-${did}" accept="image/*" multiple style="display:none" onchange="onPhotosAdd('${did}','before',this)"/>
     </div>
     <div class="photo-zone" data-zone="after" data-did="${did}"
      ondragover="onPhotoDragOver(event)" ondragleave="onPhotoDragLeave(event)"
-     ondrop="onPhotoDrop(event,'${did}','after')"
-     onclick="document.getElementById('pf-after-${did}').click()">
+     ondrop="onPhotoDrop(event,'${did}','after')">
      <div class="photo-zone-label">AFTER</div>
-     <div class="photo-zone-hint">Drop / paste / click</div>
+     <div class="photo-zone-hint">Drop or pick action below</div>
      <div id="photo-grid-${did}-after" class="photo-zone-grid"></div>
+     <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">
+      <button type="button" onclick="document.getElementById('pf-after-${did}').click()" class="btn btn-g btn-sm" style="font-size:11px;padding:4px 8px">Browse</button>
+      <button type="button" onclick="pasteInvoicePhoto('${did}','after')" class="btn btn-g btn-sm" style="font-size:11px;padding:4px 8px">Paste</button>
+     </div>
      <input type="file" id="pf-after-${did}" accept="image/*" multiple style="display:none" onchange="onPhotosAdd('${did}','after',this)"/>
     </div>
    </div>
@@ -3000,12 +3234,15 @@ function renderInvDogServices(){
     ondragover="onPhotoDragOver(event)" ondragleave="onPhotoDragLeave(event)"
     ondrop="onPhotoDrop(event,'${did}','issue')"
     style="margin-top:8px">
-    <div style="display:flex;align-items:center;justify-content:space-between">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
      <div>
       <div class="photo-zone-label" style="color:#92400e">ISSUES (opsional)</div>
       <div class="photo-zone-hint" style="margin:0">Kalau ada masalah: kutu, luka, jamur, telinga, dll</div>
      </div>
-     <button type="button" onclick="event.stopPropagation();document.getElementById('pf-issue-${did}').click()" class="btn btn-g btn-sm">+ Add photo</button>
+     <div style="display:flex;gap:4px">
+      <button type="button" onclick="document.getElementById('pf-issue-${did}').click()" class="btn btn-g btn-sm" style="font-size:11px;padding:4px 8px">Browse</button>
+      <button type="button" onclick="pasteInvoicePhoto('${did}','issue')" class="btn btn-g btn-sm" style="font-size:11px;padding:4px 8px">Paste</button>
+     </div>
     </div>
     <div id="photo-grid-${did}-issue" class="photo-zone-grid" style="margin-top:6px"></div>
     <input type="file" id="pf-issue-${did}" accept="image/*" multiple style="display:none" onchange="onPhotosAdd('${did}','issue',this)"/>
@@ -3347,7 +3584,8 @@ function buildInvoiceRecord(){
   advance_interval:document.getElementById('inv-interval')?.value||'none',
   advance_first_date:document.getElementById('inv-first-date')?.value||null,
   subs_type:invSubsType,
-  is_subscription_billing:!!document.getElementById('inv-subs-billing')?.checked
+  is_subscription_billing:!!document.getElementById('inv-subs-billing')?.checked,
+  ...editStamp()
  };
 }
 
@@ -3363,6 +3601,10 @@ async function saveVisitsFromInvoice(rec){
    service_type:d.services?.map(s=>s.name).join(', ')||null,
    note:d.groomer_notes||null
   }));
+ // Batch O.6 — also bump last_groomed_at for each dog
+ for(const d of rec.dogs){
+  if(d.dog_id) await bumpDogLastGroomed(d.dog_id,date);
+ }
  if(!rows.length) return;
  const {error}=await db.from('visits').insert(rows);
  if(error) console.error('Visit log error:',error.message);
@@ -3614,8 +3856,8 @@ function buildAdvanceRows(rec,counter){
   </tr>`;
   if(disc>0){
    const discLabel=ad.disc_type==='percent'&&ad.disc_value
-    ? `Diskon ${ad.disc_value}% paket`
-    : `Diskon paket`;
+    ? `Diskon ${ad.disc_value}%`
+    : `Diskon`;
    rows+=`<tr class="svc-disc-row">
     <td></td>
     <td class="svc-disc-label">${discLabel}</td>
@@ -4347,14 +4589,26 @@ function buildMsg(g,ga,date,pickup,pickupTime,extra){
   lines.push(items.length>1?'Dogs:':'Dog:');
   items.forEach(({appt:a,dog:d})=>{
    const t=(a.appt_time||'').slice(0,5);
+   const svc=a.service_base||'Basic Grooming';
    const dogLine=items.length>1
-    ? `  \u2022 ${t} \u2014 ${d.name||'?'} (${d.breed||'?'} \u00B7 ${d.size||'?'})`
-    : `  \u2022 ${d.name||'?'} (${d.breed||'?'} \u00B7 ${d.size||'?'})`;
+    ? `  \u2022 ${t} \u2014 ${d.name||'?'} (${d.breed||'?'} \u00B7 ${d.size||'?'}) \u2014 ${svc}`
+    : `  \u2022 ${d.name||'?'} (${d.breed||'?'} \u00B7 ${d.size||'?'}) \u2014 ${svc}`;
    lines.push(dogLine);
    const notes=[];
    if(a.appt_note) notes.push('sesi: '+a.appt_note);
    if(d.prefs) notes.push(d.prefs);
    if(notes.length) lines.push(`     \u21B3 ${notes.join(' | ')}`);
+   // Batch O.6 — skin condition warning
+   if(d.skin_history){
+    const skinLine=d.skin_history.replace(/\n/g,' ').slice(0,150);
+    lines.push(`     \u26A0 Kondisi kulit: ${skinLine}`);
+   }
+   // Batch O.6 — styling references link
+   const refs=(d.styling_refs||[]).filter(r=>!isStyleRefExpired(r));
+   if(refs.length){
+    lines.push(`     \u{1F4F7} Styling refs (${refs.length}):`);
+    refs.slice(0,3).forEach(r=>lines.push(`        ${r.url}`));
+   }
   });
   lines.push('');
  });
@@ -4706,6 +4960,38 @@ async function fetchAndAddPhoto(did,zone,url){
  }
 }
 
+// Batch O.6 — explicit Paste button handler for invoice photo zones
+async function pasteInvoicePhoto(did,zone){
+ try{
+  if(!navigator.clipboard||!navigator.clipboard.read){
+   alert('Browser tidak support paste-from-clipboard. Gunakan Browse atau update browser ke Chrome/Edge versi terbaru.');
+   return;
+  }
+  const items=await navigator.clipboard.read();
+  let added=0;
+  const files=[];
+  for(const item of items){
+   for(const type of item.types){
+    if(type.startsWith('image/')){
+     const blob=await item.getType(type);
+     files.push(new File([blob],'pasted.png',{type}));
+    }
+   }
+  }
+  if(!files.length){
+   alert('Tidak ada gambar di clipboard.\n\nDari WhatsApp Web: right-click gambar -> Copy image, lalu klik Paste di sini.');
+   return;
+  }
+  addPhotosFromFiles(did,zone,files);
+ }catch(e){
+  if(e.name==='NotAllowedError'){
+   alert('Browser blokir clipboard access. Klik allow saat browser bertanya, atau gunakan Browse.');
+  } else {
+   alert('Paste gagal: '+e.message);
+  }
+ }
+}
+
 // Global paste listener — paste image into currently focused/hovered zone
 let _activePhotoZone=null;
 function setActivePhotoZone(did,zone){_activePhotoZone={did,zone};}
@@ -4751,18 +5037,24 @@ function buildPhotoHTML(did){
   if(byZone[z]) byZone[z].push(p);
   else byZone.before.push(p);
  });
- // Batch O.4 — Before/After side-by-side, Issues below full-width
+ // Batch O.6 — skip empty zones entirely (no placeholders). Solo zone takes full width.
  const buildCol=(label,arr,color)=>{
-  if(!arr.length) return `<div style="flex:1;min-width:0"><div style="font-size:10px;color:${color};letter-spacing:1.5px;font-weight:700;margin-bottom:6px">${label}</div><div style="aspect-ratio:4/3;background:#f5f5f5;border:1px dashed #ddd;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:10px">No photo</div></div>`;
   const imgs=arr.map(p=>`<img src="${p.data}" style="width:100%;height:auto;border-radius:6px;display:block;margin-bottom:6px"/>`).join('');
   return `<div style="flex:1;min-width:0">
    <div style="font-size:10px;color:${color};letter-spacing:1.5px;font-weight:700;margin-bottom:6px">${label}</div>
    ${imgs}
   </div>`;
  };
- const baRow=(byZone.before.length||byZone.after.length)
-  ? `<div style="display:flex;gap:10px;margin:8px 0">${buildCol('BEFORE',byZone.before,'#888')}${buildCol('AFTER',byZone.after,'#888')}</div>`
-  : '';
+ let baRow='';
+ const hasBefore=byZone.before.length>0;
+ const hasAfter=byZone.after.length>0;
+ if(hasBefore&&hasAfter){
+  baRow=`<div style="display:flex;gap:10px;margin:8px 0">${buildCol('BEFORE',byZone.before,'#888')}${buildCol('AFTER',byZone.after,'#888')}</div>`;
+ } else if(hasBefore){
+  baRow=`<div style="margin:8px 0">${buildCol('BEFORE',byZone.before,'#888')}</div>`;
+ } else if(hasAfter){
+  baRow=`<div style="margin:8px 0">${buildCol('AFTER',byZone.after,'#888')}</div>`;
+ }
  // Issues row stays full-width with each photo in a flex line
  let issueRow='';
  if(byZone.issue.length){
@@ -4962,6 +5254,7 @@ async function checkAuthState(){
   setAuthScreen('login');return;
  }
  currentUser=session.user;
+ window._currentAuthUser=session.user;
  if(isRecovery){setAuthScreen('recovery');return}
  // Look up admin_users row
  const {data:row,error}=await db.from('admin_users').select('*').eq('id',currentUser.id).maybeSingle();
@@ -5547,11 +5840,19 @@ function c360RenderDogs(c){
  const dogsBlock=list.length
   ? `<div class="c360-section-lbl">Dogs (${list.length})</div>`+list.map(d=>{
    const visitCount=visits.filter(v=>v.dog_id===d.id).length;
+   // Batch O.6 — last groomed + skin history + styling refs preview
+   const lastG=d.last_groomed_at?`<div class="c360-card-meta" style="margin-top:4px">Last groomed: ${lastGroomedDisplay(d)}</div>`:'<div class="c360-card-meta" style="margin-top:4px;font-style:italic">Belum pernah grooming</div>';
+   const skinHist=d.skin_history?`<div style="font-size:11px;color:#92400e;background:#fef3c7;padding:6px 8px;border-radius:5px;margin-top:6px;border-left:3px solid #ca8a04"><strong>Kondisi kulit:</strong> ${esc(d.skin_history).slice(0,140)}${d.skin_history.length>140?'…':''}</div>`:'';
+   const stylRefs=(d.styling_refs||[]).filter(r=>!isStyleRefExpired(r));
+   const stylBlock=stylRefs.length?`<div style="margin-top:6px"><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Styling refs (${stylRefs.length})</div><div style="display:flex;gap:4px;flex-wrap:wrap">${stylRefs.slice(0,6).map(r=>`<img src="${esc(r.url)}" style="width:50px;height:50px;object-fit:cover;border-radius:4px;border:1px solid var(--border)"/>`).join('')}</div></div>`:'';
    return `<div class="c360-card">
     <div class="c360-card-title">${esc(d.name)} <span style="font-weight:400;font-size:11px;color:var(--muted)">${esc(d.dog_code||'')}</span></div>
     <div class="c360-card-meta">${esc(d.breed||'?')} \u00B7 ${esc(d.size||'?')}${d.age?' \u00B7 '+esc(d.age):''}${d.weight?' \u00B7 '+esc(d.weight):''}${d.coat?' \u00B7 '+esc(d.coat):''}${d.coat_color?' \u00B7 '+esc(d.coat_color):''}</div>
     ${d.prefs?`<div class="c360-card-meta" style="margin-top:4px;font-style:italic">${esc(d.prefs)}</div>`:''}
-    <div class="c360-card-meta" style="margin-top:4px">${visitCount} visit${visitCount!==1?'s':''}</div>
+    ${lastG}
+    <div class="c360-card-meta">${visitCount} visit${visitCount!==1?'s':''}</div>
+    ${skinHist}
+    ${stylBlock}
    </div>`;
   }).join('')
   : `<div class="c360-empty">No dogs yet for this customer.</div>`;
@@ -5870,6 +6171,68 @@ function renderDashboard(){
 
  // Batch O.4 — Monthly subscription billing
  renderSubsBilling();
+ // Batch O.6 — 14+ day no-grooming followups
+ renderFollowups();
+}
+
+// Batch O.6 — Dogs not groomed for 14+ days. WA reminder per customer.
+function renderFollowups(){
+ const el=document.getElementById('dash-followups'); if(!el) return;
+ const today=new Date();
+ const threshold=14;
+ // For each dog: compute days since last_groomed_at (or fall back to most recent visit date)
+ const overdue=dogs.map(d=>{
+  let lastDate=d.last_groomed_at;
+  if(!lastDate){
+   // Fallback: most recent visit
+   const dogVisits=visits.filter(v=>v.dog_id===d.id).map(v=>v.visited_at).filter(Boolean).sort();
+   if(dogVisits.length) lastDate=dogVisits[dogVisits.length-1];
+  }
+  if(!lastDate) return null; // Never groomed → skip (might be brand new customer)
+  const days=daysSince(lastDate);
+  if(days<threshold) return null;
+  const cust=custs.find(c=>c.id===d.customer_id);
+  if(!cust) return null;
+  return {dog:d,cust,days,lastDate};
+ }).filter(Boolean).sort((a,b)=>b.days-a.days);
+
+ if(!overdue.length){el.innerHTML='';return}
+
+ // Group by customer
+ const byCust={};
+ overdue.forEach(o=>{
+  if(!byCust[o.cust.id]) byCust[o.cust.id]={cust:o.cust,dogs:[]};
+  byCust[o.cust.id].dogs.push({dog:o.dog,days:o.days,lastDate:o.lastDate});
+ });
+
+ el.innerHTML=`<div class="card" style="padding:14px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+   <div>
+    <div style="font-size:13px;font-weight:600">Followup — dogs not groomed 14+ days</div>
+    <div style="font-size:11px;color:var(--muted)">${overdue.length} dog${overdue.length!==1?'s':''} across ${Object.keys(byCust).length} customer${Object.keys(byCust).length!==1?'s':''}</div>
+   </div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:8px">
+   ${Object.values(byCust).map(grp=>{
+    const c=grp.cust;
+    const dogLines=grp.dogs.map(x=>`${x.dog.name} (${x.days}h)`).join(', ');
+    const maxDays=Math.max(...grp.dogs.map(x=>x.days));
+    const bg=maxDays>=30?'#fee2e2':maxDays>=21?'#fef3c7':'#dbeafe';
+    const waPhone=c.wa?'62'+c.wa.replace(/^0/,'').replace(/\D/g,''):null;
+    const firstName=(c.owner||'').split(' ')[0];
+    const dogList=grp.dogs.map(x=>x.dog.name).join(' dan ');
+    const msg=`Halo kak ${firstName}, sudah lama nggak kelihatan! ${dogList} terakhir grooming ${maxDays} hari lalu. Boleh aku bantu booking jadwal berikutnya?`;
+    const waLink=waPhone?`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`:null;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:${bg};border-radius:5px;flex-wrap:wrap;gap:8px">
+     <div style="flex:1;min-width:0">
+      <div style="font-weight:600;font-size:13px"><span class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner)}</span> <span style="font-size:11px;color:var(--muted);font-weight:400">${esc(c.customer_code||'')}</span></div>
+      <div style="font-size:11px;color:var(--muted)">${esc(dogLines)}</div>
+     </div>
+     ${waLink?`<a class="btn btn-g btn-sm" href="${waLink}" target="_blank">WA</a>`:'<span style="font-size:11px;color:var(--muted)">No WA</span>'}
+    </div>`;
+   }).join('')}
+  </div>
+ </div>`;
 }
 
 // Batch O.4 — Render subscription billing UI on dashboard
