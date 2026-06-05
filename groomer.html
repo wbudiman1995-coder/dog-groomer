@@ -229,14 +229,18 @@ async function loadSchedule(){
   return;
  }
 
- // Fetch related dogs + customers
+ // Fetch related dogs first
  const dogIds=[...new Set(appts.map(a=>a.dog_id).filter(Boolean))];
- const custIds=[...new Set(appts.map(a=>a.customer_id).filter(Boolean))];
- const [dr,cr]=await Promise.all([
-  dogIds.length?db.from('dogs').select('id,name,breed,size,coat,coat_color,prefs,skin_history,styling_refs,customer_id').in('id',dogIds):Promise.resolve({data:[]}),
-  custIds.length?db.from('customers').select('id,owner,address,kecamatan,kota,gmaps_link').in('id',custIds):Promise.resolve({data:[]})
- ]);
- dataCache={appts,dogs:dr.data||[],custs:cr.data||[]};
+ const dr=dogIds.length
+  ?await db.from('dogs').select('id,name,breed,size,coat,coat_color,prefs,skin_history,styling_refs,customer_id').in('id',dogIds)
+  :{data:[]};
+ const allDogs=dr.data||[];
+ // Derive customer IDs from dogs (appointments don't have customer_id, only dog_id)
+ const custIds=[...new Set(allDogs.map(d=>d.customer_id).filter(Boolean))];
+ const cr=custIds.length
+  ?await db.from('customers').select('id,owner,address,kecamatan,kota,gmaps_link').in('id',custIds)
+  :{data:[]};
+ dataCache={appts,dogs:allDogs,custs:cr.data||[]};
  updateCounts();
  renderActiveTab();
 }
@@ -307,7 +311,7 @@ function isStyleRefExpired(ref){
 
 function renderAppt(a){
  const dog=dataCache.dogs.find(d=>d.id===a.dog_id);
- const cust=dataCache.custs.find(c=>c.id===a.customer_id)||(dog?dataCache.custs.find(c=>c.id===dog.customer_id):null);
+ const cust=dog?dataCache.custs.find(c=>c.id===dog.customer_id):null;
  if(!dog||!cust) return ''; // skip if related data missing
 
  const time=fmtTime(a.appt_time);
