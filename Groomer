@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#3d1f0d">
+<title>HomePaw — Jadwal Groomer</title>
+<style>
+:root{
+ --bg:#fdf8f0;
+ --surface:#fff;
+ --text:#2a1810;
+ --muted:#7a6b5c;
+ --border:#e8d5b7;
+ --subtle:#fdf3e7;
+ --primary:#e07b39;
+ --primary-dk:#b85c1f;
+ --green:#16a34a;
+ --red:#dc2626;
+ --yellow:#ca8a04;
+ --sh:0 1px 3px rgba(0,0,0,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,'Segoe UI',sans-serif;font-size:14px;line-height:1.5;-webkit-text-size-adjust:100%}
+
+.app{max-width:600px;margin:0 auto;padding:0 0 80px}
+
+.hdr{background:linear-gradient(135deg,#3d1f0d,#e07b39);color:#fff;padding:18px 16px;position:sticky;top:0;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.hdr-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.hdr-name{font-size:18px;font-weight:700;margin:0}
+.hdr-sub{font-size:11px;opacity:.9;margin-top:2px}
+.hdr-refresh{background:rgba(255,255,255,.18);border:none;color:#fff;padding:8px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:500;min-height:36px}
+.hdr-refresh:active{background:rgba(255,255,255,.3)}
+
+.tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:74px;z-index:9}
+.tab{flex:1;background:none;border:none;padding:12px 8px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;font-family:inherit;min-height:48px}
+.tab.active{color:var(--primary-dk);border-bottom-color:var(--primary);background:var(--subtle)}
+.tab .count{display:inline-block;background:var(--primary);color:#fff;font-size:10px;padding:2px 7px;border-radius:10px;margin-left:5px;font-weight:700;min-width:18px}
+.tab.active .count{background:var(--primary-dk)}
+
+.content{padding:14px 12px}
+
+.appt{background:var(--surface);border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:var(--sh);border-left:4px solid var(--primary)}
+.appt.done{opacity:.55;border-left-color:var(--green)}
+.appt.pending{border-left-color:var(--yellow)}
+.appt-time{display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.appt-time-big{font-size:20px;font-weight:700;color:var(--primary-dk)}
+.appt-duration{font-size:11px;color:var(--muted);font-weight:500;background:var(--subtle);padding:2px 7px;border-radius:4px}
+.appt-status{font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:600;padding:3px 8px;border-radius:4px;background:#dbeafe;color:#1e40af;margin-left:auto}
+.appt-status.pending{background:#fef3c7;color:#92400e}
+.appt-status.done{background:#dcfce7;color:#15803d}
+.appt-status.confirmed{background:#dbeafe;color:#1e40af}
+
+.appt-cust{font-size:16px;font-weight:600;margin-bottom:4px}
+.appt-addr{font-size:13px;color:var(--text);margin-bottom:10px;line-height:1.4}
+.appt-addr a{color:var(--primary-dk);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:6px 12px;background:var(--subtle);border-radius:6px;border:1px solid var(--border);min-height:36px}
+.appt-addr a:active{background:var(--border)}
+
+.dog-card{background:var(--subtle);border-radius:8px;padding:10px 12px;margin-bottom:6px;border:1px solid var(--border)}
+.dog-name{font-size:15px;font-weight:600;color:var(--text)}
+.dog-meta{font-size:12px;color:var(--muted);margin-top:3px}
+.dog-svc{font-size:13px;color:var(--primary-dk);font-weight:600;margin-top:6px;padding:4px 8px;background:#fff;border-radius:5px;display:inline-block}
+.dog-prefs{font-size:12px;font-style:italic;color:#5a4a3a;margin-top:6px;padding:6px 8px;background:#fff;border-left:3px solid var(--primary);border-radius:0 5px 5px 0}
+.dog-skin{font-size:12px;color:#92400e;background:#fef3c7;padding:8px 10px;border-radius:6px;margin-top:6px;border-left:3px solid var(--yellow)}
+.dog-skin strong{display:block;font-size:10px;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px}
+.dog-styling{margin-top:8px}
+.dog-styling-label{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.dog-styling-imgs{display:flex;gap:6px;flex-wrap:wrap}
+.dog-styling-imgs a{display:block}
+.dog-styling-imgs img{width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--border)}
+
+.appt-note{margin-top:8px;font-size:12px;color:#444;background:#fff7ed;padding:6px 10px;border-radius:5px;border-left:3px solid var(--primary)}
+
+.day-section{margin-bottom:18px}
+.day-header{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);padding:8px 0;margin-bottom:8px;border-bottom:2px solid var(--border)}
+.day-header.today{color:var(--primary-dk)}
+.day-header.today::after{content:'HARI INI';margin-left:10px;background:var(--primary);color:#fff;padding:2px 8px;border-radius:10px;font-size:9px}
+
+.empty{text-align:center;padding:3rem 1rem;color:var(--muted);font-size:13px;font-style:italic}
+
+.gate{max-width:400px;margin:60px auto;padding:0 20px;text-align:center}
+.gate-logo{font-size:24px;font-weight:700;color:var(--primary-dk);margin-bottom:6px}
+.gate-tag{font-size:12px;color:var(--muted);margin-bottom:30px}
+.gate-card{background:var(--surface);padding:24px;border-radius:12px;box-shadow:var(--sh);text-align:left}
+.gate-card h2{font-size:16px;margin:0 0 14px}
+.gate-card label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.gate-card input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:15px;background:var(--bg);margin-bottom:14px;font-family:inherit;min-height:44px}
+.gate-card button{width:100%;padding:12px;background:var(--primary);color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;min-height:48px}
+.gate-card button:active{background:var(--primary-dk)}
+.gate-err{font-size:12px;color:var(--red);margin-top:10px;padding:8px 12px;background:#fee2e2;border-radius:5px;border:1px solid #fca5a5}
+
+.loader{text-align:center;padding:3rem 1rem;color:var(--muted)}
+.spin{display:inline-block;width:20px;height:20px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:sp 0.7s linear infinite;vertical-align:middle;margin-right:8px}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+.footer{text-align:center;font-size:10px;color:var(--muted);padding:16px 12px;margin-top:20px}
+</style>
+</head>
+<body>
+
+<div id="app-wrap" class="app" style="display:none">
+ <div class="hdr">
+  <div class="hdr-row">
+   <div>
+    <div class="hdr-name" id="g-name">HomePaw Groomer</div>
+    <div class="hdr-sub" id="g-sub">Loading…</div>
+   </div>
+   <button class="hdr-refresh" onclick="loadSchedule()">Refresh</button>
+  </div>
+ </div>
+
+ <div class="tabs">
+  <button class="tab active" id="tab-today" onclick="switchTab('today')">Hari Ini <span class="count" id="cnt-today">0</span></button>
+  <button class="tab" id="tab-tomorrow" onclick="switchTab('tomorrow')">Besok <span class="count" id="cnt-tomorrow">0</span></button>
+  <button class="tab" id="tab-later" onclick="switchTab('later')">2-3 Hari <span class="count" id="cnt-later">0</span></button>
+ </div>
+
+ <div class="content" id="content"><div class="loader"><span class="spin"></span>Loading schedule…</div></div>
+
+ <div class="footer">HomePaw — Jadwal grooming, read-only.<br/>Bookmark this page on your phone. Refresh untuk update.</div>
+</div>
+
+<div id="gate" class="gate" style="display:none">
+ <div class="gate-logo">HomePaw</div>
+ <div class="gate-tag">Halaman jadwal groomer</div>
+ <div class="gate-card">
+  <h2>Login Groomer</h2>
+  <div>
+   <label>Nama groomer</label>
+   <input id="gate-name" placeholder="Nama anda" autocomplete="off" autocapitalize="words"/>
+  </div>
+  <div>
+   <label>Access code</label>
+   <input id="gate-token" placeholder="Kode dari Xavier" autocomplete="off"/>
+  </div>
+  <button onclick="tryLogin()">Buka jadwal</button>
+  <div id="gate-err" class="gate-err" style="display:none"></div>
+ </div>
+ <div style="margin-top:20px;font-size:11px;color:var(--muted)">Tidak punya akses? Hubungi Xavier untuk dapat kode.</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL="https://cwqrpslypcjgjuxagglc.supabase.co";
+const SUPABASE_ANON="sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
+const db=supabase.createClient(SUPABASE_URL,SUPABASE_ANON);
+
+let currentGroomer=null;
+let currentTab='today';
+let dataCache={appts:[],dogs:[],custs:[]};
+
+// Parse URL: ?name=irgih&token=abc123
+function parseURL(){
+ const p=new URLSearchParams(window.location.search);
+ return {name:(p.get('name')||p.get('g')||'').trim(), token:(p.get('token')||p.get('t')||'').trim()};
+}
+
+function esc(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function iso(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${dd}`}
+function fmtTime(t){return (t||'').slice(0,5)}
+function fmtDateLong(d){return new Date(d+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'})}
+
+function showGate(errMsg){
+ document.getElementById('app-wrap').style.display='none';
+ document.getElementById('gate').style.display='block';
+ if(errMsg){
+  const e=document.getElementById('gate-err');
+  e.textContent=errMsg;e.style.display='block';
+ }
+}
+
+function showApp(){
+ document.getElementById('gate').style.display='none';
+ document.getElementById('app-wrap').style.display='block';
+}
+
+async function tryLogin(){
+ const name=document.getElementById('gate-name').value.trim();
+ const token=document.getElementById('gate-token').value.trim();
+ if(!name||!token){showGate('Isi nama dan kode dulu.');return}
+ // Persist URL with params so refresh works
+ const url=new URL(window.location.href);
+ url.searchParams.set('name',name.toLowerCase());
+ url.searchParams.set('token',token);
+ window.history.replaceState({},'',url);
+ await init();
+}
+
+async function init(){
+ const {name,token}=parseURL();
+ if(!name||!token){showGate();return}
+ // Look up groomer by name (case-insensitive) AND token
+ const {data,error}=await db.from('groomers')
+  .select('id,name,active,access_token')
+  .ilike('name',name)
+  .limit(1)
+  .maybeSingle();
+ if(error){showGate('Error: '+error.message);return}
+ if(!data){showGate('Groomer tidak ditemukan. Cek nama anda dan minta Xavier untuk update.');return}
+ if(!data.active){showGate('Account tidak aktif. Hubungi Xavier.');return}
+ if(!data.access_token||data.access_token!==token){showGate('Access code salah. Cek dari Xavier.');return}
+ currentGroomer=data;
+ document.getElementById('g-name').textContent=data.name;
+ document.getElementById('g-sub').textContent='Jadwal grooming · Read-only';
+ showApp();
+ await loadSchedule();
+}
+
+async function loadSchedule(){
+ const content=document.getElementById('content');
+ content.innerHTML='<div class="loader"><span class="spin"></span>Loading schedule…</div>';
+ const today=new Date(); today.setHours(0,0,0,0);
+ const end=new Date(today); end.setDate(end.getDate()+3); // 4-day window (today+1+2+3)
+ const startISO=iso(today), endISO=iso(end);
+
+ // Fetch appointments scoped to this groomer + date range
+ const {data:appts,error:e1}=await db.from('appointments')
+  .select('*')
+  .eq('groomer_id',currentGroomer.id)
+  .gte('appt_date',startISO)
+  .lte('appt_date',endISO)
+  .order('appt_date')
+  .order('appt_time');
+ if(e1){content.innerHTML='<div class="empty">Error loading: '+esc(e1.message)+'</div>';return}
+
+ if(!appts||!appts.length){
+  dataCache={appts:[],dogs:[],custs:[]};
+  renderActiveTab();
+  return;
+ }
+
+ // Fetch related dogs + customers
+ const dogIds=[...new Set(appts.map(a=>a.dog_id).filter(Boolean))];
+ const custIds=[...new Set(appts.map(a=>a.customer_id).filter(Boolean))];
+ const [dr,cr]=await Promise.all([
+  dogIds.length?db.from('dogs').select('id,name,breed,size,coat,coat_color,prefs,skin_history,styling_refs,customer_id').in('id',dogIds):Promise.resolve({data:[]}),
+  custIds.length?db.from('customers').select('id,owner,address,kecamatan,kota,gmaps_link').in('id',custIds):Promise.resolve({data:[]})
+ ]);
+ dataCache={appts,dogs:dr.data||[],custs:cr.data||[]};
+ updateCounts();
+ renderActiveTab();
+}
+
+function updateCounts(){
+ const today=iso(new Date());
+ const tmw=new Date();tmw.setDate(tmw.getDate()+1);const tmwISO=iso(tmw);
+ const d2=new Date();d2.setDate(d2.getDate()+2);const d2ISO=iso(d2);
+ const d3=new Date();d3.setDate(d3.getDate()+3);const d3ISO=iso(d3);
+ const c={today:0,tomorrow:0,later:0};
+ dataCache.appts.forEach(a=>{
+  if(a.appt_date===today) c.today++;
+  else if(a.appt_date===tmwISO) c.tomorrow++;
+  else if(a.appt_date===d2ISO||a.appt_date===d3ISO) c.later++;
+ });
+ document.getElementById('cnt-today').textContent=c.today;
+ document.getElementById('cnt-tomorrow').textContent=c.tomorrow;
+ document.getElementById('cnt-later').textContent=c.later;
+}
+
+function switchTab(tab){
+ currentTab=tab;
+ ['today','tomorrow','later'].forEach(t=>{
+  document.getElementById('tab-'+t).classList.toggle('active',t===tab);
+ });
+ renderActiveTab();
+}
+
+function renderActiveTab(){
+ const content=document.getElementById('content');
+ const today=iso(new Date());
+ const tmw=new Date();tmw.setDate(tmw.getDate()+1);const tmwISO=iso(tmw);
+ const d2=new Date();d2.setDate(d2.getDate()+2);const d2ISO=iso(d2);
+ const d3=new Date();d3.setDate(d3.getDate()+3);const d3ISO=iso(d3);
+
+ let dates;
+ if(currentTab==='today') dates=[today];
+ else if(currentTab==='tomorrow') dates=[tmwISO];
+ else dates=[d2ISO,d3ISO];
+
+ const sections=dates.map(date=>{
+  const dayAppts=dataCache.appts.filter(a=>a.appt_date===date)
+   .sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
+  const isToday=date===today;
+  return {date,isToday,appts:dayAppts};
+ });
+
+ const hasAny=sections.some(s=>s.appts.length>0);
+ if(!hasAny){
+  content.innerHTML='<div class="empty">Tidak ada jadwal grooming untuk periode ini.<br><br>Refresh nanti untuk update.</div>';
+  return;
+ }
+
+ content.innerHTML=sections.map(({date,isToday,appts})=>{
+  if(!appts.length) return '';
+  return `<div class="day-section">
+   <div class="day-header ${isToday?'today':''}">${esc(fmtDateLong(date))}</div>
+   ${appts.map(renderAppt).join('')}
+  </div>`;
+ }).join('');
+}
+
+function isStyleRefExpired(ref){
+ if(!ref?.uploaded_at) return false;
+ const days=Math.floor((Date.now()-new Date(ref.uploaded_at).getTime())/(86400000));
+ return days>60;
+}
+
+function renderAppt(a){
+ const dog=dataCache.dogs.find(d=>d.id===a.dog_id);
+ const cust=dataCache.custs.find(c=>c.id===a.customer_id)||(dog?dataCache.custs.find(c=>c.id===dog.customer_id):null);
+ if(!dog||!cust) return ''; // skip if related data missing
+
+ const time=fmtTime(a.appt_time);
+ const dur=a.duration_mins||60;
+ const endMin=(parseInt(time.split(':')[0])*60+parseInt(time.split(':')[1]))+dur;
+ const endTime=String(Math.floor(endMin/60)).padStart(2,'0')+':'+String(endMin%60).padStart(2,'0');
+
+ const status=a.status||'pending';
+
+ // Address: build full string, add Google Maps link
+ const addrParts=[cust.address,cust.kecamatan,cust.kota].filter(Boolean);
+ const addrStr=addrParts.join(', ')||'(alamat tidak tersedia)';
+ const mapsLink=cust.gmaps_link||'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(addrParts.concat(['Jakarta']).join(', '));
+
+ // Dog info
+ const dogMeta=[dog.breed,dog.size,dog.coat,dog.coat_color].filter(Boolean).join(' · ');
+ const svc=a.service_base||'Basic Grooming';
+ // Clean appt_note (strip per-dog markers like (1/2))
+ const note=(a.appt_note||'').replace(/\s*\(\d+\/\d+\)\s*$/,'').trim();
+
+ // Skin condition
+ const skinBlock=dog.skin_history?`<div class="dog-skin"><strong>Kondisi kulit</strong>${esc(dog.skin_history)}</div>`:'';
+
+ // Styling refs (filter expired)
+ const refs=Array.isArray(dog.styling_refs)?dog.styling_refs.filter(r=>!isStyleRefExpired(r)):[];
+ const stylingBlock=refs.length?`<div class="dog-styling">
+  <div class="dog-styling-label">Styling references (${refs.length})</div>
+  <div class="dog-styling-imgs">
+   ${refs.slice(0,6).map(r=>`<a href="${esc(r.url)}" target="_blank"><img src="${esc(r.url)}" alt="ref"/></a>`).join('')}
+  </div>
+ </div>`:'';
+
+ return `<div class="appt ${status}">
+  <div class="appt-time">
+   <span class="appt-time-big">${esc(time)} – ${esc(endTime)}</span>
+   <span class="appt-duration">${dur} min</span>
+   <span class="appt-status ${status}">${esc(status)}</span>
+  </div>
+  <div class="appt-cust">${esc(cust.owner||'?')}</div>
+  <div class="appt-addr">${esc(addrStr)}<br/>
+   <a href="${mapsLink}" target="_blank">Buka di Google Maps →</a>
+  </div>
+  <div class="dog-card">
+   <div class="dog-name">${esc(dog.name||'?')}</div>
+   <div class="dog-meta">${esc(dogMeta||'-')}</div>
+   <div class="dog-svc">${esc(svc)}</div>
+   ${dog.prefs?`<div class="dog-prefs">${esc(dog.prefs)}</div>`:''}
+   ${skinBlock}
+   ${stylingBlock}
+  </div>
+  ${note?`<div class="appt-note">Catatan: ${esc(note)}</div>`:''}
+ </div>`;
+}
+
+// Auto-refresh every 5 minutes
+setInterval(()=>{if(currentGroomer)loadSchedule()},5*60*1000);
+
+// Init on load
+init();
+</script>
+</body>
+</html>
