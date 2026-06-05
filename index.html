@@ -2636,11 +2636,50 @@ function renderGroomers(){
  <td>${ac}</td>
  <td><div class="row-actions">
  <button class="icon-btn view" onclick="openGSched('${g.id}')">Schedule</button>
-        <button class="icon-btn" onclick="openEditGroomer('${g.id}')">Edit</button>
+ <button class="icon-btn" onclick="copyGroomerScheduleLink('${g.id}')" title="Copy groomer schedule URL">Link</button>
+ <button class="icon-btn" onclick="openEditGroomer('${g.id}')">Edit</button>
  <button class="icon-btn del" onclick="delGroomer('${g.id}','${esc(g.name).replace(/'/g,"\\'")}')">Del</button>
  </div></td>
  </tr>`;
  }).join('');
+}
+
+// Batch O.7 — share groomer schedule URL
+function copyGroomerScheduleLink(groomerId){
+ const g=groomers.find(x=>x.id===groomerId); if(!g){alert('Groomer tidak ditemukan');return}
+ if(!g.access_token){
+  alert('Groomer ini belum punya access_token. Jalankan migration batch_o7_migration.sql di Supabase dulu.');
+  return;
+ }
+ const base=window.location.origin+window.location.pathname.replace(/[^/]+$/,'');
+ const url=`${base}groomer.html?name=${encodeURIComponent((g.name||'').toLowerCase())}&token=${g.access_token}`;
+ // WhatsApp share message
+ const msg=`Halo ${g.name},\n\nJadwal grooming kamu bisa diakses di link ini (bookmark di hp ya):\n\n${url}\n\nLogin pakai:\n- Nama: ${g.name}\n- Code: ${g.access_token}\n\nLink ini cuma untuk kamu, jangan share ya. Update otomatis setiap 5 menit.`;
+ const waPhone=g.phone?'62'+g.phone.replace(/^0/,'').replace(/\D/g,''):null;
+ const waLink=waPhone?`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`:null;
+ // Show in a small modal with copy + WA buttons
+ const modalHtml=`
+  <div style="font-size:13px;margin-bottom:12px"><strong>${esc(g.name)}</strong>'s schedule URL:</div>
+  <div style="background:var(--subtle);padding:10px;border-radius:6px;font-family:monospace;font-size:11px;word-break:break-all;margin-bottom:12px;border:1px solid var(--border)" id="g-link-url">${esc(url)}</div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Login pakai: Nama "<strong>${esc(g.name)}</strong>" + Code "<strong>${esc(g.access_token)}</strong>"</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+   <button class="btn btn-p btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('g-link-url').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy URL',1500)">Copy URL</button>
+   ${waLink?`<a class="btn btn-g btn-sm" href="${waLink}" target="_blank">Send via WhatsApp</a>`:''}
+   <button class="btn btn-g btn-sm" onclick="navigator.clipboard.writeText(\`${msg.replace(/`/g,'\\`').replace(/\$/g,'\\$')}\`);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy message',1500)">Copy full message</button>
+  </div>`;
+ // Use a simple ad-hoc overlay
+ let ov=document.getElementById('g-link-modal');
+ if(!ov){
+  ov=document.createElement('div');
+  ov.id='g-link-modal';
+  ov.className='overlay';
+  ov.style.display='flex';
+  ov.innerHTML=`<div class="modal" style="max-width:480px"><button class="modal-close" onclick="document.getElementById('g-link-modal').remove()" title="Close">&#x2715;</button><div class="modal-title">Groomer schedule link</div><div id="g-link-body"></div></div>`;
+  document.body.appendChild(ov);
+ } else {
+  ov.style.display='flex';
+ }
+ document.getElementById('g-link-body').innerHTML=modalHtml;
 }
 
 function openAddGroomer(){
@@ -2676,7 +2715,11 @@ async function saveGroomer(){
  active:document.getElementById('gf-active').checked
  };
  if(groomerEditId){await db.from('groomers').update(p).eq('id',groomerEditId)}
- else{await db.from('groomers').insert(p)}
+ else{
+  // Batch O.7 — generate random access_token for new groomer
+  p.access_token=Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,10);
+  await db.from('groomers').insert(p);
+ }
  cm('ov-groomer'); await loadAll(); renderGroomers();
 }
 
