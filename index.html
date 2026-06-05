@@ -1078,9 +1078,13 @@ tbody tr:hover{background:var(--subtle)}
   <!-- Step 4: Summary + Save -->
   <div id="wiz-4" style="display:none">
    <div id="wiz-summary" style="background:var(--subtle);border-radius:var(--rl);padding:1rem;margin-bottom:.9rem;font-size:13px;line-height:1.8"></div>
-   <div class="fg" style="margin-bottom:.9rem">
-    <label>Notes (optional)</label>
+   <div class="fg" style="margin-bottom:.6rem">
+    <label>Catatan groomer (internal) <span style="font-size:10px;color:var(--muted);font-weight:400">— ditampilkan ke groomer saja</span></label>
     <input id="appt-note" placeholder="e.g. Lion cut, bring own shampoo"/>
+   </div>
+   <div class="fg" style="margin-bottom:.9rem">
+    <label>Catatan dari customer <span style="font-size:10px;color:var(--muted);font-weight:400">— ditampilkan di reminder ke customer</span></label>
+    <input id="appt-customer-note" placeholder="e.g. Latte agak stress, tolong gentle ya"/>
    </div>
    <div class="form-actions">
     <button class="btn btn-p" onclick="saveAppt()" id="appt-save-btn">Save appointment</button>
@@ -2495,6 +2499,7 @@ function openAppt(dateISO,groomerId,startMins){
  const invBtnNew=document.getElementById('appt-invoice-btn');
  if(invBtnNew) invBtnNew.style.display='none';
  document.getElementById('appt-note').value='';
+ const cnEl=document.getElementById('appt-customer-note'); if(cnEl) cnEl.value='';
  document.getElementById('appt-cust').value='';
  document.getElementById('appt-cust-search').value='';
  populateWizCustList();
@@ -2539,6 +2544,7 @@ function openApptEdit(id){
   }
  }
  document.getElementById('appt-note').value=a.appt_note||'';
+ const cnElE=document.getElementById('appt-customer-note'); if(cnElE) cnElE.value=a.customer_note||'';
  const cs=document.getElementById('appt-cust');
  cs.innerHTML='<option value="">Select customer…</option>'+
   custs.map(c=>`<option value="${c.id}" ${c.id===wiz.custId?'selected':''}>${esc(c.customer_code||'?')} – ${esc(c.owner)}</option>`).join('');
@@ -2576,6 +2582,7 @@ async function saveAppt(){
   alert('Incomplete booking details');return;
  }
  const note=document.getElementById('appt-note').value.trim();
+ const custNote=document.getElementById('appt-customer-note')?.value.trim()||null;
  const inserts=[];
  let cursor=wiz.startMins;
  wiz.dogSvcs.forEach((ds,i)=>{
@@ -2595,6 +2602,7 @@ async function saveAppt(){
    dog_id:ds.did,groomer_id:wiz.groomerId,appt_date:wiz.date,
    appt_time:m2t(cursor)+':00',service_base:ds.svc,duration_mins:dur,
    appt_note:note+(wiz.dogSvcs.length>1?` (${i+1}/${wiz.dogSvcs.length})`:''),
+   customer_note:custNote,
    token_id:wiz.tokenId||null,token_used:false,session_source:sessSrc,
    ...editStamp()
   });
@@ -4468,6 +4476,13 @@ function generateCustomerReminders(){
   const greeting=greetingTpl||`Halo kak ${ownerName.split(' ')[0]||ownerName}`;
 
   // Build message body — single vs multi dog
+  // Batch O.8 — use customer_note (NOT appt_note which is groomer-facing); always append dog.prefs if dog has notes
+  const buildNoteLine=(a,dog)=>{
+   const parts=[];
+   if(a.customer_note) parts.push(a.customer_note.trim());
+   if(dog.prefs) parts.push(dog.prefs.trim());
+   return parts.length?parts.join(' \u00B7 '):'(no notes)';
+  };
   let msg=`${greeting},\n\nIzin reminder untuk appointment besok:\n`;
   if(sortedAppts.length===1){
    const a=sortedAppts[0];
@@ -4476,8 +4491,7 @@ function generateCustomerReminders(){
    const endMin=t2m(startT)+(a.duration_mins||60);
    const endT=m2t(endMin);
    const svc=a.service_base||'Basic Grooming';
-   const note=(a.appt_note||'').replace(/\s*\(\d+\/\d+\)\s*$/,'').trim();
-   msg+=`\nNama: ${dog.name||'?'}\nJam: ${startT} - ${endT}\nService: ${svc}\nSpecial note: ${note||'(no notes)'}\n`;
+   msg+=`\nNama: ${dog.name||'?'}\nJam: ${startT} - ${endT}\nService: ${svc}\nSpecial note: ${buildNoteLine(a,dog)}\n`;
   } else {
    sortedAppts.forEach(a=>{
     const dog=dogs.find(d=>d.id===a.dog_id)||a.dogs||{};
@@ -4485,8 +4499,7 @@ function generateCustomerReminders(){
     const endMin=t2m(startT)+(a.duration_mins||60);
     const endT=m2t(endMin);
     const svc=a.service_base||'Basic Grooming';
-    const note=(a.appt_note||'').replace(/\s*\(\d+\/\d+\)\s*$/,'').trim();
-    msg+=`\nNama: ${dog.name||'?'}\nJam: ${startT} - ${endT}\nService: ${svc}\nSpecial note: ${note||'(no notes)'}\n`;
+    msg+=`\nNama: ${dog.name||'?'}\nJam: ${startT} - ${endT}\nService: ${svc}\nSpecial note: ${buildNoteLine(a,dog)}\n`;
    });
   }
   msg+=`\n${closingTpl}`;
