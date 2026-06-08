@@ -662,7 +662,8 @@ tbody tr:hover{background:var(--subtle)}
  <select id="inv-groomer" onchange="renderInvoicePreview()"><option value="">Pilih groomer…</option></select>
  </div>
  <div class="fg"><label>Or type manually</label><input id="inv-groomer-manual" placeholder="Nama groomer" oninput="renderInvoicePreview()"/></div>
- <div class="fg"><label>Tanggal invoice</label><input type="date" id="inv-date" onchange="renderInvoicePreview();updateSubsBillingDate()"/></div>
+ <div class="fg"><label>Tanggal invoice</label><input type="date" id="inv-date" onchange="onInvDateChange()"/></div>
+ <div class="fg"><label>Tanggal jatuh tempo <span style="font-size:10px;color:var(--muted);font-weight:400">(optional, default: invoice + 1)</span></label><input type="date" id="inv-due-date" onchange="renderInvoicePreview()"/></div>
  </div>
  </div>
 
@@ -2969,6 +2970,9 @@ function initInvoiceTab(){
  gs.innerHTML='<option value="">Pilih groomer…</option>'+groomers.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
  const t=iso(new Date());
  if(!document.getElementById('inv-date').value) document.getElementById('inv-date').value=t;
+ // Batch O.9 — default due date to invoice + 1 if blank
+ const ddEl=document.getElementById('inv-due-date');
+ if(ddEl&&!ddEl.value) updateInvDueDate();
  const dt=document.getElementById('inv-disc-type');
  if(!dt.value) dt.value='percent';
  // Clear search input on tab open
@@ -3011,6 +3015,7 @@ function resetInvoice(){
  if(g('inv-disc-value')) g('inv-disc-value').value=0;
  if(g('inv-disc-base-only')) g('inv-disc-base-only').checked=false;
  if(g('inv-subs-billing')) g('inv-subs-billing').checked=false;
+ if(g('inv-due-date')) g('inv-due-date').value='';
  if(g('inv-notes')) g('inv-notes').value='';
  recalcInvoice();
  updateInvoiceModeBanner();
@@ -3077,6 +3082,7 @@ function openInvoiceForEdit(id){
   });
   // Invoice-level fields
   const dtEl=document.getElementById('inv-date'); if(dtEl) dtEl.value=inv.invoice_date||iso(new Date());
+  const ddEl=document.getElementById('inv-due-date'); if(ddEl) ddEl.value=inv.due_date||'';
   const grEl=document.getElementById('inv-groomer'); if(grEl) grEl.value=inv.groomer_id||'';
   const ditEl=document.getElementById('inv-disc-type'); if(ditEl) ditEl.value=inv.discount_type||'';
   const divEl=document.getElementById('inv-disc-value'); if(divEl) divEl.value=inv.discount_value||0;
@@ -3348,9 +3354,45 @@ function onIntervalChange(){
 
 // Batch O.4 — Subscription billing toggle
 function onSubsBillingToggle(){
- updateSubsBillingDate();
+ updateInvDueDate();
  renderInvoicePreview();
 }
+
+// Batch O.9 — invoice date changed → auto-update due_date field per current rules
+function onInvDateChange(){
+ updateInvDueDate();
+ renderInvoicePreview();
+}
+
+// Compute & set the inv-due-date field based on invoice date + subscription billing flag.
+// Rules:
+//  - Subs billing checked, invoice day <= 5: due = 5th of same month
+//  - Subs billing checked, invoice day > 5: clear due date (admin sets manually)
+//  - Otherwise: due = invoice + 1 day (default)
+function updateInvDueDate(){
+ const invDateEl=document.getElementById('inv-date');
+ const dueDateEl=document.getElementById('inv-due-date');
+ if(!invDateEl||!dueDateEl) return;
+ const invDateStr=invDateEl.value;
+ if(!invDateStr){dueDateEl.value='';updateSubsBillingDate();return}
+ const invDate=new Date(invDateStr+'T00:00:00');
+ const subsCb=document.getElementById('inv-subs-billing');
+ if(subsCb?.checked){
+  const day=invDate.getDate();
+  if(day<=5){
+   const due=new Date(invDate.getFullYear(),invDate.getMonth(),5);
+   dueDateEl.value=iso(due);
+  } else {
+   dueDateEl.value=''; // subs billing past 5th → no due date
+  }
+ } else {
+  // Default: invoice + 1 day
+  const due=new Date(invDate); due.setDate(due.getDate()+1);
+  dueDateEl.value=iso(due);
+ }
+ updateSubsBillingDate();
+}
+
 function updateSubsBillingDate(){
  const cb=document.getElementById('inv-subs-billing');
  const preview=document.getElementById('inv-subs-due-preview');
@@ -3370,7 +3412,7 @@ function updateSubsBillingDate(){
   preview.style.display='block';
   preview.style.background='#fef3c7';
   preview.style.color='#92400e';
-  preview.textContent='Tanggal invoice setelah tanggal 5 — tidak ada due date otomatis. Admin tulis manual di catatan invoice.';
+  preview.textContent='Tanggal invoice setelah tanggal 5 — tidak ada due date otomatis. Admin tulis manual di field jatuh tempo atau catatan.';
  }
 }
 
@@ -3621,6 +3663,7 @@ function buildInvoiceRecord(){
   groomer_id:grId||null,
   groomer_name:groomerName,
   invoice_date:document.getElementById('inv-date').value||iso(new Date()),
+  due_date:document.getElementById('inv-due-date')?.value||null,
   dogs:dogsData,
   subtotal:t.subtotal,
   sessions:1,
@@ -3951,15 +3994,22 @@ function buildInvoiceHTML(rec, custObj, bankObj, forPrint){
  const ba=baRaw.replace(/\s/g,'').replace(/(.{4})/g,'$1 ').trim();
  const bh=bankObj.bank_holder||'Xavier Fidelia Ali';
  const invDate=new Date(rec.invoice_date+'T00:00:00');
- // Batch O.4 — Subscription billing: due date = 5th of THIS month if invoice <= 5th, else no auto due
- let dueDate=new Date(invDate); dueDate.setDate(dueDate.getDate()+1);
+ // Batch O.9 — due_date is now an optional column. If present, use it. If blank, hide entirely.
+ // Backward-compat: old invoices without due_date column default to invoice+1.
+ let dueDate=null;
  let hideDueDate=false;
- if(rec.is_subscription_billing){
-  const day=invDate.getDate();
-  if(day<=5){
-   dueDate=new Date(invDate.getFullYear(),invDate.getMonth(),5);
-  } else {
-   hideDueDate=true;
+ if(rec.due_date===null||rec.due_date===''){
+  hideDueDate=true;
+ } else if(rec.due_date){
+  dueDate=new Date(rec.due_date+'T00:00:00');
+ } else {
+  // Legacy fallback (column didn't exist or undefined): old default = invoice + 1
+  dueDate=new Date(invDate); dueDate.setDate(dueDate.getDate()+1);
+  // Subs billing legacy logic
+  if(rec.is_subscription_billing){
+   const day=invDate.getDate();
+   if(day<=5) dueDate=new Date(invDate.getFullYear(),invDate.getMonth(),5);
+   else hideDueDate=true;
   }
  }
  const fmtID=(d)=>new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
@@ -4025,7 +4075,7 @@ ${forPrint?'@media print{.inv-wrap{padding:24px 28px}}':''}
 <div class="meta-row">
  <div class="meta-item"><div class="meta-lbl">No. Invoice</div><div class="meta-val">${rec.invoice_number}</div></div>
  <div class="meta-item"><div class="meta-lbl">Tanggal</div><div class="meta-val">${fmtID(invDate)}</div></div>
- <div class="meta-item"><div class="meta-lbl">Jatuh tempo</div><div class="meta-val" style="color:#dc2626">${hideDueDate?'<span style="color:#888;font-style:italic">manual</span>':fmtID(dueDate)}</div></div>
+ ${hideDueDate?'':`<div class="meta-item"><div class="meta-lbl">Jatuh tempo</div><div class="meta-val" style="color:#dc2626">${fmtID(dueDate)}</div></div>`}
  <div class="meta-item"><div class="meta-lbl">Groomer</div><div class="meta-val">${rec.groomer_name||'-'}</div></div>
 </div>
 <div class="bill-row">
