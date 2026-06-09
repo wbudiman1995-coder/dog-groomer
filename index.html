@@ -1893,8 +1893,8 @@ let calDay=iso(new Date());
 
 /* ---- DURATION LOGIC ---- */
 const DUR_BASE={XS:60,Small:60,S:60,Medium:90,M:90,Large:120,L:120,XL:120};
-const DUR_ADD={Styling:30,Botak:15,Dematting:15,Deshedding:20};
-const SVC_LIST=['Basic Grooming','Basic + Styling','Basic + Botak','Basic + Dematting','Basic + Deshedding','Wash only'];
+const DUR_ADD={Styling:30,Botak:15,Dematting:15,Deshedding:20,'Anti Fungal':15,'Anti Kutu':10,Whitening:15,Parfume:5};
+const SVC_LIST=['Basic Grooming','Basic + Styling','Basic + Botak','Basic + Dematting','Basic + Deshedding','Basic + Whitening','Basic + Anti Kutu','Basic + Anti Fungal','Basic + Parfume','Wash only'];
 function dogDur(svc,size){
  const base=DUR_BASE[size]||60;
  let extra=0;
