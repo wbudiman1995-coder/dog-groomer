@@ -378,6 +378,75 @@ tbody tr:hover{background:var(--subtle)}
 @media (max-width: 768px){
  #sec-dashboard > div[style*="grid-template-columns"]{grid-template-columns:1fr!important}
 }
+
+/* ============ BATCH O.11 — PHONE-SPECIFIC (<=480px) ============ */
+@media (max-width: 480px){
+ /* Header */
+ .nav{padding:8px 10px;gap:6px;flex-wrap:nowrap;align-items:center}
+ .nav-brand{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:none;flex:1;min-width:0}
+ .nav-user-email{display:none}
+ .nav-user{gap:6px;flex-shrink:0}
+ .nav-user .btn{padding:6px 10px;font-size:11px;min-height:32px;white-space:nowrap}
+
+ /* Calendar nav: compact one-line */
+ .cal-nav{flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px}
+ .cal-nav .btn{padding:6px 10px;font-size:12px;min-height:36px}
+ .cal-title{font-size:13px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+ .cal-view-toggle{display:none}
+ .cal-block-day-btn{display:none}
+ .cal-menu-btn{display:inline-flex!important}
+
+ /* Hide help text + legend */
+ .cal-help-line{display:none}
+ .cal-legend{display:none}
+
+ /* Mass select toolbar */
+ #cal-mass-toolbar{padding:6px 10px;font-size:12px}
+
+ /* Calendar grid: narrower time labels */
+ .cal-time-label{font-size:10px!important}
+
+ /* Tighter appointment blocks */
+ .appt-block{padding:4px 5px;font-size:10px;line-height:1.25}
+ .ab-time{font-size:9px}
+ .ab-name{font-size:11px;font-weight:600}
+ .ab-kota{display:none}
+ .ab-svc{font-size:9px;color:rgba(0,0,0,.5)}
+
+ /* Section padding */
+ .page{padding:.5rem .4rem}
+ .sec{padding:.6rem .5rem}
+
+ /* Toolbar titles smaller */
+ .toolbar-title{font-size:14px}
+ .toolbar{padding:6px 0}
+
+ /* Customer 360 panel: full screen */
+ .c360-panel{width:100vw!important;height:100vh!important;top:0!important;bottom:0!important;border-radius:0!important;transform:translateY(100%)}
+ .c360-panel.open{transform:translateY(0)}
+ .c360-tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+ .c360-tab{flex-shrink:0;padding:8px 10px;font-size:12px;white-space:nowrap}
+
+ /* Subtabs scroll horizontally on phone */
+ .subtabs{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap}
+ .subtab{flex-shrink:0;white-space:nowrap}
+
+ /* History feed compact */
+ #hist-feed [style*="border-left:3px solid"]{padding:6px 8px}
+
+ /* Filter bars vertical */
+ .filter-bar{flex-direction:column;align-items:stretch;gap:6px}
+}
+
+/* Format hour labels: hide :00 on phone */
+@media (max-width: 480px){
+ .cal-hour-only{display:inline}
+ .cal-hour-full{display:none}
+}
+@media (min-width: 481px){
+ .cal-hour-only{display:none}
+ .cal-hour-full{display:inline}
+}
 </style>
 </head>
 <body class="auth-loading">
@@ -593,7 +662,8 @@ tbody tr:hover{background:var(--subtle)}
    <button onclick="setCalView('3day')" id="cv-3day">3 days</button>
    <button class="active" onclick="setCalView('week')" id="cv-week">Week</button>
   </div>
-  <button class="btn btn-d btn-sm" onclick="openBlockDayModal()" style="margin-left:auto" title="Block day (sick / holiday / leave)">Block day</button>
+  <button class="btn btn-d btn-sm cal-block-day-btn" onclick="openBlockDayModal()" style="margin-left:auto" title="Block day (sick / holiday / leave)">Block day</button>
+  <button class="btn btn-g btn-sm cal-menu-btn" onclick="openCalMobileMenu(event)" style="display:none;padding:6px 10px;font-size:14px;margin-left:auto" title="More">&#x22EE;</button>
  </div>
  <!-- Groomer filter tabs -->
  <div id="cal-groomer-tabs" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px"></div>
@@ -604,8 +674,8 @@ tbody tr:hover{background:var(--subtle)}
   <button class="btn btn-d btn-sm" onclick="massDelete()">Delete selected</button>
   <button class="btn btn-g btn-sm" onclick="clearMassSelect()">Cancel</button>
  </div>
- <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Click slot to book · Drag to reschedule · Click block to edit · Hold Shift+click to multi-select</div>
- <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;font-size:10px;color:var(--muted)">
+ <div class="cal-help-line" style="font-size:11px;color:var(--muted);margin-bottom:6px">Click slot to book · Drag to reschedule · Click block to edit · Hold Shift+click to multi-select</div>
+ <div class="cal-legend" style="display:flex;align-items:center;gap:12px;margin-bottom:8px;font-size:10px;color:var(--muted)">
   <span>Legend:</span>
   <span style="display:flex;align-items:center;gap:3px"><span class="ab-badge ab-badge-S">S</span> Subscription</span>
   <span style="display:flex;align-items:center;gap:3px"><span class="ab-badge ab-badge-A">A</span> Advance (token)</span>
@@ -1288,7 +1358,7 @@ let invSelectedCust=null, invSelectedDogs=[], invDogServices={}, invDogNotes={},
 let invPhotos={};
 let calStart = weekStart(new Date());
 // Batch O — calendar view mode (day / 3day / week). Mobile defaults to day.
-let calView = (window.matchMedia&&window.matchMedia('(max-width: 768px)').matches) ? 'day' : 'week';
+let calView = (window.matchMedia&&window.matchMedia('(max-width: 480px)').matches) ? 'day' : 'week';
 
 function weekStart(d) {
  const x=new Date(d), day=x.getDay(), diff=x.getDate()-day+(day===0?-6:1);
@@ -1693,7 +1763,17 @@ function sw(tab) {
  document.getElementById('sec-'+tab).classList.add('active');
  if(tab==='dashboard') renderDashboard();
  if(tab==='database') renderCusts();
- if(tab==='calendar') renderCal();
+ if(tab==='calendar'){
+  // Batch O.11 — always jump to today when opening calendar
+  const today=new Date(); today.setHours(0,0,0,0);
+  // On phone (<=480px), force Day view; else respect existing view
+  const isPhone480=window.matchMedia&&window.matchMedia('(max-width: 480px)').matches;
+  if(isPhone480) calView='day';
+  if(calView==='week') calStart=weekStart(today);
+  else { calStart=new Date(today); }
+  calDay=iso(today);
+  renderCal();
+ }
  if(tab==='groomers') renderGroomers();
  if(tab==='invoice') initInvoiceTab();
  if(tab==='financial'){ swFin('invoices'); }
@@ -2182,9 +2262,16 @@ function renderCal(){
   viewStart=new Date(calStart);
  }
  const end=new Date(viewStart);end.setDate(end.getDate()+(nDays-1));
- document.getElementById('cal-title').textContent=
-  viewStart.toLocaleDateString('id-ID',{day:'numeric',month:'short'})+
-  (nDays>1?' – '+end.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):' '+viewStart.toLocaleDateString('id-ID',{year:'numeric'}));
+ const isPhone480=window.matchMedia&&window.matchMedia('(max-width: 480px)').matches;
+ if(isPhone480&&nDays===1){
+  // Compact: "Sun, 14 Jun"
+  document.getElementById('cal-title').textContent=
+   viewStart.toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short'});
+ } else {
+  document.getElementById('cal-title').textContent=
+   viewStart.toLocaleDateString('id-ID',{day:'numeric',month:'short'})+
+   (nDays>1?' – '+end.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):' '+viewStart.toLocaleDateString('id-ID',{year:'numeric'}));
+ }
  const today=new Date();today.setHours(0,0,0,0);
 
  const wdays=[];
@@ -2208,7 +2295,9 @@ function renderCal(){
  const dayColW=`repeat(${nSubCols},1fr)`;
  const minW = nDays===1 ? '100%' : nDays===3 ? '500px' : '600px';
 
- let html=`<div style="display:grid;grid-template-columns:50px repeat(${nDays},minmax(0,1fr));min-width:${minW}">`;
+ const isPhone=window.matchMedia&&window.matchMedia('(max-width: 480px)').matches;
+ const timeColW=isPhone?'28px':'50px';
+ let html=`<div style="display:grid;grid-template-columns:${timeColW} repeat(${nDays},minmax(0,1fr));min-width:${minW}">`;
 
  // Header row: corner + day headers
  html+=`<div style="grid-column:1;background:var(--surface);position:sticky;top:0;z-index:10;border-bottom:1px solid var(--border)"></div>`;
@@ -2231,7 +2320,9 @@ function renderCal(){
  slots.forEach(m=>{
   const half=m%60!==0;
   const top=((m-SSTART)/SSTEP)*SH;
-  html+=`<div style="position:absolute;top:${top}px;height:${SH}px;width:100%;font-size:9px;color:var(--muted);padding-right:4px;text-align:right;border-top:1px solid ${half?'transparent':'var(--border)'};">${half?'':m2t(m)}</div>`;
+  const hourStr=String(Math.floor(m/60));
+  const fullStr=m2t(m);
+  html+=`<div class="cal-time-label" style="position:absolute;top:${top}px;height:${SH}px;width:100%;font-size:9px;color:var(--muted);padding-right:4px;text-align:right;border-top:1px solid ${half?'transparent':'var(--border)'};">${half?'':`<span class="cal-hour-only">${hourStr}</span><span class="cal-hour-full">${fullStr}</span>`}</div>`;
  });
  html+=`</div>`;
 
@@ -4729,6 +4820,30 @@ async function delInvoice(id,num){
 }
 
 // Batch O.10 — Block day (sick / holiday / leave)
+// Batch O.11 — mobile kebab menu for calendar (Block day, view toggle)
+function openCalMobileMenu(ev){
+ ev?.stopPropagation?.();
+ let menu=document.getElementById('cal-mobile-menu');
+ if(menu){menu.remove();return}
+ menu=document.createElement('div');
+ menu.id='cal-mobile-menu';
+ menu.style.cssText='position:fixed;top:60px;right:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:9999;padding:6px;min-width:180px';
+ menu.innerHTML=`
+  <button class="btn btn-g btn-sm" style="width:100%;justify-content:flex-start;margin-bottom:4px" onclick="document.getElementById('cal-mobile-menu')?.remove();setCalView('day')">Day view</button>
+  <button class="btn btn-g btn-sm" style="width:100%;justify-content:flex-start;margin-bottom:4px" onclick="document.getElementById('cal-mobile-menu')?.remove();setCalView('3day')">3-day view</button>
+  <button class="btn btn-g btn-sm" style="width:100%;justify-content:flex-start;margin-bottom:4px" onclick="document.getElementById('cal-mobile-menu')?.remove();setCalView('week')">Week view</button>
+  <div style="height:1px;background:var(--border);margin:4px 0"></div>
+  <button class="btn btn-d btn-sm" style="width:100%;justify-content:flex-start" onclick="document.getElementById('cal-mobile-menu')?.remove();openBlockDayModal()">Block day (sick/holiday)</button>
+ `;
+ document.body.appendChild(menu);
+ // Close on outside click
+ setTimeout(()=>{
+  document.addEventListener('click',function closeMenu(e){
+   if(!menu.contains(e.target)){menu.remove();document.removeEventListener('click',closeMenu)}
+  });
+ },50);
+}
+
 function openBlockDayModal(){
  // Default date = today
  const di=document.getElementById('bf-date');
