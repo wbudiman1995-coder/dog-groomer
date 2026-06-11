@@ -468,7 +468,6 @@ tbody tr:hover{background:var(--subtle)}
  <button class="nav-tab" onclick="sw('reminders')" id="tab-reminders">Reminders</button>
  <button class="nav-tab" onclick="sw('membership')" id="tab-membership">Membership</button>
  <button class="nav-tab" onclick="sw('access')" id="tab-access" style="display:none">Access<span class="access-badge" id="access-badge" style="display:none">0</span></button>
- <button class="nav-tab" onclick="sw('route')" id="tab-route">Route</button>
  </div>
  <div class="nav-user" id="nav-user-info" style="display:none">
   <span class="nav-user-email" id="nav-user-email"></span>
@@ -924,19 +923,7 @@ tbody tr:hover{background:var(--subtle)}
  </div>
  </div>
 
- <div class="sec" id="sec-route">
- <div class="route-box">
- <div class="route-lbl">Who to groom?</div>
- <button class="cal-load-btn" onclick="loadFromCal()">Load tomorrow's appointments</button>
- <textarea class="route-ta" id="route-input" placeholder='e.g. "Groom Max, Bella, Cooper tomorrow at 9am from Sudirman"'></textarea>
- <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
- <button class="btn btn-p" onclick="optimizeRoute()">Optimize route</button>
- <span style="font-size:12px;color:var(--muted)">or quick-select:</span>
- </div>
- <div class="chips" id="chips"></div>
- </div>
- <div id="route-result"></div>
- </div>
+ <div class="sec" id="sec-route" style="display:none"></div>
 </div>
 
 <!-- ADD/EDIT CUSTOMER -->
@@ -1208,6 +1195,8 @@ tbody tr:hover{background:var(--subtle)}
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 let dogs=[], visits=[], appts=[], custs=[], groomers=[], invoices=[], tokens=[], subscriptions=[], bankSettings={}, custEditId=null, dogEditId=null, currentCustId=null, apptDate=null, apptEditId=null, groomerEditId=null, membEditState=null;
+// Batch O.10
+let auditEntries=[], groomerBlocks=[];
 // Batch H — auth state
 let adminUsers=[], currentUser=null, currentAdminRow=null;
 // Batch J — payroll
@@ -1244,6 +1233,104 @@ function editStamp(){
  const u=window._currentAuthUser;
  return {updated_by:u?.id||null, updated_at:new Date().toISOString()};
 }
+
+// Batch O.10 — audit log infrastructure
+const AUDIT_TRACKED_FIELDS={
+ customer:['owner','wa','address','kota','kecamatan','source','prefs','gmaps_link'],
+ dog:['name','breed','size','age','weight','coat','coat_color','prefs','skin_history','customer_id'],
+ appointment:['appt_date','appt_time','groomer_id','dog_id','service_base','status','appt_note','customer_note','duration_mins','session_source'],
+ invoice:['total','subtotal','status','discount_value','discount_amount','is_subscription_billing','due_date','notes'],
+ subscription:['type','status','sessions_total','sessions_used','expires_at'],
+ visit:['visited_at','service_type','is_billed_manually','billed_amount','billed_note','note'],
+ groomer_block:['block_date','groomer_id','reason','note']
+};
+
+// Compute diff between old & new objects, scoped to tracked fields
+function auditDiff(entity_type, oldRec, newRec){
+ const fields=AUDIT_TRACKED_FIELDS[entity_type]||[];
+ const changes={};
+ fields.forEach(f=>{
+  const oldVal=oldRec?.[f] ?? null;
+  const newVal=newRec?.[f] ?? null;
+  // Coerce undefined → null; compare loosely for type-cross-mismatch like "" vs null
+  const oNorm=(oldVal===''||oldVal===undefined)?null:oldVal;
+  const nNorm=(newVal===''||newVal===undefined)?null:newVal;
+  if(JSON.stringify(oNorm)!==JSON.stringify(nNorm)){
+   changes[f]={old:oNorm,new:nNorm};
+  }
+ });
+ return changes;
+}
+
+async function logAudit(entity_type, entity_id, action, opts){
+ // opts: {old, new, label}
+ const u=window._currentAuthUser;
+ const email=u?.email||window._adminEmails?.[u?.id]||'admin';
+ let changes={};
+ let entity_label=opts?.label||null;
+ if(action==='update'){
+  changes=auditDiff(entity_type, opts?.old, opts?.new);
+  if(Object.keys(changes).length===0) return; // no actual change — don't pollute log
+ } else if(action==='create'){
+  // Snapshot key fields only
+  const fields=AUDIT_TRACKED_FIELDS[entity_type]||[];
+  fields.forEach(f=>{if(opts?.new?.[f]!==undefined&&opts.new[f]!==null) changes[f]={old:null,new:opts.new[f]}});
+ } else if(action==='delete'){
+  const fields=AUDIT_TRACKED_FIELDS[entity_type]||[];
+  fields.forEach(f=>{if(opts?.old?.[f]!==undefined&&opts.old[f]!==null) changes[f]={old:opts.old[f],new:null}});
+ }
+ try{
+  await db.from('audit_log').insert({
+   entity_type, entity_id, action, changes,
+   entity_label,
+   user_id:u?.id||null,
+   user_email:email
+  });
+ }catch(e){console.warn('audit log failed:',e)}
+}
+
+// Human-readable label for a field name
+function auditFieldLabel(field){
+ const labels={
+  owner:'Owner',wa:'WhatsApp',address:'Address',kota:'Kota',kecamatan:'Kecamatan',
+  source:'Source',prefs:'Preferences',gmaps_link:'Maps link',
+  name:'Name',breed:'Breed',size:'Size',age:'Age',weight:'Weight',coat:'Coat',
+  coat_color:'Coat color',skin_history:'Skin history',customer_id:'Owner',
+  appt_date:'Date',appt_time:'Time',groomer_id:'Groomer',dog_id:'Dog',
+  service_base:'Service',status:'Status',appt_note:'Note (groomer)',
+  customer_note:'Note (customer)',duration_mins:'Duration (min)',session_source:'Source',
+  total:'Total',subtotal:'Subtotal',discount_value:'Discount %',discount_amount:'Discount amt',
+  is_subscription_billing:'Subs billing',due_date:'Due date',notes:'Notes',
+  type:'Type',sessions_total:'Sessions total',sessions_used:'Sessions used',expires_at:'Expires',
+  visited_at:'Visit date',service_type:'Service',is_billed_manually:'Manual billed',
+  billed_amount:'Billed amount',billed_note:'Bill note',note:'Note',
+  block_date:'Block date',reason:'Reason'
+ };
+ return labels[field]||field;
+}
+
+// Human-readable value (resolve UUIDs to names where possible)
+function auditFieldValue(field, val){
+ if(val===null||val===undefined) return '—';
+ if(field==='groomer_id'){
+  const g=groomers.find(x=>x.id===val);
+  return g?g.name:String(val).slice(0,8);
+ }
+ if(field==='dog_id'){
+  const d=dogs.find(x=>x.id===val);
+  return d?d.name:String(val).slice(0,8);
+ }
+ if(field==='customer_id'){
+  const c=custs.find(x=>x.id===val);
+  return c?c.owner:String(val).slice(0,8);
+ }
+ if(field==='is_billed_manually'||field==='is_subscription_billing'){
+  return val?'Yes':'No';
+ }
+ if(typeof val==='string'&&val.length>80) return val.slice(0,80)+'…';
+ return String(val);
+}
+
 function editStampHTML(rec){
  if(!rec||!rec.updated_at) return '';
  const when=new Date(rec.updated_at).toLocaleString('id-ID',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -1490,7 +1577,6 @@ function sw(tab) {
  if(tab==='reminders') initReminders();
  if(tab==='membership') renderMembership();
  if(tab==='access') renderAccess();
- if(tab==='route') renderChips();
 }
 
 function swSub(sub){
@@ -1506,7 +1592,7 @@ function swSub(sub){
 }
 
 async function loadAll() {
- const [cr,dr,vr,ar,gr,ir,br,tr,sr,aur,psr,gpr] = await Promise.all([
+ const [cr,dr,vr,ar,gr,ir,br,tr,sr,aur,psr,gpr,alr,gbr] = await Promise.all([
  db.from('customers').select('*').order('created_at',{ascending:false}),
  db.from('dogs').select('*').order('created_at',{ascending:false}),
  db.from('visits').select('*,dogs(name,size)').order('visited_at',{ascending:false}),
@@ -1518,9 +1604,12 @@ async function loadAll() {
  db.from('subscriptions').select('*').order('created_at',{ascending:false}),
  db.from('admin_users').select('*').order('created_at',{ascending:false}),
  db.from('payroll_settings').select('*').eq('id',1).maybeSingle(),
- db.from('groomer_payouts').select('*').order('cycle_start',{ascending:false})
+ db.from('groomer_payouts').select('*').order('cycle_start',{ascending:false}),
+ db.from('audit_log').select('*').order('created_at',{ascending:false}).limit(500),
+ db.from('groomer_blocks').select('*').order('block_date',{ascending:false})
  ]);
  custs=cr.data||[]; dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[]; groomers=gr.data||[]; invoices=ir.data||[]; bankSettings=br.data||{}; tokens=tr.data||[]; subscriptions=sr.data||[]; adminUsers=aur.data||[];
+ auditEntries=alr.data||[]; groomerBlocks=gbr.data||[];
  // Batch O.6 — admin email lookup cache for edit-history display
  window._adminEmails={};
  adminUsers.forEach(a=>{window._adminEmails[a.id]=a.email||a.name||'admin'});
@@ -1706,23 +1795,31 @@ async function saveCust(){
  ...editStamp()
  };
  if(custEditId){
- await db.from('customers').update(p).eq('id',custEditId);
+  const oldRec=custs.find(c=>c.id===custEditId);
+  await db.from('customers').update(p).eq('id',custEditId);
+  await logAudit('customer',custEditId,'update',{old:oldRec,new:p,label:owner});
  } else {
- let maxN=0;
- custs.forEach(c=>{
- const m=(c.customer_code||'').match(/^CUST-(\d+)$/);
- if(m){const n=parseInt(m[1]);if(n>maxN)maxN=n}
- });
- p.customer_code=`CUST-${String(maxN+1).padStart(3,'0')}`;
- await db.from('customers').insert(p);
+  let maxN=0;
+  custs.forEach(c=>{
+   const m=(c.customer_code||'').match(/^CUST-(\d+)$/);
+   if(m){const n=parseInt(m[1]);if(n>maxN)maxN=n}
+  });
+  p.customer_code=`CUST-${String(maxN+1).padStart(3,'0')}`;
+  const {data:inserted}=await db.from('customers').insert(p).select().single();
+  if(inserted) await logAudit('customer',inserted.id,'create',{new:p,label:owner});
  }
  cm('ov-cust'); await loadAll();
 }
 
 async function delCust(id,name){
  if(!confirm(`Delete customer "${name}" and ALL their dogs? Cannot be undone.`)) return;
+ const oldRec=custs.find(c=>c.id===id);
+ // Also delete linked dogs from audit POV
+ const linkedDogs=dogs.filter(d=>d.customer_id===id);
+ for(const d of linkedDogs) await logAudit('dog',d.id,'delete',{old:d,label:d.name});
  await db.from('dogs').delete().eq('customer_id',id);
  await db.from('customers').delete().eq('id',id);
+ await logAudit('customer',id,'delete',{old:oldRec,label:name});
  if(currentCustId===id) currentCustId=null;
  await loadAll();
 }
@@ -1784,25 +1881,30 @@ async function saveDog(){
  ...editStamp()
  };
  if(dogEditId){
- await db.from('dogs').update(p).eq('id',dogEditId);
+  const oldRec=dogs.find(d=>d.id===dogEditId);
+  await db.from('dogs').update(p).eq('id',dogEditId);
+  await logAudit('dog',dogEditId,'update',{old:oldRec,new:p,label:p.name});
  } else {
- // Generate dog_code = CUST-XXX-D{N} based on existing dogs for this customer
- const cust=custs.find(x=>x.id===currentCustId);
- const existing=dogsOf(currentCustId);
- let maxN=0;
- existing.forEach(d=>{
- const m=(d.dog_code||'').match(/-D(\d+)$/);
- if(m){const n=parseInt(m[1]);if(n>maxN)maxN=n}
- });
- p.dog_code=`${cust?.customer_code||'CUST-???'}-D${maxN+1}`;
- await db.from('dogs').insert(p);
+  // Generate dog_code = CUST-XXX-D{N} based on existing dogs for this customer
+  const cust=custs.find(x=>x.id===currentCustId);
+  const existing=dogsOf(currentCustId);
+  let maxN=0;
+  existing.forEach(d=>{
+   const m=(d.dog_code||'').match(/-D(\d+)$/);
+   if(m){const n=parseInt(m[1]);if(n>maxN)maxN=n}
+  });
+  p.dog_code=`${cust?.customer_code||'CUST-???'}-D${maxN+1}`;
+  const {data:inserted}=await db.from('dogs').insert(p).select().single();
+  if(inserted) await logAudit('dog',inserted.id,'create',{new:p,label:p.name});
  }
  cm('ov-dog'); await loadAll();
 }
 
 async function delDog(id,name){
  if(!confirm(`Delete dog "${name}"? Cannot be undone.`)) return;
+ const oldRec=dogs.find(d=>d.id===id);
  await db.from('dogs').delete().eq('id',id);
+ await logAudit('dog',id,'delete',{old:oldRec,label:name});
  await loadAll();
 }
 
@@ -2610,10 +2712,18 @@ async function saveAppt(){
   cursor+=dur;
  });
  if(wiz.editId){
+  const oldRec=appts.find(a=>a.id===wiz.editId);
   await db.from('appointments').update(inserts[0]).eq('id',wiz.editId);
+  const dogName=dogs.find(d=>d.id===oldRec?.dog_id)?.name||'?';
+  await logAudit('appointment',wiz.editId,'update',{old:oldRec,new:inserts[0],label:dogName+' '+inserts[0].appt_date});
  } else {
-  const {error}=await db.from('appointments').insert(inserts);
+  const {data:insertedAppts,error}=await db.from('appointments').insert(inserts).select();
   if(error){alert('Error: '+error.message);return}
+  // Log create for each inserted appt
+  for(const a of (insertedAppts||[])){
+   const dogName=dogs.find(d=>d.id===a.dog_id)?.name||'?';
+   await logAudit('appointment',a.id,'create',{new:a,label:dogName+' '+a.appt_date});
+  }
  }
  calDay=wiz.date;
  cm('ov-appt');await loadAll();renderCal();
@@ -2622,14 +2732,33 @@ async function saveAppt(){
 async function delApptFromModal(){
  if(!wiz.editId)return;
  if(!confirm('Delete this appointment?'))return;
- await db.from('appointments').delete().eq('id',wiz.editId);
+ await deleteAppointmentWithVisitCheck(wiz.editId);
  cm('ov-appt');await loadAll();renderCal();
 }
 
 async function delAppt(id){
  if(!confirm('Remove appointment?'))return;
- await db.from('appointments').delete().eq('id',id);
+ await deleteAppointmentWithVisitCheck(id);
  await loadAll();renderCal();
+}
+
+// Batch O.10 — appt delete: check for linked visit + log audit
+async function deleteAppointmentWithVisitCheck(apptId){
+ const oldAppt=appts.find(a=>a.id===apptId);
+ if(!oldAppt) return;
+ const dogName=dogs.find(d=>d.id===oldAppt.dog_id)?.name||'?';
+ // Check for linked visit (same dog + date)
+ const linkedVisit=visits.find(v=>v.dog_id===oldAppt.dog_id&&v.visited_at===oldAppt.appt_date);
+ if(linkedVisit){
+  const choice=prompt(`Ada visit terlinked dengan appointment ini (${dogName} pada ${oldAppt.appt_date}).\n\nKetik:\n- "yes" untuk hapus visit juga\n- "no" untuk simpan visit (mis. service tetap dilakukan)\n- batal/kosong untuk batalkan delete appointment\n\nPilihan:`,'yes');
+  if(choice===null||choice===''||choice.trim()==='') return; // cancelled
+  if(choice.trim().toLowerCase()==='yes'){
+   await db.from('visits').delete().eq('id',linkedVisit.id);
+   await logAudit('visit',linkedVisit.id,'delete',{old:linkedVisit,label:dogName+' ('+linkedVisit.visited_at+')'});
+  }
+ }
+ await db.from('appointments').delete().eq('id',apptId);
+ await logAudit('appointment',apptId,'delete',{old:oldAppt,label:dogName+' '+oldAppt.appt_date+' '+(oldAppt.appt_time||'').slice(0,5)});
 }
 /* GROOMERS TAB */
 function renderGroomers(){
@@ -3783,8 +3912,10 @@ async function saveInvoice(){
  const isEdit=!!invEditId;
  if(!confirm(`${isEdit?'Update':'Simpan'} invoice ${rec.invoice_number} untuk ${rec.owner_name}?\nTotal: ${fmtRp(rec.total)}`)) return;
  if(isEdit){
+  const oldRec=invoices.find(i=>i.id===invEditId);
   const {error}=await db.from('invoices').update(stripRecForDB(rec)).eq('id',invEditId);
   if(error){alert('Error: '+error.message);return}
+  await logAudit('invoice',invEditId,'update',{old:oldRec,new:rec,label:rec.invoice_number+' — '+rec.owner_name});
   // Bug fix: when editing an invoice, refresh linked tokens to match the new content.
   // Only safe to refresh tokens with 0 sessions_used. Same logic as subscriptions reversal.
   const linkedTokens=tokens.filter(t=>t.source_invoice===rec.invoice_number);
@@ -3802,8 +3933,9 @@ async function saveInvoice(){
   invEditId=null;
   updateInvoiceModeBanner();
  } else {
-  const {error}=await db.from('invoices').insert(stripRecForDB(rec));
+  const {data:inserted,error}=await db.from('invoices').insert(stripRecForDB(rec)).select().single();
   if(error){alert('Error: '+error.message);return}
+  if(inserted) await logAudit('invoice',inserted.id,'create',{new:rec,label:rec.invoice_number+' — '+rec.owner_name});
   await saveVisitsFromInvoice(rec);
   await createTokensFromInvoice(rec);
   alert('Invoice tersimpan: '+rec.invoice_number);
@@ -4451,7 +4583,9 @@ async function delInvoice(id,num){
   return;
  }
  if(!confirm(`Delete invoice ${num}?`)) return;
+ const oldRec=invoices.find(i=>i.id===id);
  await db.from('invoices').delete().eq('id',id);
+ await logAudit('invoice',id,'delete',{old:oldRec,label:num+' — '+(oldRec?.owner_name||'')});
  await loadAll(); renderFinancial();
 }
 
@@ -5778,6 +5912,8 @@ function renderVisits(){
      <button class="icon-btn" onclick="markVisitManualBilled('${v.id}')" style="margin-left:4px">Mark billed</button>`;
    }
   }
+  // Batch O.10 — Delete button on every visit row
+  actionCell+=`<button class="icon-btn del" onclick="delVisit('${v.id}')" style="margin-left:4px" title="Delete visit record">Del</button>`;
   return `<tr>
    <td>${fmtD(v.visited_at)}</td>
    <td><strong class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner||'?')}</strong>${c.customer_code?` <span style="font-size:10px;color:var(--muted)">${esc(c.customer_code)}</span>`:''}</td>
@@ -5797,27 +5933,46 @@ async function markVisitManualBilled(visitId){
  if(amtStr===null) return; // cancelled
  const amount=parseInt(amtStr.replace(/[^0-9]/g,''))||0;
  const note=prompt('Catatan (opsional, mis. "Dibayar tunai via WA"):','')||'';
- const {error}=await db.from('visits').update({
+ const newRec={
   is_billed_manually:true,
   billed_amount:amount,
   billed_at:new Date().toISOString(),
   billed_note:note
- }).eq('id',visitId);
+ };
+ const {error}=await db.from('visits').update(newRec).eq('id',visitId);
  if(error){alert('Error: '+error.message);return}
+ const dogName=dogs.find(d=>d.id===v.dog_id)?.name||'?';
+ await logAudit('visit',visitId,'update',{old:v,new:{...v,...newRec},label:dogName+' ('+v.visited_at+')'});
  await loadAll(); renderVisits();
  showToast('Visit ditandai sebagai manual billed','success');
 }
 
 async function unmarkVisitBilled(visitId){
  if(!confirm('Hapus tanda manual-billed dari visit ini?')) return;
- const {error}=await db.from('visits').update({
-  is_billed_manually:false,
-  billed_amount:0,
-  billed_at:null,
-  billed_note:null
- }).eq('id',visitId);
+ const v=visits.find(x=>x.id===visitId);
+ const newRec={is_billed_manually:false,billed_amount:0,billed_at:null,billed_note:null};
+ const {error}=await db.from('visits').update(newRec).eq('id',visitId);
  if(error){alert('Error: '+error.message);return}
+ if(v){
+  const dogName=dogs.find(d=>d.id===v.dog_id)?.name||'?';
+  await logAudit('visit',visitId,'update',{old:v,new:{...v,...newRec},label:dogName+' ('+v.visited_at+')'});
+ }
  await loadAll(); renderVisits();
+}
+
+// Batch O.10 — delete a visit (admin tool for orphaned visits, e.g. groomer sick)
+async function delVisit(visitId){
+ const v=visits.find(x=>x.id===visitId); if(!v){alert('Visit not found');return}
+ const dog=dogs.find(d=>d.id===v.dog_id);
+ const label=`${dog?.name||'?'} (${v.visited_at})`;
+ if(!confirm(`Delete visit "${label}"?\n\nVisit record akan dihapus. Invoice (kalau ada) TIDAK terpengaruh.\nGunakan ini untuk: groomer sick, customer cancel last-minute, atau visit yang seharusnya tidak ter-record.`)) return;
+ const {error}=await db.from('visits').delete().eq('id',visitId);
+ if(error){alert('Error: '+error.message);return}
+ await logAudit('visit',visitId,'delete',{old:v,label});
+ await loadAll();
+ if(typeof renderVisits==='function') renderVisits();
+ if(typeof renderCust360==='function') renderCust360();
+ showToast('Visit dihapus','success');
 }
 
 function invoiceVisit(visitId){
