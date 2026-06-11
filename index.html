@@ -1687,12 +1687,6 @@ function onKotaChange(){
 }
 
 function sw(tab) {
- // Batch L4: history tab is gone; redirect to Financial > Visits
- if(tab==='history'){
-  sw('financial');
-  setTimeout(()=>swFin('visits'),0);
-  return;
- }
  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
  document.getElementById('tab-'+tab).classList.add('active');
@@ -6161,12 +6155,13 @@ function renderVisits(){
    if(r.manualBilled){
     actionCell=`<button class="icon-btn" onclick="unmarkVisitBilled('${v.id}')">Undo manual</button>`;
    } else {
-    actionCell=`<button class="icon-btn view" onclick="invoiceVisit('${v.id}')">+ Invoice</button>
-     <button class="icon-btn" onclick="markVisitManualBilled('${v.id}')" style="margin-left:4px">Mark billed</button>`;
+    actionCell=`<button class="icon-btn view" onclick="invoiceVisit('${v.id}')">+ Invoice</button><button class="icon-btn" onclick="markVisitManualBilled('${v.id}')">Mark billed</button>`;
    }
   }
   // Batch O.10 — Delete button on every visit row
-  actionCell+=`<button class="icon-btn del" onclick="delVisit('${v.id}')" style="margin-left:4px" title="Delete visit record">Del</button>`;
+  actionCell+=`<button class="icon-btn del" onclick="delVisit('${v.id}')" title="Delete visit record">Del</button>`;
+  // Wrap in flex container with whitespace:nowrap to force single line on desktop
+  actionCell=`<div style="display:flex;gap:4px;flex-wrap:nowrap;justify-content:flex-end">${actionCell}</div>`;
   return `<tr>
    <td>${fmtD(v.visited_at)}</td>
    <td><strong class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner||'?')}</strong>${c.customer_code?` <span style="font-size:10px;color:var(--muted)">${esc(c.customer_code)}</span>`:''}</td>
