@@ -468,6 +468,7 @@ tbody tr:hover{background:var(--subtle)}
  <button class="nav-tab" onclick="sw('reminders')" id="tab-reminders">Reminders</button>
  <button class="nav-tab" onclick="sw('membership')" id="tab-membership">Membership</button>
  <button class="nav-tab" onclick="sw('access')" id="tab-access" style="display:none">Access<span class="access-badge" id="access-badge" style="display:none">0</span></button>
+ <button class="nav-tab" onclick="sw('history')" id="tab-history">History</button>
  </div>
  <div class="nav-user" id="nav-user-info" style="display:none">
   <span class="nav-user-email" id="nav-user-email"></span>
@@ -592,6 +593,7 @@ tbody tr:hover{background:var(--subtle)}
    <button onclick="setCalView('3day')" id="cv-3day">3 days</button>
    <button class="active" onclick="setCalView('week')" id="cv-week">Week</button>
   </div>
+  <button class="btn btn-d btn-sm" onclick="openBlockDayModal()" style="margin-left:auto" title="Block day (sick / holiday / leave)">Block day</button>
  </div>
  <!-- Groomer filter tabs -->
  <div id="cal-groomer-tabs" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px"></div>
@@ -924,6 +926,45 @@ tbody tr:hover{background:var(--subtle)}
  </div>
 
  <div class="sec" id="sec-route" style="display:none"></div>
+
+ <!-- Batch O.10 — History audit log section -->
+ <div class="sec" id="sec-history">
+  <div class="toolbar">
+   <span class="toolbar-title">History</span>
+   <span style="font-size:11px;color:var(--muted)">Audit log — all changes across system</span>
+  </div>
+  <div class="card" style="padding:12px;margin-bottom:1rem">
+   <div class="form-grid">
+    <div class="fg">
+     <label>Filter by entity</label>
+     <select id="hist-entity-filter" onchange="renderHistoryTab()">
+      <option value="">All entities</option>
+      <option value="customer">Customer</option>
+      <option value="dog">Dog</option>
+      <option value="appointment">Appointment</option>
+      <option value="invoice">Invoice</option>
+      <option value="visit">Visit</option>
+      <option value="subscription">Subscription</option>
+      <option value="groomer_block">Sick/Holiday block</option>
+     </select>
+    </div>
+    <div class="fg">
+     <label>Filter by action</label>
+     <select id="hist-action-filter" onchange="renderHistoryTab()">
+      <option value="">All actions</option>
+      <option value="create">Created</option>
+      <option value="update">Updated</option>
+      <option value="delete">Deleted</option>
+     </select>
+    </div>
+    <div class="fg full">
+     <label>Search</label>
+     <input id="hist-search" placeholder="Search by name, label, user email…" oninput="renderHistoryTab()"/>
+    </div>
+   </div>
+  </div>
+  <div id="hist-feed"></div>
+ </div>
 </div>
 
 <!-- ADD/EDIT CUSTOMER -->
@@ -992,6 +1033,46 @@ tbody tr:hover{background:var(--subtle)}
 </div>
 
 <!-- APPOINTMENT WIZARD -->
+<!-- Batch O.10 — Block day (sick/holiday) modal -->
+<div class="overlay" id="ov-block">
+ <div class="modal" style="max-width:500px">
+  <button class="modal-close" onclick="cm('ov-block')" title="Close">&#x2715;</button>
+  <div class="modal-title">Block day</div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">Mark a day as unavailable for grooming (sick, holiday, leave). Groomer NOT paid for blocked days.</div>
+  <div class="form-grid">
+   <div class="fg">
+    <label>Tanggal *</label>
+    <input type="date" id="bf-date"/>
+   </div>
+   <div class="fg">
+    <label>Reason</label>
+    <select id="bf-reason">
+     <option value="sick">Sakit</option>
+     <option value="holiday">Libur nasional</option>
+     <option value="leave">Cuti</option>
+     <option value="other">Lainnya</option>
+    </select>
+   </div>
+   <div class="fg full">
+    <label>Groomer</label>
+    <select id="bf-groomer">
+     <option value="">All groomers (libur nasional / business closed)</option>
+    </select>
+   </div>
+   <div class="fg full">
+    <label>Catatan (opsional)</label>
+    <input id="bf-note" placeholder="e.g. Demam, harus istirahat 2 hari"/>
+   </div>
+  </div>
+  <div id="bf-existing-warning" style="display:none;background:#fef3c7;border-left:3px solid #ca8a04;padding:10px 12px;border-radius:5px;margin-top:10px;font-size:12px;color:#92400e"></div>
+  <div class="form-actions">
+   <button class="btn btn-d" onclick="saveBlockDay()">Save block</button>
+   <button class="btn btn-g btn-sm" onclick="cm('ov-block')">Cancel</button>
+  </div>
+  <div id="bf-existing-list" style="margin-top:1rem"></div>
+ </div>
+</div>
+
 <div class="overlay" id="ov-appt">
  <div class="modal" style="max-width:500px">
   <button class="modal-close" onclick="cm('ov-appt')" title="Close">&#x2715;</button>
@@ -1074,6 +1155,7 @@ tbody tr:hover{background:var(--subtle)}
     <label>Catatan dari customer <span style="font-size:10px;color:var(--muted);font-weight:400">— ditampilkan di reminder ke customer</span></label>
     <input id="appt-customer-note" placeholder="e.g. Latte agak stress, tolong gentle ya"/>
    </div>
+   <div id="appt-edit-stamp"></div>
    <div class="form-actions">
     <button class="btn btn-p" onclick="saveAppt()" id="appt-save-btn">Save appointment</button>
     <button class="btn btn-b btn-sm" id="appt-confirm-btn" style="display:none" onclick="confirmApptFromModal()">Mark confirmed</button>
@@ -1337,6 +1419,53 @@ function editStampHTML(rec){
  const who=rec.updated_by?(window._adminEmails?.[rec.updated_by]||'admin'):'';
  return `<div style="font-size:10px;color:var(--muted);margin-top:8px;padding-top:6px;border-top:1px dashed var(--border)">Last edit${who?' by '+esc(who):''} on ${esc(when)}</div>`;
 }
+
+// Batch O.10 — render audit history block (single audit entry)
+function renderAuditEntry(e){
+ const when=new Date(e.created_at).toLocaleString('id-ID',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+ const who=e.user_email||(e.user_id?(window._adminEmails?.[e.user_id]||'admin'):'system');
+ const actionLabel={create:'created',update:'edited',delete:'deleted'}[e.action]||e.action;
+ const actionColor={create:'#16a34a',update:'#0369a1',delete:'#dc2626'}[e.action]||'#666';
+ const entityLabel={customer:'Customer',dog:'Dog',appointment:'Appointment',invoice:'Invoice',subscription:'Subscription',visit:'Visit',groomer_block:'Block'}[e.entity_type]||e.entity_type;
+ let changesHTML='';
+ if(e.action==='update'&&e.changes&&Object.keys(e.changes).length>0){
+  const rows=Object.entries(e.changes).map(([field,c])=>{
+   return `<tr>
+    <td style="padding:2px 8px 2px 0;color:var(--muted);font-size:11px">${esc(auditFieldLabel(field))}</td>
+    <td style="padding:2px 4px;font-size:11px;color:#dc2626;text-decoration:line-through">${esc(auditFieldValue(field,c.old))}</td>
+    <td style="padding:2px 4px;font-size:11px;color:var(--muted)">→</td>
+    <td style="padding:2px 4px;font-size:11px;color:#16a34a">${esc(auditFieldValue(field,c.new))}</td>
+   </tr>`;
+  }).join('');
+  changesHTML=`<table style="margin-top:4px;border-collapse:collapse">${rows}</table>`;
+ } else if(e.action==='create'&&e.changes&&Object.keys(e.changes).length>0){
+  const summary=Object.keys(e.changes).slice(0,3).map(f=>auditFieldLabel(f)).join(', ');
+  changesHTML=`<div style="font-size:11px;color:var(--muted);margin-top:2px">Fields: ${esc(summary)}${Object.keys(e.changes).length>3?'...':''}</div>`;
+ }
+ return `<div style="padding:8px 10px;border-left:3px solid ${actionColor};background:var(--subtle);margin-bottom:6px;border-radius:0 5px 5px 0">
+  <div style="font-size:11px;color:var(--muted)">
+   <strong style="color:${actionColor};text-transform:uppercase;font-size:10px;letter-spacing:.5px">${actionLabel}</strong>
+   ${entityLabel}${e.entity_label?': <span style="color:var(--text)">'+esc(e.entity_label)+'</span>':''}
+  </div>
+  <div style="font-size:10px;color:var(--muted);margin-top:2px">by ${esc(who)} \u00B7 ${esc(when)}</div>
+  ${changesHTML}
+ </div>`;
+}
+
+// Last N edits for an entity (used in modal footers + c360 history)
+function auditLastN(entity_type, entity_id, n){
+ if(!entity_id) return [];
+ return auditEntries.filter(e=>e.entity_type===entity_type&&e.entity_id===entity_id).slice(0,n);
+}
+
+function renderAuditFooter(entity_type, entity_id){
+ const entries=auditLastN(entity_type,entity_id,3);
+ if(!entries.length) return '';
+ return `<div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border)">
+  <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Recent changes (last 3)</div>
+  ${entries.map(renderAuditEntry).join('')}
+ </div>`;
+}
 function daysSince(dateStr){
  if(!dateStr) return null;
  const d=new Date(dateStr+'T00:00:00');
@@ -1577,6 +1706,7 @@ function sw(tab) {
  if(tab==='reminders') initReminders();
  if(tab==='membership') renderMembership();
  if(tab==='access') renderAccess();
+ if(tab==='history') renderHistoryTab();
 }
 
 function swSub(sub){
@@ -1772,7 +1902,7 @@ function openEditCust(id){
  document.getElementById('cf-kota').value=c.kota||'';
  populateKecSelect(document.getElementById('cf-kec'),c.kota||'');
  document.getElementById('cf-kec').value=c.kecamatan||'';
- const stampEl=document.getElementById('cf-edit-stamp'); if(stampEl) stampEl.innerHTML=editStampHTML(c);
+ const stampEl=document.getElementById('cf-edit-stamp'); if(stampEl) stampEl.innerHTML=editStampHTML(c)+renderAuditFooter('customer',id);
  om('ov-cust');
 }
 
@@ -1859,7 +1989,7 @@ function openEditDog(id){
  const sh=document.getElementById('df-skin-history'); if(sh) sh.value=d.skin_history||'';
  _stylingRefsBuffer=Array.isArray(d.styling_refs)?[...d.styling_refs]:[];
  renderStylingRefsGrid();
- const stampEl=document.getElementById('df-edit-stamp'); if(stampEl) stampEl.innerHTML=editStampHTML(d);
+ const stampEl=document.getElementById('df-edit-stamp'); if(stampEl) stampEl.innerHTML=editStampHTML(d)+renderAuditFooter('dog',id);
  om('ov-dog');
 }
 
@@ -2115,7 +2245,12 @@ function renderCal(){
  wdays.forEach(w=>{
   html+=`<div style="display:grid;grid-template-columns:${dayColW};height:${totalH}px;position:relative;${w.isToday?'background:rgba(22,163,74,.025)':''}">`;
   activeG.forEach((g,gi)=>{
-   html+=`<div style="position:relative;height:${totalH}px;border-right:1px solid var(--border);${gi===0?'border-left:1px solid var(--border)':''}">`;
+   // Batch O.10 — check if this date+groomer is blocked
+   const blocked=isDateBlocked(w.iso_,g.id);
+   const blocks=getBlocksForDate(w.iso_);
+   const blockInfo=blocks.find(b=>!b.groomer_id||b.groomer_id===g.id);
+   const blockOverlay=blocked&&blockInfo?`<div style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(220,38,38,.08),rgba(220,38,38,.08) 10px,rgba(220,38,38,.18) 10px,rgba(220,38,38,.18) 20px);pointer-events:none;z-index:5;display:flex;align-items:center;justify-content:center"><div style="background:rgba(220,38,38,.9);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;text-align:center;writing-mode:vertical-rl;transform:rotate(180deg)">${esc({sick:'SAKIT',holiday:'LIBUR',leave:'CUTI',other:'BLOCKED'}[blockInfo.reason]||'BLOCKED')}</div></div>`:'';
+   html+=`<div style="position:relative;height:${totalH}px;border-right:1px solid var(--border);${gi===0?'border-left:1px solid var(--border)':''}">${blockOverlay}`;
    // Slot backgrounds
    slots.forEach((m,si)=>{
     const top=si*SH;
@@ -2595,6 +2730,14 @@ function populateWizCustList(){
 }
 
 function openAppt(dateISO,groomerId,startMins){
+ // Batch O.10 — reject if day is blocked
+ if(dateISO&&groomerId&&isDateBlocked(dateISO,groomerId)){
+  const block=groomerBlocks.find(b=>b.block_date===dateISO&&(!b.groomer_id||b.groomer_id===groomerId));
+  const reasonLbl={sick:'sakit',holiday:'libur nasional',leave:'cuti',other:'block'}[block?.reason]||'block';
+  const gName=block?.groomer_id?(groomers.find(g=>g.id===block.groomer_id)?.name||'?'):'semua groomer';
+  showToast(`Tanggal ${dateISO} di-block (${reasonLbl} \u00B7 ${gName}). Hapus block dulu untuk booking.`,'error');
+  return;
+ }
  wiz={step:1,custId:null,dogSvcs:[],groomerId:groomerId||null,date:dateISO||iso(new Date()),startMins:startMins??null,editId:null,tokenId:null,isFree:false,freeDogs:new Set()};
  document.getElementById('appt-title').textContent='Schedule appointment';
  document.getElementById('appt-save-btn').textContent='Save appointment';
@@ -2603,6 +2746,7 @@ function openAppt(dateISO,groomerId,startMins){
  if(invBtnNew) invBtnNew.style.display='none';
  document.getElementById('appt-note').value='';
  const cnEl=document.getElementById('appt-customer-note'); if(cnEl) cnEl.value='';
+ const aesEl=document.getElementById('appt-edit-stamp'); if(aesEl) aesEl.innerHTML='';
  document.getElementById('appt-cust').value='';
  document.getElementById('appt-cust-search').value='';
  populateWizCustList();
@@ -2648,6 +2792,7 @@ function openApptEdit(id){
  }
  document.getElementById('appt-note').value=a.appt_note||'';
  const cnElE=document.getElementById('appt-customer-note'); if(cnElE) cnElE.value=a.customer_note||'';
+ const aesEl=document.getElementById('appt-edit-stamp'); if(aesEl) aesEl.innerHTML=editStampHTML(a)+renderAuditFooter('appointment',id);
  const cs=document.getElementById('appt-cust');
  cs.innerHTML='<option value="">Select customer…</option>'+
   custs.map(c=>`<option value="${c.id}" ${c.id===wiz.custId?'selected':''}>${esc(c.customer_code||'?')} – ${esc(c.owner)}</option>`).join('');
@@ -4589,6 +4734,114 @@ async function delInvoice(id,num){
  await loadAll(); renderFinancial();
 }
 
+// Batch O.10 — Block day (sick / holiday / leave)
+function openBlockDayModal(){
+ // Default date = today
+ const di=document.getElementById('bf-date');
+ if(di) di.value=iso(new Date());
+ const gi=document.getElementById('bf-groomer');
+ if(gi){
+  const activeG=groomers.filter(g=>g.active);
+  gi.innerHTML='<option value="">All groomers (libur nasional / business closed)</option>'+
+   activeG.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
+ }
+ const wrn=document.getElementById('bf-existing-warning'); if(wrn) wrn.style.display='none';
+ // Existing blocks list (last 30 days + future)
+ const list=document.getElementById('bf-existing-list');
+ if(list){
+  const today=iso(new Date());
+  const sorted=[...groomerBlocks].sort((a,b)=>b.block_date.localeCompare(a.block_date));
+  const recent=sorted.filter(b=>b.block_date>=today||new Date(b.block_date)>new Date(Date.now()-30*86400000)).slice(0,15);
+  if(!recent.length){
+   list.innerHTML='<div style="font-size:11px;color:var(--muted);font-style:italic">No active blocks.</div>';
+  } else {
+   list.innerHTML='<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Recent &amp; upcoming blocks</div>'+
+    recent.map(b=>{
+     const gName=b.groomer_id?(groomers.find(g=>g.id===b.groomer_id)?.name||'?'):'All groomers';
+     const reasonLbl={sick:'Sakit',holiday:'Libur nasional',leave:'Cuti',other:'Lainnya'}[b.reason]||b.reason;
+     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--subtle);border-radius:5px;margin-bottom:4px;font-size:12px">
+      <div>
+       <strong>${esc(b.block_date)}</strong> \u00B7 ${esc(gName)} \u00B7 ${esc(reasonLbl)}
+       ${b.note?`<div style="font-size:10px;color:var(--muted)">${esc(b.note)}</div>`:''}
+      </div>
+      <button class="icon-btn del" onclick="delBlockDay('${b.id}')">Del</button>
+     </div>`;
+    }).join('');
+  }
+ }
+ om('ov-block');
+}
+
+async function saveBlockDay(){
+ const date=document.getElementById('bf-date').value;
+ if(!date){alert('Pilih tanggal');return}
+ const groomerId=document.getElementById('bf-groomer').value||null;
+ const reason=document.getElementById('bf-reason').value;
+ const note=document.getElementById('bf-note').value.trim()||null;
+ // Check for existing appointments on that day for that groomer (or all)
+ const conflictingAppts=appts.filter(a=>{
+  if(a.appt_date!==date) return false;
+  if(a.status==='done') return false;
+  if(groomerId&&a.groomer_id!==groomerId) return false; // per-groomer block
+  return true;
+ });
+ if(conflictingAppts.length){
+  const gName=groomerId?(groomers.find(g=>g.id===groomerId)?.name||'?'):'All groomers';
+  const msg=`${gName} has ${conflictingAppts.length} appointment${conflictingAppts.length!==1?'s':''} on ${date} (${conflictingAppts.map(a=>{
+   const d=dogs.find(x=>x.id===a.dog_id);
+   return (d?.name||'?')+' '+(a.appt_time||'').slice(0,5);
+  }).slice(0,5).join(', ')}${conflictingAppts.length>5?'...':''}).\n\nReschedule them first or delete them manually. The block will still be saved but those appointments remain.`;
+  if(!confirm(msg+'\n\nContinue and save block anyway?')) return;
+ }
+ const payload={
+  block_date:date,
+  groomer_id:groomerId,
+  reason,
+  note,
+  created_by:window._currentAuthUser?.id||null
+ };
+ const {data:inserted,error}=await db.from('groomer_blocks').insert(payload).select().single();
+ if(error){alert('Error: '+error.message);return}
+ if(inserted){
+  const gName=groomerId?(groomers.find(g=>g.id===groomerId)?.name||'?'):'All groomers';
+  await logAudit('groomer_block',inserted.id,'create',{new:payload,label:`${date} \u00B7 ${gName} \u00B7 ${reason}`});
+ }
+ await loadAll();
+ cm('ov-block');
+ renderCal();
+ showToast('Block day disimpan','success');
+}
+
+async function delBlockDay(id){
+ if(!confirm('Hapus block ini? Day akan tersedia kembali untuk booking.')) return;
+ const oldRec=groomerBlocks.find(b=>b.id===id);
+ const {error}=await db.from('groomer_blocks').delete().eq('id',id);
+ if(error){alert('Error: '+error.message);return}
+ if(oldRec){
+  const gName=oldRec.groomer_id?(groomers.find(g=>g.id===oldRec.groomer_id)?.name||'?'):'All groomers';
+  await logAudit('groomer_block',id,'delete',{old:oldRec,label:`${oldRec.block_date} \u00B7 ${gName}`});
+ }
+ await loadAll();
+ // Refresh modal list + calendar
+ if(document.getElementById('ov-block')?.classList.contains('open')||document.getElementById('ov-block')?.style.display==='flex') openBlockDayModal();
+ renderCal();
+}
+
+// Helper: check if a date+groomer is blocked
+function isDateBlocked(date,groomerId){
+ return groomerBlocks.some(b=>{
+  if(b.block_date!==date) return false;
+  // null groomer_id = all groomers blocked
+  if(!b.groomer_id) return true;
+  return b.groomer_id===groomerId;
+ });
+}
+
+// Helper: get block info for visual rendering on calendar
+function getBlocksForDate(date){
+ return groomerBlocks.filter(b=>b.block_date===date);
+}
+
 function openBankSettings(){
  document.getElementById('bf-name').value=bankSettings.bank_name||'';
  document.getElementById('bf-account').value=bankSettings.bank_account||'';
@@ -6061,6 +6314,7 @@ function renderCust360Body(){
  else if(c360CurrentTab==='invoices') body.innerHTML=c360RenderInvoices(c);
  else if(c360CurrentTab==='membership') body.innerHTML=c360RenderMembership(c);
  else if(c360CurrentTab==='notes') body.innerHTML=c360RenderNotes(c);
+ else if(c360CurrentTab==='history') body.innerHTML=c360RenderHistory(c);
 }
 
 function c360RenderDogs(c){
@@ -6202,6 +6456,75 @@ function c360RenderNotes(c){
   <div style="font-size:11px;color:var(--muted);margin-top:6px" id="c360-notes-status">Auto-save on blur.</div>
  </div>
  ${c.address?`<div class="c360-section-lbl">Address</div><div class="c360-card"><div class="c360-card-meta">${esc(c.address)}</div></div>`:''}`;
+}
+
+// Batch O.10 — Customer 360 History tab: timeline of all changes to this customer + their dogs + their invoices + appts
+function c360RenderHistory(c){
+ const dogIds=dogs.filter(d=>d.customer_id===c.id).map(d=>d.id);
+ const invIds=invoices.filter(i=>i.customer_id===c.id).map(i=>i.id);
+ const apptIds=appts.filter(a=>{
+  const d=dogs.find(x=>x.id===a.dog_id);
+  return d?.customer_id===c.id;
+ }).map(a=>a.id);
+
+ const entries=auditEntries.filter(e=>{
+  if(e.entity_type==='customer'&&e.entity_id===c.id) return true;
+  if(e.entity_type==='dog'&&dogIds.includes(e.entity_id)) return true;
+  if(e.entity_type==='invoice'&&invIds.includes(e.entity_id)) return true;
+  if(e.entity_type==='appointment'&&apptIds.includes(e.entity_id)) return true;
+  if(e.entity_type==='visit'){
+   // visit audit doesn't have customer link, but label often includes dog name
+   return false; // skip for now to keep timeline tight
+  }
+  return false;
+ }).slice(0,50);
+
+ if(!entries.length){
+  return `<div class="c360-empty">No edits recorded yet. Future changes to this customer, their dogs, invoices, or appointments will appear here.</div>`;
+ }
+ return `<div class="c360-section-lbl">Change history (last ${entries.length})</div>
+ <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Edits across this customer + their ${dogIds.length} dog${dogIds.length!==1?'s':''} + linked appointments + invoices.</div>
+ ${entries.map(renderAuditEntry).join('')}`;
+}
+
+// Batch O.10 — Global History tab: full system audit feed with filters
+function renderHistoryTab(){
+ const feed=document.getElementById('hist-feed'); if(!feed) return;
+ const entityFilter=document.getElementById('hist-entity-filter')?.value||'';
+ const actionFilter=document.getElementById('hist-action-filter')?.value||'';
+ const search=(document.getElementById('hist-search')?.value||'').toLowerCase().trim();
+
+ let filtered=auditEntries.filter(e=>{
+  if(entityFilter&&e.entity_type!==entityFilter) return false;
+  if(actionFilter&&e.action!==actionFilter) return false;
+  if(search){
+   const blob=`${e.entity_label||''} ${e.user_email||''} ${e.entity_type} ${e.action}`.toLowerCase();
+   if(!blob.includes(search)) return false;
+  }
+  return true;
+ });
+
+ // Group by day for visual clarity
+ if(!filtered.length){
+  feed.innerHTML=`<div class="empty">No matching audit entries.</div>`;
+  return;
+ }
+ const byDay={};
+ filtered.slice(0,200).forEach(e=>{
+  const day=e.created_at.slice(0,10);
+  if(!byDay[day]) byDay[day]=[];
+  byDay[day].push(e);
+ });
+ const days=Object.keys(byDay).sort().reverse();
+ feed.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Showing ${Math.min(filtered.length,200)} of ${filtered.length} entries (max 500 stored).</div>`+
+  days.map(day=>{
+   const dayDate=new Date(day+'T00:00:00');
+   const dayLabel=dayDate.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+   return `<div style="margin-bottom:14px">
+    <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid var(--border)">${esc(dayLabel)} \u00B7 ${byDay[day].length} change${byDay[day].length!==1?'s':''}</div>
+    ${byDay[day].map(renderAuditEntry).join('')}
+   </div>`;
+  }).join('');
 }
 
 let _c360NotesTimer=null;
@@ -6739,6 +7062,7 @@ checkAuthState();
   <button class="c360-tab" data-c360-tab="invoices" onclick="c360SwTab('invoices')">Invoices</button>
   <button class="c360-tab" data-c360-tab="membership" onclick="c360SwTab('membership')">Membership</button>
   <button class="c360-tab" data-c360-tab="notes" onclick="c360SwTab('notes')">Notes</button>
+  <button class="c360-tab" data-c360-tab="history" onclick="c360SwTab('history')">History</button>
  </div>
  <div class="c360-body" id="c360-body"></div>
 </div>
