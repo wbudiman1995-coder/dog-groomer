@@ -2244,6 +2244,7 @@ function isBlocked(gid,date,start,dur,skipIds,custId){
  const skip=Array.isArray(skipIds)?skipIds:(skipIds?[skipIds]:[]);
  return appts.some(a=>{
   if(skip.includes(a.id)||a.appt_date!==date||a.groomer_id!==gid)return false;
+  if(a.status==='cancelled') return false; // cancelled doesn't block
   // Same customer = same location, allow back-to-back
   const ad=dogs.find(x=>x.id===a.dog_id);
   if(custId && ad?.customer_id===custId) return false;
@@ -2481,6 +2482,35 @@ async function massMove(){
  const newDate=prompt('Move all selected to date (YYYY-MM-DD):',iso(new Date()));
  if(!newDate||!/^\d{4}-\d{2}-\d{2}$/.test(newDate)){alert('Invalid date format');return}
  const ids=[...massSelected];
+ // Batch O.14 — overlap check for each moved appt vs existing appts on target date
+ const movedAppts=ids.map(id=>appts.find(a=>a.id===id)).filter(Boolean);
+ const conflicts=[];
+ for(const a of movedAppts){
+  const startMins=t2m(a.appt_time?.slice(0,5)||'00:00');
+  const aDog=dogs.find(d=>d.id===a.dog_id);
+  const conflict=appts.find(b=>{
+   if(ids.includes(b.id)) return false; // skip moved ones
+   if(b.appt_date!==newDate) return false;
+   if(b.groomer_id!==a.groomer_id) return false;
+   if(b.status==='cancelled') return false;
+   if(aDog?.customer_id){
+    const bd=dogs.find(d=>d.id===b.dog_id);
+    if(bd?.customer_id===aDog.customer_id) return false;
+   }
+   const bStart=t2m(b.appt_time?.slice(0,5)||'00:00');
+   const bEnd=bStart+(b.duration_mins||60);
+   const aEnd=startMins+(a.duration_mins||60);
+   return startMins<bEnd&&aEnd>bStart;
+  });
+  if(conflict){
+   const otherDog=dogs.find(d=>d.id===conflict.dog_id);
+   conflicts.push(`${aDog?.name||'?'} jam ${a.appt_time?.slice(0,5)||''} bentrok dgn ${otherDog?.name||'?'} jam ${conflict.appt_time?.slice(0,5)||''}`);
+  }
+ }
+ if(conflicts.length){
+  alert(`Tidak bisa pindahkan — ${conflicts.length} bentrok:\n\n${conflicts.slice(0,5).join('\n')}${conflicts.length>5?'\n...':''}\n\nPindahkan satu-per-satu atau pilih tanggal lain.`);
+  return;
+ }
  const {error}=await db.from('appointments').update({appt_date:newDate}).in('id',ids);
  if(error){alert('Error: '+error.message);return}
  massSelected.clear();
@@ -2546,7 +2576,8 @@ function onApptTouchStart(e,apptId){
    if(a){
     const newTime=m2t(nm)+':00';
     if(!(a.appt_date===nd&&a.groomer_id===ng&&a.appt_time?.slice(0,5)===m2t(nm))){
-     const conflict=checkApptOverlap(a.id,nd,ng,nm,a.duration_mins);
+     const aDog=dogs.find(d=>d.id===a.dog_id);
+     const conflict=checkApptOverlap(a.id,nd,ng,nm,a.duration_mins,aDog?.customer_id);
      if(conflict){
       const otherDog=dogs.find(d=>d.id===conflict.dog_id);
       showToast(`Bentrok dengan ${otherDog?.name||'appt lain'} jam ${conflict.appt_time?.slice(0,5)||''}`);
@@ -2576,13 +2607,18 @@ function onApptTouchStart(e,apptId){
 }
 function onDragOver(e){e.preventDefault()}
 // Batch O — overlap check helper
-function checkApptOverlap(apptId, newDate, newGroomerId, newStartMins, durationMins){
+function checkApptOverlap(apptId, newDate, newGroomerId, newStartMins, durationMins, custId){
  const newEnd = newStartMins + (durationMins||60);
  const conflict = appts.find(a=>{
   if(a.id===apptId) return false; // skip self
   if(a.appt_date!==newDate) return false;
   if(a.groomer_id!==newGroomerId) return false;
-  if(a.status==='done') return false; // past appts don't block
+  if(a.status==='cancelled') return false; // cancelled doesn't block
+  // Same customer = same location, allow back-to-back (matches isBlocked)
+  if(custId){
+   const ad=dogs.find(x=>x.id===a.dog_id);
+   if(ad?.customer_id===custId) return false;
+  }
   const aStart = t2m(a.appt_time?.slice(0,5)||'00:00');
   const aEnd = aStart + (a.duration_mins||60);
   // Ranges intersect if start < other end AND end > other start
@@ -2616,7 +2652,8 @@ async function onDrop(e){
  const newTime=m2t(nm)+':00';
  if(a.appt_date===nd&&a.groomer_id===ng&&a.appt_time?.slice(0,5)===m2t(nm))return;
  // Batch O — overlap check
- const conflict = checkApptOverlap(a.id, nd, ng, nm, a.duration_mins);
+ const aDog=dogs.find(d=>d.id===a.dog_id);
+ const conflict = checkApptOverlap(a.id, nd, ng, nm, a.duration_mins, aDog?.customer_id);
  if(conflict){
   const otherDog = dogs.find(d=>d.id===conflict.dog_id);
   showToast(`Bentrok dengan ${otherDog?.name||'appointment lain'} jam ${conflict.appt_time?.slice(0,5)||''}`);
@@ -3058,6 +3095,33 @@ async function saveAppt(){
   });
   cursor+=dur;
  });
+ // Batch O.14 — final defensive overlap check before write
+ // Each candidate insert needs to clear vs all OTHER appts (not in this batch + not self)
+ const skipIds=wiz.editId?[wiz.editId]:[];
+ for(const inc of inserts){
+  const startMins=t2m(inc.appt_time.slice(0,5));
+  const conflict=appts.find(a=>{
+   if(skipIds.includes(a.id)) return false;
+   if(a.appt_date!==inc.appt_date) return false;
+   if(a.groomer_id!==inc.groomer_id) return false;
+   if(a.status==='cancelled') return false;
+   // Same-customer back-to-back allowed
+   if(wiz.custId){
+    const ad=dogs.find(x=>x.id===a.dog_id);
+    if(ad?.customer_id===wiz.custId) return false;
+   }
+   const aStart=t2m(a.appt_time?.slice(0,5)||'00:00');
+   const aEnd=aStart+(a.duration_mins||60);
+   const incEnd=startMins+(inc.duration_mins||60);
+   return startMins<aEnd&&incEnd>aStart;
+  });
+  if(conflict){
+   const otherDog=dogs.find(d=>d.id===conflict.dog_id);
+   const inDog=dogs.find(d=>d.id===inc.dog_id);
+   alert(`Slot bentrok!\n\n${inDog?.name||'?'} jam ${inc.appt_time.slice(0,5)} (${inc.duration_mins}m) overlap dengan ${otherDog?.name||'appt lain'} jam ${conflict.appt_time?.slice(0,5)||''} (${conflict.duration_mins||60}m).\n\nGanti slot waktu atau kurangi durasi service.`);
+   return;
+  }
+ }
  if(wiz.editId){
   const oldRec=appts.find(a=>a.id===wiz.editId);
   // Batch O.13 — merge performance tracking fields into the update
