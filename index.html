@@ -176,6 +176,8 @@ tbody tr:hover{background:var(--subtle)}
 .ab-time{font-size:9px;font-weight:700;opacity:.75}
 .ab-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
 .ab-kota{font-size:10px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;font-weight:500}
+.ab-loc-full{font-size:10px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;font-weight:500}
+.ab-loc-short{font-size:10px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none;font-weight:500}
 .ab-svc{font-size:10px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
 .ab-badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;margin-left:4px;line-height:1;vertical-align:middle}
 .ab-badge-S{background:#fef9c3;color:#ca8a04}
@@ -411,6 +413,8 @@ tbody tr:hover{background:var(--subtle)}
  .ab-time{font-size:9px}
  .ab-name{font-size:11px;font-weight:600}
  .ab-kota{display:none}
+ .ab-loc-full{display:none}
+ .ab-loc-short{display:block}
  .ab-svc{font-size:9px;color:rgba(0,0,0,.5)}
 
  /* Section padding */
@@ -2357,7 +2361,13 @@ function renderCal(){
     const d=dogs.find(x=>x.id===a.dog_id)||{};
     const owner=d.customer_id?getOwnerName(d.customer_id):'';
     const cust=d.customer_id?custs.find(x=>x.id===d.customer_id):null;
-    const kotaLabel=cust?.kota||'';
+    // Batch O.12 — show kecamatan + kota on desktop, kecamatan only on phone
+    // Two spans: .ab-loc-full (desktop) shows "Kembangan, Jakarta Barat"
+    //            .ab-loc-short (phone) shows "Kembangan"
+    const kec=cust?.kecamatan||'';
+    const kota=cust?.kota||cust?.area||'';
+    const locFull=[kec,kota].filter(Boolean).join(', ');
+    const locShort=kec||kota;
     const statusDot=a.status==='confirmed'?'dot-confirmed':a.status==='done'?'dot-done':'dot-pending';
     const isMSel=massSelected.has(a.id);
     // session_source coloring overrides default. Free shows on all statuses (admin marks manually);
@@ -2380,7 +2390,8 @@ function renderCal(){
      style="top:${top}px;height:${ht}px;background:${bg};border-left-color:${col};color:${textCol}">
      <span class="ab-time"><span class="appt-status-dot ${statusDot}"></span>${m2t(sm)}${srcBadge}</span>
      <span class="ab-name">${esc(a.dogs?.name||d.name||'?')}</span>
-     ${kotaLabel?`<span class="ab-kota">${esc(kotaLabel)}</span>`:''}
+     ${locFull?`<span class="ab-loc-full">${esc(locFull)}</span>`:''}
+     ${locShort?`<span class="ab-loc-short">${esc(locShort)}</span>`:''}
      <span class="ab-svc">${esc(owner)}${a.service_base?' · '+esc(a.service_base.split(',')[0]):''}</span>
     </div>`;
    });
@@ -2918,6 +2929,40 @@ async function saveAppt(){
  const custNote=document.getElementById('appt-customer-note')?.value.trim()||null;
  const inserts=[];
  let cursor=wiz.startMins;
+ // Batch O.12 — pre-validate: each dog with active subs must have sessions remaining
+ // Count: subs.sessions_used (already deducted past) + future scheduled subscription appts not yet deducted
+ const subsDogsThisBooking={}; // dog_id -> count in this booking
+ wiz.dogSvcs.forEach(ds=>{
+  if(!ds.did) return;
+  const isFree=wiz.freeDogs?wiz.freeDogs.has(ds.did):!!wiz.isFree;
+  if(isFree||wiz.tokenId) return;
+  const hasActiveSubs=subscriptions.some(s=>s.dog_id===ds.did&&s.status==='active');
+  if(hasActiveSubs) subsDogsThisBooking[ds.did]=(subsDogsThisBooking[ds.did]||0)+1;
+ });
+ const today=iso(new Date());
+ for(const dogId of Object.keys(subsDogsThisBooking)){
+  const sub=subscriptions.find(s=>s.dog_id===dogId&&s.status==='active');
+  if(!sub) continue;
+  const used=sub.sessions_used||0;
+  const total=sub.sessions_total||0;
+  // Future already-scheduled subs appts for this dog (not yet deducted; not this booking)
+  const futureUndeducted=appts.filter(a=>
+   a.dog_id===dogId
+   && a.session_source==='subscription'
+   && !a.subs_deducted
+   && a.appt_date>=today
+   && a.id!==wiz.editId
+   && a.status!=='cancelled'
+  ).length;
+  const inThisBooking=subsDogsThisBooking[dogId];
+  const projectedUsed=used+futureUndeducted+inThisBooking;
+  if(projectedUsed>total){
+   const dog=dogs.find(d=>d.id===dogId);
+   const remaining=Math.max(0,total-used-futureUndeducted);
+   alert(`Subscription habis untuk ${dog?.name||'?'}\n\n${sub.type||'Subs'} sessions: ${used}/${total} sudah dipakai${futureUndeducted?', '+futureUndeducted+' future appts sudah booked':''}.\nSisa: ${remaining} sesi.\nKamu booking ${inThisBooking} sesi baru — over by ${projectedUsed-total}.\n\nBatalkan booking atau renew subscription dulu.`);
+   return;
+  }
+ }
  wiz.dogSvcs.forEach((ds,i)=>{
   const d=dogs.find(x=>x.id===ds.did);
   const dur=getWizDogDur(ds);
@@ -3589,6 +3634,14 @@ function renderInvDogServices(){
  wrap.innerHTML=invSelectedDogs.map(did=>{
  const d=dogs.find(x=>x.id===did); if(!d) return '';
  const ds=invDogServices[did]||{services:{}};
+ // Batch O.12 — if dog has active subscription, show banner + auto-zero Basic Grooming price
+ const activeSub=subscriptions.find(s=>s.dog_id===did&&s.status==='active');
+ const subsLeft=activeSub?(activeSub.sessions_total||0)-(activeSub.sessions_used||0):0;
+ const subsBanner=activeSub?`<div style="background:#dcfce7;border-left:3px solid #16a34a;padding:8px 10px;border-radius:5px;margin-bottom:.6rem;font-size:12px;color:#15803d">
+  <strong>Covered by ${esc((activeSub.type||'subscription').toUpperCase())}</strong> · Sesi ${(activeSub.sessions_used||0)+1}/${activeSub.sessions_total||0}
+  ${subsLeft<=0?'<span style="color:#dc2626;font-weight:600">— SESI HABIS, jangan tambah lagi!</span>':`<span style="color:var(--muted)"> · ${subsLeft} sesi tersisa sebelum invoice ini</span>`}
+  <div style="font-size:10px;color:var(--muted);margin-top:2px">Basic Grooming auto-set ke Rp 0 (sudah pre-paid). Tambahan service tetap dihitung.</div>
+ </div>`:'';
  return `<div class="card" style="padding:1rem;margin-bottom:1rem">
  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
  <div><strong>${esc(d.name)}</strong> <span style="font-size:11px;color:var(--muted)">${esc(d.dog_code||'')} · ${esc(d.size||'?')}</span></div>
@@ -3602,14 +3655,18 @@ function renderInvDogServices(){
   <input type="number" value="${ds.disc_value||0}" min="0" style="width:65px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px" onchange="onDogDiscValue('${did}',this.value)"/>
  </div>
  </div>
+ ${subsBanner}
  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
  ${SERVICE_LIST.map(svc=>{
  const checked=ds.services?.[svc]?.checked?'checked':'';
- const price=ds.services?.[svc]?.price??priceFor(svc,d.size);
- return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 8px;background:var(--subtle);border-radius:6px">
+ // Batch O.12 — if dog has active sub and svc is Basic Grooming, force price to 0
+ const defaultPrice=priceFor(svc,d.size);
+ const forceZero=activeSub&&svc==='Basic Grooming';
+ const price=forceZero?0:(ds.services?.[svc]?.price??defaultPrice);
+ return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 8px;background:var(--subtle);border-radius:6px;${forceZero&&checked?'border-left:2px solid #16a34a':''}">
  <input type="checkbox" ${checked} onchange="onSvcToggle('${did}','${svc}',this.checked)"/>
- <span style="flex:1">${svc}</span>
- <input type="number" value="${price}" min="0" step="1000" style="width:84px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px" onchange="onSvcPrice('${did}','${svc}',this.value)"/>
+ <span style="flex:1">${svc}${forceZero?' <span style="color:#15803d;font-weight:600;font-size:10px">(SUBS)</span>':''}</span>
+ <input type="number" value="${price}" min="0" step="1000" style="width:84px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px${forceZero?';background:#dcfce7':''}" onchange="onSvcPrice('${did}','${svc}',this.value)"${forceZero?' title="Subscription covers this — leave at 0"':''}/>
  </label>`;
  }).join('')}
  </div>
@@ -3684,7 +3741,10 @@ function onDogNoteChange(did,val){
 function onSvcToggle(did,svc,checked){
  if(!invDogServices[did]) invDogServices[did]={services:{}};
  const d=dogs.find(x=>x.id===did);
- if(!invDogServices[did].services[svc]) invDogServices[did].services[svc]={price:priceFor(svc,d?.size)};
+ // Batch O.12 — if dog has active subscription, Basic Grooming is auto Rp 0
+ const activeSub=subscriptions.find(s=>s.dog_id===did&&s.status==='active');
+ const initPrice=(activeSub&&svc==='Basic Grooming')?0:priceFor(svc,d?.size);
+ if(!invDogServices[did].services[svc]) invDogServices[did].services[svc]={price:initPrice};
  invDogServices[did].services[svc].checked=checked;
  recalcInvoice();
 }
@@ -5440,7 +5500,33 @@ async function autoLogPastAppointments(){
   await db.from('appointments').update({token_used:true}).eq('id',a.id);
   console.log(`Deducted 1 token from ${tok.id}, now ${newUsed}/${tok.sessions_total} used`);
  }
- if(toLog.length||apptWithTokens.length) await loadAll();
+ // Batch O.12 — Deduct subscription sessions for past appts with session_source='subscription'
+ // Backfill: scan ALL past subscription appts not yet deducted (not just last 7 days)
+ const subsAppts=appts.filter(a=>
+  a.appt_date<today
+  && a.session_source==='subscription'
+  && !a.subs_deducted
+  && a.status!=='cancelled'
+ );
+ for(const a of subsAppts){
+  // Find an active subscription for this dog
+  const sub=subscriptions.find(s=>
+   s.dog_id===a.dog_id
+   && s.status==='active'
+   && (s.sessions_used||0)<(s.sessions_total||0)
+  );
+  if(!sub){
+   // No matching active sub with sessions left — log warning, mark deducted to avoid retrying
+   console.warn(`No active subscription with sessions left for dog ${a.dog_id} on ${a.appt_date}. Marking as deducted to skip.`);
+   await db.from('appointments').update({subs_deducted:true}).eq('id',a.id);
+   continue;
+  }
+  const newUsed=Math.min(sub.sessions_total,(sub.sessions_used||0)+1);
+  await db.from('subscriptions').update({sessions_used:newUsed}).eq('id',sub.id);
+  await db.from('appointments').update({subs_deducted:true}).eq('id',a.id);
+  console.log(`Deducted 1 session from sub ${sub.id} (${sub.type}), now ${newUsed}/${sub.sessions_total} used`);
+ }
+ if(toLog.length||apptWithTokens.length||subsAppts.length) await loadAll();
 }
 
 /* ========== PHOTOS — zones: before / after / issue (Batch L3) ========== */
