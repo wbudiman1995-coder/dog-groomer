@@ -1229,6 +1229,30 @@ tbody tr:hover{background:var(--subtle)}
     <label>Catatan dari customer <span style="font-size:10px;color:var(--muted);font-weight:400">— ditampilkan di reminder ke customer</span></label>
     <input id="appt-customer-note" placeholder="e.g. Latte agak stress, tolong gentle ya"/>
    </div>
+   <!-- Batch O.13: Performance tracking — only relevant for past/done appts -->
+   <div id="appt-perf-section" style="display:none;background:var(--subtle);border-radius:6px;padding:10px;margin-bottom:.9rem;border:1px dashed var(--border)">
+    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Post-appointment performance (for groomer report)</div>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px">
+     <input type="checkbox" id="appt-was-late" onchange="onLateToggle()" style="width:16px;height:16px"/>
+     <span style="font-size:13px">Groomer late?</span>
+    </label>
+    <div id="appt-late-details" style="display:none;margin-left:24px;margin-bottom:8px">
+     <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+      <label style="font-size:12px;color:var(--muted);min-width:90px">Telat (menit):</label>
+      <input type="number" id="appt-late-mins" min="0" max="240" placeholder="15" style="width:80px;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
+     </div>
+     <div style="display:flex;gap:8px;align-items:center">
+      <label style="font-size:12px;color:var(--muted);min-width:90px">Alasan:</label>
+      <input id="appt-late-reason" placeholder="e.g. Macet, ban bocor" style="flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
+     </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+     <label style="font-size:13px;color:var(--text);min-width:140px">Durasi aktual (menit):</label>
+     <input type="number" id="appt-actual-dur" min="0" max="600" placeholder="auto" oninput="updateOverrunHint()" style="width:80px;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px"/>
+     <span id="appt-overrun-hint" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:6px;font-style:italic">Kosongkan kalau sesuai jadwal. Field ini hanya untuk laporan performance groomer.</div>
+   </div>
    <div id="appt-edit-stamp"></div>
    <div class="form-actions">
     <button class="btn btn-p" onclick="saveAppt()" id="appt-save-btn">Save appointment</button>
@@ -1394,7 +1418,7 @@ function editStamp(){
 const AUDIT_TRACKED_FIELDS={
  customer:['owner','wa','address','kota','kecamatan','source','prefs','gmaps_link'],
  dog:['name','breed','size','age','weight','coat','coat_color','prefs','skin_history','customer_id'],
- appointment:['appt_date','appt_time','groomer_id','dog_id','service_base','status','appt_note','customer_note','duration_mins','session_source'],
+ appointment:['appt_date','appt_time','groomer_id','dog_id','service_base','status','appt_note','customer_note','duration_mins','session_source','late_minutes','late_reason','actual_duration_mins'],
  invoice:['total','subtotal','status','discount_value','discount_amount','is_subscription_billing','due_date','notes'],
  subscription:['type','status','sessions_total','sessions_used','expires_at'],
  visit:['visited_at','service_type','is_billed_manually','billed_amount','billed_note','note'],
@@ -1455,6 +1479,7 @@ function auditFieldLabel(field){
   appt_date:'Date',appt_time:'Time',groomer_id:'Groomer',dog_id:'Dog',
   service_base:'Service',status:'Status',appt_note:'Note (groomer)',
   customer_note:'Note (customer)',duration_mins:'Duration (min)',session_source:'Source',
+  late_minutes:'Late (min)',late_reason:'Late reason',actual_duration_mins:'Actual duration (min)',
   total:'Total',subtotal:'Subtotal',discount_value:'Discount %',discount_amount:'Discount amt',
   is_subscription_billing:'Subs billing',due_date:'Due date',notes:'Notes',
   type:'Type',sessions_total:'Sessions total',sessions_used:'Sessions used',expires_at:'Expires',
@@ -2843,6 +2868,13 @@ function openAppt(dateISO,groomerId,startMins){
  document.getElementById('appt-note').value='';
  const cnEl=document.getElementById('appt-customer-note'); if(cnEl) cnEl.value='';
  const aesEl=document.getElementById('appt-edit-stamp'); if(aesEl) aesEl.innerHTML='';
+ // Batch O.13 — reset perf fields
+ const perfSec=document.getElementById('appt-perf-section'); if(perfSec) perfSec.style.display='none';
+ const lateCb=document.getElementById('appt-was-late'); if(lateCb) lateCb.checked=false;
+ const lateDet=document.getElementById('appt-late-details'); if(lateDet) lateDet.style.display='none';
+ const lateMins=document.getElementById('appt-late-mins'); if(lateMins) lateMins.value='';
+ const lateReason=document.getElementById('appt-late-reason'); if(lateReason) lateReason.value='';
+ const actDur=document.getElementById('appt-actual-dur'); if(actDur) actDur.value='';
  document.getElementById('appt-cust').value='';
  document.getElementById('appt-cust-search').value='';
  populateWizCustList();
@@ -2889,6 +2921,20 @@ function openApptEdit(id){
  document.getElementById('appt-note').value=a.appt_note||'';
  const cnElE=document.getElementById('appt-customer-note'); if(cnElE) cnElE.value=a.customer_note||'';
  const aesEl=document.getElementById('appt-edit-stamp'); if(aesEl) aesEl.innerHTML=editStampHTML(a)+renderAuditFooter('appointment',id);
+ // Batch O.13 — show perf section only for past/done appts
+ const perfSec=document.getElementById('appt-perf-section');
+ const todayISO=iso(new Date());
+ const isPast=a.appt_date<todayISO||a.status==='done';
+ if(perfSec) perfSec.style.display=isPast?'block':'none';
+ if(isPast){
+  const wasLate=(a.late_minutes||0)>0;
+  const lateCb=document.getElementById('appt-was-late'); if(lateCb) lateCb.checked=wasLate;
+  const lateDet=document.getElementById('appt-late-details'); if(lateDet) lateDet.style.display=wasLate?'block':'none';
+  const lateMins=document.getElementById('appt-late-mins'); if(lateMins) lateMins.value=a.late_minutes||'';
+  const lateReason=document.getElementById('appt-late-reason'); if(lateReason) lateReason.value=a.late_reason||'';
+  const actDur=document.getElementById('appt-actual-dur'); if(actDur) actDur.value=a.actual_duration_mins||'';
+  updateOverrunHint();
+ }
  const cs=document.getElementById('appt-cust');
  cs.innerHTML='<option value="">Select customer…</option>'+
   custs.map(c=>`<option value="${c.id}" ${c.id===wiz.custId?'selected':''}>${esc(c.customer_code||'?')} – ${esc(c.owner)}</option>`).join('');
@@ -2919,6 +2965,32 @@ async function confirmApptFromModal(){
  if(a.status!=='pending') return; // confirmed→done is auto-handled by autoLogPastAppointments
  await db.from('appointments').update({status:'confirmed'}).eq('id',wiz.editId);
  cm('ov-appt');await loadAll();
+}
+
+// Batch O.13 — performance tracking helpers
+function onLateToggle(){
+ const cb=document.getElementById('appt-was-late');
+ const det=document.getElementById('appt-late-details');
+ if(!cb||!det) return;
+ det.style.display=cb.checked?'block':'none';
+ if(!cb.checked){
+  document.getElementById('appt-late-mins').value='';
+  document.getElementById('appt-late-reason').value='';
+ } else if(!document.getElementById('appt-late-mins').value){
+  document.getElementById('appt-late-mins').value='15';
+ }
+}
+function updateOverrunHint(){
+ const actDur=parseInt(document.getElementById('appt-actual-dur')?.value)||0;
+ const hint=document.getElementById('appt-overrun-hint');
+ if(!hint) return;
+ if(!actDur||!wiz.editId){hint.textContent='';return}
+ const a=appts.find(x=>x.id===wiz.editId);
+ const predicted=a?.duration_mins||60;
+ const diff=actDur-predicted;
+ if(diff===0){hint.textContent='= prediksi ('+predicted+'m)';hint.style.color='var(--muted)'}
+ else if(diff>0){hint.textContent='+'+diff+'m dari prediksi ('+predicted+'m)';hint.style.color=diff>15?'#dc2626':'#ca8a04'}
+ else {hint.textContent=diff+'m dari prediksi ('+predicted+'m)';hint.style.color='#16a34a'}
 }
 
 async function saveAppt(){
@@ -2988,9 +3060,28 @@ async function saveAppt(){
  });
  if(wiz.editId){
   const oldRec=appts.find(a=>a.id===wiz.editId);
-  await db.from('appointments').update(inserts[0]).eq('id',wiz.editId);
+  // Batch O.13 — merge performance tracking fields into the update
+  const perfFields={};
+  const lateCb=document.getElementById('appt-was-late');
+  if(lateCb){
+   if(lateCb.checked){
+    const m=parseInt(document.getElementById('appt-late-mins')?.value);
+    perfFields.late_minutes=isNaN(m)?0:Math.max(0,m);
+    perfFields.late_reason=document.getElementById('appt-late-reason')?.value.trim()||null;
+   } else {
+    perfFields.late_minutes=0;
+    perfFields.late_reason=null;
+   }
+  }
+  const adRaw=document.getElementById('appt-actual-dur')?.value;
+  if(adRaw!==undefined){
+   const ad=parseInt(adRaw);
+   perfFields.actual_duration_mins=isNaN(ad)?null:Math.max(0,ad);
+  }
+  const updatePayload={...inserts[0],...perfFields};
+  await db.from('appointments').update(updatePayload).eq('id',wiz.editId);
   const dogName=dogs.find(d=>d.id===oldRec?.dog_id)?.name||'?';
-  await logAudit('appointment',wiz.editId,'update',{old:oldRec,new:inserts[0],label:dogName+' '+inserts[0].appt_date});
+  await logAudit('appointment',wiz.editId,'update',{old:oldRec,new:updatePayload,label:dogName+' '+updatePayload.appt_date});
  } else {
   const {data:insertedAppts,error}=await db.from('appointments').insert(inserts).select();
   if(error){alert('Error: '+error.message);return}
@@ -3049,12 +3140,259 @@ function renderGroomers(){
  <td>${ac}</td>
  <td><div class="row-actions">
  <button class="icon-btn view" onclick="openGSched('${g.id}')">Schedule</button>
+ <button class="icon-btn" onclick="openGroomerReport('${g.id}')" title="Performance report card">Report</button>
  <button class="icon-btn" onclick="copyGroomerScheduleLink('${g.id}')" title="Copy groomer schedule URL">Link</button>
  <button class="icon-btn" onclick="openEditGroomer('${g.id}')">Edit</button>
  <button class="icon-btn del" onclick="delGroomer('${g.id}','${esc(g.name).replace(/'/g,"\\'")}')">Del</button>
  </div></td>
  </tr>`;
  }).join('');
+}
+
+// Batch O.13 — Groomer Performance Report
+
+let _grptCurrentId=null;
+
+function openGroomerReport(groomerId){
+ const g=groomers.find(x=>x.id===groomerId); if(!g){alert('Groomer tidak ditemukan');return}
+ _grptCurrentId=groomerId;
+ document.getElementById('grpt-title').textContent=g.name+' \u2014 Performance Report';
+ document.getElementById('grpt-subtitle').textContent=(g.active?'Active':'Inactive')+' groomer';
+ const panel=document.getElementById('grpt-panel');
+ panel.classList.add('open');
+ renderGroomerReport();
+}
+
+function closeGroomerReport(){
+ document.getElementById('grpt-panel')?.classList.remove('open');
+ _grptCurrentId=null;
+}
+
+// Metrics calculator: returns one groomer's stats over a period
+function calcGroomerMetrics(groomerId, periodStr){
+ const today=new Date(); today.setHours(0,0,0,0);
+ let cutoff=null;
+ if(periodStr!=='all'){
+  cutoff=new Date(today); cutoff.setDate(cutoff.getDate()-parseInt(periodStr));
+ }
+ const cutoffISO=cutoff?iso(cutoff):'0000-01-01';
+ // Filter appts
+ const inRange=appts.filter(a=>a.groomer_id===groomerId&&a.appt_date>=cutoffISO&&a.appt_date<=iso(today));
+ const completed=inRange.filter(a=>a.appt_date<iso(today)||a.status==='done');
+ // Filter blocks
+ const allBlocks=groomerBlocks.filter(b=>{
+  // Either targeted at this groomer, or null (all-groomers block)
+  if(b.groomer_id&&b.groomer_id!==groomerId) return false;
+  return b.block_date>=cutoffISO&&b.block_date<=iso(today);
+ });
+ const sickBlocks=allBlocks.filter(b=>b.reason==='sick').length;
+ const otherBlocks=allBlocks.filter(b=>b.reason!=='sick').length;
+
+ // Attendance % = working days / available days
+ // Available days = count of distinct days in range
+ // For simplicity: use 6 working days per week (sundays off? assume all 7)
+ const availDays=cutoff?Math.floor((today-cutoff)/(86400000)):365;
+ const blockedDays=allBlocks.length;
+ const attendancePct=availDays>0?Math.max(0,Math.round((availDays-blockedDays)/availDays*100)):100;
+
+ // Volume
+ const totalCompleted=completed.length;
+ // Distinct customers
+ const custIds=new Set();
+ completed.forEach(a=>{const d=dogs.find(x=>x.id===a.dog_id); if(d?.customer_id) custIds.add(d.customer_id)});
+ const distinctCustomers=custIds.size;
+
+ // Retention: customers who came back within 60 days of their first visit with this groomer
+ let retainedCount=0;
+ const dateRangeMs=cutoff?(today-cutoff):Infinity;
+ custIds.forEach(cid=>{
+  const myVisits=completed
+   .filter(a=>{const d=dogs.find(x=>x.id===a.dog_id); return d?.customer_id===cid})
+   .map(a=>a.appt_date).sort();
+  if(myVisits.length<2) return;
+  // At least 2 visits within range = retained
+  // Stricter: 2nd visit within 60d of 1st
+  const first=new Date(myVisits[0]+'T00:00:00');
+  const second=new Date(myVisits[1]+'T00:00:00');
+  const gap=(second-first)/86400000;
+  if(gap<=60) retainedCount++;
+ });
+ const retentionPct=distinctCustomers>0?Math.round(retainedCount/distinctCustomers*100):0;
+
+ // Service mix
+ const svcCount={};
+ completed.forEach(a=>{
+  const svc=a.service_base||'Unknown';
+  svcCount[svc]=(svcCount[svc]||0)+1;
+ });
+ const svcSorted=Object.entries(svcCount).sort((a,b)=>b[1]-a[1]);
+ const basicPct=totalCompleted>0?Math.round((svcCount['Basic Grooming']||0)/totalCompleted*100):0;
+ const addonsPct=100-basicPct;
+
+ // Revenue (sum invoices where groomer_id matches AND invoice_date in range AND status=paid)
+ let revenue=0;
+ invoices.forEach(inv=>{
+  if(inv.groomer_id!==groomerId) return;
+  if(inv.invoice_date<cutoffISO) return;
+  if(inv.status!=='paid') return;
+  revenue+=inv.total||0;
+ });
+ const avgRevPerSession=totalCompleted>0?Math.round(revenue/totalCompleted):0;
+
+ // Phase 2: Lateness
+ const lateAppts=inRange.filter(a=>(a.late_minutes||0)>0);
+ const totalLateMins=lateAppts.reduce((sum,a)=>sum+(a.late_minutes||0),0);
+ const avgLateMins=lateAppts.length>0?Math.round(totalLateMins/lateAppts.length):0;
+
+ // Overrun (only count where actual_duration_mins is set)
+ const overrunData=inRange.filter(a=>a.actual_duration_mins!=null&&a.actual_duration_mins>0);
+ const overruns=overrunData.map(a=>(a.actual_duration_mins||0)-(a.duration_mins||60));
+ const avgOverrun=overruns.length>0?Math.round(overruns.reduce((s,v)=>s+v,0)/overruns.length):0;
+ const significantOverruns=overruns.filter(v=>v>15).length;
+ const trackedSessions=overrunData.length;
+
+ return {
+  groomerId,
+  period:periodStr,
+  availDays,
+  blockedDays,
+  sickBlocks,otherBlocks,
+  attendancePct,
+  totalCompleted,
+  distinctCustomers,
+  retainedCount,retentionPct,
+  svcSorted,basicPct,addonsPct,
+  revenue,avgRevPerSession,
+  lateApptsCount:lateAppts.length,
+  avgLateMins,totalLateMins,
+  lateApptsList:lateAppts,
+  trackedSessions,
+  avgOverrun,
+  significantOverruns,
+ };
+}
+
+function calcTeamAverage(periodStr){
+ const active=groomers.filter(g=>g.active);
+ if(!active.length) return null;
+ const all=active.map(g=>calcGroomerMetrics(g.id,periodStr));
+ const avg=k=>Math.round(all.reduce((s,m)=>s+(m[k]||0),0)/all.length);
+ return {
+  attendancePct:avg('attendancePct'),
+  totalCompleted:avg('totalCompleted'),
+  distinctCustomers:avg('distinctCustomers'),
+  retentionPct:avg('retentionPct'),
+  basicPct:avg('basicPct'),
+  avgRevPerSession:avg('avgRevPerSession'),
+  lateApptsCount:avg('lateApptsCount'),
+  avgLateMins:avg('avgLateMins'),
+  avgOverrun:avg('avgOverrun'),
+ };
+}
+
+function renderGroomerReport(){
+ if(!_grptCurrentId) return;
+ const period=document.getElementById('grpt-period').value;
+ const m=calcGroomerMetrics(_grptCurrentId,period);
+ const teamAvg=calcTeamAverage(period);
+ const body=document.getElementById('grpt-body');
+
+ const cmpHTML=(val,teamVal,suffix='',inverted=false)=>{
+  if(teamVal==null) return '';
+  const diff=val-teamVal;
+  if(diff===0) return `<span style="font-size:10px;color:var(--muted)">= team avg</span>`;
+  // Inverted means "lower is better" (e.g. late minutes, overrun)
+  const isPositive=inverted?diff<0:diff>0;
+  const color=isPositive?'#16a34a':'#dc2626';
+  const arrow=diff>0?'\u25B2':'\u25BC';
+  return `<span style="font-size:10px;color:${color}">${arrow} ${Math.abs(diff)}${suffix} vs team avg ${teamVal}${suffix}</span>`;
+ };
+
+ const card=(label,val,sub,cmp)=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;flex:1;min-width:180px">
+  <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">${esc(label)}</div>
+  <div style="font-size:22px;font-weight:700;margin-top:4px">${val}</div>
+  ${sub?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${sub}</div>`:''}
+  ${cmp?`<div style="margin-top:4px">${cmp}</div>`:''}
+ </div>`;
+
+ // Late appts table
+ let lateListHTML='';
+ if(m.lateApptsList.length){
+  const rows=m.lateApptsList.slice(0,10).map(a=>{
+   const d=dogs.find(x=>x.id===a.dog_id);
+   const c=d?custs.find(x=>x.id===d.customer_id):null;
+   return `<tr>
+    <td style="padding:6px 8px;font-size:12px">${esc(a.appt_date)}</td>
+    <td style="padding:6px 8px;font-size:12px">${esc(d?.name||'?')}</td>
+    <td style="padding:6px 8px;font-size:12px">${esc(c?.owner||'?')}</td>
+    <td style="padding:6px 8px;font-size:12px;color:#dc2626;font-weight:600">+${a.late_minutes}m</td>
+    <td style="padding:6px 8px;font-size:11px;color:var(--muted)">${esc(a.late_reason||'(no reason)')}</td>
+   </tr>`;
+  }).join('');
+  lateListHTML=`<div style="margin-top:1rem">
+   <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Late incidents (showing ${Math.min(10,m.lateApptsList.length)}/${m.lateApptsList.length})</div>
+   <table style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;border-collapse:collapse">
+    <thead><tr style="background:var(--subtle)">
+     <th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted)">Date</th>
+     <th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted)">Dog</th>
+     <th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted)">Owner</th>
+     <th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted)">Late</th>
+     <th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted)">Reason</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+   </table>
+  </div>`;
+ }
+
+ // Service mix bar
+ const svcMixHTML=m.svcSorted.length?`<div style="margin-top:6px">
+  ${m.svcSorted.slice(0,5).map(([svc,cnt])=>{
+   const pct=Math.round(cnt/m.totalCompleted*100);
+   return `<div style="margin-bottom:5px">
+    <div style="display:flex;justify-content:space-between;font-size:11px"><span>${esc(svc)}</span><span style="color:var(--muted)">${cnt} (${pct}%)</span></div>
+    <div style="height:5px;background:var(--subtle);border-radius:3px;overflow:hidden;margin-top:2px"><div style="height:100%;width:${pct}%;background:var(--primary)"></div></div>
+   </div>`;
+  }).join('')}
+ </div>`:'<div style="font-size:11px;color:var(--muted);font-style:italic">No completed sessions yet.</div>';
+
+ body.innerHTML=`
+  <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${period==='all'?'All time':'Last '+period+' days'} \u00B7 ${m.totalCompleted} completed session${m.totalCompleted!==1?'s':''}</div>
+
+  <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:14px 0 8px">Reliability</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
+   ${card('Attendance', m.attendancePct+'%', `Available ${m.availDays}d \u00B7 Blocked ${m.blockedDays}d`, cmpHTML(m.attendancePct, teamAvg?.attendancePct, '%'))}
+   ${card('Sick days', m.sickBlocks, m.otherBlocks?`+${m.otherBlocks} other blocks (libur/cuti)`:'', null)}
+   ${card('Late incidents', m.lateApptsCount, m.lateApptsCount>0?`avg ${m.avgLateMins}m \u00B7 total ${m.totalLateMins}m`:'on time', cmpHTML(m.lateApptsCount, teamAvg?.lateApptsCount, '', true))}
+  </div>
+
+  <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:14px 0 8px">Volume &amp; Reach</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
+   ${card('Completed sessions', m.totalCompleted, '', cmpHTML(m.totalCompleted, teamAvg?.totalCompleted))}
+   ${card('Distinct customers', m.distinctCustomers, '', cmpHTML(m.distinctCustomers, teamAvg?.distinctCustomers))}
+   ${card('Retention', m.retentionPct+'%', `${m.retainedCount}/${m.distinctCustomers} came back within 60d`, cmpHTML(m.retentionPct, teamAvg?.retentionPct, '%'))}
+  </div>
+
+  <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:14px 0 8px">Revenue</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
+   ${card('Total revenue', 'Rp '+(m.revenue||0).toLocaleString('id-ID'), 'from paid invoices', null)}
+   ${card('Avg per session', 'Rp '+(m.avgRevPerSession||0).toLocaleString('id-ID'), '', cmpHTML(m.avgRevPerSession, teamAvg?.avgRevPerSession))}
+   ${card('Add-on attach', m.addonsPct+'%', `Basic ${m.basicPct}% \u00B7 Add-ons ${m.addonsPct}%`, cmpHTML(100-m.basicPct, 100-(teamAvg?.basicPct??100), '%'))}
+  </div>
+
+  <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:14px 0 8px">Duration accuracy</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
+   ${card('Tracked sessions', m.trackedSessions, 'with actual duration logged', null)}
+   ${card('Avg overrun', (m.avgOverrun>0?'+':'')+m.avgOverrun+'m', m.trackedSessions>0?`vs predicted time`:'no data yet', cmpHTML(m.avgOverrun, teamAvg?.avgOverrun, 'm', true))}
+   ${card('Significant overruns', m.significantOverruns, m.trackedSessions>0?`sessions >15m over predicted`:'no data yet', null)}
+  </div>
+
+  <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:14px 0 8px">Service mix</div>
+  ${svcMixHTML}
+
+  ${lateListHTML}
+
+  ${m.trackedSessions===0?'<div style="margin-top:1rem;padding:10px;background:#fef3c7;border-left:3px solid #ca8a04;font-size:12px;color:#92400e;border-radius:5px">Tip: Open past appointments and log actual duration + lateness in the new "Post-appointment performance" section to populate these metrics.</div>':''}
+ `;
 }
 
 // Batch O.7 — share groomer schedule URL
@@ -7261,6 +7599,26 @@ checkAuthState();
   <button class="c360-tab" data-c360-tab="history" onclick="c360SwTab('history')">History</button>
  </div>
  <div class="c360-body" id="c360-body"></div>
+</div>
+
+<!-- Batch O.13 — Groomer performance report panel -->
+<div class="c360-panel" id="grpt-panel" role="dialog" aria-modal="true">
+ <div class="c360-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:10">
+  <div>
+   <div id="grpt-title" style="font-size:16px;font-weight:700"></div>
+   <div id="grpt-subtitle" style="font-size:11px;color:var(--muted);margin-top:2px"></div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+   <select id="grpt-period" onchange="renderGroomerReport()" style="padding:6px 10px;border:1px solid var(--border);border-radius:5px;font-size:12px">
+    <option value="30">Last 30 days</option>
+    <option value="90" selected>Last 90 days</option>
+    <option value="365">Last 12 months</option>
+    <option value="all">All time</option>
+   </select>
+   <button class="btn btn-g btn-sm" onclick="closeGroomerReport()">Close</button>
+  </div>
+ </div>
+ <div class="c360-body" id="grpt-body" style="padding:16px"></div>
 </div>
 
 </body>
