@@ -171,8 +171,8 @@ tbody tr:hover{background:var(--subtle)}
 .appt-block.mass-selected{outline:2px solid #f59e0b;outline-offset:1px;z-index:3}
 .cal-groomer-tab{padding:5px 14px;border-radius:20px;border:1.5px solid var(--border);font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;background:var(--surface);color:var(--text)}
 .cal-groomer-tab.active{color:#fff;border-color:transparent}
-.appt-block:active{cursor:grabbing;opacity:.7}
-.appt-block.dragging{opacity:.3}
+.appt-block:active{cursor:grabbing}
+.appt-block.dragging{opacity:.25;pointer-events:none;border:2px dashed rgba(0,0,0,.2)!important;background:rgba(200,200,200,.3)!important}
 .ab-time{font-size:9px;font-weight:700;opacity:.75}
 .ab-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
 .ab-kota{font-size:10px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;font-weight:500}
@@ -2594,14 +2594,139 @@ async function massMove(){
 }
 
 /* ---- DRAG DROP ---- */
+// ─── Drag & Drop — Google Calendar style ───────────────────────────────────
 let draggedId=null;
+let _dragGhost=null; // floating ghost element that follows cursor
+let _dragOffsetY=0;  // cursor offset within the block when drag started
+let _lastDropSlot=null; // {date, gid, m} for drop preview
+let _dropPreviewEl=null;
+
 function onDragStart(e,id){
  draggedId=id;
- e.target.classList.add('dragging');
  e.dataTransfer.effectAllowed='move';
+ e.dataTransfer.setData('text/plain',id);
+ // Measure cursor position within block for natural offset
+ const rect=e.target.getBoundingClientRect();
+ _dragOffsetY=e.clientY-rect.top;
+ // Set a transparent 1×1 drag image so browser ghost doesn't show
+ const blank=document.createElement('canvas');blank.width=1;blank.height=1;
+ e.dataTransfer.setDragImage(blank,0,0);
+ // Style source
+ e.target.classList.add('dragging');
+ // Build ghost clone
+ _buildDragGhost(e.target,e.clientX,e.clientY);
 }
-function onDragEnd(e){e.target.classList.remove('dragging');draggedId=null}
 
+function _buildDragGhost(srcEl,clientX,clientY){
+ if(_dragGhost) _dragGhost.remove();
+ _dragGhost=srcEl.cloneNode(true);
+ const w=srcEl.offsetWidth;
+ const h=srcEl.offsetHeight;
+ Object.assign(_dragGhost.style,{
+  position:'fixed',
+  width:w+'px',
+  height:h+'px',
+  pointerEvents:'none',
+  zIndex:'10000',
+  opacity:'0.85',
+  boxShadow:'0 8px 24px rgba(0,0,0,.25)',
+  borderRadius:'6px',
+  transform:'rotate(1.5deg) scale(1.03)',
+  transition:'box-shadow .1s',
+  left:(clientX-w/2)+'px',
+  top:(clientY-_dragOffsetY)+'px',
+ });
+ document.body.appendChild(_dragGhost);
+}
+
+function onDragEnd(e){
+ e.target.classList.remove('dragging');
+ draggedId=null;
+ if(_dragGhost){_dragGhost.remove();_dragGhost=null}
+ _clearDropPreview();
+ _lastDropSlot=null;
+}
+
+function onDragOver(e){
+ e.preventDefault();
+ e.dataTransfer.dropEffect='move';
+ // Move ghost
+ if(_dragGhost){
+  _dragGhost.style.left=(e.clientX-_dragGhost.offsetWidth/2)+'px';
+  _dragGhost.style.top=(e.clientY-_dragOffsetY)+'px';
+ }
+ // Highlight slot
+ const slot=e.target.closest('[data-m]');
+ if(!slot) return;
+ const nd=slot.dataset.date,ng=slot.dataset.g,nm=parseInt(slot.dataset.m);
+ if(_lastDropSlot&&_lastDropSlot.date===nd&&_lastDropSlot.gid===ng&&_lastDropSlot.m===nm) return;
+ _lastDropSlot={date:nd,gid:ng,m:nm};
+ _showDropPreview(slot,nd,ng,nm);
+}
+
+function _showDropPreview(slotEl,nd,ng,nm){
+ _clearDropPreview();
+ const a=appts.find(x=>x.id===draggedId); if(!a) return;
+ const dur=a.duration_mins||60;
+ const colEl=slotEl.closest('[style*="position:relative"]');
+ if(!colEl) return;
+ const ht=Math.max(18,Math.round((dur/30)*SH));
+ const top=Math.round(((nm-SSTART)/SSTEP)*SH);
+ _dropPreviewEl=document.createElement('div');
+ Object.assign(_dropPreviewEl.style,{
+  position:'absolute',
+  top:top+'px',
+  height:ht+'px',
+  left:'2px',
+  right:'2px',
+  background:'rgba(59,130,246,.15)',
+  border:'2px dashed #3b82f6',
+  borderRadius:'6px',
+  pointerEvents:'none',
+  zIndex:'20',
+  display:'flex',
+  alignItems:'flex-start',
+  padding:'3px 5px',
+  boxSizing:'border-box',
+ });
+ // Time label inside preview
+ const endM=nm+dur;
+ _dropPreviewEl.innerHTML=`<span style="font-size:9px;font-weight:700;color:#2563eb">${m2t(nm)} – ${m2t(endM)}</span>`;
+ // Check overlap hint
+ const aDog=dogs.find(d=>d.id===a.dog_id);
+ const conflict=checkApptOverlap(a.id,nd,ng,nm,dur,aDog?.customer_id);
+ if(conflict){
+  _dropPreviewEl.style.background='rgba(220,38,38,.1)';
+  _dropPreviewEl.style.border='2px dashed #dc2626';
+  _dropPreviewEl.innerHTML=`<span style="font-size:9px;font-weight:700;color:#dc2626">Bentrok</span>`;
+ }
+ colEl.appendChild(_dropPreviewEl);
+}
+
+function _clearDropPreview(){
+ if(_dropPreviewEl){_dropPreviewEl.remove();_dropPreviewEl=null}
+}
+
+async function onDrop(e){
+ e.preventDefault();
+ if(!draggedId) return;
+ const t=e.target.closest('[data-m]'); if(!t) return;
+ const nd=t.dataset.date,ng=t.dataset.g,nm=parseInt(t.dataset.m);
+ const a=appts.find(x=>x.id===draggedId); if(!a) return;
+ const newTime=m2t(nm)+':00';
+ if(a.appt_date===nd&&a.groomer_id===ng&&a.appt_time?.slice(0,5)===m2t(nm)) return;
+ // Overlap check
+ const aDog=dogs.find(d=>d.id===a.dog_id);
+ const conflict=checkApptOverlap(a.id,nd,ng,nm,a.duration_mins,aDog?.customer_id);
+ if(conflict){
+  const otherDog=dogs.find(d=>d.id===conflict.dog_id);
+  showToast(`Bentrok dengan ${otherDog?.name||'appointment lain'} jam ${conflict.appt_time?.slice(0,5)||''}`);
+  return;
+ }
+ await db.from('appointments').update({appt_date:nd,groomer_id:ng,appt_time:newTime}).eq('id',draggedId);
+ showToast('Appointment dipindahkan','success');
+ await loadAll();renderCal();
+}
 // Batch O — touch reschedule for mobile (long-press → drag)
 let _touchDragState=null;
 function onApptTouchStart(e,apptId){
@@ -2679,24 +2804,21 @@ function onApptTouchStart(e,apptId){
  document.addEventListener('touchend',onEnd);
  document.addEventListener('touchcancel',cleanup);
 }
-function onDragOver(e){e.preventDefault()}
-// Batch O — overlap check helper
+// Batch O — overlap check helper (used by drag-drop, wizard, mass-move)
 function checkApptOverlap(apptId, newDate, newGroomerId, newStartMins, durationMins, custId){
  const newEnd = newStartMins + (durationMins||60);
  const conflict = appts.find(a=>{
-  if(a.id===apptId) return false; // skip self
+  if(a.id===apptId) return false;
   if(a.appt_date!==newDate) return false;
   if(a.groomer_id!==newGroomerId) return false;
-  if(a.status==='cancelled') return false; // cancelled doesn't block
-  // Same customer = same location, allow back-to-back (matches isBlocked)
+  if(a.status==='cancelled') return false;
   if(custId){
    const ad=dogs.find(x=>x.id===a.dog_id);
    if(ad?.customer_id===custId) return false;
   }
-  const aStart = t2m(a.appt_time?.slice(0,5)||'00:00');
-  const aEnd = aStart + (a.duration_mins||60);
-  // Ranges intersect if start < other end AND end > other start
-  return newStartMins < aEnd && newEnd > aStart;
+  const aStart=t2m(a.appt_time?.slice(0,5)||'00:00');
+  const aEnd=aStart+(a.duration_mins||60);
+  return newStartMins<aEnd&&newEnd>aStart;
  });
  return conflict;
 }
@@ -2715,26 +2837,6 @@ function showToast(msg, kind='error'){
  toast.style.opacity='1';
  clearTimeout(toast._timer);
  toast._timer=setTimeout(()=>{toast.style.opacity='0'},3500);
-}
-
-async function onDrop(e){
- e.preventDefault();
- if(!draggedId)return;
- const t=e.target.closest('[data-m]');if(!t)return;
- const nd=t.dataset.date,ng=t.dataset.g,nm=parseInt(t.dataset.m);
- const a=appts.find(x=>x.id===draggedId);if(!a)return;
- const newTime=m2t(nm)+':00';
- if(a.appt_date===nd&&a.groomer_id===ng&&a.appt_time?.slice(0,5)===m2t(nm))return;
- // Batch O — overlap check
- const aDog=dogs.find(d=>d.id===a.dog_id);
- const conflict = checkApptOverlap(a.id, nd, ng, nm, a.duration_mins, aDog?.customer_id);
- if(conflict){
-  const otherDog = dogs.find(d=>d.id===conflict.dog_id);
-  showToast(`Bentrok dengan ${otherDog?.name||'appointment lain'} jam ${conflict.appt_time?.slice(0,5)||''}`);
-  return;
- }
- await db.from('appointments').update({appt_date:nd,groomer_id:ng,appt_time:newTime}).eq('id',draggedId);
- await loadAll();renderCal();
 }
 
 /* ---- 4-STEP BOOKING WIZARD ---- */
