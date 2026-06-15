@@ -4340,12 +4340,23 @@ function renderInvDogServices(){
  let coverageBadge='';
  let accentColor='#16a34a';
  let accentBg='#dcfce7';
- if(coverage==='subscription'&&svc==='Basic Grooming'){forceZero=true;coverageBadge='SUBS';accentColor='#16a34a';accentBg='#dcfce7'}
- else if(coverage==='advance'&&svc===(tokInfo?.serviceType||'Basic Grooming')){forceZero=true;coverageBadge='PREPAID';accentColor='#2563eb';accentBg='#dbeafe'}
+ let isRealCoverage=false;
+ if(coverage==='subscription'&&svc==='Basic Grooming'){forceZero=true;isRealCoverage=true;coverageBadge='SUBS';accentColor='#16a34a';accentBg='#dcfce7'}
+ else if(coverage==='advance'&&svc===(tokInfo?.serviceType||'Basic Grooming')){forceZero=true;isRealCoverage=true;coverageBadge='PREPAID';accentColor='#2563eb';accentBg='#dbeafe'}
  else if(coverage==='manual'&&svc==='Basic Grooming'){forceZero=true;coverageBadge='MANUAL';accentColor='#ca8a04';accentBg='#fef3c7'}
- // If saved price exists, respect admin's manual override; else apply forceZero default
+ // Batch O.16 fix: For REAL coverage (subs/advance), ALWAYS force price to 0 and sync state.
+ // For manual override, respect saved price (admin can override).
  const savedPrice=ds.services?.[svc]?.price;
- const price=savedPrice!==undefined?savedPrice:(forceZero?0:defaultPrice);
+ let price;
+ if(isRealCoverage){
+  price=0;
+  // Sync state so save persists 0 — overrides any stale saved value
+  if(ds.services?.[svc]&&ds.services[svc].price!==0){
+   ds.services[svc].price=0;
+  }
+ } else {
+  price=savedPrice!==undefined?savedPrice:(forceZero?0:defaultPrice);
+ }
  return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 8px;background:var(--subtle);border-radius:6px;${forceZero&&checked?'border-left:2px solid '+accentColor:''}">
  <input type="checkbox" ${checked} onchange="onSvcToggle('${did}','${svc}',this.checked)"/>
  <span style="flex:1">${svc}${forceZero?` <span style="color:${accentColor};font-weight:600;font-size:10px">(${coverageBadge})</span>`:''}</span>
@@ -4412,6 +4423,8 @@ function renderInvDogServices(){
  invSelectedDogs.forEach(did=>{
   ['before','after','issue'].forEach(z=>renderPhotoGridZone(did,z));
  });
+ // Batch O.16 fix: auto-sync may have changed prices on covered services; recalc total
+ recalcInvoice();
 }
 
 function onDogNoteChange(did,val){
@@ -4427,13 +4440,17 @@ function onSvcToggle(did,svc,checked){
  // Batch O.16 — auto Rp 0 for covered services (subscription/advance/manual override)
  const coverage=getEffectiveCoverage(did);
  let initPrice=priceFor(svc,d?.size);
- if(coverage==='subscription'&&svc==='Basic Grooming') initPrice=0;
+ let isRealCoverage=false;
+ if(coverage==='subscription'&&svc==='Basic Grooming'){initPrice=0;isRealCoverage=true}
  else if(coverage==='advance'){
   const tokInfo=getAdvanceTokenInfo(did);
-  if(tokInfo&&svc===tokInfo.serviceType) initPrice=0;
+  if(tokInfo&&svc===tokInfo.serviceType){initPrice=0;isRealCoverage=true}
  }
  else if(coverage==='manual'&&svc==='Basic Grooming') initPrice=0;
+ // Initialize if not present
  if(!invDogServices[did].services[svc]) invDogServices[did].services[svc]={price:initPrice};
+ // Real coverage: force price to 0 even if already set to something else (sync)
+ if(isRealCoverage){invDogServices[did].services[svc].price=0}
  invDogServices[did].services[svc].checked=checked;
  recalcInvoice();
 }
