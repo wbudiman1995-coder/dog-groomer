@@ -1841,7 +1841,9 @@ const AREAS = {
  'Kota Tangerang': ['Batuceper','Benda','Ciledug','Cipondoh','Cibodas','Jatiuwung','Karang Tengah','Karawaci','Larangan','Neglasari','Periuk','Pinang','Tangerang'],
  'Tangerang Selatan': ['Ciputat','Ciputat Timur','Pamulang','Pondok Aren','Serpong','Serpong Utara','Setu'],
  'Kabupaten Tangerang': ['Balaraja','Cikupa','Cisauk','Curug','Kelapa Dua','Kosambi','Legok','Pagedangan','Panongan','Rajeg','Sepatan','Tigaraksa'],
- 'Depok': ['Beji','Bojongsari','Cilodong','Cimanggis','Cinere','Cipayung','Limo','Pancoran Mas','Sawangan','Sukmajaya','Tapos']
+ 'Depok': ['Beji','Bojongsari','Cilodong','Cimanggis','Cinere','Cipayung','Limo','Pancoran Mas','Sawangan','Sukmajaya','Tapos'],
+ 'Kota Bekasi': ['Bantargebang','Bekasi Barat','Bekasi Selatan','Bekasi Timur','Bekasi Utara','Jatiasih','Jatisampurna','Medan Satria','Mustikajaya','Pondok Gede','Pondok Melati','Rawalumbu'],
+ 'Kabupaten Bekasi': ['Babelan','Bojongmangu','Cabangbungin','Cibarusah','Cibitung','Cikarang Barat','Cikarang Pusat','Cikarang Selatan','Cikarang Timur','Cikarang Utara','Karangbahagia','Kedungwaringin','Muaragembong','Pebayuran','Serang Baru','Setu','Sukakarya','Sukatani','Sukawangi','Tambelang','Tambun Selatan','Tambun Utara','Tarumajaya']
 };
 function populateKotaSelect(sel){
  sel.innerHTML='<option value="">Pilih kota…</option>'+Object.keys(AREAS).map(k=>`<option value="${k}">${k}</option>`).join('');
