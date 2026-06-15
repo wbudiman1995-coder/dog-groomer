@@ -739,6 +739,14 @@ tbody tr:hover{background:var(--subtle)}
  <div class="fg"><label>Or type manually</label><input id="inv-groomer-manual" placeholder="Nama groomer" oninput="renderInvoicePreview()"/></div>
  <div class="fg"><label>Tanggal invoice</label><input type="date" id="inv-date" onchange="onInvDateChange()"/></div>
  <div class="fg"><label>Tanggal jatuh tempo <span style="font-size:10px;color:var(--muted);font-weight:400">(optional, default: invoice + 1)</span></label><input type="date" id="inv-due-date" onchange="renderInvoicePreview()"/></div>
+ <div class="fg"><label>Jenis dokumen <span style="font-size:10px;color:var(--muted);font-weight:400">(auto = sistem pilih sendiri)</span></label>
+  <select id="inv-doc-mode" onchange="renderInvoicePreview()">
+   <option value="auto">Auto (deteksi otomatis)</option>
+   <option value="invoice">Invoice (bayar penuh)</option>
+   <option value="report">Laporan Grooming (sudah dibayar via subs/prepaid)</option>
+  </select>
+  <div id="inv-doc-mode-hint" style="font-size:10px;color:var(--muted);font-style:italic;margin-top:3px"></div>
+ </div>
  </div>
  </div>
 
@@ -1108,6 +1116,64 @@ tbody tr:hover{background:var(--subtle)}
 
 <!-- APPOINTMENT WIZARD -->
 <!-- Batch O.10 — Block day (sick/holiday) modal -->
+<!-- Batch O.15 — Complaint logging modal -->
+<div class="overlay" id="ov-complaint">
+ <div class="modal" style="max-width:500px">
+  <button class="modal-close" onclick="cm('ov-complaint')" title="Close">&#x2715;</button>
+  <div class="modal-title" id="complaint-title">Log complaint</div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">Catat komplain customer. Akan tampil di groomer report card.</div>
+  <input type="hidden" id="cmf-id"/>
+  <input type="hidden" id="cmf-appt-id"/>
+  <div class="form-grid">
+   <div class="fg">
+    <label>Tanggal komplain *</label>
+    <input type="date" id="cmf-date"/>
+   </div>
+   <div class="fg">
+    <label>Severity *</label>
+    <select id="cmf-severity">
+     <option value="minor">Minor — masalah kecil, mudah</option>
+     <option value="moderate" selected>Moderate — perlu refund/redo</option>
+     <option value="serious">Serious — lost customer / injury risk</option>
+    </select>
+   </div>
+   <div class="fg full">
+    <label>Groomer</label>
+    <select id="cmf-groomer">
+     <option value="">(no specific groomer)</option>
+    </select>
+   </div>
+   <div class="fg full">
+    <label>Customer / Dog</label>
+    <input id="cmf-cust-search" placeholder="Type to search customer or dog..." autocomplete="off" oninput="onCmfCustSearch(this.value)" onfocus="onCmfCustSearch(this.value)" onblur="setTimeout(()=>{const dd=document.getElementById('cmf-cust-dd');if(dd)dd.style.display='none'},200)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle)"/>
+    <div id="cmf-cust-dd" style="display:none;position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);max-height:200px;overflow-y:auto;z-index:50;margin-top:2px"></div>
+    <input type="hidden" id="cmf-customer-id"/>
+    <input type="hidden" id="cmf-dog-id"/>
+    <div id="cmf-selected" style="margin-top:6px;font-size:11px;color:var(--muted)"></div>
+   </div>
+   <div class="fg full">
+    <label>Deskripsi komplain *</label>
+    <textarea id="cmf-description" rows="3" placeholder="e.g. Bulu masih banyak yang miss, perlu groomer ulang. Customer kesal." style="width:100%"></textarea>
+   </div>
+   <div class="fg full">
+    <label>Resolusi (kalau sudah selesai)</label>
+    <textarea id="cmf-resolution" rows="2" placeholder="e.g. Schedule ulang gratis minggu depan, dapat diskon 20% next" style="width:100%"></textarea>
+   </div>
+   <div class="fg full">
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+     <input type="checkbox" id="cmf-resolved"/>
+     <span>Mark resolved</span>
+    </label>
+   </div>
+  </div>
+  <div class="form-actions">
+   <button class="btn btn-p" onclick="saveComplaint()">Save complaint</button>
+   <button class="btn btn-d btn-sm" id="cmf-del-btn" style="display:none" onclick="delComplaint()">Delete</button>
+   <button class="btn btn-g btn-sm" onclick="cm('ov-complaint')">Cancel</button>
+  </div>
+ </div>
+</div>
+
 <div class="overlay" id="ov-block">
  <div class="modal" style="max-width:500px">
   <button class="modal-close" onclick="cm('ov-block')" title="Close">&#x2715;</button>
@@ -1258,6 +1324,7 @@ tbody tr:hover{background:var(--subtle)}
     <button class="btn btn-p" onclick="saveAppt()" id="appt-save-btn">Save appointment</button>
     <button class="btn btn-b btn-sm" id="appt-confirm-btn" style="display:none" onclick="confirmApptFromModal()">Mark confirmed</button>
     <button class="btn btn-g btn-sm" id="appt-invoice-btn" style="display:none" onclick="invoiceFromApptModal()"></button>
+    <button class="btn btn-d btn-sm" id="appt-complaint-btn" style="display:none;background:#fff7ed;color:#92400e;border:1px solid #fbbf24" onclick="logComplaintFromAppt()" title="Log a customer complaint for this appointment">Log complaint</button>
     <button class="btn btn-d btn-sm" id="appt-del-btn" style="display:none" onclick="delApptFromModal()">Delete</button>
     <button class="btn btn-g btn-sm" onclick="wizNext(3)">Back</button>
    </div>
@@ -1377,6 +1444,8 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 let dogs=[], visits=[], appts=[], custs=[], groomers=[], invoices=[], tokens=[], subscriptions=[], bankSettings={}, custEditId=null, dogEditId=null, currentCustId=null, apptDate=null, apptEditId=null, groomerEditId=null, membEditState=null;
 // Batch O.10
 let auditEntries=[], groomerBlocks=[];
+// Batch O.15
+let complaints=[];
 // Batch H — auth state
 let adminUsers=[], currentUser=null, currentAdminRow=null;
 // Batch J — payroll
@@ -1422,7 +1491,8 @@ const AUDIT_TRACKED_FIELDS={
  invoice:['total','subtotal','status','discount_value','discount_amount','is_subscription_billing','due_date','notes'],
  subscription:['type','status','sessions_total','sessions_used','expires_at'],
  visit:['visited_at','service_type','is_billed_manually','billed_amount','billed_note','note'],
- groomer_block:['block_date','groomer_id','reason','note']
+ groomer_block:['block_date','groomer_id','reason','note'],
+ complaint:['complaint_date','severity','description','resolution','resolved','groomer_id','customer_id','dog_id']
 };
 
 // Compute diff between old & new objects, scoped to tracked fields
@@ -1825,7 +1895,7 @@ function swSub(sub){
 }
 
 async function loadAll() {
- const [cr,dr,vr,ar,gr,ir,br,tr,sr,aur,psr,gpr,alr,gbr] = await Promise.all([
+ const [cr,dr,vr,ar,gr,ir,br,tr,sr,aur,psr,gpr,alr,gbr,cmr] = await Promise.all([
  db.from('customers').select('*').order('created_at',{ascending:false}),
  db.from('dogs').select('*').order('created_at',{ascending:false}),
  db.from('visits').select('*,dogs(name,size)').order('visited_at',{ascending:false}),
@@ -1839,10 +1909,12 @@ async function loadAll() {
  db.from('payroll_settings').select('*').eq('id',1).maybeSingle(),
  db.from('groomer_payouts').select('*').order('cycle_start',{ascending:false}),
  db.from('audit_log').select('*').order('created_at',{ascending:false}).limit(500),
- db.from('groomer_blocks').select('*').order('block_date',{ascending:false})
+ db.from('groomer_blocks').select('*').order('block_date',{ascending:false}),
+ db.from('complaints').select('*').order('complaint_date',{ascending:false})
  ]);
  custs=cr.data||[]; dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[]; groomers=gr.data||[]; invoices=ir.data||[]; bankSettings=br.data||{}; tokens=tr.data||[]; subscriptions=sr.data||[]; adminUsers=aur.data||[];
  auditEntries=alr.data||[]; groomerBlocks=gbr.data||[];
+ complaints=cmr.data||[];
  // Batch O.6 — admin email lookup cache for edit-history display
  window._adminEmails={};
  adminUsers.forEach(a=>{window._adminEmails[a.id]=a.email||a.name||'admin'});
@@ -2900,6 +2972,7 @@ function openAppt(dateISO,groomerId,startMins){
  document.getElementById('appt-title').textContent='Schedule appointment';
  document.getElementById('appt-save-btn').textContent='Save appointment';
  document.getElementById('appt-del-btn').style.display='none';
+ const compBtnNew=document.getElementById('appt-complaint-btn'); if(compBtnNew) compBtnNew.style.display='none';
  const invBtnNew=document.getElementById('appt-invoice-btn');
  if(invBtnNew) invBtnNew.style.display='none';
  document.getElementById('appt-note').value='';
@@ -2930,6 +3003,7 @@ function openApptEdit(id){
  document.getElementById('appt-title').textContent='Edit appointment';
  document.getElementById('appt-save-btn').textContent='Update';
  document.getElementById('appt-del-btn').style.display='inline-flex';
+ const compBtn=document.getElementById('appt-complaint-btn'); if(compBtn) compBtn.style.display='inline-flex';
  const confirmBtn=document.getElementById('appt-confirm-btn');
  if(confirmBtn){
   if(a.status==='pending'){confirmBtn.style.display='inline-flex';confirmBtn.textContent='Mark confirmed';}
@@ -3315,6 +3389,32 @@ function calcGroomerMetrics(groomerId, periodStr){
  const significantOverruns=overruns.filter(v=>v>15).length;
  const trackedSessions=overrunData.length;
 
+ // Batch O.15 — complaints
+ const groomerComplaints=complaints.filter(c=>{
+  if(c.groomer_id!==groomerId) return false;
+  if(c.complaint_date<cutoffISO) return false;
+  return true;
+ });
+ const complaintsCount=groomerComplaints.length;
+ const seriousComplaints=groomerComplaints.filter(c=>c.severity==='serious').length;
+ const moderateComplaints=groomerComplaints.filter(c=>c.severity==='moderate').length;
+ const minorComplaints=groomerComplaints.filter(c=>c.severity==='minor').length;
+ const unresolvedComplaints=groomerComplaints.filter(c=>!c.resolved).length;
+ // Complaints per 10 sessions (rate normalized by volume)
+ const complaintsPer10=totalCompleted>0?Math.round((complaintsCount/totalCompleted*10)*10)/10:0;
+
+ // Batch O.15 — documentation rate (proxy for "did groomer document properly")
+ // Count invoices linked to this groomer's completed appts where groomer_notes were filled
+ const invoicesByGroomer=invoices.filter(inv=>inv.groomer_id===groomerId&&inv.invoice_date>=cutoffISO);
+ let invDogsTotal=0,invDogsDocumented=0;
+ invoicesByGroomer.forEach(inv=>{
+  (inv.dogs||[]).forEach(d=>{
+   invDogsTotal++;
+   if(d.groomer_notes&&d.groomer_notes.trim().length>0) invDogsDocumented++;
+  });
+ });
+ const docPct=invDogsTotal>0?Math.round(invDogsDocumented/invDogsTotal*100):0;
+
  return {
   groomerId,
   period:periodStr,
@@ -3333,6 +3433,13 @@ function calcGroomerMetrics(groomerId, periodStr){
   trackedSessions,
   avgOverrun,
   significantOverruns,
+  // Batch O.15
+  complaintsCount,
+  seriousComplaints,moderateComplaints,minorComplaints,
+  unresolvedComplaints,
+  complaintsPer10,
+  complaintsList:groomerComplaints,
+  docPct,invDogsTotal,invDogsDocumented,
  };
 }
 
@@ -3341,6 +3448,7 @@ function calcTeamAverage(periodStr){
  if(!active.length) return null;
  const all=active.map(g=>calcGroomerMetrics(g.id,periodStr));
  const avg=k=>Math.round(all.reduce((s,m)=>s+(m[k]||0),0)/all.length);
+ const avgFloat=k=>Math.round(all.reduce((s,m)=>s+(m[k]||0),0)/all.length*10)/10;
  return {
   attendancePct:avg('attendancePct'),
   totalCompleted:avg('totalCompleted'),
@@ -3351,6 +3459,9 @@ function calcTeamAverage(periodStr){
   lateApptsCount:avg('lateApptsCount'),
   avgLateMins:avg('avgLateMins'),
   avgOverrun:avg('avgOverrun'),
+  complaintsCount:avg('complaintsCount'),
+  complaintsPer10:avgFloat('complaintsPer10'),
+  docPct:avg('docPct'),
  };
 }
 
@@ -3450,13 +3561,54 @@ function renderGroomerReport(){
    ${card('Significant overruns', m.significantOverruns, m.trackedSessions>0?`sessions >15m over predicted`:'no data yet', null)}
   </div>
 
+  <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:14px 0 8px">Quality &amp; Customer Feedback</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
+   ${card('Complaints', m.complaintsCount, m.complaintsCount>0?`${m.seriousComplaints} serious \u00B7 ${m.moderateComplaints} moderate \u00B7 ${m.minorComplaints} minor`:'none reported', cmpHTML(m.complaintsCount, teamAvg?.complaintsCount, '', true))}
+   ${card('Per 10 sessions', m.complaintsPer10, m.totalCompleted>0?'normalized by volume':'no sessions yet', cmpHTML(m.complaintsPer10, teamAvg?.complaintsPer10, '', true))}
+   ${card('Unresolved', m.unresolvedComplaints, m.unresolvedComplaints>0?'needs follow-up':'all resolved', null)}
+   ${card('Documentation', m.docPct+'%', m.invDogsTotal>0?`${m.invDogsDocumented}/${m.invDogsTotal} dogs had notes`:'no invoices yet', cmpHTML(m.docPct, teamAvg?.docPct, '%'))}
+  </div>
+
   <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:14px 0 8px">Service mix</div>
   ${svcMixHTML}
 
   ${lateListHTML}
 
-  ${m.trackedSessions===0?'<div style="margin-top:1rem;padding:10px;background:#fef3c7;border-left:3px solid #ca8a04;font-size:12px;color:#92400e;border-radius:5px">Tip: Open past appointments and log actual duration + lateness in the new "Post-appointment performance" section to populate these metrics.</div>':''}
+  ${renderComplaintsList(m)}
+
+  <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+   <button class="btn btn-g btn-sm" onclick="openComplaintModal({groomerId:'${m.groomerId}'})">+ Log complaint manually</button>
+   <span style="font-size:11px;color:var(--muted);font-style:italic">Or click "Log complaint" from any past appointment.</span>
+  </div>
+
+  ${m.trackedSessions===0&&m.complaintsCount===0?'<div style="margin-top:1rem;padding:10px;background:#fef3c7;border-left:3px solid #ca8a04;font-size:12px;color:#92400e;border-radius:5px">Tip: Open past appointments and log lateness + actual duration in "Post-appointment performance". Log complaints from this panel or from the appointment modal.</div>':''}
  `;
+}
+
+function renderComplaintsList(m){
+ if(!m.complaintsList||!m.complaintsList.length) return '';
+ const rows=m.complaintsList.slice(0,10).map(c=>{
+  const cust=custs.find(x=>x.id===c.customer_id);
+  const dog=dogs.find(x=>x.id===c.dog_id);
+  const sevColor={serious:'#dc2626',moderate:'#ca8a04',minor:'#6b7280'}[c.severity]||'#6b7280';
+  const sevBg={serious:'#fee2e2',moderate:'#fef3c7',minor:'#f3f4f6'}[c.severity]||'#f3f4f6';
+  return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;cursor:pointer" onclick="openComplaintModal({complaintId:'${c.id}'})">
+   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:4px">
+    <div style="font-size:11px">
+     <span style="background:${sevBg};color:${sevColor};font-weight:600;padding:2px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:.5px;font-size:9px">${c.severity}</span>
+     <span style="color:var(--muted);margin-left:6px">${esc(c.complaint_date)}</span>
+     ${cust?`<span style="margin-left:6px">${esc(cust.owner)}${dog?' \u00B7 '+esc(dog.name):''}</span>`:''}
+    </div>
+    <span style="font-size:10px;${c.resolved?'color:#16a34a':'color:#dc2626'}">${c.resolved?'\u2713 Resolved':'\u26A0 Open'}</span>
+   </div>
+   <div style="font-size:12px;color:var(--text);line-height:1.4">${esc(c.description).slice(0,200)}${c.description.length>200?'…':''}</div>
+   ${c.resolution?`<div style="font-size:11px;color:#15803d;margin-top:4px;font-style:italic">Resolution: ${esc(c.resolution).slice(0,150)}</div>`:''}
+  </div>`;
+ }).join('');
+ return `<div style="margin-top:1rem">
+  <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Complaints (showing ${Math.min(10,m.complaintsList.length)}/${m.complaintsList.length})</div>
+  ${rows}
+ </div>`;
 }
 
 // Batch O.7 — share groomer schedule URL
@@ -3767,6 +3919,73 @@ const SERVICE_LIST = Object.keys(PRICING);
 function fmtRp(n){return 'Rp '+(n||0).toLocaleString('id-ID')}
 function priceFor(svc,size){const s=size==='Small'?'S':size==='Medium'?'M':size==='Large'?'L':(size||'M'); return PRICING[svc]?.[s]??0}
 
+// Batch O.16 — invoice document mode helpers
+// Returns 'subscription' | 'advance' | 'none' for whether a dog's Basic Grooming
+// is already paid for via subs or prepaid token. Uses live state.
+function getDogCoverage(dogId){
+ if(!dogId) return 'none';
+ // Subscription: any active subs for this dog with sessions remaining
+ const activeSub=subscriptions.find(s=>s.dog_id===dogId&&s.status==='active'&&(s.sessions_used||0)<(s.sessions_total||0));
+ if(activeSub) return 'subscription';
+ // Token: any active token belonging to this dog's customer with sessions remaining
+ // Tokens are scoped per customer (not per dog) so any matching dog_size token applies
+ const d=dogs.find(x=>x.id===dogId);
+ if(!d) return 'none';
+ const activeTok=tokens.find(t=>t.customer_id===d.customer_id&&(t.sessions_used||0)<(t.sessions_total||0)&&(t.dog_size===d.size||!t.dog_size));
+ if(activeTok) return 'advance';
+ return 'none';
+}
+
+// Get session number for a subscription appointment
+// Returns {current, total, subsType} or null
+function getSubscriptionSessionInfo(dogId,apptDate){
+ if(!dogId) return null;
+ const sub=subscriptions.find(s=>s.dog_id===dogId&&s.status==='active');
+ if(!sub) return null;
+ // Count past subs-source completed appts for this dog (already deducted), +1 for current
+ const past=appts.filter(a=>
+  a.dog_id===dogId
+  && a.session_source==='subscription'
+  && a.subs_deducted
+  && a.status!=='cancelled'
+  && (apptDate?a.appt_date<apptDate:true)
+ ).length;
+ return {
+  current:past+1,
+  total:sub.sessions_total||0,
+  subsType:sub.type||'Subscription',
+  subsId:sub.id
+ };
+}
+
+// Get current usage of advance token for invoice display
+function getAdvanceTokenInfo(dogId){
+ if(!dogId) return null;
+ const d=dogs.find(x=>x.id===dogId);
+ if(!d) return null;
+ const tok=tokens.find(t=>t.customer_id===d.customer_id&&(t.sessions_used||0)<(t.sessions_total||0)&&(t.dog_size===d.size||!t.dog_size));
+ if(!tok) return null;
+ return {
+  current:(tok.sessions_used||0)+1,
+  total:tok.sessions_total||0,
+  serviceType:tok.service_type||'Basic Grooming'
+ };
+}
+
+// Decide doc mode for a record. Returns 'invoice' | 'report'.
+// If rec.doc_mode is explicit override ('invoice'|'report'), respect it.
+// Else 'auto': if ANY selected dog has subscription OR advance coverage → 'report'
+function detectInvoiceMode(rec){
+ if(rec?.doc_mode==='invoice'||rec?.doc_mode==='report') return rec.doc_mode;
+ // Auto: scan dogs for coverage
+ if(!rec?.dogs?.length) return 'invoice';
+ const anyCovered=rec.dogs.some(d=>{
+  const cov=getDogCoverage(d.dog_id);
+  return cov==='subscription'||cov==='advance';
+ });
+ return anyCovered?'report':'invoice';
+}
+
 function initInvoiceTab(){
  const cs=document.getElementById('inv-customer');
  cs.innerHTML='<option value="">Pilih customer…</option>'+custs.map(c=>`<option value="${c.id}">${esc(c.customer_code||'?')} - ${esc(c.owner)}</option>`).join('');
@@ -3822,6 +4041,7 @@ function resetInvoice(){
  if(g('inv-disc-base-only')) g('inv-disc-base-only').checked=false;
  if(g('inv-subs-billing')) g('inv-subs-billing').checked=false;
  if(g('inv-due-date')) g('inv-due-date').value='';
+ if(g('inv-doc-mode')) g('inv-doc-mode').value='auto';
  if(g('inv-notes')) g('inv-notes').value='';
  recalcInvoice();
  updateInvoiceModeBanner();
@@ -3889,6 +4109,7 @@ function openInvoiceForEdit(id){
   // Invoice-level fields
   const dtEl=document.getElementById('inv-date'); if(dtEl) dtEl.value=inv.invoice_date||iso(new Date());
   const ddEl=document.getElementById('inv-due-date'); if(ddEl) ddEl.value=inv.due_date||'';
+  const dmEl=document.getElementById('inv-doc-mode'); if(dmEl) dmEl.value=inv.doc_mode||'auto';
   const grEl=document.getElementById('inv-groomer'); if(grEl) grEl.value=inv.groomer_id||'';
   const ditEl=document.getElementById('inv-disc-type'); if(ditEl) ditEl.value=inv.discount_type||'';
   const divEl=document.getElementById('inv-disc-value'); if(divEl) divEl.value=inv.discount_value||0;
@@ -4036,17 +4257,25 @@ function renderInvDogServices(){
  wrap.innerHTML=invSelectedDogs.map(did=>{
  const d=dogs.find(x=>x.id===did); if(!d) return '';
  const ds=invDogServices[did]||{services:{}};
- // Batch O.12 — if dog has active subscription, show banner + auto-zero Basic Grooming price
- const activeSub=subscriptions.find(s=>s.dog_id===did&&s.status==='active');
- const subsLeft=activeSub?(activeSub.sessions_total||0)-(activeSub.sessions_used||0):0;
- const subsBanner=activeSub?`<div style="background:#dcfce7;border-left:3px solid #16a34a;padding:8px 10px;border-radius:5px;margin-bottom:.6rem;font-size:12px;color:#15803d">
-  <strong>Covered by ${esc((activeSub.type||'subscription').toUpperCase())}</strong> · Sesi ${(activeSub.sessions_used||0)+1}/${activeSub.sessions_total||0}
-  ${subsLeft<=0?'<span style="color:#dc2626;font-weight:600">— SESI HABIS, jangan tambah lagi!</span>':`<span style="color:var(--muted)"> · ${subsLeft} sesi tersisa sebelum invoice ini</span>`}
-  <div style="font-size:10px;color:var(--muted);margin-top:2px">Basic Grooming auto-set ke Rp 0 (sudah pre-paid). Tambahan service tetap dihitung.</div>
- </div>`:'';
+ // Batch O.16 — coverage detection (subscription OR advance token)
+ const coverage=getDogCoverage(did);
+ const subInfo=coverage==='subscription'?getSubscriptionSessionInfo(did,document.getElementById('inv-date')?.value):null;
+ const tokInfo=coverage==='advance'?getAdvanceTokenInfo(did):null;
+ let coverageBanner='';
+ if(coverage==='subscription'&&subInfo){
+  coverageBanner=`<div style="background:#dcfce7;border-left:3px solid #16a34a;padding:8px 10px;border-radius:5px;margin-bottom:.6rem;font-size:12px;color:#15803d">
+   <strong>Covered by ${esc(subInfo.subsType.toUpperCase())}</strong> \u00B7 Sesi ${subInfo.current}/${subInfo.total}
+   <div style="font-size:10px;color:var(--muted);margin-top:2px">Basic Grooming auto-set ke Rp 0 (sudah dibayar via subscription). Add-ons (Whitening/Styling/dll) tetap dihitung.</div>
+  </div>`;
+ } else if(coverage==='advance'&&tokInfo){
+  coverageBanner=`<div style="background:#dbeafe;border-left:3px solid #2563eb;padding:8px 10px;border-radius:5px;margin-bottom:.6rem;font-size:12px;color:#1e3a8a">
+   <strong>Covered by ADVANCE PACKAGE</strong> \u00B7 Sesi ${tokInfo.current}/${tokInfo.total}
+   <div style="font-size:10px;color:var(--muted);margin-top:2px">${esc(tokInfo.serviceType)} auto-set ke Rp 0 (sudah pre-paid). Add-ons tetap dihitung.</div>
+  </div>`;
+ }
  return `<div class="card" style="padding:1rem;margin-bottom:1rem">
  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
- <div><strong>${esc(d.name)}</strong> <span style="font-size:11px;color:var(--muted)">${esc(d.dog_code||'')} · ${esc(d.size||'?')}</span></div>
+ <div><strong>${esc(d.name)}</strong> <span style="font-size:11px;color:var(--muted)">${esc(d.dog_code||'')} \u00B7 ${esc(d.size||'?')}</span></div>
  <div style="display:flex;align-items:center;gap:5px;font-size:11px">
   <span style="color:var(--muted)">Diskon anjing ini:</span>
   <select style="padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px" onchange="onDogDiscType('${did}',this.value)">
@@ -4057,18 +4286,23 @@ function renderInvDogServices(){
   <input type="number" value="${ds.disc_value||0}" min="0" style="width:65px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px" onchange="onDogDiscValue('${did}',this.value)"/>
  </div>
  </div>
- ${subsBanner}
+ ${coverageBanner}
  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
  ${SERVICE_LIST.map(svc=>{
  const checked=ds.services?.[svc]?.checked?'checked':'';
- // Batch O.12 — if dog has active sub and svc is Basic Grooming, force price to 0
+ // Batch O.16 — zero out covered base service; for subscription = Basic Grooming, for advance token = the tok.service_type
  const defaultPrice=priceFor(svc,d.size);
- const forceZero=activeSub&&svc==='Basic Grooming';
+ let forceZero=false;
+ let coverageBadge='';
+ if(coverage==='subscription'&&svc==='Basic Grooming'){forceZero=true;coverageBadge='SUBS'}
+ else if(coverage==='advance'&&svc===(tokInfo?.serviceType||'Basic Grooming')){forceZero=true;coverageBadge='PREPAID'}
  const price=forceZero?0:(ds.services?.[svc]?.price??defaultPrice);
- return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 8px;background:var(--subtle);border-radius:6px;${forceZero&&checked?'border-left:2px solid #16a34a':''}">
+ const accentColor=coverage==='subscription'?'#16a34a':'#2563eb';
+ const accentBg=coverage==='subscription'?'#dcfce7':'#dbeafe';
+ return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 8px;background:var(--subtle);border-radius:6px;${forceZero&&checked?'border-left:2px solid '+accentColor:''}">
  <input type="checkbox" ${checked} onchange="onSvcToggle('${did}','${svc}',this.checked)"/>
- <span style="flex:1">${svc}${forceZero?' <span style="color:#15803d;font-weight:600;font-size:10px">(SUBS)</span>':''}</span>
- <input type="number" value="${price}" min="0" step="1000" style="width:84px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px${forceZero?';background:#dcfce7':''}" onchange="onSvcPrice('${did}','${svc}',this.value)"${forceZero?' title="Subscription covers this — leave at 0"':''}/>
+ <span style="flex:1">${svc}${forceZero?` <span style="color:${accentColor};font-weight:600;font-size:10px">(${coverageBadge})</span>`:''}</span>
+ <input type="number" value="${price}" min="0" step="1000" style="width:84px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px${forceZero?';background:'+accentBg:''}" onchange="onSvcPrice('${did}','${svc}',this.value)"${forceZero?' title="Already covered — leave at 0"':''}/>
  </label>`;
  }).join('')}
  </div>
@@ -4143,9 +4377,14 @@ function onDogNoteChange(did,val){
 function onSvcToggle(did,svc,checked){
  if(!invDogServices[did]) invDogServices[did]={services:{}};
  const d=dogs.find(x=>x.id===did);
- // Batch O.12 — if dog has active subscription, Basic Grooming is auto Rp 0
- const activeSub=subscriptions.find(s=>s.dog_id===did&&s.status==='active');
- const initPrice=(activeSub&&svc==='Basic Grooming')?0:priceFor(svc,d?.size);
+ // Batch O.16 — auto Rp 0 for covered services (subscription Basic OR advance token service)
+ const coverage=getDogCoverage(did);
+ let initPrice=priceFor(svc,d?.size);
+ if(coverage==='subscription'&&svc==='Basic Grooming') initPrice=0;
+ else if(coverage==='advance'){
+  const tokInfo=getAdvanceTokenInfo(did);
+  if(tokInfo&&svc===tokInfo.serviceType) initPrice=0;
+ }
  if(!invDogServices[did].services[svc]) invDogServices[did].services[svc]={price:initPrice};
  invDogServices[did].services[svc].checked=checked;
  recalcInvoice();
@@ -4485,6 +4724,7 @@ function buildInvoiceRecord(){
   groomer_name:groomerName,
   invoice_date:document.getElementById('inv-date').value||iso(new Date()),
   due_date:document.getElementById('inv-due-date')?.value||null,
+  doc_mode:document.getElementById('inv-doc-mode')?.value||'auto',
   dogs:dogsData,
   subtotal:t.subtotal,
   sessions:1,
@@ -4683,6 +4923,7 @@ function buildServiceRows(dogsData,counter){
  // Read invoice-level discount config to determine if base-only mode is active
  const inv=window._currentInvoiceForRender||{};
  const baseOnly=!!inv.discount_base_only;
+ const docMode=inv._docMode||detectInvoiceMode(inv);
  dogsData.forEach(d=>{
   const dogSubtotal=d.services.reduce((a,s)=>a+s.price,0);
   let dogDisc=0;
@@ -4693,14 +4934,31 @@ function buildServiceRows(dogsData,counter){
   const mainSvc=d.services.find(s=>s.name==='Basic Grooming')||d.services[0];
   const addons=d.services.filter(s=>s!==mainSvc);
   const n=++counter.n;
+  // Batch O.16 — determine if main service is covered (subs or prepaid)
+  const coverage=getDogCoverage(d.dog_id);
+  const isMainCovered=docMode==='report'&&mainSvc.price===0&&(
+   (coverage==='subscription'&&mainSvc.name==='Basic Grooming')||
+   (coverage==='advance')
+  );
+  // Coverage tag for the main row
+  let coverageTag='';
+  if(isMainCovered){
+   if(coverage==='subscription'){
+    const subInfo=getSubscriptionSessionInfo(d.dog_id,inv.invoice_date);
+    coverageTag=subInfo?` <span style="color:#15803d;font-weight:600;font-size:10px;background:#dcfce7;padding:2px 6px;border-radius:3px;margin-left:4px">SUBS \u00B7 Sesi ${subInfo.current}/${subInfo.total}</span>`:'<span style="color:#15803d;font-size:10px;margin-left:4px">(subscription)</span>';
+   } else if(coverage==='advance'){
+    const tokInfo=getAdvanceTokenInfo(d.dog_id);
+    coverageTag=tokInfo?` <span style="color:#1e3a8a;font-weight:600;font-size:10px;background:#dbeafe;padding:2px 6px;border-radius:3px;margin-left:4px">PREPAID \u00B7 Sesi ${tokInfo.current}/${tokInfo.total}</span>`:'<span style="color:#1e3a8a;font-size:10px;margin-left:4px">(prepaid)</span>';
+   }
+  }
   // Batch O.5 — itemized: if there are addons, show base price as the main row amount,
   // then each addon on its own row. Otherwise compact single row.
   if(addons.length===0){
-   const rateStr=isFree?'GRATIS':fmtRp(mainSvc.price||0);
+   const rateStr=isMainCovered?'<span style="color:#16a34a;font-weight:600">SUDAH DIBAYAR</span>':(isFree?'GRATIS':fmtRp(mainSvc.price||0));
    rows+=`<tr style="border-top:2px solid #f0f0f0">
     <td class="svc-num" style="padding-top:14px">${n}</td>
     <td class="svc-name" style="padding-top:14px">
-     <strong>${d.name} \u2014 ${mainSvc.name}</strong>
+     <strong>${d.name} \u2014 ${mainSvc.name}</strong>${coverageTag}
      <div class="svc-sub">Mandi, blow dry, trim, telinga &amp; kuku</div>
     </td>
     <td class="svc-qty" style="padding-top:14px">1</td>
@@ -4709,25 +4967,26 @@ function buildServiceRows(dogsData,counter){
   } else {
    // Main row: dog name + Basic Grooming line only
    const mainPrice=mainSvc.price||0;
-   const mainRateStr=isFree?'GRATIS':fmtRp(mainPrice);
+   const mainRateStr=isMainCovered?'<span style="color:#16a34a;font-weight:600">SUDAH DIBAYAR</span>':(isFree?'GRATIS':fmtRp(mainPrice));
    rows+=`<tr style="border-top:2px solid #f0f0f0">
     <td class="svc-num" style="padding-top:14px">${n}</td>
     <td class="svc-name" style="padding-top:14px">
-     <strong>${d.name} \u2014 ${mainSvc.name}</strong>
+     <strong>${d.name} \u2014 ${mainSvc.name}</strong>${coverageTag}
      <div class="svc-sub">Mandi, blow dry, trim, telinga &amp; kuku</div>
     </td>
     <td class="svc-qty" style="padding-top:14px">1</td>
     <td class="svc-rate" style="padding-top:14px">${mainRateStr}</td>
     <td class="svc-amt" style="padding-top:14px">${mainRateStr}</td></tr>`;
-   // Add-on rows — each on its own line, indented
-   addons.forEach(a=>{
+   // Add-on rows — each on its own line, indented (label as TAMBAHAN if covered base)
+   addons.forEach((a,ai)=>{
     const addonPrice=a.price||0;
     const addonName=a.name.replace('Basic Grooming','').trim()||a.name;
     const note=baseOnly?'<span style="color:#92400e;font-size:10px;margin-left:6px">(tanpa diskon)</span>':'';
+    const tambahanLbl=(isMainCovered&&ai===0)?'<span style="color:#92400e;font-size:9px;background:#fef3c7;padding:1px 5px;border-radius:3px;margin-right:4px;font-weight:600">TAMBAHAN</span>':'';
     rows+=`<tr>
      <td></td>
      <td class="svc-name" style="padding:4px 10px;padding-left:24px;font-size:11px;color:#555">
-      + ${esc(addonName)}${note}
+      ${tambahanLbl}+ ${esc(addonName)}${note}
      </td>
      <td class="svc-qty" style="padding:4px 10px;font-size:11px;color:#555">1</td>
      <td class="svc-rate" style="padding:4px 10px;font-size:11px;color:#555">${fmtRp(addonPrice)}</td>
@@ -4812,6 +5071,10 @@ function buildTokenBalanceHTML(custId){
 }
 
 function buildInvoiceHTML(rec, custObj, bankObj, forPrint){
+ // Batch O.16 — determine document mode (invoice vs service report)
+ const docMode=detectInvoiceMode(rec);
+ rec._docMode=docMode;
+ rec._total=rec.total||0;
  const bn=bankObj.bank_name||'BCA';
  const baRaw=bankObj.bank_account||'770055777787';
  // Format account number with spaces every 4 digits (Iris item 5)
@@ -4894,17 +5157,17 @@ ${forPrint?'@media print{.inv-wrap{padding:24px 28px}}':''}
 <div class="inv-wrap">
 <div class="top-bar">
  <img src="${HP_LOGO}" alt="HomePaw" style="height:120px;width:auto"/>
- <div class="inv-label">INVOICE</div>
+ <div class="inv-label">${docMode==='report'?'LAPORAN GROOMING':'INVOICE'}</div>
 </div>
 <div class="meta-row">
- <div class="meta-item"><div class="meta-lbl">No. Invoice</div><div class="meta-val">${rec.invoice_number}</div></div>
+ <div class="meta-item"><div class="meta-lbl">No. ${docMode==='report'?'Laporan':'Invoice'}</div><div class="meta-val">${rec.invoice_number}</div></div>
  <div class="meta-item"><div class="meta-lbl">Tanggal</div><div class="meta-val">${fmtID(invDate)}</div></div>
- ${hideDueDate?'':`<div class="meta-item"><div class="meta-lbl">Jatuh tempo</div><div class="meta-val" style="color:#dc2626">${fmtID(dueDate)}</div></div>`}
+ ${(hideDueDate||rec._total===0)?'':`<div class="meta-item"><div class="meta-lbl">Jatuh tempo</div><div class="meta-val" style="color:#dc2626">${fmtID(dueDate)}</div></div>`}
  <div class="meta-item"><div class="meta-lbl">Groomer</div><div class="meta-val">${rec.groomer_name||'-'}</div></div>
 </div>
 <div class="bill-row">
  <div>
-  <div class="bill-lbl">Ditagih kepada</div>
+  <div class="bill-lbl">${docMode==='report'?'Diberikan kepada':'Ditagih kepada'}</div>
   <div class="bill-name">${rec.owner_name}</div>
   <div class="bill-addr">${fullAddr||'-'}${custObj.wa?'<br>+62'+custObj.wa.replace(/^0/,''):''}</div>
  </div>
@@ -4953,15 +5216,17 @@ ${custTokenBalance}
 </div>
 <div class="pay-section">
  <div>
-  <div class="pay-lbl">Cara bayar</div>
+  ${docMode==='report'&&rec.total===0?`<div class="pay-lbl">Status pembayaran</div>
+  <div class="pay-bank" style="color:#16a34a">\u2713 SUDAH DIBAYAR (via subscription / prepaid)</div>
+  <div class="pay-note">Grooming sudah selesai. Lihat catatan groomer di bawah.</div>`:`<div class="pay-lbl">Cara bayar</div>
   <div class="pay-bank">${bn} \u2014 a/n ${bh}</div>
   <div class="pay-acc">${ba}</div>
-  <div class="pay-note">Transfer sesuai nominal.<br>Kirim bukti via WhatsApp / DM Instagram.</div>
+  <div class="pay-note">Transfer sesuai nominal.<br>Kirim bukti via WhatsApp / DM Instagram.</div>`}
  </div>
  <div>
-  <div class="pay-due-lbl">Jumlah tagihan</div>
+  <div class="pay-due-lbl">${docMode==='report'?(rec.total===0?'Total':'Tambahan yang perlu dibayar'):'Jumlah tagihan'}</div>
   <div class="pay-due-val">${fmtRp(rec.total)}</div>
-  <div style="font-size:10px;color:#dc2626;margin-top:4px;text-align:right;font-weight:600">${hideDueDate?'':'Bayar sebelum '+fmtID(dueDate)}</div>
+  ${(hideDueDate||rec.total===0)?'':`<div style="font-size:10px;color:#dc2626;margin-top:4px;text-align:right;font-weight:600">Bayar sebelum ${fmtID(dueDate)}</div>`}
  </div>
 </div>
 <div class="inv-footer">
@@ -5028,10 +5293,24 @@ function renderInvoicePreview(){
  const el=document.getElementById('inv-preview'); if(!el) return;
  if(!invSelectedCust||!invSelectedDogs.length){
   el.innerHTML='<div style="color:#9ca3af;font-size:12px;text-align:center;padding:2rem">Pilih customer dan dog untuk melihat preview.</div>';
+  const hint=document.getElementById('inv-doc-mode-hint'); if(hint) hint.textContent='';
   return;
  }
  const rec=buildInvoiceRecord();
  if(!rec){el.innerHTML='';return}
+ // Batch O.16 — show detected mode hint
+ const mode=detectInvoiceMode(rec);
+ const explicit=rec.doc_mode&&rec.doc_mode!=='auto';
+ const hint=document.getElementById('inv-doc-mode-hint');
+ if(hint){
+  if(explicit){
+   hint.textContent='Manual override: '+(mode==='report'?'Laporan Grooming':'Invoice')+' (sistem deteksi: '+(detectInvoiceMode({...rec,doc_mode:'auto'})==='report'?'Laporan Grooming':'Invoice')+')';
+   hint.style.color='#ca8a04';
+  } else {
+   hint.textContent='Auto-detected: '+(mode==='report'?'Laporan Grooming (ada dog dgn subscription/prepaid)':'Invoice biasa');
+   hint.style.color='var(--muted)';
+  }
+ }
  const cust=custs.find(c=>c.id===rec.customer_id)||{};
  el.innerHTML=buildInvoiceHTML(rec,cust,bankSettings,false);
 }
@@ -5304,6 +5583,161 @@ function openCalMobileMenu(ev){
    if(!menu.contains(e.target)){menu.remove();document.removeEventListener('click',closeMenu)}
   });
  },50);
+}
+
+// Batch O.15 — Complaint logging
+function logComplaintFromAppt(){
+ if(!wiz.editId) return;
+ const a=appts.find(x=>x.id===wiz.editId); if(!a) return;
+ const d=dogs.find(x=>x.id===a.dog_id);
+ openComplaintModal({
+  apptId:a.id,
+  groomerId:a.groomer_id,
+  customerId:d?.customer_id,
+  dogId:a.dog_id
+ });
+}
+
+function openComplaintModal(opts){
+ // opts: {complaintId, apptId, groomerId, customerId, dogId}
+ opts=opts||{};
+ const titleEl=document.getElementById('complaint-title');
+ const delBtn=document.getElementById('cmf-del-btn');
+
+ // Populate groomer select
+ const gi=document.getElementById('cmf-groomer');
+ const activeG=groomers.filter(g=>g.active);
+ gi.innerHTML='<option value="">(no specific groomer)</option>'+
+  activeG.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
+
+ if(opts.complaintId){
+  // Edit existing
+  const c=complaints.find(x=>x.id===opts.complaintId);
+  if(!c){alert('Complaint not found');return}
+  titleEl.textContent='Edit complaint';
+  delBtn.style.display='inline-flex';
+  document.getElementById('cmf-id').value=c.id;
+  document.getElementById('cmf-appt-id').value=c.appointment_id||'';
+  document.getElementById('cmf-date').value=c.complaint_date;
+  document.getElementById('cmf-severity').value=c.severity||'moderate';
+  document.getElementById('cmf-groomer').value=c.groomer_id||'';
+  document.getElementById('cmf-customer-id').value=c.customer_id||'';
+  document.getElementById('cmf-dog-id').value=c.dog_id||'';
+  document.getElementById('cmf-description').value=c.description||'';
+  document.getElementById('cmf-resolution').value=c.resolution||'';
+  document.getElementById('cmf-resolved').checked=!!c.resolved;
+  // Show selected
+  const cust=custs.find(x=>x.id===c.customer_id);
+  const dog=dogs.find(x=>x.id===c.dog_id);
+  document.getElementById('cmf-cust-search').value='';
+  document.getElementById('cmf-selected').innerHTML=cust?`<strong>${esc(cust.owner)}</strong>${dog?' · '+esc(dog.name):''}`:'';
+ } else {
+  // New
+  titleEl.textContent='Log complaint';
+  delBtn.style.display='none';
+  document.getElementById('cmf-id').value='';
+  document.getElementById('cmf-appt-id').value=opts.apptId||'';
+  document.getElementById('cmf-date').value=iso(new Date());
+  document.getElementById('cmf-severity').value='moderate';
+  document.getElementById('cmf-groomer').value=opts.groomerId||'';
+  document.getElementById('cmf-customer-id').value=opts.customerId||'';
+  document.getElementById('cmf-dog-id').value=opts.dogId||'';
+  document.getElementById('cmf-description').value='';
+  document.getElementById('cmf-resolution').value='';
+  document.getElementById('cmf-resolved').checked=false;
+  document.getElementById('cmf-cust-search').value='';
+  // Show selected
+  let selStr='';
+  if(opts.customerId){
+   const cust=custs.find(x=>x.id===opts.customerId);
+   const dog=opts.dogId?dogs.find(x=>x.id===opts.dogId):null;
+   selStr=cust?`<strong>${esc(cust.owner)}</strong>${dog?' · '+esc(dog.name):''}`:'';
+  }
+  document.getElementById('cmf-selected').innerHTML=selStr;
+ }
+ om('ov-complaint');
+}
+
+function onCmfCustSearch(val){
+ const q=(val||'').toLowerCase().trim();
+ const dd=document.getElementById('cmf-cust-dd');
+ if(!dd) return;
+ if(q.length<2){dd.style.display='none';return}
+ const matches=[];
+ custs.forEach(c=>{
+  const myDogs=dogs.filter(d=>d.customer_id===c.id);
+  const blob=`${c.owner||''} ${c.kota||''} ${myDogs.map(d=>d.name).join(' ')}`.toLowerCase();
+  if(!blob.includes(q)) return;
+  matches.push({c,dogs:myDogs});
+ });
+ if(!matches.length){
+  dd.innerHTML=`<div style="padding:8px;font-size:11px;color:var(--muted);font-style:italic">No match.</div>`;
+  dd.style.display='block';
+  return;
+ }
+ dd.innerHTML=matches.slice(0,15).map(({c,dogs:myDogs})=>{
+  let inner=`<div onclick="pickCmfCust('${c.id}','')" style="padding:6px 10px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px" onmouseover="this.style.background='var(--subtle)'" onmouseout="this.style.background=''"><strong>${esc(c.owner||'?')}</strong> <span style="color:var(--muted);font-size:10px">(all dogs)</span></div>`;
+  myDogs.forEach(d=>{
+   inner+=`<div onclick="pickCmfCust('${c.id}','${d.id}')" style="padding:5px 10px 5px 20px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px" onmouseover="this.style.background='var(--subtle)'" onmouseout="this.style.background=''">${esc(c.owner)} \u00B7 ${esc(d.name)}</div>`;
+  });
+  return inner;
+ }).join('');
+ dd.style.display='block';
+}
+
+function pickCmfCust(cid,did){
+ const c=custs.find(x=>x.id===cid);
+ const d=did?dogs.find(x=>x.id===did):null;
+ document.getElementById('cmf-customer-id').value=cid;
+ document.getElementById('cmf-dog-id').value=did||'';
+ document.getElementById('cmf-cust-search').value='';
+ document.getElementById('cmf-selected').innerHTML=c?`<strong>${esc(c.owner)}</strong>${d?' \u00B7 '+esc(d.name):''}`:'';
+ document.getElementById('cmf-cust-dd').style.display='none';
+}
+
+async function saveComplaint(){
+ const id=document.getElementById('cmf-id').value;
+ const desc=document.getElementById('cmf-description').value.trim();
+ if(!desc){alert('Deskripsi komplain harus diisi.');return}
+ const resolved=document.getElementById('cmf-resolved').checked;
+ const payload={
+  appointment_id:document.getElementById('cmf-appt-id').value||null,
+  complaint_date:document.getElementById('cmf-date').value||iso(new Date()),
+  severity:document.getElementById('cmf-severity').value,
+  groomer_id:document.getElementById('cmf-groomer').value||null,
+  customer_id:document.getElementById('cmf-customer-id').value||null,
+  dog_id:document.getElementById('cmf-dog-id').value||null,
+  description:desc,
+  resolution:document.getElementById('cmf-resolution').value.trim()||null,
+  resolved,
+  resolved_at:resolved?new Date().toISOString():null
+ };
+ if(id){
+  const oldRec=complaints.find(c=>c.id===id);
+  await db.from('complaints').update(payload).eq('id',id);
+  await logAudit('complaint',id,'update',{old:oldRec,new:payload,label:payload.complaint_date+' \u00B7 '+payload.severity});
+ } else {
+  payload.created_by=window._currentAuthUser?.id||null;
+  const {data:inserted}=await db.from('complaints').insert(payload).select().single();
+  if(inserted) await logAudit('complaint',inserted.id,'create',{new:payload,label:payload.complaint_date+' \u00B7 '+payload.severity});
+ }
+ cm('ov-complaint');
+ await loadAll();
+ // If groomer report open, refresh
+ if(typeof renderGroomerReport==='function'&&_grptCurrentId) renderGroomerReport();
+ showToast('Komplain tersimpan','success');
+}
+
+async function delComplaint(){
+ const id=document.getElementById('cmf-id').value;
+ if(!id) return;
+ if(!confirm('Hapus komplain ini?')) return;
+ const oldRec=complaints.find(c=>c.id===id);
+ await db.from('complaints').delete().eq('id',id);
+ if(oldRec) await logAudit('complaint',id,'delete',{old:oldRec,label:oldRec.complaint_date+' \u00B7 '+oldRec.severity});
+ cm('ov-complaint');
+ await loadAll();
+ if(typeof renderGroomerReport==='function'&&_grptCurrentId) renderGroomerReport();
 }
 
 function openBlockDayModal(){
