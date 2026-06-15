@@ -1056,7 +1056,11 @@ tbody tr:hover{background:var(--subtle)}
  <div class="modal-title" id="cust-title">Add customer</div>
  <div class="form-grid">
  <div class="fg"><label>Owner name *</label><input id="cf-owner" placeholder="Sarah"/></div>
- <div class="fg"><label>WhatsApp</label><input id="cf-wa" placeholder="08xxxxxxxxxx"/></div>
+ <div class="fg">
+  <label>WhatsApp</label>
+  <input id="cf-wa" placeholder="08xxx / +62 8xx-xxxx-xxxx" oninput="onWaInput(this)"/>
+  <div id="cf-wa-hint" style="font-size:10px;color:var(--muted);margin-top:2px;font-style:italic"></div>
+ </div>
  <div class="fg full"><label>Address</label><input id="cf-addr" placeholder="Jl. Kemang Raya No.10"/></div>
  <div class="fg"><label>Kota / Kabupaten</label><select id="cf-kota" onchange="onKotaChange()"><option value="">Pilih kota…</option></select></div>
  <div class="fg"><label>Kecamatan</label><select id="cf-kec"><option value="">Pilih kota dulu…</option></select></div>
@@ -1828,7 +1832,45 @@ function calcAge(ageAtInput, createdAt){
  return mos>0?`${yrs} thn ${mos} bln`:`${yrs} thn`;
 }
 
-/* AREAS - Kota -> Kecamatan */
+// Live phone normalizer hint for WA input
+function onWaInput(el){
+ const hint=document.getElementById('cf-wa-hint'); if(!hint) return;
+ const v=el.value.trim();
+ if(!v){hint.textContent='';return}
+ const norm=normalizeWA(v);
+ if(norm){
+  hint.textContent='\u2713 WA link: wa.me/'+norm;
+  hint.style.color='#16a34a';
+ } else {
+  hint.textContent='Format tidak dikenali';
+  hint.style.color='#dc2626';
+ }
+}
+// Handles: 087880945541 / +62 878-8094-5541 / 62878xxx / 878xxx / 08-7880-9455-41
+function normalizeWA(raw){
+ if(!raw) return null;
+ let d=raw.replace(/[\s\-\.\(\)]/g,''); // strip spaces, dashes, dots, parens
+ if(d.startsWith('+')) d=d.slice(1);    // strip leading +
+ if(d.startsWith('62')) return d;        // already 628xxx
+ if(d.startsWith('0')) return '62'+d.slice(1); // 08xxx → 628xxx
+ if(d.startsWith('8')) return '62'+d;   // 8xxx → 628xxx
+ return '62'+d;                          // fallback
+}
+function waLink(raw){
+ const num=normalizeWA(raw);
+ return num?'https://wa.me/'+num:null;
+}
+// Format for display: always show as +62 8xx-xxxx-xxxx
+function formatPhoneDisplay(raw){
+ if(!raw) return '';
+ const num=normalizeWA(raw); // e.g. "62878xxxxxxxx"
+ if(!num) return raw;
+ // Format: +62 xxx-xxxx-xxxx (8xx-xxxx-xxxx after 62)
+ const local=num.slice(2); // e.g. "878xxxxxxxx"
+ if(local.length<7) return '+62 '+local;
+ // Group: 3-4-4 or adapt
+ return '+62 '+local.slice(0,3)+'-'+local.slice(3,7)+'-'+local.slice(7);
+}
 const AREAS = {
  'Jakarta Pusat': ['Cempaka Putih','Gambir','Johar Baru','Kemayoran','Menteng','Sawah Besar','Senen','Tanah Abang'],
  'Jakarta Utara': ['Cilincing','Kelapa Gading','Koja','Pademangan','Penjaringan','Tanjung Priok'],
@@ -2005,7 +2047,7 @@ function renderCusts(){
  return `<tr>
  <td><span class="id-pill">${esc(c.customer_code||'—')}</span></td>
  <td><strong class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner)}</strong>${subsBadgeHTML(c.id)}</td>
- <td>${c.wa?`<a class="wa-lnk" href="https://wa.me/62${c.wa.replace(/^0/,'')}" target="_blank">${esc(c.wa)}</a>`:'—'}</td>
+ <td>${c.wa?`<a class="wa-lnk" href="${waLink(c.wa)}" target="_blank">${esc(c.wa)}</a>`:'—'}</td>
  <td>${esc(c.area)||'—'}</td>
  <td>${srcCell}</td>
  <td><span class="badge bs">${dc} dog${dc!==1?'s':''}</span></td>
@@ -3377,7 +3419,7 @@ function renderGroomers(){
  return `<tr>
  <td><span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:${g.color||'#16a34a'};vertical-align:middle"></span></td>
  <td><strong>${esc(g.name)}</strong></td>
- <td>${g.phone?`<a class="wa-lnk" href="https://wa.me/62${g.phone.replace(/^0/,'')}" target="_blank">${esc(g.phone)}</a>`:'—'}</td>
+ <td>${g.phone?`<a class="wa-lnk" href="${waLink(g.phone)}" target="_blank">${esc(g.phone)}</a>`:'—'}</td>
  <td>${g.active?'<span class="badge bs">Active</span>':'<span class="badge bm">Inactive</span>'}</td>
  <td>${ac}</td>
  <td><div class="row-actions">
@@ -3726,8 +3768,8 @@ function copyGroomerScheduleLink(groomerId){
  const url=`${base}groomer.html?name=${encodeURIComponent((g.name||'').toLowerCase())}&token=${g.access_token}`;
  // WhatsApp share message
  const msg=`Halo ${g.name},\n\nJadwal grooming kamu bisa diakses di link ini (bookmark di hp ya):\n\n${url}\n\nLogin pakai:\n- Nama: ${g.name}\n- Code: ${g.access_token}\n\nLink ini cuma untuk kamu, jangan share ya. Update otomatis setiap 5 menit.`;
- const waPhone=g.phone?'62'+g.phone.replace(/^0/,'').replace(/\D/g,''):null;
- const waLink=waPhone?`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`:null;
+ const waPhoneNum=normalizeWA(g.phone);
+ const waLink=waPhoneNum?`https://wa.me/${waPhoneNum}?text=${encodeURIComponent(msg)}`:null;
  // Show in a small modal with copy + WA buttons
  const modalHtml=`
   <div style="font-size:13px;margin-bottom:12px"><strong>${esc(g.name)}</strong>'s schedule URL:</div>
@@ -3993,7 +4035,7 @@ Request: "${input}"
  <div class="stop-det">${s.address}</div>
  <div class="stop-det">${s.note}</div>
  <div class="stop-links">
- ${s.wa?`<a class="stop-lnk" href="https://wa.me/62${s.wa.replace(/^0/,'')}" target="_blank">WA</a>`:''}
+ ${s.wa?`<a class="stop-lnk" href="${waLink(s.wa)}" target="_blank">WA</a>`:''}
  <a class="stop-lnk" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.address)}&travelmode=driving&avoid=tolls" target="_blank">Navigate</a>
  </div>
  </div>
@@ -5341,7 +5383,7 @@ ${forPrint?'@media print{.inv-wrap{padding:24px 28px}}':''}
  <div>
   <div class="bill-lbl">${docMode==='report'?'Diberikan kepada':'Ditagih kepada'}</div>
   <div class="bill-name">${rec.owner_name}</div>
-  <div class="bill-addr">${fullAddr||'-'}${custObj.wa?'<br>+62'+custObj.wa.replace(/^0/,''):''}</div>
+  <div class="bill-addr">${fullAddr||'-'}${custObj.wa?'<br>'+formatPhoneDisplay(custObj.wa):''}</div>
  </div>
  <div>
   <div class="bill-lbl">Info anjing</div>
@@ -6128,7 +6170,7 @@ function generateCustomerReminders(){
   const dogCount=sortedAppts.length;
 
   // WhatsApp deep link
-  const waPhone=c.wa?'62'+c.wa.replace(/^0/,'').replace(/\D/g,''):null;
+  const waPhone=c.wa?normalizeWA(c.wa):null;
   const waLink=waPhone?`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`:null;
 
   return `<div class="card" style="padding:1rem;margin-bottom:.8rem">
@@ -7487,10 +7529,10 @@ function renderCust360Header(c){
  const lifetime=lifetimeSpend(c.id);
  const srcLabel={ads:'Ads',free_session:'Free session',organic:'Organic',family:'Family',friend:'Friend'};
  const srcBadge=c.source?`<span class="c360-stat"><strong>Source:</strong> ${esc(srcLabel[c.source]||c.source)}</span>`:'';
- const waLink=c.wa?`https://wa.me/62${c.wa.replace(/^0/,'').replace(/\D/g,'')}`:null;
+ const waLinkUrl=c.wa?waLink(c.wa):null;
  const gmaps=c.gmaps_link||(c.address?'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent([c.address,c.kota,'Jakarta'].filter(Boolean).join(', ')):null);
  const addrLine=[c.kota,c.kecamatan].filter(Boolean).join(' \u00B7 ');
- const wa=c.wa?'+62 '+c.wa.replace(/^0/,''):'';
+ const wa=c.wa?formatPhoneDisplay(c.wa):'';
  const html=`
  <div class="c360-header-top">
   <div class="c360-title">${esc(c.customer_code||'CUST-???')} \u00B7 ${esc(c.owner||'?')}${subsBadgeHTML(c.id)}</div>
@@ -7503,7 +7545,7 @@ function renderCust360Header(c){
   <span class="c360-stat"><strong>Lifetime:</strong> ${fmtRp(lifetime)}</span>
  </div>
  <div class="c360-actions">
-  ${waLink?`<a href="${waLink}" target="_blank">WhatsApp</a>`:''}
+  ${waLinkUrl?`<a href="${waLinkUrl}" target="_blank">WhatsApp</a>`:''}
   ${gmaps?`<a href="${gmaps}" target="_blank">Open in Maps</a>`:''}
   <button onclick="closeCust360();openEditCust('${c.id}')">Edit profile</button>
  </div>`;
@@ -8006,7 +8048,7 @@ function renderFollowups(){
     const dogLines=grp.dogs.map(x=>`${x.dog.name} (${x.days}h)`).join(', ');
     const maxDays=Math.max(...grp.dogs.map(x=>x.days));
     const bg=maxDays>=30?'#fee2e2':maxDays>=21?'#fef3c7':'#dbeafe';
-    const waPhone=c.wa?'62'+c.wa.replace(/^0/,'').replace(/\D/g,''):null;
+    const waPhone=c.wa?normalizeWA(c.wa):null;
     const firstName=(c.owner||'').split(' ')[0];
     const dogList=grp.dogs.map(x=>x.dog.name).join(' dan ');
     const msg=`Halo kak ${firstName}, sudah lama nggak kelihatan! ${dogList} terakhir grooming ${maxDays} hari lalu. Boleh aku bantu booking jadwal berikutnya?`;
@@ -8079,7 +8121,8 @@ function renderSubsBilling(){
     const status=r.billedThisMonth
      ? `<span class="badge bs">Sudah dibilling</span>`
      : `<button class="btn btn-p btn-sm" onclick="createSubsBillingInvoice('${r.c.id}')">Buat invoice</button>`;
-    const waLink=r.c.wa?`https://wa.me/62${r.c.wa.replace(/^0/,'').replace(/\D/g,'')}?text=${encodeURIComponent(buildSubsBillingMessage(r.c,r.lineItems,r.totalAmount,monthName))}`:null;
+    const _subsWaBase=normalizeWA(r.c.wa);
+    const waLink=_subsWaBase?`https://wa.me/${_subsWaBase}?text=${encodeURIComponent(buildSubsBillingMessage(r.c,r.lineItems,r.totalAmount,monthName))}`:null;
     const waBtn=waLink?`<a class="btn btn-g btn-sm" href="${waLink}" target="_blank" style="margin-left:6px">WA</a>`:'';
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:${r.billedThisMonth?'#dcfce7':'#fef3c7'};border-radius:5px;flex-wrap:wrap;gap:8px">
      <div style="flex:1;min-width:0">
