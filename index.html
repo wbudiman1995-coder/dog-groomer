@@ -740,7 +740,7 @@ tbody tr:hover{background:var(--subtle)}
  <div class="fg"><label>Tanggal invoice</label><input type="date" id="inv-date" onchange="onInvDateChange()"/></div>
  <div class="fg"><label>Tanggal jatuh tempo <span style="font-size:10px;color:var(--muted);font-weight:400">(optional, default: invoice + 1)</span></label><input type="date" id="inv-due-date" onchange="renderInvoicePreview()"/></div>
  <div class="fg"><label>Jenis dokumen <span style="font-size:10px;color:var(--muted);font-weight:400">(auto = sistem pilih sendiri)</span></label>
-  <select id="inv-doc-mode" onchange="renderInvoicePreview()">
+  <select id="inv-doc-mode" onchange="onDocModeChange()">
    <option value="auto">Auto (deteksi otomatis)</option>
    <option value="invoice">Invoice (bayar penuh)</option>
    <option value="report">Laporan Grooming (sudah dibayar via subs/prepaid)</option>
@@ -3936,6 +3936,42 @@ function getDogCoverage(dogId){
  return 'none';
 }
 
+// Batch O.16 (fix Bug C) — effective coverage considers manual override too.
+// When admin manually picks doc_mode='report', treat dogs as if they have
+// 'manual' coverage (Basic Grooming = Rp 0). Add-ons stay billable.
+// Optional explicitMode arg: pass rec.doc_mode for non-form contexts (PDF render of saved invoice)
+function getEffectiveCoverage(dogId, explicitMode){
+ const real=getDogCoverage(dogId);
+ if(real!=='none') return real;
+ // Prefer explicit mode (e.g. from saved record); else fall back to form
+ let mode=explicitMode;
+ if(!mode||mode==='auto') mode=document.getElementById('inv-doc-mode')?.value;
+ if(mode==='report') return 'manual';
+ return 'none';
+}
+
+// When doc mode changes, reset Basic Grooming prices to match the new effective coverage
+// (e.g. flipping to 'report' should zero out Basic; flipping to 'invoice' restores default)
+function onDocModeChange(){
+ invSelectedDogs.forEach(did=>{
+  const d=dogs.find(x=>x.id===did); if(!d) return;
+  const coverage=getEffectiveCoverage(did);
+  if(!invDogServices[did]) return;
+  const basicSvc=invDogServices[did].services?.['Basic Grooming'];
+  if(basicSvc){
+   if(coverage==='subscription'||coverage==='advance'||coverage==='manual'){
+    basicSvc.price=0;
+   } else {
+    // 'invoice' override or auto-detected as 'invoice'
+    basicSvc.price=priceFor('Basic Grooming',d.size);
+   }
+  }
+ });
+ renderInvDogServices();
+ recalcInvoice();
+ renderInvoicePreview();
+}
+
 // Get session number for a subscription appointment
 // Returns {current, total, subsType} or null
 function getSubscriptionSessionInfo(dogId,apptDate){
@@ -4257,8 +4293,9 @@ function renderInvDogServices(){
  wrap.innerHTML=invSelectedDogs.map(did=>{
  const d=dogs.find(x=>x.id===did); if(!d) return '';
  const ds=invDogServices[did]||{services:{}};
- // Batch O.16 — coverage detection (subscription OR advance token)
- const coverage=getDogCoverage(did);
+ // Batch O.16 — coverage detection (subscription OR advance token OR manual override)
+ const coverage=getEffectiveCoverage(did);
+ const realCoverage=getDogCoverage(did);
  const subInfo=coverage==='subscription'?getSubscriptionSessionInfo(did,document.getElementById('inv-date')?.value):null;
  const tokInfo=coverage==='advance'?getAdvanceTokenInfo(did):null;
  let coverageBanner='';
@@ -4271,6 +4308,13 @@ function renderInvDogServices(){
   coverageBanner=`<div style="background:#dbeafe;border-left:3px solid #2563eb;padding:8px 10px;border-radius:5px;margin-bottom:.6rem;font-size:12px;color:#1e3a8a">
    <strong>Covered by ADVANCE PACKAGE</strong> \u00B7 Sesi ${tokInfo.current}/${tokInfo.total}
    <div style="font-size:10px;color:var(--muted);margin-top:2px">${esc(tokInfo.serviceType)} auto-set ke Rp 0 (sudah pre-paid). Add-ons tetap dihitung.</div>
+  </div>`;
+ } else if(coverage==='manual'){
+  // Manual override warning — admin chose 'report' but no real subs/token detected
+  coverageBanner=`<div style="background:#fef3c7;border-left:3px solid #ca8a04;padding:8px 10px;border-radius:5px;margin-bottom:.6rem;font-size:12px;color:#92400e">
+   <strong>\u26A0 Mode "Laporan Grooming" dipilih manual</strong>
+   <div style="font-size:11px;margin-top:3px">Tidak ada subscription/token aktif di sistem. Basic Grooming auto-set ke Rp 0 \u2014 pastikan customer sudah bayar via metode lain (cash, transfer manual, dll).</div>
+   <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Klik harga Basic Grooming untuk ubah jadi non-zero kalau perlu.</div>
   </div>`;
  }
  return `<div class="card" style="padding:1rem;margin-bottom:1rem">
@@ -4290,19 +4334,22 @@ function renderInvDogServices(){
  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
  ${SERVICE_LIST.map(svc=>{
  const checked=ds.services?.[svc]?.checked?'checked':'';
- // Batch O.16 — zero out covered base service; for subscription = Basic Grooming, for advance token = the tok.service_type
+ // Batch O.16 — zero out covered base service; subscription/advance/manual all map to Basic Grooming
  const defaultPrice=priceFor(svc,d.size);
  let forceZero=false;
  let coverageBadge='';
- if(coverage==='subscription'&&svc==='Basic Grooming'){forceZero=true;coverageBadge='SUBS'}
- else if(coverage==='advance'&&svc===(tokInfo?.serviceType||'Basic Grooming')){forceZero=true;coverageBadge='PREPAID'}
- const price=forceZero?0:(ds.services?.[svc]?.price??defaultPrice);
- const accentColor=coverage==='subscription'?'#16a34a':'#2563eb';
- const accentBg=coverage==='subscription'?'#dcfce7':'#dbeafe';
+ let accentColor='#16a34a';
+ let accentBg='#dcfce7';
+ if(coverage==='subscription'&&svc==='Basic Grooming'){forceZero=true;coverageBadge='SUBS';accentColor='#16a34a';accentBg='#dcfce7'}
+ else if(coverage==='advance'&&svc===(tokInfo?.serviceType||'Basic Grooming')){forceZero=true;coverageBadge='PREPAID';accentColor='#2563eb';accentBg='#dbeafe'}
+ else if(coverage==='manual'&&svc==='Basic Grooming'){forceZero=true;coverageBadge='MANUAL';accentColor='#ca8a04';accentBg='#fef3c7'}
+ // If saved price exists, respect admin's manual override; else apply forceZero default
+ const savedPrice=ds.services?.[svc]?.price;
+ const price=savedPrice!==undefined?savedPrice:(forceZero?0:defaultPrice);
  return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 8px;background:var(--subtle);border-radius:6px;${forceZero&&checked?'border-left:2px solid '+accentColor:''}">
  <input type="checkbox" ${checked} onchange="onSvcToggle('${did}','${svc}',this.checked)"/>
  <span style="flex:1">${svc}${forceZero?` <span style="color:${accentColor};font-weight:600;font-size:10px">(${coverageBadge})</span>`:''}</span>
- <input type="number" value="${price}" min="0" step="1000" style="width:84px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px${forceZero?';background:'+accentBg:''}" onchange="onSvcPrice('${did}','${svc}',this.value)"${forceZero?' title="Already covered — leave at 0"':''}/>
+ <input type="number" value="${price}" min="0" step="1000" style="width:84px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px${forceZero?';background:'+accentBg:''}" onchange="onSvcPrice('${did}','${svc}',this.value)"${forceZero?' title="Covered \u2014 default Rp 0. Bisa diubah kalau perlu."':''}/>
  </label>`;
  }).join('')}
  </div>
@@ -4377,14 +4424,15 @@ function onDogNoteChange(did,val){
 function onSvcToggle(did,svc,checked){
  if(!invDogServices[did]) invDogServices[did]={services:{}};
  const d=dogs.find(x=>x.id===did);
- // Batch O.16 — auto Rp 0 for covered services (subscription Basic OR advance token service)
- const coverage=getDogCoverage(did);
+ // Batch O.16 — auto Rp 0 for covered services (subscription/advance/manual override)
+ const coverage=getEffectiveCoverage(did);
  let initPrice=priceFor(svc,d?.size);
  if(coverage==='subscription'&&svc==='Basic Grooming') initPrice=0;
  else if(coverage==='advance'){
   const tokInfo=getAdvanceTokenInfo(did);
   if(tokInfo&&svc===tokInfo.serviceType) initPrice=0;
  }
+ else if(coverage==='manual'&&svc==='Basic Grooming') initPrice=0;
  if(!invDogServices[did].services[svc]) invDogServices[did].services[svc]={price:initPrice};
  invDogServices[did].services[svc].checked=checked;
  recalcInvoice();
@@ -4934,11 +4982,12 @@ function buildServiceRows(dogsData,counter){
   const mainSvc=d.services.find(s=>s.name==='Basic Grooming')||d.services[0];
   const addons=d.services.filter(s=>s!==mainSvc);
   const n=++counter.n;
-  // Batch O.16 — determine if main service is covered (subs or prepaid)
-  const coverage=getDogCoverage(d.dog_id);
+  // Batch O.16 — determine if main service is covered (subs or prepaid or manual override)
+  const coverage=getEffectiveCoverage(d.dog_id, inv.doc_mode);
   const isMainCovered=docMode==='report'&&mainSvc.price===0&&(
    (coverage==='subscription'&&mainSvc.name==='Basic Grooming')||
-   (coverage==='advance')
+   (coverage==='advance')||
+   (coverage==='manual'&&mainSvc.name==='Basic Grooming')
   );
   // Coverage tag for the main row
   let coverageTag='';
@@ -4949,6 +4998,8 @@ function buildServiceRows(dogsData,counter){
    } else if(coverage==='advance'){
     const tokInfo=getAdvanceTokenInfo(d.dog_id);
     coverageTag=tokInfo?` <span style="color:#1e3a8a;font-weight:600;font-size:10px;background:#dbeafe;padding:2px 6px;border-radius:3px;margin-left:4px">PREPAID \u00B7 Sesi ${tokInfo.current}/${tokInfo.total}</span>`:'<span style="color:#1e3a8a;font-size:10px;margin-left:4px">(prepaid)</span>';
+   } else if(coverage==='manual'){
+    coverageTag=` <span style="color:#92400e;font-weight:600;font-size:10px;background:#fef3c7;padding:2px 6px;border-radius:3px;margin-left:4px">SUDAH DIBAYAR</span>`;
    }
   }
   // Batch O.5 — itemized: if there are addons, show base price as the main row amount,
