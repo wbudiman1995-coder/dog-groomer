@@ -37,12 +37,14 @@ body.auth-blocked .nav,body.auth-blocked .page,body.auth-blocked .overlay{displa
 .nav-user{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);padding-left:14px;border-left:1px solid var(--border)}
 .nav-user-email{font-weight:500;color:var(--text);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .access-badge{display:inline-block;margin-left:5px;background:var(--red);color:var(--red-t);padding:1px 6px;border-radius:10px;font-size:9px;font-weight:700}
-.nav{background:var(--surface);border-bottom:1px solid var(--border);height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 1.25rem;position:sticky;top:0;z-index:100;box-shadow:var(--sh)}
+.nav{background:var(--surface);border-bottom:1px solid var(--border);height:54px;display:flex;align-items:center;padding:0;position:sticky;top:0;z-index:100;box-shadow:var(--sh)}
 .nav-brand{font-weight:600;font-size:15px}
 .nav-tabs{display:flex;gap:2px;background:var(--subtle);border-radius:var(--r);padding:3px}
 .nav-tab{padding:5px 13px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted);transition:all .15s;white-space:nowrap}
 .nav-tab.active{background:var(--surface);color:var(--text);box-shadow:var(--sh)}
-.page{max-width:960px;margin:0 auto;padding:1.25rem}
+/* Batch O.21 UX — constrain page width, add horizontal padding, cap at comfortable reading width */
+.page{max-width:1120px;margin:0 auto;padding:1.25rem 2rem}
+.nav-inner-wrap{max-width:1120px;margin:0 auto;width:100%;padding:0 2rem;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .sec{display:none}.sec.active{display:block}
 .btn{padding:7px 15px;border-radius:var(--r);border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:5px}
 .btn-p{background:var(--green);color:#fff}.btn-p:hover{background:var(--green-dk)}
@@ -53,8 +55,8 @@ body.auth-blocked .nav,body.auth-blocked .page,body.auth-blocked .overlay{displa
 .dot-pending{background:#f59e0b}.dot-confirmed{background:#3b82f6}.dot-done{background:#16a34a}
 .btn-b{background:#1d4ed8;color:#fff}.btn-b:hover{background:#1e40af}
 .btn-sm{padding:4px 10px;font-size:12px}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--sh)}
-.toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--sh);padding:1rem}
+.toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.1rem;padding-bottom:.75rem;border-bottom:1px solid var(--border)}
 .toolbar-title{font-size:16px;font-weight:600}
 
 /* CLIENTS */
@@ -123,7 +125,7 @@ body.auth-blocked .nav,body.auth-blocked .page,body.auth-blocked .overlay{displa
 .det-nm{font-size:17px;font-weight:600}
 .det-sub{font-size:12px;color:var(--muted);margin-top:2px}
 .det-sec{margin-bottom:.9rem}
-.det-lbl{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+.det-lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;margin-top:.1rem}
 .det-row{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px}
 .det-row:last-child{border-bottom:none}
 .dl{color:var(--muted);min-width:80px;font-size:12px;flex-shrink:0}
@@ -134,8 +136,8 @@ body.auth-blocked .nav,body.auth-blocked .page,body.auth-blocked .overlay{displa
 /* HISTORY */
 .tbl-wrap{overflow-x:auto;border-radius:var(--rl);border:1px solid var(--border)}
 table{width:100%;border-collapse:collapse;font-size:13px}
-thead th{background:var(--subtle);padding:9px 13px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);white-space:nowrap}
-tbody td{padding:9px 13px;border-bottom:1px solid var(--border);vertical-align:middle}
+thead th{background:var(--subtle);padding:10px 14px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);white-space:nowrap}
+tbody td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
 tbody tr:last-child td{border-bottom:none}
 tbody tr:hover{background:var(--subtle)}
 .tav{width:26px;height:26px;border-radius:50%;background:var(--green-lt);display:inline-flex;align-items:center;justify-content:center;font-size:13px;vertical-align:middle;margin-right:5px}
@@ -326,13 +328,13 @@ tbody tr:hover{background:var(--subtle)}
 @media (max-width: 1024px){
  .nav-tabs{display:none}
  .nav-hamburger{display:block}
- .nav{padding:12px 14px;gap:8px}
+ .nav{padding:0}.nav-inner-wrap{padding:12px 14px;gap:8px}
  .nav-brand{font-size:14px}
 }
 
 /* Phone-only refinements */
 @media (max-width: 768px){
- .page{padding:.8rem .7rem}
+ .page{padding:.8rem 1rem}
  .sec{padding:.8rem .7rem}
  .toolbar{padding:8px 0;flex-wrap:wrap}
  .toolbar-title{font-size:15px}
@@ -385,7 +387,7 @@ tbody tr:hover{background:var(--subtle)}
 /* ============ BATCH O.11 — PHONE-SPECIFIC (<=480px) ============ */
 @media (max-width: 480px){
  /* Header */
- .nav{padding:8px 10px;gap:6px;flex-wrap:nowrap;align-items:center}
+ .nav{padding:0}.nav-inner-wrap{padding:8px 10px;gap:6px;flex-wrap:nowrap;align-items:center}
  .nav-brand{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:none;flex:1;min-width:0}
  .nav-user-email{display:none}
  .nav-user{gap:6px;flex-shrink:0}
@@ -530,6 +532,7 @@ tbody tr:hover{background:var(--subtle)}
 </div>
 
 <nav class="nav">
+ <div class="nav-inner-wrap">
  <button class="nav-hamburger" onclick="openNavDrawer()" aria-label="Menu">&#9776;</button>
  <div class="nav-brand">Groomer CRM</div>
  <div class="nav-tabs">
@@ -547,6 +550,7 @@ tbody tr:hover{background:var(--subtle)}
  <div class="nav-user" id="nav-user-info" style="display:none">
   <span class="nav-user-email" id="nav-user-email"></span>
   <button class="btn btn-g btn-sm" onclick="doLogout()">Sign out</button>
+ </div>
  </div>
 </nav>
 
