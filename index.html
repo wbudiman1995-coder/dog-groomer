@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Dog Groomer CRM</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <style>
 :root {
  --green:#16a34a;--green-lt:#dcfce7;--green-md:#4ade80;--green-dk:#15803d;
@@ -605,6 +606,7 @@ tbody tr:hover{background:var(--subtle)}
  <div class="subtabs">
  <button class="subtab active" id="stab-cust" onclick="swSub('cust')">Customers</button>
  <button class="subtab" id="stab-dogs" onclick="swSub('dogs')">Dogs</button>
+ <button class="subtab" id="stab-export" onclick="swSub('export')">Export</button>
  </div>
 
  <div class="subsec active" id="ssec-cust">
@@ -651,6 +653,44 @@ tbody tr:hover{background:var(--subtle)}
  </tr></thead>
  <tbody id="dogs-body"></tbody></table>
  </div>
+ </div>
+ </div>
+ <!-- Batch O.18 — Export subsection -->
+ <div class="subsec" id="ssec-export" style="padding:1rem 0">
+  <div class="card" style="padding:1.2rem">
+   <div style="font-size:15px;font-weight:600;margin-bottom:4px">Export data ke Excel</div>
+   <div style="font-size:12px;color:var(--muted);margin-bottom:1.2rem">Download semua data sebagai file .xlsx untuk migrasi, backup, atau analisis di Excel / Google Sheets.</div>
+   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.2rem">
+    <button class="btn btn-p" onclick="exportAllSheets()" style="font-size:13px">Export Semua (1 file)</button>
+   </div>
+   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
+    <button class="btn btn-g" onclick="exportSheet('customers')" style="font-size:12px;justify-content:flex-start;padding:10px 14px">
+     <span style="font-size:16px;margin-right:8px">&#128100;</span> Customers
+    </button>
+    <button class="btn btn-g" onclick="exportSheet('dogs')" style="font-size:12px;justify-content:flex-start;padding:10px 14px">
+     <span style="font-size:16px;margin-right:8px">&#128054;</span> Dogs
+    </button>
+    <button class="btn btn-g" onclick="exportSheet('appointments')" style="font-size:12px;justify-content:flex-start;padding:10px 14px">
+     <span style="font-size:16px;margin-right:8px">&#128197;</span> Appointments
+    </button>
+    <button class="btn btn-g" onclick="exportSheet('invoices')" style="font-size:12px;justify-content:flex-start;padding:10px 14px">
+     <span style="font-size:16px;margin-right:8px">&#128196;</span> Invoices
+    </button>
+    <button class="btn btn-g" onclick="exportSheet('visits')" style="font-size:12px;justify-content:flex-start;padding:10px 14px">
+     <span style="font-size:16px;margin-right:8px">&#10003;</span> Visits
+    </button>
+    <button class="btn btn-g" onclick="exportSheet('subscriptions')" style="font-size:12px;justify-content:flex-start;padding:10px 14px">
+     <span style="font-size:16px;margin-right:8px">&#9733;</span> Subscriptions
+    </button>
+    <button class="btn btn-g" onclick="exportSheet('tokens')" style="font-size:12px;justify-content:flex-start;padding:10px 14px">
+     <span style="font-size:16px;margin-right:8px">&#128179;</span> Tokens
+    </button>
+    <button class="btn btn-g" onclick="exportSheet('complaints')" style="font-size:12px;justify-content:flex-start;padding:10px 14px">
+     <span style="font-size:16px;margin-right:8px">&#9888;</span> Complaints
+    </button>
+   </div>
+   <div id="export-status" style="margin-top:12px;font-size:12px;color:var(--muted);min-height:18px"></div>
+  </div>
  </div>
  </div>
  </div>
@@ -837,6 +877,7 @@ tbody tr:hover{background:var(--subtle)}
  <button class="btn btn-p" onclick="saveInvoice()">Simpan invoice</button>
  <button class="btn btn-b" onclick="saveInvoiceAndAppts()">Simpan invoice + kalender</button>
  <button class="btn btn-g" onclick="downloadInvoicePDF()">Download PDF</button>
+ <button class="btn btn-g" style="background:#25d366;color:#fff;border-color:#25d366" onclick="sendCurrentInvoiceToWA()">Kirim ke WhatsApp</button>
  </div>
  </div>
 
@@ -5473,8 +5514,18 @@ ${custTokenBalance}
    let out='';
    out+=`<div class="tot-row"><span>Subtotal (sebelum diskon)</span><span>${fmtRp(grandSub)}</span></div>`;
    if(grandDisc>0){
-    const baseOnlyNote=rec.discount_base_only?'<div style="font-size:9px;color:#92400e;margin-top:-2px;text-align:right">(diskon hanya untuk Basic Grooming)</div>':'';
-    out+=`<div class="tot-row" style="color:#15803d"><span>Total diskon</span><span>\u2014 ${fmtRp(grandDisc)}</span></div>${baseOnlyNote}`;
+    // Batch O.20 — descriptive discount label: show rate + scope
+    let discLabel='Diskon';
+    const dtype=rec.discount_type, dval=rec.discount_value||0;
+    if(dtype==='percent'&&dval>0){
+     discLabel='Diskon '+dval+'%'+(rec.discount_base_only?' (Basic Grooming saja)':' (semua layanan)');
+    } else if(dtype==='fixed'&&dval>0){
+     discLabel='Diskon Rp '+dval.toLocaleString('id-ID')+(rec.discount_base_only?' (Basic Grooming)':'');
+    }
+    // Include per-dog discounts in label if any
+    const dogDiscExists=(rec.dogs||[]).some(d=>(d.disc_type)&&(d.disc_value>0));
+    if(dogDiscExists) discLabel+=' (termasuk diskon per anjing)';
+    out+=`<div class="tot-row" style="color:#15803d"><span>${esc(discLabel)}</span><span style="font-weight:600">\u2014 ${fmtRp(grandDisc)}</span></div>`;
    }
    // Extra charge lines
    if(extraCharges.length){
@@ -5598,6 +5649,101 @@ function downloadInvoicePDF(){
  setTimeout(()=>w.print(),300);
 }
 
+// Batch O.19 — Send invoice summary to customer WhatsApp
+function buildInvoiceWAMessage(rec, custObj){
+ const docMode=detectInvoiceMode(rec);
+ const isReport=docMode==='report';
+ const firstName=(custObj.owner||'').split(' ')[0]||'kak';
+ const dogNames=(rec.dogs||[]).map(d=>d.name).filter(Boolean).join(' & ');
+ const svcSummary=(rec.dogs||[]).map(d=>{
+  const svcs=(d.services||[]).map(s=>s.name).join('+');
+  return d.name+(svcs?' ('+svcs+')':'');
+ }).join(', ');
+ const totalStr=rec.total===0?'Rp 0 (sudah dibayar via subscription)':'Rp '+rec.total.toLocaleString('id-ID');
+ const bank=bankSettings.bank_name||'BCA';
+ const acc=bankSettings.bank_account||'';
+ const holder=bankSettings.bank_holder||'';
+ const dueStr=rec.due_date?new Date(rec.due_date+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'}):'';
+ // Extra charges
+ const extras=(rec.extra_charges||[]).filter(c=>c.amount>0);
+ const extraLines=extras.length?'\n'+extras.map(c=>'\u2022 '+c.label+': Rp '+c.amount.toLocaleString('id-ID')).join('\n'):'';
+
+ if(isReport&&rec.total===0){
+  // Service report — no payment needed
+  return `Halo kak ${firstName},\n\nGrooming ${dogNames} sudah selesai hari ini!\n\nDetail layanan:\n${svcSummary}\n\nStatus: \u2714 SUDAH DIBAYAR (subscription/prepaid)\nTidak ada tagihan tambahan.\n\n\uD83D\uDCCE Detail lengkap (foto & catatan groomer) terlampir di invoice PDF.\n\nTerima kasih sudah mempercayai HomePaw \uD83D\uDC3E\nSampai jumpa grooming berikutnya!`;
+ }
+
+ let msg=`Halo kak ${firstName},\n\nBerikut detail grooming ${dogNames}:\n\n`;
+ msg+=`\uD83D\uDCCB *${rec.invoice_number}*\n`;
+ msg+=`Tanggal: ${rec.invoice_date?new Date(rec.invoice_date+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'}):'-'}\n`;
+ msg+=`Layanan: ${svcSummary}\n`;
+ if(extraLines) msg+=`Biaya lain:${extraLines}\n`;
+ // Batch O.20 — show discount in WA message
+ if(rec.discount_amount>0){
+  const dtype=rec.discount_type, dval=rec.discount_value||0;
+  let discLabel='Diskon';
+  if(dtype==='percent'&&dval>0) discLabel='Diskon '+dval+'%'+(rec.discount_base_only?' (Basic Grooming)':' (semua layanan)');
+  else if(dtype==='fixed'&&dval>0) discLabel='Diskon Rp '+dval.toLocaleString('id-ID');
+  msg+=`${discLabel}: \u2014 Rp ${rec.discount_amount.toLocaleString('id-ID')}\n`;
+ }
+ msg+=`*Total: ${totalStr}*\n`;
+ if(dueStr&&rec.total>0) msg+=`\u23F0 Mohon transfer sebelum ${dueStr}\n`;
+ if(rec.total>0){
+  msg+=`\nCara bayar:\n${bank} a/n ${holder}\nNo. Rek: *${acc}*\n`;
+  msg+=`\nSetelah transfer, mohon kirim bukti bayar ya kak \uD83D\uDE4F`;
+ }
+ msg+=`\n\n\uD83D\uDCCE Detail lengkap (foto & catatan groomer) terlampir di invoice PDF.`;
+ msg+=`\n\nTerima kasih sudah mempercayai HomePaw \uD83D\uDC3E`;
+ return msg;
+}
+
+// From invoice form (current unsaved or just-built record)
+function sendCurrentInvoiceToWA(){
+ const rec=buildInvoiceRecord(); if(!rec) return;
+ const cust=custs.find(c=>c.id===rec.customer_id)||{};
+ if(!cust.wa){
+  alert('Customer ini tidak memiliki nomor WhatsApp yang tersimpan.\n\nTambahkan nomor WA di profil customer terlebih dahulu.');
+  return;
+ }
+ // Batch O.20 — open PDF print dialog first, then WA
+ const body=buildInvoiceHTML(rec,cust,bankSettings,true);
+ const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${rec.invoice_number}</title></head><body>${body}</body></html>`;
+ const w=window.open('','_blank');
+ w.document.write(html); w.document.close();
+ setTimeout(()=>{
+  w.print();
+  // Open WA after brief delay so user sees the PDF dialog first
+  setTimeout(()=>{
+   const msg=buildInvoiceWAMessage(rec,cust);
+   const url=waLink(cust.wa)+'?text='+encodeURIComponent(msg);
+   window.open(url,'_blank');
+  },800);
+ },300);
+}
+
+// From Financial tab invoice list (saved invoice)
+function sendSavedInvoiceToWA(invId){
+ const inv=invoices.find(i=>i.id===invId); if(!inv){alert('Invoice tidak ditemukan');return}
+ const cust=custs.find(c=>c.id===inv.customer_id)||{owner:inv.owner_name};
+ if(!cust.wa){
+  alert('Customer '+esc(inv.owner_name)+' tidak memiliki nomor WhatsApp.\n\nUpdate profil customer untuk menambahkan nomor WA.');
+  return;
+ }
+ // Batch O.20 — open PDF print dialog first, then WA
+ const body=buildInvoiceHTML(inv,cust,bankSettings,true);
+ const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${inv.invoice_number}</title></head><body>${body}</body></html>`;
+ const w=window.open('','_blank');
+ w.document.write(html); w.document.close();
+ setTimeout(()=>{
+  w.print();
+  setTimeout(()=>{
+   const msg=buildInvoiceWAMessage(inv,cust);
+   const url=waLink(cust.wa)+'?text='+encodeURIComponent(msg);
+   window.open(url,'_blank');
+  },800);
+ },300);
+}
+
 /* ============ FINANCIAL TAB ============ */
 function renderFinancial(){
  const st=document.getElementById('fin-status').value;
@@ -5641,6 +5787,7 @@ function renderFinancial(){
  <td><span class="badge ${isPaid?'bs':'bm'}">${i.status}</span></td>
  <td><div class="row-actions">
  <button class="icon-btn ${isPaid?'':'view'}" onclick="toggleInvStatus('${i.id}','${isPaid?'unpaid':'paid'}')">${isPaid?'Mark unpaid':'Mark paid'}</button>
+ <button class="icon-btn" onclick="sendSavedInvoiceToWA('${i.id}')" style="background:#25d366;color:#fff;border-color:#25d366" title="Kirim ke WhatsApp customer">WA</button>
  ${!isPaid?`<button class="icon-btn" onclick="openInvoiceForEdit('${i.id}')">Edit</button>`:''}
  ${!isPaid?`<button class="icon-btn del" onclick="delInvoice('${i.id}','${esc(i.invoice_number)}')">Del</button>`:''}
  </div></td>
@@ -5833,7 +5980,234 @@ async function delInvoice(id,num){
  await loadAll(); renderFinancial();
 }
 
-// Batch O.10 — Block day (sick / holiday / leave)
+// Batch O.18 — Export to Excel using SheetJS
+function setExportStatus(msg, color='var(--muted)'){
+ const el=document.getElementById('export-status');
+ if(el){el.textContent=msg;el.style.color=color}
+}
+
+function buildCustomersSheet(){
+ return custs.map(c=>({
+  'Customer Code': c.customer_code||'',
+  'Owner Name': c.owner||'',
+  'WhatsApp': c.wa||'',
+  'Address': c.address||'',
+  'Kecamatan': c.kecamatan||'',
+  'Kota': c.kota||'',
+  'Google Maps': c.gmaps_link||'',
+  'Source': c.source||'',
+  'Preferences/Notes': c.prefs||'',
+  'Created At': c.created_at?new Date(c.created_at).toLocaleDateString('id-ID'):'',
+ }));
+}
+
+function buildDogsSheet(){
+ return dogs.map(d=>{
+  const cust=custs.find(c=>c.id===d.customer_id);
+  return {
+   'Dog Code': d.dog_code||'',
+   'Dog Name': d.name||'',
+   'Owner Name': cust?.owner||'',
+   'Customer Code': cust?.customer_code||'',
+   'Breed': d.breed||'',
+   'Size': d.size||'',
+   'Age': d.age||'',
+   'Weight': d.weight||'',
+   'Coat': d.coat||'',
+   'Coat Color': d.coat_color||'',
+   'Preferences/Notes': d.prefs||'',
+   'Skin History': d.skin_history||'',
+   'Last Groomed': d.last_groomed_at||'',
+   'Created At': d.created_at?new Date(d.created_at).toLocaleDateString('id-ID'):'',
+  };
+ });
+}
+
+function buildAppointmentsSheet(){
+ return appts.map(a=>{
+  const dog=dogs.find(d=>d.id===a.dog_id);
+  const cust=dog?custs.find(c=>c.id===dog.customer_id):null;
+  const groomer=groomers.find(g=>g.id===a.groomer_id);
+  return {
+   'Appt Date': a.appt_date||'',
+   'Appt Time': (a.appt_time||'').slice(0,5),
+   'Dog Name': dog?.name||'',
+   'Dog Code': dog?.dog_code||'',
+   'Owner Name': cust?.owner||'',
+   'Customer Code': cust?.customer_code||'',
+   'Groomer': groomer?.name||'',
+   'Service': a.service_base||'',
+   'Duration (mins)': a.duration_mins||'',
+   'Status': a.status||'',
+   'Session Source': a.session_source||'',
+   'Groomer Note': a.appt_note||'',
+   'Customer Note': a.customer_note||'',
+   'Late (mins)': a.late_minutes||0,
+   'Late Reason': a.late_reason||'',
+   'Actual Duration (mins)': a.actual_duration_mins||'',
+   'Subs Deducted': a.subs_deducted?'Yes':'No',
+  };
+ });
+}
+
+function buildInvoicesSheet(){
+ return invoices.map(inv=>{
+  const dogs_str=(inv.dogs||[]).map(d=>d.name||'?').join(', ');
+  const svcs_str=(inv.dogs||[]).map(d=>(d.services||[]).map(s=>s.name).join('+')).join(' | ');
+  const extras=(inv.extra_charges||[]).map(c=>c.label+' Rp'+c.amount).join(', ');
+  return {
+   'Invoice Number': inv.invoice_number||'',
+   'Invoice Date': inv.invoice_date||'',
+   'Due Date': inv.due_date||'',
+   'Owner Name': inv.owner_name||'',
+   'Groomer': inv.groomer_name||'',
+   'Dogs': dogs_str,
+   'Services': svcs_str,
+   'Subtotal': inv.subtotal||0,
+   'Discount Amount': inv.discount_amount||0,
+   'Extra Charges': extras,
+   'Total': inv.total||0,
+   'Status': inv.status||'',
+   'Doc Mode': inv.doc_mode||'auto',
+   'Notes': inv.notes||'',
+   'Created At': inv.created_at?new Date(inv.created_at).toLocaleDateString('id-ID'):'',
+  };
+ });
+}
+
+function buildVisitsSheet(){
+ return visits.map(v=>{
+  const dog=dogs.find(d=>d.id===v.dog_id);
+  const cust=dog?custs.find(c=>c.id===dog.customer_id):null;
+  return {
+   'Visit Date': v.visited_at||'',
+   'Dog Name': dog?.name||'',
+   'Dog Code': dog?.dog_code||'',
+   'Owner Name': cust?.owner||'',
+   'Customer Code': cust?.customer_code||'',
+   'Service': v.service_type||'',
+   'Manual Billed': v.is_billed_manually?'Yes':'No',
+   'Billed Amount': v.billed_amount||0,
+   'Billed Note': v.billed_note||'',
+   'Note': v.note||'',
+  };
+ });
+}
+
+function buildSubscriptionsSheet(){
+ return subscriptions.map(s=>{
+  const dog=dogs.find(d=>d.id===s.dog_id);
+  const cust=dog?custs.find(c=>c.id===dog.customer_id):null;
+  return {
+   'Type': s.type||'',
+   'Dog Name': dog?.name||'',
+   'Dog Code': dog?.dog_code||'',
+   'Owner Name': cust?.owner||'',
+   'Customer Code': cust?.customer_code||'',
+   'Status': s.status||'',
+   'Sessions Total': s.sessions_total||0,
+   'Sessions Used': s.sessions_used||0,
+   'Sessions Left': Math.max(0,(s.sessions_total||0)-(s.sessions_used||0)),
+   'Expires At': s.expires_at||'',
+   'Created At': s.created_at?new Date(s.created_at).toLocaleDateString('id-ID'):'',
+  };
+ });
+}
+
+function buildTokensSheet(){
+ return tokens.map(t=>{
+  const cust=custs.find(c=>c.id===t.customer_id);
+  return {
+   'Customer Name': cust?.owner||'',
+   'Customer Code': cust?.customer_code||'',
+   'Dog Size': t.dog_size||'',
+   'Service Type': t.service_type||'',
+   'Sessions Total': t.sessions_total||0,
+   'Sessions Used': t.sessions_used||0,
+   'Sessions Left': Math.max(0,(t.sessions_total||0)-(t.sessions_used||0)),
+   'Source Invoice': t.source_invoice||'',
+   'Token Used': t.token_used?'Yes':'No',
+   'Created At': t.created_at?new Date(t.created_at).toLocaleDateString('id-ID'):'',
+  };
+ });
+}
+
+function buildComplaintsSheet(){
+ return complaints.map(c=>{
+  const cust=custs.find(x=>x.id===c.customer_id);
+  const dog=dogs.find(x=>x.id===c.dog_id);
+  const groomer=groomers.find(x=>x.id===c.groomer_id);
+  return {
+   'Date': c.complaint_date||'',
+   'Severity': c.severity||'',
+   'Customer Name': cust?.owner||'',
+   'Customer Code': cust?.customer_code||'',
+   'Dog Name': dog?.name||'',
+   'Groomer': groomer?.name||'',
+   'Description': c.description||'',
+   'Resolution': c.resolution||'',
+   'Resolved': c.resolved?'Yes':'No',
+   'Resolved At': c.resolved_at?new Date(c.resolved_at).toLocaleDateString('id-ID'):'',
+   'Created At': c.created_at?new Date(c.created_at).toLocaleDateString('id-ID'):'',
+  };
+ });
+}
+
+const EXPORT_SHEETS={
+ customers:  {label:'Customers',   fn:buildCustomersSheet},
+ dogs:       {label:'Dogs',        fn:buildDogsSheet},
+ appointments:{label:'Appointments',fn:buildAppointmentsSheet},
+ invoices:   {label:'Invoices',    fn:buildInvoicesSheet},
+ visits:     {label:'Visits',      fn:buildVisitsSheet},
+ subscriptions:{label:'Subscriptions',fn:buildSubscriptionsSheet},
+ tokens:     {label:'Tokens',      fn:buildTokensSheet},
+ complaints: {label:'Complaints',  fn:buildComplaintsSheet},
+};
+
+function exportSheet(key){
+ if(typeof XLSX==='undefined'){setExportStatus('SheetJS belum load. Cek koneksi internet dan reload halaman.','#dc2626');return}
+ const def=EXPORT_SHEETS[key]; if(!def) return;
+ setExportStatus('Menyiapkan '+def.label+'...');
+ try{
+  const data=def.fn();
+  if(!data.length){setExportStatus(def.label+': tidak ada data.','#ca8a04');return}
+  const ws=XLSX.utils.json_to_sheet(data);
+  // Auto column widths
+  const cols=Object.keys(data[0]).map(k=>({wch:Math.max(k.length,14)}));
+  ws['!cols']=cols;
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,def.label);
+  const filename=`HomePaw_${def.label}_${iso(new Date())}.xlsx`;
+  XLSX.writeFile(wb,filename);
+  setExportStatus(def.label+' exported: '+data.length+' rows.','#16a34a');
+ }catch(e){
+  setExportStatus('Error: '+e.message,'#dc2626');
+ }
+}
+
+function exportAllSheets(){
+ if(typeof XLSX==='undefined'){setExportStatus('SheetJS belum load. Cek koneksi internet dan reload halaman.','#dc2626');return}
+ setExportStatus('Menyiapkan semua data...');
+ try{
+  const wb=XLSX.utils.book_new();
+  let totalRows=0;
+  Object.entries(EXPORT_SHEETS).forEach(([key,def])=>{
+   const data=def.fn();
+   const ws=XLSX.utils.json_to_sheet(data.length?data:[{}]);
+   if(data.length){
+    const cols=Object.keys(data[0]).map(k=>({wch:Math.max(k.length,14)}));
+    ws['!cols']=cols;
+   }
+   XLSX.utils.book_append_sheet(wb,ws,def.label);
+   totalRows+=data.length;
+  });
+  const filename=`HomePaw_Export_${iso(new Date())}.xlsx`;
+  XLSX.writeFile(wb,filename);
+  setExportStatus('Export selesai: '+totalRows+' total rows across '+Object.keys(EXPORT_SHEETS).length+' sheets.','#16a34a');
+ }catch(e){
+  setExportStatus('Error: '+e.message,'#dc2626');
+ }
+}
 // Batch O.11 — mobile kebab menu for calendar (Block day, view toggle)
 function openCalMobileMenu(ev){
  ev?.stopPropagation?.();
