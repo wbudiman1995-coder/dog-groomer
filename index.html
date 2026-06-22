@@ -1383,6 +1383,11 @@ tbody tr:hover{background:var(--subtle)}
      <input type="number" id="appt-disc-value" value="0" min="0" placeholder="0" style="width:75px;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
     </div>
    </div>
+   <!-- Grooming photos (read-only, taken from groomer page) -->
+   <div id="appt-photos-section" style="display:none;margin-bottom:.9rem">
+    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Foto grooming</div>
+    <div id="appt-photos-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+   </div>
    <!-- Batch O.13: Performance tracking — only relevant for past/done appts -->
    <div id="appt-perf-section" style="display:none;background:var(--subtle);border-radius:6px;padding:10px;margin-bottom:.9rem;border:1px dashed var(--border)">
     <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Post-appointment performance (for groomer report)</div>
@@ -3250,6 +3255,7 @@ function openAppt(dateISO,groomerId,startMins){
  const aesEl=document.getElementById('appt-edit-stamp'); if(aesEl) aesEl.innerHTML='';
  // Batch O.13 — reset perf fields
  const perfSec=document.getElementById('appt-perf-section'); if(perfSec) perfSec.style.display='none';
+ const photoSec=document.getElementById('appt-photos-section'); if(photoSec) photoSec.style.display='none';
  const lateCb=document.getElementById('appt-was-late'); if(lateCb) lateCb.checked=false;
  const lateDet=document.getElementById('appt-late-details'); if(lateDet) lateDet.style.display='none';
  const lateMins=document.getElementById('appt-late-mins'); if(lateMins) lateMins.value='';
@@ -3317,6 +3323,27 @@ function openApptEdit(id){
   const lateReason=document.getElementById('appt-late-reason'); if(lateReason) lateReason.value=a.late_reason||'';
   const actDur=document.getElementById('appt-actual-dur'); if(actDur) actDur.value=a.actual_duration_mins||'';
   updateOverrunHint();
+ }
+ // Show grooming photos if any
+ const photoSec=document.getElementById('appt-photos-section');
+ const photoGrid=document.getElementById('appt-photos-grid');
+ if(photoSec&&photoGrid){
+  const hasBefore=!!a.photo_before;
+  const hasAfter=!!a.photo_after;
+  if(hasBefore||hasAfter){
+   photoSec.style.display='block';
+   photoGrid.innerHTML=
+    `<div style="text-align:center">
+      <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">BEFORE</div>
+      ${hasBefore?`<a href="${esc(a.photo_before)}" target="_blank"><img src="${esc(a.photo_before)}" style="width:100%;border-radius:6px;border:1px solid var(--border)"/></a>`:'<div style="padding:1.5rem;color:var(--muted);font-size:11px;background:var(--subtle);border-radius:6px">Belum ada</div>'}
+     </div>
+     <div style="text-align:center">
+      <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">AFTER</div>
+      ${hasAfter?`<a href="${esc(a.photo_after)}" target="_blank"><img src="${esc(a.photo_after)}" style="width:100%;border-radius:6px;border:1px solid var(--border)"/></a>`:'<div style="padding:1.5rem;color:var(--muted);font-size:11px;background:var(--subtle);border-radius:6px">Belum ada</div>'}
+     </div>`;
+  } else {
+   photoSec.style.display='none';
+  }
  }
  const cs=document.getElementById('appt-cust');
  cs.innerHTML='<option value="">Select customer…</option>'+
@@ -7927,7 +7954,7 @@ function renderVisits(){
   const inv=v.visited_at?findInvoiceForDogsOnDate([v.dog_id],v.visited_at):null;
   // Batch O.1 — find linked appointment for session_source
   const linkedAppt=appts.find(a=>a.dog_id===v.dog_id&&a.appt_date===v.visited_at);
-  return {visit:v,dog,cust,inv,manualBilled:!!v.is_billed_manually,sessionSrc:linkedAppt?.session_source};
+  return {visit:v,dog,cust,inv,manualBilled:!!v.is_billed_manually,sessionSrc:linkedAppt?.session_source,photoBefore:linkedAppt?.photo_before,photoAfter:linkedAppt?.photo_after};
  });
 
  let filtered=rows.filter(r=>{
@@ -7996,7 +8023,7 @@ function renderVisits(){
   return `<tr>
    <td>${fmtD(v.visited_at)}</td>
    <td><strong class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner||'?')}</strong>${c.customer_code?` <span style="font-size:10px;color:var(--muted)">${esc(c.customer_code)}</span>`:''}</td>
-   <td>${esc(d.name||'?')}${srcBadge}</td>
+   <td>${esc(d.name||'?')}${srcBadge}${r.photoBefore||r.photoAfter?`<div style="display:flex;gap:3px;margin-top:3px">${r.photoBefore?`<a href="${esc(r.photoBefore)}" target="_blank"><img src="${esc(r.photoBefore)}" style="width:32px;height:32px;object-fit:cover;border-radius:3px;border:1px solid var(--border)" title="Before"/></a>`:''}${r.photoAfter?`<a href="${esc(r.photoAfter)}" target="_blank"><img src="${esc(r.photoAfter)}" style="width:32px;height:32px;object-fit:cover;border-radius:3px;border:1px solid var(--border)" title="After"/></a>`:''}</div>`:''}</td>
    <td>${esc(v.service_type||'-')}</td>
    <td>${esc(d.size||'-')}</td>
    <td>${invCell}</td>
