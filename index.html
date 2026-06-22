@@ -3328,19 +3328,31 @@ function openApptEdit(id){
  const photoSec=document.getElementById('appt-photos-section');
  const photoGrid=document.getElementById('appt-photos-grid');
  if(photoSec&&photoGrid){
-  const hasBefore=!!a.photo_before;
-  const hasAfter=!!a.photo_after;
-  if(hasBefore||hasAfter){
+  const photos=a.photos||{};
+  const types=[
+   {key:'absency',label:'Kehadiran'},
+   {key:'before',label:'Before'},
+   {key:'after',label:'After'},
+   {key:'ear_left',label:'Telinga Kiri'},
+   {key:'ear_right',label:'Telinga Kanan'},
+   {key:'dematting',label:'Dematting'},
+   {key:'injury',label:'Luka'},
+  ];
+  const filled=types.filter(t=>photos[t.key]);
+  if(filled.length){
    photoSec.style.display='block';
-   photoGrid.innerHTML=
-    `<div style="text-align:center">
-      <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">BEFORE</div>
-      ${hasBefore?`<a href="${esc(a.photo_before)}" target="_blank"><img src="${esc(a.photo_before)}" style="width:100%;border-radius:6px;border:1px solid var(--border)"/></a>`:'<div style="padding:1.5rem;color:var(--muted);font-size:11px;background:var(--subtle);border-radius:6px">Belum ada</div>'}
-     </div>
-     <div style="text-align:center">
-      <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">AFTER</div>
-      ${hasAfter?`<a href="${esc(a.photo_after)}" target="_blank"><img src="${esc(a.photo_after)}" style="width:100%;border-radius:6px;border:1px solid var(--border)"/></a>`:'<div style="padding:1.5rem;color:var(--muted);font-size:11px;background:var(--subtle);border-radius:6px">Belum ada</div>'}
-     </div>`;
+   photoGrid.style.gridTemplateColumns='repeat(auto-fill,minmax(120px,1fr))';
+   photoGrid.innerHTML=filled.map(t=>{
+    const val=photos[t.key];
+    const url=typeof val==='object'?val?.url:val;
+    const isAbsency=t.key==='absency'&&typeof val==='object';
+    const meta=isAbsency?`<div style="font-size:9px;color:var(--muted);margin-top:2px;text-align:center">${val.timestamp?new Date(val.timestamp).toLocaleString('id-ID'):''}${val.lat?` <a href="https://maps.google.com/?q=${val.lat},${val.lng}" target="_blank" style="color:var(--primary)">Map</a>`:''}</div>`:'';
+    return `<div style="text-align:center">
+     <div style="font-size:9px;font-weight:700;color:var(--muted);margin-bottom:3px;text-transform:uppercase">${t.label}</div>
+     <a href="${esc(url)}" target="_blank"><img src="${esc(url)}" style="width:100%;border-radius:6px;border:1px solid var(--border);aspect-ratio:4/3;object-fit:cover"/></a>
+     ${meta}
+    </div>`;
+   }).join('');
   } else {
    photoSec.style.display='none';
   }
@@ -7954,7 +7966,7 @@ function renderVisits(){
   const inv=v.visited_at?findInvoiceForDogsOnDate([v.dog_id],v.visited_at):null;
   // Batch O.1 — find linked appointment for session_source
   const linkedAppt=appts.find(a=>a.dog_id===v.dog_id&&a.appt_date===v.visited_at);
-  return {visit:v,dog,cust,inv,manualBilled:!!v.is_billed_manually,sessionSrc:linkedAppt?.session_source,photoBefore:linkedAppt?.photo_before,photoAfter:linkedAppt?.photo_after};
+  return {visit:v,dog,cust,inv,manualBilled:!!v.is_billed_manually,sessionSrc:linkedAppt?.session_source,photos:linkedAppt?.photos||{}};
  });
 
  let filtered=rows.filter(r=>{
@@ -8023,7 +8035,7 @@ function renderVisits(){
   return `<tr>
    <td>${fmtD(v.visited_at)}</td>
    <td><strong class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner||'?')}</strong>${c.customer_code?` <span style="font-size:10px;color:var(--muted)">${esc(c.customer_code)}</span>`:''}</td>
-   <td>${esc(d.name||'?')}${srcBadge}${r.photoBefore||r.photoAfter?`<div style="display:flex;gap:3px;margin-top:3px">${r.photoBefore?`<a href="${esc(r.photoBefore)}" target="_blank"><img src="${esc(r.photoBefore)}" style="width:32px;height:32px;object-fit:cover;border-radius:3px;border:1px solid var(--border)" title="Before"/></a>`:''}${r.photoAfter?`<a href="${esc(r.photoAfter)}" target="_blank"><img src="${esc(r.photoAfter)}" style="width:32px;height:32px;object-fit:cover;border-radius:3px;border:1px solid var(--border)" title="After"/></a>`:''}</div>`:''}</td>
+   <td>${esc(d.name||'?')}${srcBadge}${(()=>{const p=r.photos;const urls=Object.entries(p).slice(0,4).map(([k,v])=>{const u=typeof v==='object'?v?.url:v;return u?`<a href="${esc(u)}" target="_blank"><img src="${esc(u)}" style="width:28px;height:28px;object-fit:cover;border-radius:3px;border:1px solid var(--border)" title="${esc(k)}"/></a>`:''}).filter(Boolean);return urls.length?`<div style="display:flex;gap:2px;margin-top:3px;flex-wrap:wrap">${urls.join('')}</div>`:'';})()}</td>
    <td>${esc(v.service_type||'-')}</td>
    <td>${esc(d.size||'-')}</td>
    <td>${invCell}</td>
