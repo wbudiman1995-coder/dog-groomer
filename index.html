@@ -5713,7 +5713,13 @@ ${(()=>{
 })()}
 ${(()=>{
  // Page 2: groomer notes + before/after photos (if any)
- const hasContent=rec.dogs.some(d=>d.groomer_notes||(Array.isArray(invPhotos[d.dog_id])&&invPhotos[d.dog_id].length>0));
+ const hasContent=rec.dogs.some(d=>{
+  if(d.groomer_notes) return true;
+  if(Array.isArray(invPhotos[d.dog_id])&&invPhotos[d.dog_id].length>0) return true;
+  const la=appts.find(a=>a.dog_id===d.dog_id&&a.appt_date===rec.invoice_date&&a.photos);
+  if(la&&Object.keys(la.photos||{}).length>0) return true;
+  return false;
+ });
  if(!hasContent)return '';
  const dogSections=rec.dogs.map(d=>{
   const notes=d.groomer_notes||'';
@@ -7328,7 +7334,25 @@ document.addEventListener('mouseover',function(e){
 });
 
 function buildPhotoHTML(did){
- const photos=Array.isArray(invPhotos[did])?invPhotos[did]:[];
+ // Start with manually added invoice photos
+ const photos=Array.isArray(invPhotos[did])?[...invPhotos[did]]:[];
+ // Auto-merge groomer-uploaded appointment photos (from JSONB `photos` column)
+ const invRec=window._currentInvoiceForRender;
+ if(invRec){
+  const invDate=invRec.invoice_date;
+  const linkedAppt=appts.find(a=>a.dog_id===did&&a.appt_date===invDate&&a.photos);
+  if(linkedAppt){
+   const p=linkedAppt.photos||{};
+   const hasManualBefore=photos.some(x=>x.zone==='before');
+   const hasManualAfter=photos.some(x=>x.zone==='after');
+   if(!hasManualBefore&&typeof p.before==='string') photos.push({data:p.before,zone:'before'});
+   if(!hasManualAfter&&typeof p.after==='string') photos.push({data:p.after,zone:'after'});
+   [{key:'dematting',label:'Bulu Gimbal'},{key:'fungal',label:'Bekas Jamur'},{key:'injury',label:'Luka'},{key:'other',label:'Lainnya'}].forEach(mt=>{
+    const arr=Array.isArray(p[mt.key])?p[mt.key]:[];
+    arr.forEach(url=>photos.push({data:url,zone:'issue',label:mt.label}));
+   });
+  }
+ }
  if(!photos.length) return '';
  const byZone={before:[],after:[],issue:[]};
  photos.forEach(p=>{
