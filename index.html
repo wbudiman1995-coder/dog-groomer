@@ -7416,10 +7416,16 @@ function openInvApptPicker(){
  om('ov-inv-appt-picker');
 }
 
-function loadInvFromAppointment(apptId){
+async function loadInvFromAppointment(apptId){
  const a=appts.find(x=>x.id===apptId);if(!a){alert('Appointment not found');return;}
  const d=dogs.find(x=>x.id===a.dog_id);if(!d){alert('Dog not found');return;}
  const cid=d.customer_id;if(!cid){alert('Customer not linked');return;}
+ // Re-fetch appointments for this date to get latest groomer photos
+ const {data:freshAppts}=await db.from('appointments').select('*').eq('appt_date',a.appt_date);
+ if(freshAppts) freshAppts.forEach(fa=>{
+  const idx=appts.findIndex(x=>x.id===fa.id);
+  if(idx>=0) Object.assign(appts[idx],fa); else appts.push(fa);
+ });
  // Apply using applyInvCustomer which handles multi-dog
  applyInvCustomer(cid,a.appt_date);
  // Wait for dog chips to be clicked (rAF chain: applyInvCustomer uses 2, we add 1 more)
