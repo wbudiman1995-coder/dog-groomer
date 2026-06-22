@@ -108,19 +108,23 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .chk-label{font-size:13px;font-weight:500;flex:1}
 .chk-reason{font-size:10px;color:var(--muted);font-weight:400}
 
-.appt-photos{display:flex;gap:8px;margin-top:10px}
-.photo-slot{flex:1;position:relative}
-.photo-slot-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;text-align:center}
-.photo-btn{width:100%;aspect-ratio:4/3;border:2px dashed var(--border);border-radius:8px;background:var(--subtle);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent;gap:4px;min-height:80px}
+.appt-photos{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+.appt-photos .full{grid-column:1/-1}
+.photo-slot{position:relative}
+.photo-slot-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px;text-align:center}
+.photo-btn{width:100%;aspect-ratio:4/3;border:2px dashed var(--border);border-radius:8px;background:var(--subtle);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent;gap:2px;min-height:70px}
 .photo-btn:active{background:var(--border)}
-.photo-btn-icon{font-size:24px;line-height:1}
-.photo-btn-text{font-size:11px;color:var(--muted);font-weight:500}
+.photo-btn-icon{font-size:20px;line-height:1}
+.photo-btn-text{font-size:10px;color:var(--muted);font-weight:500}
 .photo-preview{width:100%;aspect-ratio:4/3;border-radius:8px;overflow:hidden;position:relative;border:1px solid var(--border)}
 .photo-preview img{width:100%;height:100%;object-fit:cover}
-.photo-retake{position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:5px;font-size:10px;padding:4px 8px;cursor:pointer;font-weight:600;min-height:28px}
-.photo-retake:active{background:rgba(0,0,0,.8)}
+.photo-del{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.65);color:#fff;border:none;border-radius:50%;width:24px;height:24px;font-size:14px;line-height:24px;text-align:center;cursor:pointer;padding:0}
+.photo-del:active{background:rgba(220,38,38,.9)}
+.photo-retake{position:absolute;bottom:3px;right:3px;background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:5px;font-size:9px;padding:3px 7px;cursor:pointer;font-weight:600;min-height:24px}
 .photo-uploading{width:100%;aspect-ratio:4/3;border:2px solid var(--primary);border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--subtle)}
-.photo-uploading .spin{width:16px;height:16px}
+.photo-uploading .spin{width:14px;height:14px}
+.photo-meta{font-size:9px;color:var(--muted);text-align:center;margin-top:2px;line-height:1.3}
+.photo-section-label{grid-column:1/-1;font-size:10px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:.5px;padding:6px 0 2px;border-top:1px solid var(--border);margin-top:4px}
 </style>
 </head>
 <body>
@@ -166,8 +170,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
  <div style="margin-top:20px;font-size:11px;color:var(--muted)">Tidak punya akses? Hubungi Xavier untuk dapat kode.</div>
 </div>
 
-<input type="file" id="cam-before" accept="image/*" capture="environment" style="display:none" onchange="onPhotoCapture(this,'before')"/>
-<input type="file" id="cam-after" accept="image/*" capture="environment" style="display:none" onchange="onPhotoCapture(this,'after')"/>
+<input type="file" id="cam-input" accept="image/*" capture="environment" style="display:none" onchange="onPhotoCapture(this)"/>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -477,50 +480,90 @@ function renderAppt(a){
    ${stylingBlock}
   </div>
   ${note?`<div class="appt-note">Catatan: ${esc(note)}</div>`:''}
-  <div class="appt-photos">
-   <div class="photo-slot">
-    <div class="photo-slot-label">Before</div>
-    ${renderPhotoSlot(a.id,a.photo_before,'before')}
-   </div>
-   <div class="photo-slot">
-    <div class="photo-slot-label">After</div>
-    ${renderPhotoSlot(a.id,a.photo_after,'after')}
-   </div>
-  </div>
+  ${renderPhotoGrid(a)}
  </div>`;
 }
 
-function renderPhotoSlot(apptId,url,type){
+// --- Photo system (JSONB `photos` column) ---
+const PHOTO_TYPES=[
+ {key:'absency',label:'Kehadiran',section:'Bukti Kehadiran',full:true,hasGeo:true},
+ {key:'before',label:'Before',section:'Grooming'},
+ {key:'after',label:'After'},
+ {key:'ear_left',label:'Telinga Kiri',section:'Telinga'},
+ {key:'ear_right',label:'Telinga Kanan'},
+ {key:'dematting',label:'Dematting',section:'Tambahan',conditional:'Dematting'},
+ {key:'injury',label:'Luka / Injury'},
+];
+
+function renderPhotoGrid(a){
+ const photos=a.photos||{};
+ const svc=a.service_base||'';
+ let html='<div class="appt-photos">';
+ let lastSection='';
+ PHOTO_TYPES.forEach(pt=>{
+  if(pt.conditional && !svc.includes(pt.conditional)) return;
+  if(pt.section && pt.section!==lastSection){
+   html+=`<div class="photo-section-label">${pt.section}</div>`;
+   lastSection=pt.section;
+  }
+  const val=photos[pt.key];
+  const url=typeof val==='object'?val?.url:val;
+  html+=`<div class="photo-slot${pt.full?' full':''}">
+   <div class="photo-slot-label">${pt.label}</div>
+   ${renderPhotoSlot(a.id,url,pt.key,pt.hasGeo)}
+   ${pt.hasGeo&&typeof val==='object'&&val?.timestamp?`<div class="photo-meta">${new Date(val.timestamp).toLocaleString('id-ID')}${val.lat?` · <a href="https://maps.google.com/?q=${val.lat},${val.lng}" target="_blank" style="color:var(--primary)">Lokasi</a>`:''}</div>`:''}
+  </div>`;
+ });
+ html+='</div>';
+ return html;
+}
+
+function renderPhotoSlot(apptId,url,type,hasGeo){
  if(url){
   return `<div class="photo-preview" id="ps-${type}-${apptId}">
    <img src="${esc(url)}" alt="${type}"/>
-   <button class="photo-retake" onclick="capturePhoto('${apptId}','${type}')">Retake</button>
+   <button class="photo-del" onclick="event.stopPropagation();deletePhoto('${apptId}','${type}')" title="Hapus">&times;</button>
+   <button class="photo-retake" onclick="event.stopPropagation();capturePhoto('${apptId}','${type}',${!!hasGeo})">Retake</button>
   </div>`;
  }
- return `<div class="photo-btn" id="ps-${type}-${apptId}" onclick="capturePhoto('${apptId}','${type}')">
+ return `<div class="photo-btn" id="ps-${type}-${apptId}" onclick="capturePhoto('${apptId}','${type}',${!!hasGeo})">
   <span class="photo-btn-icon">&#128247;</span>
-  <span class="photo-btn-text">Ambil foto</span>
+  <span class="photo-btn-text">${hasGeo?'Foto + Lokasi':'Ambil foto'}</span>
  </div>`;
 }
 
-let _pendingPhotoApptId=null;
-let _pendingPhotoType=null;
+let _pendingApptId=null;
+let _pendingType=null;
+let _pendingGeo=false;
 
-function capturePhoto(apptId,type){
- _pendingPhotoApptId=apptId;
- _pendingPhotoType=type;
- const input=document.getElementById('cam-'+type);
+function capturePhoto(apptId,type,hasGeo){
+ _pendingApptId=apptId;
+ _pendingType=type;
+ _pendingGeo=!!hasGeo;
+ const input=document.getElementById('cam-input');
  input.value='';
  input.click();
 }
 
-async function onPhotoCapture(input,type){
- const file=input.files?.[0];
- if(!file||!_pendingPhotoApptId) return;
- const apptId=_pendingPhotoApptId;
- _pendingPhotoApptId=null;
+function getGeoPosition(){
+ return new Promise(resolve=>{
+  if(!navigator.geolocation){resolve(null);return}
+  navigator.geolocation.getCurrentPosition(
+   pos=>resolve({lat:pos.coords.latitude,lng:pos.coords.longitude}),
+   ()=>resolve(null),
+   {enableHighAccuracy:true,timeout:10000,maximumAge:0}
+  );
+ });
+}
 
- // Show uploading state
+async function onPhotoCapture(input){
+ const file=input.files?.[0];
+ if(!file||!_pendingApptId) return;
+ const apptId=_pendingApptId;
+ const type=_pendingType;
+ const hasGeo=_pendingGeo;
+ _pendingApptId=null;
+
  const slotEl=document.getElementById('ps-'+type+'-'+apptId);
  if(slotEl) slotEl.outerHTML=`<div class="photo-uploading" id="ps-${type}-${apptId}"><span class="spin"></span></div>`;
 
@@ -528,33 +571,48 @@ async function onPhotoCapture(input,type){
   const blob=await compressImage(file);
   const path=`${apptId}/${type}.jpg`;
 
-  // Upload (upsert to allow retake)
   const {error:upErr}=await db.storage.from('grooming-photos').upload(path,blob,{
    contentType:'image/jpeg',upsert:true
   });
   if(upErr) throw upErr;
 
-  // Get public URL
   const {data:urlData}=db.storage.from('grooming-photos').getPublicUrl(path);
   const publicUrl=urlData.publicUrl+'?v='+Date.now();
 
-  // Update appointment record
-  const col=type==='before'?'photo_before':'photo_after';
-  const {error:dbErr}=await db.from('appointments').update({[col]:publicUrl}).eq('id',apptId);
+  // Build photo value (with geo for absency)
+  let photoVal=publicUrl;
+  if(hasGeo){
+   const geo=await getGeoPosition();
+   photoVal={url:publicUrl,timestamp:new Date().toISOString(),lat:geo?.lat||null,lng:geo?.lng||null};
+  }
+
+  // Read-merge-write JSONB
+  const appt=dataCache.appts.find(a=>a.id===apptId);
+  const photos={...(appt?.photos||{}),[type]:photoVal};
+  const {error:dbErr}=await db.from('appointments').update({photos}).eq('id',apptId);
   if(dbErr) throw dbErr;
 
-  // Update local cache
-  const appt=dataCache.appts.find(a=>a.id===apptId);
-  if(appt) appt[col]=publicUrl;
-
-  // Re-render slot
-  const el=document.getElementById('ps-'+type+'-'+apptId);
-  if(el) el.outerHTML=renderPhotoSlot(apptId,publicUrl,type);
+  if(appt) appt.photos=photos;
+  renderActiveTab();
  } catch(err) {
   alert('Upload gagal: '+(err.message||err));
-  // Restore button
-  const el=document.getElementById('ps-'+type+'-'+apptId);
-  if(el) el.outerHTML=renderPhotoSlot(apptId,null,type);
+  renderActiveTab();
+ }
+}
+
+async function deletePhoto(apptId,type){
+ if(!confirm('Hapus foto ini?')) return;
+ try {
+  await db.storage.from('grooming-photos').remove([`${apptId}/${type}.jpg`]);
+  const appt=dataCache.appts.find(a=>a.id===apptId);
+  const photos={...(appt?.photos||{})};
+  delete photos[type];
+  const {error}=await db.from('appointments').update({photos}).eq('id',apptId);
+  if(error) throw error;
+  if(appt) appt.photos=photos;
+  renderActiveTab();
+ } catch(err){
+  alert('Gagal hapus: '+(err.message||err));
  }
 }
 
