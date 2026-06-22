@@ -3335,21 +3335,31 @@ function openApptEdit(id){
    {key:'after',label:'After'},
    {key:'ear_left',label:'Telinga Kiri'},
    {key:'ear_right',label:'Telinga Kanan'},
-   {key:'dematting',label:'Dematting'},
-   {key:'injury',label:'Luka'},
+   {key:'dematting',label:'Bulu Gimbal',multi:true},
+   {key:'fungal',label:'Bekas Jamur',multi:true},
+   {key:'injury',label:'Luka',multi:true},
+   {key:'other',label:'Lainnya',multi:true},
   ];
-  const filled=types.filter(t=>photos[t.key]);
-  if(filled.length){
-   photoSec.style.display='block';
-   photoGrid.style.gridTemplateColumns='repeat(auto-fill,minmax(120px,1fr))';
-   photoGrid.innerHTML=filled.map(t=>{
-    const val=photos[t.key];
+  // Flatten all photos into renderable items
+  const items=[];
+  types.forEach(t=>{
+   const val=photos[t.key];
+   if(!val) return;
+   if(t.multi&&Array.isArray(val)){
+    val.forEach((u,i)=>items.push({label:t.label+(val.length>1?` ${i+1}`:''),url:u}));
+   } else {
     const url=typeof val==='object'?val?.url:val;
-    const isAbsency=t.key==='absency'&&typeof val==='object';
-    const meta=isAbsency?`<div style="font-size:9px;color:var(--muted);margin-top:2px;text-align:center">${val.timestamp?new Date(val.timestamp).toLocaleString('id-ID'):''}${val.lat?` <a href="https://maps.google.com/?q=${val.lat},${val.lng}" target="_blank" style="color:var(--primary)">Map</a>`:''}</div>`:'';
+    if(url) items.push({label:t.label,url,meta:t.key==='absency'&&typeof val==='object'?val:null});
+   }
+  });
+  if(items.length){
+   photoSec.style.display='block';
+   photoGrid.style.gridTemplateColumns='repeat(auto-fill,minmax(100px,1fr))';
+   photoGrid.innerHTML=items.map(it=>{
+    const meta=it.meta?`<div style="font-size:8px;color:var(--muted);margin-top:2px;text-align:center">${it.meta.timestamp?new Date(it.meta.timestamp).toLocaleString('id-ID'):''}${it.meta.lat?` <a href="https://maps.google.com/?q=${it.meta.lat},${it.meta.lng}" target="_blank" style="color:var(--primary)">Map</a>`:''}</div>`:'';
     return `<div style="text-align:center">
-     <div style="font-size:9px;font-weight:700;color:var(--muted);margin-bottom:3px;text-transform:uppercase">${t.label}</div>
-     <a href="${esc(url)}" target="_blank"><img src="${esc(url)}" style="width:100%;border-radius:6px;border:1px solid var(--border);aspect-ratio:4/3;object-fit:cover"/></a>
+     <div style="font-size:8px;font-weight:700;color:var(--muted);margin-bottom:2px;text-transform:uppercase">${it.label}</div>
+     <a href="${esc(it.url)}" target="_blank"><img src="${esc(it.url)}" style="width:100%;border-radius:5px;border:1px solid var(--border);aspect-ratio:4/3;object-fit:cover"/></a>
      ${meta}
     </div>`;
    }).join('');
@@ -7434,6 +7444,25 @@ function loadInvFromAppointment(apptId){
   }
   renderInvDogServices();
   recalcInvoice();
+  // Auto-populate invoice photos from groomer-uploaded appointment photos
+  const custAppts=appts.filter(ap=>{
+   if(ap.appt_date!==a.appt_date) return false;
+   const dd=dogs.find(x=>x.id===ap.dog_id);
+   return dd?.customer_id===cid;
+  });
+  custAppts.forEach(ap=>{
+   const p=ap.photos||{};
+   if(!Object.keys(p).length) return;
+   const did=ap.dog_id;
+   if(!invPhotos[did]) invPhotos[did]=[];
+   if(typeof p.before==='string') invPhotos[did].push({data:p.before,zone:'before'});
+   if(typeof p.after==='string') invPhotos[did].push({data:p.after,zone:'after'});
+   [{key:'dematting',label:'Bulu Gimbal'},{key:'fungal',label:'Bekas Jamur'},{key:'injury',label:'Luka'},{key:'other',label:'Lainnya'}].forEach(mt=>{
+    const arr=Array.isArray(p[mt.key])?p[mt.key]:[];
+    arr.forEach(url=>invPhotos[did].push({data:url,zone:'issue',label:mt.label}));
+   });
+  });
+  renderInvoicePreview();
  })));
 }
 
