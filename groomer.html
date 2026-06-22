@@ -94,6 +94,19 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 @keyframes sp{to{transform:rotate(360deg)}}
 
 .footer{text-align:center;font-size:10px;color:var(--muted);padding:16px 12px;margin-top:20px}
+
+.checklist{background:var(--surface);border-radius:10px;padding:14px;margin-bottom:16px;box-shadow:var(--sh);border:2px solid var(--primary)}
+.checklist-title{font-size:13px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.checklist-toggle{background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;font-weight:600;padding:4px 8px;min-height:32px}
+.checklist-body{display:flex;flex-direction:column;gap:4px}
+.checklist-body.collapsed{display:none}
+.chk-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;min-height:40px}
+.chk-item:active{background:var(--subtle)}
+.chk-item.checked{opacity:.45;text-decoration:line-through}
+.chk-box{width:22px;height:22px;border:2px solid var(--border);border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--green);background:var(--surface)}
+.chk-item.checked .chk-box{border-color:var(--green);background:#dcfce7}
+.chk-label{font-size:13px;font-weight:500;flex:1}
+.chk-reason{font-size:10px;color:var(--muted);font-weight:400}
 </style>
 </head>
 <body>
@@ -269,6 +282,90 @@ function switchTab(tab){
  renderActiveTab();
 }
 
+// Tool checklist: maps services to required tools
+const BASE_TOOLS=[
+ {tool:'Clipper set + guards',always:true},
+ {tool:'Gunting grooming',always:true},
+ {tool:'Sisir & slicker brush',always:true},
+ {tool:'Shampoo (regular)',always:true},
+ {tool:'Dryer',always:true},
+ {tool:'Handuk kerja',always:true},
+ {tool:'Gunting kuku + kikir',always:true},
+ {tool:'Ear cleaner + cotton',always:true},
+ {tool:'Meja grooming portable',always:true},
+];
+const SERVICE_TOOLS={
+ 'Styling':[{tool:'Gunting styling (thinning shears)',svc:'Styling'},{tool:'Sisir set lengkap',svc:'Styling'}],
+ 'Botak':[{tool:'Clipper blade pendek (full shave)',svc:'Botak'}],
+ 'Dematting':[{tool:'Dematting comb / rake',svc:'Dematting'},{tool:'Slicker brush extra',svc:'Dematting'}],
+ 'Deshedding':[{tool:'Deshedding tool (FURminator)',svc:'Deshedding'}],
+ 'Anti Fungal':[{tool:'Shampoo anti-jamur (medicated)',svc:'Anti Fungal'}],
+ 'Anti Kutu':[{tool:'Shampoo anti-kutu',svc:'Anti Kutu'},{tool:'Sisir kutu (fine-tooth)',svc:'Anti Kutu'}],
+ 'Whitening':[{tool:'Shampoo whitening',svc:'Whitening'}],
+ 'Parfume':[{tool:'Cologne / parfume anjing',svc:'Parfume'}],
+};
+const EXTRA_TOOLS=[{tool:'+2 handuk tambahan',always:true}];
+
+let checklistState={};
+
+function renderToolChecklist(dates){
+ const dayAppts=dataCache.appts.filter(a=>dates.includes(a.appt_date));
+ if(!dayAppts.length) return '';
+
+ // Extract unique services from all appointments
+ const svcs=new Set();
+ dayAppts.forEach(a=>{
+  const svc=a.service_base||'Basic Grooming';
+  // service_base can be comma-separated like "Basic Grooming, Styling, Dematting"
+  svc.split(',').forEach(s=>svcs.add(s.trim()));
+ });
+
+ // Build tool list: base + service-specific + extra
+ const tools=[...BASE_TOOLS];
+ Object.keys(SERVICE_TOOLS).forEach(svc=>{
+  if(svcs.has(svc)){
+   SERVICE_TOOLS[svc].forEach(t=>tools.push(t));
+  }
+ });
+ tools.push(...EXTRA_TOOLS);
+
+ const dateKey=dates.join(',');
+ if(!checklistState[dateKey]) checklistState[dateKey]={};
+ const state=checklistState[dateKey];
+ const allChecked=tools.every((_,i)=>state[i]);
+
+ return `<div class="checklist">
+  <div class="checklist-title">
+   <span>Checklist Alat</span>
+   <button class="checklist-toggle" onclick="toggleChecklist(this)">${allChecked?'Buka':'Tutup'}</button>
+  </div>
+  <div class="checklist-body${allChecked?' collapsed':''}" id="chk-body-${dateKey.replace(/,/g,'-')}">
+   ${tools.map((t,i)=>{
+    const checked=!!state[i];
+    const reason=t.svc?` (${t.svc})`:(t.always?'':'');
+    return `<div class="chk-item${checked?' checked':''}" onclick="toggleChk('${dateKey}',${i},this)">
+     <div class="chk-box">${checked?'&#10003;':''}</div>
+     <span class="chk-label">${esc(t.tool)}<span class="chk-reason">${reason}</span></span>
+    </div>`;
+   }).join('')}
+  </div>
+ </div>`;
+}
+
+function toggleChk(dateKey,idx,el){
+ if(!checklistState[dateKey]) checklistState[dateKey]={};
+ checklistState[dateKey][idx]=!checklistState[dateKey][idx];
+ const checked=checklistState[dateKey][idx];
+ el.classList.toggle('checked',checked);
+ el.querySelector('.chk-box').innerHTML=checked?'&#10003;':'';
+}
+
+function toggleChecklist(btn){
+ const body=btn.closest('.checklist').querySelector('.checklist-body');
+ const collapsed=body.classList.toggle('collapsed');
+ btn.textContent=collapsed?'Buka':'Tutup';
+}
+
 function renderActiveTab(){
  const content=document.getElementById('content');
  const today=iso(new Date());
@@ -294,7 +391,7 @@ function renderActiveTab(){
   return;
  }
 
- content.innerHTML=sections.map(({date,isToday,appts})=>{
+ content.innerHTML=renderToolChecklist(dates)+sections.map(({date,isToday,appts})=>{
   if(!appts.length) return '';
   return `<div class="day-section">
    <div class="day-header ${isToday?'today':''}">${esc(fmtDateLong(date))}</div>
