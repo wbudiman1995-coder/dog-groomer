@@ -107,6 +107,20 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .chk-item.checked .chk-box{border-color:var(--green);background:#dcfce7}
 .chk-label{font-size:13px;font-weight:500;flex:1}
 .chk-reason{font-size:10px;color:var(--muted);font-weight:400}
+
+.appt-photos{display:flex;gap:8px;margin-top:10px}
+.photo-slot{flex:1;position:relative}
+.photo-slot-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;text-align:center}
+.photo-btn{width:100%;aspect-ratio:4/3;border:2px dashed var(--border);border-radius:8px;background:var(--subtle);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent;gap:4px;min-height:80px}
+.photo-btn:active{background:var(--border)}
+.photo-btn-icon{font-size:24px;line-height:1}
+.photo-btn-text{font-size:11px;color:var(--muted);font-weight:500}
+.photo-preview{width:100%;aspect-ratio:4/3;border-radius:8px;overflow:hidden;position:relative;border:1px solid var(--border)}
+.photo-preview img{width:100%;height:100%;object-fit:cover}
+.photo-retake{position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:5px;font-size:10px;padding:4px 8px;cursor:pointer;font-weight:600;min-height:28px}
+.photo-retake:active{background:rgba(0,0,0,.8)}
+.photo-uploading{width:100%;aspect-ratio:4/3;border:2px solid var(--primary);border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--subtle)}
+.photo-uploading .spin{width:16px;height:16px}
 </style>
 </head>
 <body>
@@ -151,6 +165,9 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
  </div>
  <div style="margin-top:20px;font-size:11px;color:var(--muted)">Tidak punya akses? Hubungi Xavier untuk dapat kode.</div>
 </div>
+
+<input type="file" id="cam-before" accept="image/*" capture="environment" style="display:none" onchange="onPhotoCapture(this,'before')"/>
+<input type="file" id="cam-after" accept="image/*" capture="environment" style="display:none" onchange="onPhotoCapture(this,'after')"/>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -460,7 +477,104 @@ function renderAppt(a){
    ${stylingBlock}
   </div>
   ${note?`<div class="appt-note">Catatan: ${esc(note)}</div>`:''}
+  <div class="appt-photos">
+   <div class="photo-slot">
+    <div class="photo-slot-label">Before</div>
+    ${renderPhotoSlot(a.id,a.photo_before,'before')}
+   </div>
+   <div class="photo-slot">
+    <div class="photo-slot-label">After</div>
+    ${renderPhotoSlot(a.id,a.photo_after,'after')}
+   </div>
+  </div>
  </div>`;
+}
+
+function renderPhotoSlot(apptId,url,type){
+ if(url){
+  return `<div class="photo-preview" id="ps-${type}-${apptId}">
+   <img src="${esc(url)}" alt="${type}"/>
+   <button class="photo-retake" onclick="capturePhoto('${apptId}','${type}')">Retake</button>
+  </div>`;
+ }
+ return `<div class="photo-btn" id="ps-${type}-${apptId}" onclick="capturePhoto('${apptId}','${type}')">
+  <span class="photo-btn-icon">&#128247;</span>
+  <span class="photo-btn-text">Ambil foto</span>
+ </div>`;
+}
+
+let _pendingPhotoApptId=null;
+let _pendingPhotoType=null;
+
+function capturePhoto(apptId,type){
+ _pendingPhotoApptId=apptId;
+ _pendingPhotoType=type;
+ const input=document.getElementById('cam-'+type);
+ input.value='';
+ input.click();
+}
+
+async function onPhotoCapture(input,type){
+ const file=input.files?.[0];
+ if(!file||!_pendingPhotoApptId) return;
+ const apptId=_pendingPhotoApptId;
+ _pendingPhotoApptId=null;
+
+ // Show uploading state
+ const slotEl=document.getElementById('ps-'+type+'-'+apptId);
+ if(slotEl) slotEl.outerHTML=`<div class="photo-uploading" id="ps-${type}-${apptId}"><span class="spin"></span></div>`;
+
+ try {
+  const blob=await compressImage(file);
+  const path=`${apptId}/${type}.jpg`;
+
+  // Upload (upsert to allow retake)
+  const {error:upErr}=await db.storage.from('grooming-photos').upload(path,blob,{
+   contentType:'image/jpeg',upsert:true
+  });
+  if(upErr) throw upErr;
+
+  // Get public URL
+  const {data:urlData}=db.storage.from('grooming-photos').getPublicUrl(path);
+  const publicUrl=urlData.publicUrl+'?v='+Date.now();
+
+  // Update appointment record
+  const col=type==='before'?'photo_before':'photo_after';
+  const {error:dbErr}=await db.from('appointments').update({[col]:publicUrl}).eq('id',apptId);
+  if(dbErr) throw dbErr;
+
+  // Update local cache
+  const appt=dataCache.appts.find(a=>a.id===apptId);
+  if(appt) appt[col]=publicUrl;
+
+  // Re-render slot
+  const el=document.getElementById('ps-'+type+'-'+apptId);
+  if(el) el.outerHTML=renderPhotoSlot(apptId,publicUrl,type);
+ } catch(err) {
+  alert('Upload gagal: '+(err.message||err));
+  // Restore button
+  const el=document.getElementById('ps-'+type+'-'+apptId);
+  if(el) el.outerHTML=renderPhotoSlot(apptId,null,type);
+ }
+}
+
+function compressImage(file,maxW=1200){
+ return new Promise((resolve,reject)=>{
+  const img=new Image();
+  img.onload=()=>{
+   let w=img.width,h=img.height;
+   if(w>maxW){h=Math.round(h*maxW/w);w=maxW;}
+   const c=document.createElement('canvas');
+   c.width=w;c.height=h;
+   c.getContext('2d').drawImage(img,0,0,w,h);
+   c.toBlob(b=>{
+    if(b) resolve(b); else reject(new Error('Compression failed'));
+   },'image/jpeg',0.8);
+   URL.revokeObjectURL(img.src);
+  };
+  img.onerror=()=>reject(new Error('Cannot read image'));
+  img.src=URL.createObjectURL(file);
+ });
 }
 
 // Auto-refresh every 5 minutes
