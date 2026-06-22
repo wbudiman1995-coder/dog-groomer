@@ -125,6 +125,9 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .photo-uploading .spin{width:14px;height:14px}
 .photo-meta{font-size:9px;color:var(--muted);text-align:center;margin-top:2px;line-height:1.3}
 .photo-section-label{grid-column:1/-1;font-size:10px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:.5px;padding:6px 0 2px;border-top:1px solid var(--border);margin-top:4px}
+.photo-multi{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
+.photo-multi .photo-slot{width:calc(50% - 3px);flex:none}
+.photo-multi .photo-add{width:calc(50% - 3px);flex:none}
 </style>
 </head>
 <body>
@@ -485,14 +488,17 @@ function renderAppt(a){
 }
 
 // --- Photo system (JSONB `photos` column) ---
+// multi:true = stores array of URLs, can add multiple
 const PHOTO_TYPES=[
  {key:'absency',label:'Kehadiran',section:'Bukti Kehadiran',full:true,hasGeo:true},
  {key:'before',label:'Before',section:'Grooming'},
  {key:'after',label:'After'},
  {key:'ear_left',label:'Telinga Kiri',section:'Telinga'},
  {key:'ear_right',label:'Telinga Kanan'},
- {key:'dematting',label:'Dematting',section:'Tambahan',conditional:'Dematting'},
- {key:'injury',label:'Luka / Injury'},
+ {key:'dematting',label:'Bulu Gimbal',section:'Dokumentasi Kondisi',multi:true,conditional:'Dematting'},
+ {key:'fungal',label:'Bekas Jamur',multi:true},
+ {key:'injury',label:'Luka',multi:true},
+ {key:'other',label:'Lainnya',multi:true},
 ];
 
 function renderPhotoGrid(a){
@@ -501,24 +507,28 @@ function renderPhotoGrid(a){
  let html='<div class="appt-photos">';
  let lastSection='';
  PHOTO_TYPES.forEach(pt=>{
-  if(pt.conditional && !svc.includes(pt.conditional)) return;
-  if(pt.section && pt.section!==lastSection){
+  if(pt.conditional&&!svc.includes(pt.conditional)) return;
+  if(pt.section&&pt.section!==lastSection){
    html+=`<div class="photo-section-label">${pt.section}</div>`;
    lastSection=pt.section;
   }
-  const val=photos[pt.key];
-  const url=typeof val==='object'?val?.url:val;
-  html+=`<div class="photo-slot${pt.full?' full':''}">
-   <div class="photo-slot-label">${pt.label}</div>
-   ${renderPhotoSlot(a.id,url,pt.key,pt.hasGeo)}
-   ${pt.hasGeo&&typeof val==='object'&&val?.timestamp?`<div class="photo-meta">${new Date(val.timestamp).toLocaleString('id-ID')}${val.lat?` · <a href="https://maps.google.com/?q=${val.lat},${val.lng}" target="_blank" style="color:var(--primary)">Lokasi</a>`:''}</div>`:''}
-  </div>`;
+  if(pt.multi){
+   html+=renderMultiSlot(a.id,photos,pt);
+  } else {
+   const val=photos[pt.key];
+   const url=typeof val==='object'?val?.url:val;
+   html+=`<div class="photo-slot${pt.full?' full':''}">
+    <div class="photo-slot-label">${pt.label}</div>
+    ${renderSingleSlot(a.id,url,pt.key,pt.hasGeo)}
+    ${pt.hasGeo&&typeof val==='object'&&val?.timestamp?`<div class="photo-meta">${new Date(val.timestamp).toLocaleString('id-ID')}${val.lat?` · <a href="https://maps.google.com/?q=${val.lat},${val.lng}" target="_blank" style="color:var(--primary)">Lokasi</a>`:''}</div>`:''}
+   </div>`;
+  }
  });
  html+='</div>';
  return html;
 }
 
-function renderPhotoSlot(apptId,url,type,hasGeo){
+function renderSingleSlot(apptId,url,type,hasGeo){
  if(url){
   return `<div class="photo-preview" id="ps-${type}-${apptId}">
    <img src="${esc(url)}" alt="${type}"/>
@@ -532,14 +542,40 @@ function renderPhotoSlot(apptId,url,type,hasGeo){
  </div>`;
 }
 
+function renderMultiSlot(apptId,photos,pt){
+ const arr=Array.isArray(photos[pt.key])?photos[pt.key]:[];
+ let html=`<div class="photo-multi">
+  <div class="photo-slot-label" style="width:100%">${pt.label}${arr.length?` (${arr.length})`:''}  </div>`;
+ arr.forEach((url,i)=>{
+  html+=`<div class="photo-slot">
+   <div class="photo-preview">
+    <img src="${esc(url)}" alt="${pt.key} ${i+1}"/>
+    <button class="photo-del" onclick="event.stopPropagation();deleteMultiPhoto('${apptId}','${pt.key}',${i})" title="Hapus">&times;</button>
+   </div>
+  </div>`;
+ });
+ if(arr.length<10){
+  html+=`<div class="photo-add">
+   <div class="photo-btn" onclick="capturePhoto('${apptId}','${pt.key}',false,true)">
+    <span class="photo-btn-icon">+</span>
+    <span class="photo-btn-text">Tambah foto</span>
+   </div>
+  </div>`;
+ }
+ html+='</div>';
+ return html;
+}
+
 let _pendingApptId=null;
 let _pendingType=null;
 let _pendingGeo=false;
+let _pendingMulti=false;
 
-function capturePhoto(apptId,type,hasGeo){
+function capturePhoto(apptId,type,hasGeo,multi){
  _pendingApptId=apptId;
  _pendingType=type;
  _pendingGeo=!!hasGeo;
+ _pendingMulti=!!multi;
  const input=document.getElementById('cam-input');
  input.value='';
  input.click();
@@ -562,36 +598,42 @@ async function onPhotoCapture(input){
  const apptId=_pendingApptId;
  const type=_pendingType;
  const hasGeo=_pendingGeo;
+ const isMulti=_pendingMulti;
  _pendingApptId=null;
 
- const slotEl=document.getElementById('ps-'+type+'-'+apptId);
- if(slotEl) slotEl.outerHTML=`<div class="photo-uploading" id="ps-${type}-${apptId}"><span class="spin"></span></div>`;
+ // Show loading in-place
+ renderActiveTab();
 
  try {
   const blob=await compressImage(file);
-  const path=`${apptId}/${type}.jpg`;
+  const appt=dataCache.appts.find(a=>a.id===apptId);
+  const photos={...(appt?.photos||{})};
 
-  const {error:upErr}=await db.storage.from('grooming-photos').upload(path,blob,{
-   contentType:'image/jpeg',upsert:true
-  });
-  if(upErr) throw upErr;
-
-  const {data:urlData}=db.storage.from('grooming-photos').getPublicUrl(path);
-  const publicUrl=urlData.publicUrl+'?v='+Date.now();
-
-  // Build photo value (with geo for absency)
-  let photoVal=publicUrl;
-  if(hasGeo){
-   const geo=await getGeoPosition();
-   photoVal={url:publicUrl,timestamp:new Date().toISOString(),lat:geo?.lat||null,lng:geo?.lng||null};
+  if(isMulti){
+   const arr=Array.isArray(photos[type])?[...photos[type]]:[];
+   const idx=arr.length;
+   const path=`${apptId}/${type}_${idx}.jpg`;
+   const {error:upErr}=await db.storage.from('grooming-photos').upload(path,blob,{contentType:'image/jpeg',upsert:true});
+   if(upErr) throw upErr;
+   const {data:urlData}=db.storage.from('grooming-photos').getPublicUrl(path);
+   arr.push(urlData.publicUrl+'?v='+Date.now());
+   photos[type]=arr;
+  } else {
+   const path=`${apptId}/${type}.jpg`;
+   const {error:upErr}=await db.storage.from('grooming-photos').upload(path,blob,{contentType:'image/jpeg',upsert:true});
+   if(upErr) throw upErr;
+   const {data:urlData}=db.storage.from('grooming-photos').getPublicUrl(path);
+   const publicUrl=urlData.publicUrl+'?v='+Date.now();
+   if(hasGeo){
+    const geo=await getGeoPosition();
+    photos[type]={url:publicUrl,timestamp:new Date().toISOString(),lat:geo?.lat||null,lng:geo?.lng||null};
+   } else {
+    photos[type]=publicUrl;
+   }
   }
 
-  // Read-merge-write JSONB
-  const appt=dataCache.appts.find(a=>a.id===apptId);
-  const photos={...(appt?.photos||{}),[type]:photoVal};
   const {error:dbErr}=await db.from('appointments').update({photos}).eq('id',apptId);
   if(dbErr) throw dbErr;
-
   if(appt) appt.photos=photos;
   renderActiveTab();
  } catch(err) {
@@ -607,6 +649,25 @@ async function deletePhoto(apptId,type){
   const appt=dataCache.appts.find(a=>a.id===apptId);
   const photos={...(appt?.photos||{})};
   delete photos[type];
+  const {error}=await db.from('appointments').update({photos}).eq('id',apptId);
+  if(error) throw error;
+  if(appt) appt.photos=photos;
+  renderActiveTab();
+ } catch(err){
+  alert('Gagal hapus: '+(err.message||err));
+ }
+}
+
+async function deleteMultiPhoto(apptId,type,idx){
+ if(!confirm('Hapus foto ini?')) return;
+ try {
+  await db.storage.from('grooming-photos').remove([`${apptId}/${type}_${idx}.jpg`]);
+  const appt=dataCache.appts.find(a=>a.id===apptId);
+  const photos={...(appt?.photos||{})};
+  const arr=Array.isArray(photos[type])?[...photos[type]]:[];
+  arr.splice(idx,1);
+  photos[type]=arr.length?arr:undefined;
+  if(!photos[type]) delete photos[type];
   const {error}=await db.from('appointments').update({photos}).eq('id',apptId);
   if(error) throw error;
   if(appt) appt.photos=photos;
