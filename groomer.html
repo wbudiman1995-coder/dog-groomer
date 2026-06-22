@@ -174,6 +174,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 </div>
 
 <input type="file" id="cam-input" accept="image/*" capture="environment" style="display:none" onchange="onPhotoCapture(this)"/>
+<input type="file" id="cam-gallery" accept="image/*" style="display:none" onchange="onPhotoCapture(this)"/>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -533,12 +534,20 @@ function renderSingleSlot(apptId,url,type,hasGeo){
   return `<div class="photo-preview" id="ps-${type}-${apptId}">
    <img src="${esc(url)}" alt="${type}"/>
    <button class="photo-del" onclick="event.stopPropagation();deletePhoto('${apptId}','${type}')" title="Hapus">&times;</button>
-   <button class="photo-retake" onclick="event.stopPropagation();capturePhoto('${apptId}','${type}',${!!hasGeo})">Retake</button>
+   <div style="position:absolute;bottom:3px;right:3px;display:flex;gap:3px">
+    <button class="photo-retake" onclick="event.stopPropagation();capturePhoto('${apptId}','${type}',${!!hasGeo})">Retake</button>
+    <button class="photo-retake" onclick="event.stopPropagation();capturePhoto('${apptId}','${type}',${!!hasGeo},false,true)">Galeri</button>
+   </div>
   </div>`;
  }
- return `<div class="photo-btn" id="ps-${type}-${apptId}" onclick="capturePhoto('${apptId}','${type}',${!!hasGeo})">
-  <span class="photo-btn-icon">&#128247;</span>
-  <span class="photo-btn-text">${hasGeo?'Foto + Lokasi':'Ambil foto'}</span>
+ return `<div id="ps-${type}-${apptId}" style="display:flex;flex-direction:column;gap:4px">
+  <div class="photo-btn" onclick="capturePhoto('${apptId}','${type}',${!!hasGeo})" style="flex:1">
+   <span class="photo-btn-icon">&#128247;</span>
+   <span class="photo-btn-text">${hasGeo?'Kamera + Lokasi':'Kamera'}</span>
+  </div>
+  <div class="photo-btn" onclick="capturePhoto('${apptId}','${type}',${!!hasGeo},false,true)" style="flex:1;aspect-ratio:auto;min-height:36px;border-style:solid;border-width:1px">
+   <span class="photo-btn-text">Pilih dari galeri</span>
+  </div>
  </div>`;
 }
 
@@ -556,9 +565,12 @@ function renderMultiSlot(apptId,photos,pt){
  });
  if(arr.length<10){
   html+=`<div class="photo-add">
-   <div class="photo-btn" onclick="capturePhoto('${apptId}','${pt.key}',false,true)">
-    <span class="photo-btn-icon">+</span>
-    <span class="photo-btn-text">Tambah foto</span>
+   <div class="photo-btn" onclick="capturePhoto('${apptId}','${pt.key}',false,true)" style="min-height:50px">
+    <span class="photo-btn-icon">&#128247;</span>
+    <span class="photo-btn-text">Kamera</span>
+   </div>
+   <div class="photo-btn" onclick="capturePhoto('${apptId}','${pt.key}',false,true,true)" style="aspect-ratio:auto;min-height:32px;border-style:solid;border-width:1px;margin-top:4px">
+    <span class="photo-btn-text">Galeri</span>
    </div>
   </div>`;
  }
@@ -571,12 +583,12 @@ let _pendingType=null;
 let _pendingGeo=false;
 let _pendingMulti=false;
 
-function capturePhoto(apptId,type,hasGeo,multi){
+function capturePhoto(apptId,type,hasGeo,multi,fromGallery){
  _pendingApptId=apptId;
  _pendingType=type;
  _pendingGeo=!!hasGeo;
  _pendingMulti=!!multi;
- const input=document.getElementById('cam-input');
+ const input=document.getElementById(fromGallery?'cam-gallery':'cam-input');
  input.value='';
  input.click();
 }
