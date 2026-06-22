@@ -853,8 +853,12 @@ tbody tr:hover{background:var(--subtle)}
   <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">
    <input type="checkbox" id="inv-subs-billing" onchange="onSubsBillingToggle()" style="cursor:pointer;margin-top:3px"/>
    <div>
-    <label for="inv-subs-billing" style="font-size:13px;cursor:pointer;margin:0;font-weight:500">Tagihan subscription (jatuh tempo tanggal 5)</label>
-    <div style="font-size:11px;color:var(--muted);margin-top:2px">Jika invoice tanggal &le; 5: due date = tanggal 5 bulan ini. Jika &gt; 5: tidak ada due date otomatis (admin tulis manual di notes).</div>
+    <label for="inv-subs-billing" style="font-size:13px;cursor:pointer;margin:0;font-weight:500">Tagihan subscription</label>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+     Jatuh tempo tanggal
+     <input type="number" id="inv-subs-due-day" value="5" min="1" max="28" onchange="updateInvDueDate()" style="width:44px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center"/>
+     setiap bulan.
+    </div>
    </div>
   </div>
   <div id="inv-subs-due-preview" style="display:none;font-size:12px;color:#15803d;padding:6px 10px;background:#dcfce7;border-radius:5px;margin-top:6px">Due date akan otomatis ditampilkan di PDF</div>
@@ -893,6 +897,7 @@ tbody tr:hover{background:var(--subtle)}
   <button class="subtab active" id="fstab-invoices" onclick="swFin('invoices')">Invoices</button>
   <button class="subtab" id="fstab-visits" onclick="swFin('visits')">Visits</button>
   <button class="subtab" id="fstab-payroll" onclick="swFin('payroll')">Payroll</button>
+  <button class="subtab" id="fstab-capital" onclick="swFin('capital')">Capital</button>
   <button class="subtab" id="fstab-bank" onclick="swFin('bank')">Bank</button>
  </div>
 
@@ -950,6 +955,20 @@ tbody tr:hover{background:var(--subtle)}
    </div>
   </div>
   <div id="payroll-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px"></div>
+ </div>
+
+ <div class="subsec" id="fsec-capital">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+   <div style="font-size:13px;color:var(--muted)">Injeksi modal ke HomePaw</div>
+   <button class="btn btn-p btn-sm" onclick="openCapitalModal()">+ Tambah</button>
+  </div>
+  <div id="capital-totals" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:1.25rem"></div>
+  <div class="tbl-wrap">
+   <table><thead><tr>
+    <th>Tanggal</th><th>Dari</th><th>Jumlah</th><th>Catatan</th><th></th>
+   </tr></thead>
+   <tbody id="capital-body"></tbody></table>
+  </div>
  </div>
 
  <div class="subsec" id="fsec-bank">
@@ -1353,6 +1372,17 @@ tbody tr:hover{background:var(--subtle)}
     <label>Catatan dari customer <span style="font-size:10px;color:var(--muted);font-weight:400">— ditampilkan di reminder ke customer</span></label>
     <input id="appt-customer-note" placeholder="e.g. Latte agak stress, tolong gentle ya"/>
    </div>
+   <div style="margin-bottom:.9rem;padding:8px 10px;background:var(--subtle);border-radius:6px;border:1px solid var(--border)">
+    <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:6px">Diskon per anjing <span style="font-weight:400">— otomatis masuk ke invoice</span></div>
+    <div style="display:flex;align-items:center;gap:6px">
+     <select id="appt-disc-type" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--surface)">
+      <option value="">Tidak ada</option>
+      <option value="percent">%</option>
+      <option value="fixed">Rp</option>
+     </select>
+     <input type="number" id="appt-disc-value" value="0" min="0" placeholder="0" style="width:75px;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
+    </div>
+   </div>
    <!-- Batch O.13: Performance tracking — only relevant for past/done appts -->
    <div id="appt-perf-section" style="display:none;background:var(--subtle);border-radius:6px;padding:10px;margin-bottom:.9rem;border:1px dashed var(--border)">
     <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Post-appointment performance (for groomer report)</div>
@@ -1460,6 +1490,39 @@ tbody tr:hover{background:var(--subtle)}
  </div>
 </div>
 
+<!-- CAPITAL INJECTION MODAL -->
+<div class="overlay" id="ov-capital">
+ <div class="modal" style="max-width:400px">
+  <button class="modal-close" onclick="cm('ov-capital')" title="Close">&#x2715;</button>
+  <div class="modal-title">Tambah injeksi modal</div>
+  <div class="form-grid">
+   <div class="fg">
+    <label>Dari</label>
+    <select id="cap-by">
+     <option value="winston">Winston</option>
+     <option value="xavier">Xavier</option>
+     <option value="henry">Henry</option>
+    </select>
+   </div>
+   <div class="fg">
+    <label>Tanggal</label>
+    <input type="date" id="cap-date"/>
+   </div>
+   <div class="fg full">
+    <label>Jumlah (Rp)</label>
+    <input type="number" id="cap-amount" min="0" placeholder="e.g. 5000000"/>
+   </div>
+   <div class="fg full">
+    <label>Catatan</label>
+    <input id="cap-notes" placeholder="Opsional"/>
+   </div>
+  </div>
+  <div class="form-actions">
+   <button class="btn btn-p" onclick="saveCapital()">Simpan</button>
+  </div>
+ </div>
+</div>
+
 <!-- INVOICE APPOINTMENT PICKER -->
 <div class="overlay" id="ov-inv-appt-picker">
  <div class="modal" style="max-width:480px;padding:0;overflow:hidden">
@@ -1504,6 +1567,7 @@ let dogs=[], visits=[], appts=[], custs=[], groomers=[], invoices=[], tokens=[],
 let auditEntries=[], groomerBlocks=[];
 // Batch O.15
 let complaints=[];
+let capitalInjections=[];
 // Batch H — auth state
 let adminUsers=[], currentUser=null, currentAdminRow=null;
 // Batch J — payroll
@@ -1994,7 +2058,7 @@ function swSub(sub){
 }
 
 async function loadAll() {
- const [cr,dr,vr,ar,gr,ir,br,tr,sr,aur,psr,gpr,alr,gbr,cmr] = await Promise.all([
+ const [cr,dr,vr,ar,gr,ir,br,tr,sr,aur,psr,gpr,alr,gbr,cmr,cir] = await Promise.all([
  db.from('customers').select('*').order('created_at',{ascending:false}),
  db.from('dogs').select('*').order('created_at',{ascending:false}),
  db.from('visits').select('*,dogs(name,size)').order('visited_at',{ascending:false}),
@@ -2009,11 +2073,13 @@ async function loadAll() {
  db.from('groomer_payouts').select('*').order('cycle_start',{ascending:false}),
  db.from('audit_log').select('*').order('created_at',{ascending:false}).limit(500),
  db.from('groomer_blocks').select('*').order('block_date',{ascending:false}),
- db.from('complaints').select('*').order('complaint_date',{ascending:false})
+ db.from('complaints').select('*').order('complaint_date',{ascending:false}),
+ db.from('capital_injections').select('*').order('injection_date',{ascending:false})
  ]);
  custs=cr.data||[]; dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[]; groomers=gr.data||[]; invoices=ir.data||[]; bankSettings=br.data||{}; tokens=tr.data||[]; subscriptions=sr.data||[]; adminUsers=aur.data||[];
  auditEntries=alr.data||[]; groomerBlocks=gbr.data||[];
  complaints=cmr.data||[];
+ capitalInjections=cir.data||[];
  // Batch O.6 — admin email lookup cache for edit-history display
  window._adminEmails={};
  adminUsers.forEach(a=>{window._adminEmails[a.id]=a.email||a.name||'admin'});
@@ -2047,6 +2113,7 @@ async function loadAll() {
   if(fsub==='invoices') renderFinancial();
   else if(fsub==='visits') renderVisits();
   else if(fsub==='payroll') renderPayroll();
+  else if(fsub==='capital') renderCapital();
   else if(fsub==='bank') renderBankDisplay();
  }
  else if(activeTab==='reminders') generateReminders();
@@ -3178,6 +3245,8 @@ function openAppt(dateISO,groomerId,startMins){
  if(invBtnNew) invBtnNew.style.display='none';
  document.getElementById('appt-note').value='';
  const cnEl=document.getElementById('appt-customer-note'); if(cnEl) cnEl.value='';
+ const adtEl=document.getElementById('appt-disc-type'); if(adtEl) adtEl.value='';
+ const advEl=document.getElementById('appt-disc-value'); if(advEl) advEl.value=0;
  const aesEl=document.getElementById('appt-edit-stamp'); if(aesEl) aesEl.innerHTML='';
  // Batch O.13 — reset perf fields
  const perfSec=document.getElementById('appt-perf-section'); if(perfSec) perfSec.style.display='none';
@@ -3232,6 +3301,8 @@ function openApptEdit(id){
  }
  document.getElementById('appt-note').value=a.appt_note||'';
  const cnElE=document.getElementById('appt-customer-note'); if(cnElE) cnElE.value=a.customer_note||'';
+ const adtElE=document.getElementById('appt-disc-type'); if(adtElE) adtElE.value=a.appt_disc_type||'';
+ const advElE=document.getElementById('appt-disc-value'); if(advElE) advElE.value=a.appt_disc_value||0;
  const aesEl=document.getElementById('appt-edit-stamp'); if(aesEl) aesEl.innerHTML=editStampHTML(a)+renderAuditFooter('appointment',id);
  // Batch O.13 — show perf section only for past/done appts
  const perfSec=document.getElementById('appt-perf-section');
@@ -3365,6 +3436,8 @@ async function saveAppt(){
    appt_time:m2t(cursor)+':00',service_base:ds.svc,duration_mins:dur,
    appt_note:note+(wiz.dogSvcs.length>1?` (${i+1}/${wiz.dogSvcs.length})`:''),
    customer_note:custNote,
+   appt_disc_type:document.getElementById('appt-disc-type')?.value||null,
+   appt_disc_value:parseFloat(document.getElementById('appt-disc-value')?.value)||0,
    token_id:wiz.tokenId||null,token_used:false,session_source:sessSrc,
    ...editStamp()
   });
@@ -4740,12 +4813,13 @@ function updateInvDueDate(){
  const invDate=new Date(invDateStr+'T00:00:00');
  const subsCb=document.getElementById('inv-subs-billing');
  if(subsCb?.checked){
+  const dueDay=parseInt(document.getElementById('inv-subs-due-day')?.value)||5;
   const day=invDate.getDate();
-  if(day<=5){
-   const due=new Date(invDate.getFullYear(),invDate.getMonth(),5);
+  if(day<=dueDay){
+   const due=new Date(invDate.getFullYear(),invDate.getMonth(),dueDay);
    dueDateEl.value=iso(due);
   } else {
-   dueDateEl.value=''; // subs billing past 5th → no due date
+   dueDateEl.value='';
   }
  } else {
   // Default: invoice + 1 day
@@ -4763,9 +4837,10 @@ function updateSubsBillingDate(){
  const invDateStr=document.getElementById('inv-date')?.value;
  if(!invDateStr){preview.style.display='none';return}
  const invDate=new Date(invDateStr+'T00:00:00');
+ const dueDay=parseInt(document.getElementById('inv-subs-due-day')?.value)||5;
  const day=invDate.getDate();
- if(day<=5){
-  const due=new Date(invDate.getFullYear(),invDate.getMonth(),5);
+ if(day<=dueDay){
+  const due=new Date(invDate.getFullYear(),invDate.getMonth(),dueDay);
   preview.style.display='block';
   preview.style.background='#dcfce7';
   preview.style.color='#15803d';
@@ -4774,7 +4849,7 @@ function updateSubsBillingDate(){
   preview.style.display='block';
   preview.style.background='#fef3c7';
   preview.style.color='#92400e';
-  preview.textContent='Tanggal invoice setelah tanggal 5 — tidak ada due date otomatis. Admin tulis manual di field jatuh tempo atau catatan.';
+  preview.textContent=`Tanggal invoice lewat tanggal ${dueDay}. Atur due date manual di field jatuh tempo.`;
  }
 }
 
@@ -7298,25 +7373,29 @@ function loadInvFromAppointment(apptId){
  const cid=d.customer_id;if(!cid){alert('Customer not linked');return;}
  // Apply using applyInvCustomer which handles multi-dog
  applyInvCustomer(cid,a.appt_date);
- // Batch K: auto-pre-fill discount + note based on session_source
- const src=a.session_source||'normal';
- const ditEl=document.getElementById('inv-disc-type');
- const divEl=document.getElementById('inv-disc-value');
- const ntEl=document.getElementById('inv-notes');
- if(src==='subscription'){
-  if(ditEl) ditEl.value='percent';
-  if(divEl) divEl.value=100;
-  if(ntEl&&!ntEl.value.trim()) ntEl.value='Sesi subscription — sudah dibayar via langganan';
+ // Wait for dog chips to be clicked (rAF chain: applyInvCustomer uses 2, we add 1 more)
+ requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(()=>{
+  const src=a.session_source||'normal';
+  const ditEl=document.getElementById('inv-disc-type');
+  const divEl=document.getElementById('inv-disc-value');
+  const ntEl=document.getElementById('inv-notes');
+  if(src==='subscription'){
+   if(ditEl) ditEl.value='percent';
+   if(divEl) divEl.value=100;
+   if(ntEl&&!ntEl.value.trim()) ntEl.value='Sesi subscription — sudah dibayar via langganan';
+  } else if(src==='free'){
+   if(ditEl) ditEl.value='percent';
+   if(divEl) divEl.value=100;
+   if(ntEl&&!ntEl.value.trim()) ntEl.value='Sesi gratis (kompliment)';
+  } else if(src==='advance'&&a.token_id){
+   if(ntEl&&!ntEl.value.trim()) ntEl.value='Menggunakan token prepaid';
+  } else if(a.appt_disc_type&&(a.appt_disc_value||0)>0&&invDogServices[a.dog_id]){
+   invDogServices[a.dog_id].disc_type=a.appt_disc_type;
+   invDogServices[a.dog_id].disc_value=a.appt_disc_value||0;
+  }
+  renderInvDogServices();
   recalcInvoice();
- } else if(src==='free'){
-  if(ditEl) ditEl.value='percent';
-  if(divEl) divEl.value=100;
-  if(ntEl&&!ntEl.value.trim()) ntEl.value='Sesi gratis (kompliment)';
-  recalcInvoice();
- } else if(src==='advance'&&a.token_id){
-  // Token balance already shows in preview via buildTokenBalanceHTML
-  if(ntEl&&!ntEl.value.trim()) ntEl.value='Menggunakan token prepaid';
- }
+ })));
 }
 
 /* ========== BATCH H — AUTH GATE ========== */
@@ -7562,6 +7641,7 @@ function swFin(sub){
  if(sub==='invoices') renderFinancial();
  else if(sub==='visits') renderVisits();
  else if(sub==='payroll') renderPayroll();
+ else if(sub==='capital') renderCapital();
  else if(sub==='bank') renderBankDisplay();
 }
 
@@ -7573,6 +7653,69 @@ function renderBankDisplay(){
  el.innerHTML=`<div><strong>Bank:</strong> ${esc(bn)}</div>
   <div><strong>No. rekening:</strong> ${esc(ba)}</div>
   <div><strong>Atas nama:</strong> ${esc(bh)}</div>`;
+}
+
+/* ----- Capital injection tracker ----- */
+const CAPITAL_PEOPLE=['winston','xavier','henry'];
+const CAPITAL_COLORS={winston:'#6366f1',xavier:'#0ea5e9',henry:'#10b981'};
+
+function renderCapital(){
+ const totalsEl=document.getElementById('capital-totals');
+ const bodyEl=document.getElementById('capital-body');
+ if(!totalsEl||!bodyEl) return;
+ const totals={winston:0,xavier:0,henry:0};
+ capitalInjections.forEach(r=>{if(totals[r.injected_by]!==undefined) totals[r.injected_by]+=(r.amount||0);});
+ const grand=totals.winston+totals.xavier+totals.henry;
+ totalsEl.innerHTML=CAPITAL_PEOPLE.map(p=>`
+  <div class="card" style="padding:.75rem 1rem;border-left:4px solid ${CAPITAL_COLORS[p]}">
+   <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">${p.charAt(0).toUpperCase()+p.slice(1)}</div>
+   <div style="font-size:17px;font-weight:700;color:${CAPITAL_COLORS[p]}">${fmtRp(totals[p])}</div>
+  </div>`).join('')+`
+  <div class="card" style="padding:.75rem 1rem;border-left:4px solid var(--text)">
+   <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Total</div>
+   <div style="font-size:17px;font-weight:700">${fmtRp(grand)}</div>
+  </div>`;
+ if(!capitalInjections.length){
+  bodyEl.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">Belum ada injeksi modal.</td></tr>';
+  return;
+ }
+ bodyEl.innerHTML=capitalInjections.map(r=>{
+  const c=CAPITAL_COLORS[r.injected_by]||'var(--text)';
+  const name=(r.injected_by||'?').charAt(0).toUpperCase()+(r.injected_by||'').slice(1);
+  return `<tr>
+   <td>${r.injection_date||'—'}</td>
+   <td><span style="font-weight:600;color:${c}">${name}</span></td>
+   <td style="font-weight:600">${fmtRp(r.amount||0)}</td>
+   <td style="color:var(--muted);font-size:12px">${esc(r.notes||'—')}</td>
+   <td><button class="btn btn-d btn-sm" onclick="deleteCapital('${r.id}')">Hapus</button></td>
+  </tr>`;
+ }).join('');
+}
+
+function openCapitalModal(){
+ document.getElementById('cap-date').value=iso(new Date());
+ document.getElementById('cap-amount').value='';
+ document.getElementById('cap-notes').value='';
+ document.getElementById('cap-by').value='winston';
+ om('ov-capital');
+}
+
+async function saveCapital(){
+ const by=document.getElementById('cap-by').value;
+ const amount=parseInt(document.getElementById('cap-amount').value)||0;
+ const dt=document.getElementById('cap-date').value;
+ const notes=document.getElementById('cap-notes').value.trim();
+ if(!amount||!dt){alert('Isi jumlah dan tanggal.');return}
+ const {error}=await db.from('capital_injections').insert({injected_by:by,amount,injection_date:dt,notes:notes||null});
+ if(error){alert('Error: '+error.message);return}
+ cm('ov-capital'); await loadAll();
+}
+
+async function deleteCapital(id){
+ if(!confirm('Hapus injeksi ini?')) return;
+ const {error}=await db.from('capital_injections').delete().eq('id',id);
+ if(error){alert('Error: '+error.message);return}
+ await loadAll();
 }
 
 /* ----- Payroll cycle logic ----- */
