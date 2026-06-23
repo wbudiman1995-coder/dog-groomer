@@ -7452,34 +7452,53 @@ async function loadInvFromAppointment(apptId){
  });
  // Apply using applyInvCustomer which handles multi-dog
  applyInvCustomer(cid,a.appt_date);
- // Wait for dog chips to be clicked (rAF chain: applyInvCustomer uses 2, we add 1 more)
- requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(()=>{
+ // Wait for dog chips to be clicked (rAF chain: applyInvCustomer uses 2, we add 2 more to be safe)
+ requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(()=>{
   const src=a.session_source||'normal';
-  const ditEl=document.getElementById('inv-disc-type');
-  const divEl=document.getElementById('inv-disc-value');
   const ntEl=document.getElementById('inv-notes');
+  // Re-read freshAppts for custAppts (a is already updated via Object.assign above)
+  const custAppts=appts.filter(ap=>{
+   if(ap.appt_date!==a.appt_date) return false;
+   const dd=dogs.find(x=>x.id===ap.dog_id);
+   return dd?.customer_id===cid;
+  });
+  // Bug #1 fix: translate service_base ("Basic + Styling") → invoice service checkboxes
+  custAppts.forEach(ap=>{
+   const did=ap.dog_id;
+   if(!invDogServices[did]) invDogServices[did]={services:{}};
+   const dog=dogs.find(x=>x.id===did);
+   const svcBase=ap.service_base||'Basic Grooming';
+   const newSvcs={'Basic Grooming':{checked:true,price:priceFor('Basic Grooming',dog?.size)}};
+   if(svcBase.startsWith('Basic + ')){
+    const addon=svcBase.replace('Basic + ','').trim();
+    if(PRICING[addon]) newSvcs[addon]={checked:true,price:priceFor(addon,dog?.size)};
+   } else if(svcBase!=='Basic Grooming'&&svcBase!=='Wash only'&&PRICING[svcBase]){
+    newSvcs[svcBase]={checked:true,price:priceFor(svcBase,dog?.size)};
+   }
+   invDogServices[did].services=newSvcs;
+  });
+  // Bug #2 fix + session_source handling
   if(src==='subscription'){
-   if(ditEl) ditEl.value='percent';
-   if(divEl) divEl.value=100;
    if(ntEl&&!ntEl.value.trim()) ntEl.value='Sesi subscription — sudah dibayar via langganan';
+   // subscription coverage forces Basic Grooming → Rp 0 via getEffectiveCoverage (already handled in renderInvDogServices)
   } else if(src==='free'){
-   if(ditEl) ditEl.value='percent';
-   if(divEl) divEl.value=100;
+   // Per-dog 100% discount so isFree=true in buildInvoiceHTML (dogSubtotal===0)
+   custAppts.forEach(ap=>{
+    if(!invDogServices[ap.dog_id]) invDogServices[ap.dog_id]={services:{}};
+    invDogServices[ap.dog_id].disc_type='percent';
+    invDogServices[ap.dog_id].disc_value=100;
+   });
    if(ntEl&&!ntEl.value.trim()) ntEl.value='Sesi gratis (kompliment)';
   } else if(src==='advance'&&a.token_id){
    if(ntEl&&!ntEl.value.trim()) ntEl.value='Menggunakan token prepaid';
-  } else if(a.appt_disc_type&&(a.appt_disc_value||0)>0&&invDogServices[a.dog_id]){
+  } else if(a.appt_disc_type&&(a.appt_disc_value||0)>0){
+   if(!invDogServices[a.dog_id]) invDogServices[a.dog_id]={services:{}};
    invDogServices[a.dog_id].disc_type=a.appt_disc_type;
    invDogServices[a.dog_id].disc_value=a.appt_disc_value||0;
   }
   renderInvDogServices();
   recalcInvoice();
   // Auto-populate invoice photos from groomer-uploaded appointment photos
-  const custAppts=appts.filter(ap=>{
-   if(ap.appt_date!==a.appt_date) return false;
-   const dd=dogs.find(x=>x.id===ap.dog_id);
-   return dd?.customer_id===cid;
-  });
   custAppts.forEach(ap=>{
    const p=ap.photos||{};
    if(!Object.keys(p).length) return;
@@ -7493,7 +7512,7 @@ async function loadInvFromAppointment(apptId){
    });
   });
   renderInvoicePreview();
- })));
+ }))));
 }
 
 /* ========== BATCH H — AUTH GATE ========== */
