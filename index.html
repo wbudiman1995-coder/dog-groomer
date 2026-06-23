@@ -4665,7 +4665,7 @@ function renderInvDogServices(){
  return `<div class="card" style="padding:1rem;margin-bottom:1rem">
  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
  <div><strong>${esc(d.name)}</strong> <span style="font-size:11px;color:var(--muted)">${esc(d.dog_code||'')} \u00B7 ${esc(d.size||'?')}</span></div>
- <div style="display:flex;align-items:center;gap:5px;font-size:11px">
+ <div style="display:flex;align-items:center;gap:5px;font-size:11px;flex-wrap:wrap">
   <span style="color:var(--muted)">Diskon anjing ini:</span>
   <select style="padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px" onchange="onDogDiscType('${did}',this.value)">
    <option value="">-</option>
@@ -4673,6 +4673,10 @@ function renderInvDogServices(){
    <option value="fixed" ${ds.disc_type==='fixed'?'selected':''}>Rp</option>
   </select>
   <input type="number" value="${ds.disc_value||0}" min="0" style="width:65px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px" onchange="onDogDiscValue('${did}',this.value)"/>
+  <label style="display:flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;color:var(--muted)">
+   <input type="checkbox" ${ds.disc_base_only?'checked':''} onchange="onDogDiscBaseOnly('${did}',this.checked)" style="cursor:pointer"/>
+   Basic only
+  </label>
  </div>
  </div>
  ${coverageBanner}
@@ -4846,6 +4850,11 @@ function onDogDiscType(did,val){
 function onDogDiscValue(did,val){
  if(!invDogServices[did]) invDogServices[did]={services:{}};
  invDogServices[did].disc_value=parseFloat(val)||0;
+ recalcInvoice();
+}
+function onDogDiscBaseOnly(did,checked){
+ if(!invDogServices[did]) invDogServices[did]={services:{}};
+ invDogServices[did].disc_base_only=!!checked;
  recalcInvoice();
 }
 function onIntervalChange(){
@@ -5065,7 +5074,8 @@ function calcInvoiceTotals(){
   perSession+=dogTotal;
   perSessionBaseOnly+=dogBaseOnly;
   const dt=ds.disc_type, dv=ds.disc_value||0;
-  if(dt==='percent') dogDiscAmount+=Math.round(dogTotal*dv/100);
+  const discBase=ds.disc_base_only?dogBaseOnly:dogTotal;
+  if(dt==='percent') dogDiscAmount+=Math.round(discBase*dv/100);
   else if(dt==='fixed') dogDiscAmount+=Math.round(dv);
  });
  const sessions=1; // base invoice is always 1 session; advance is separate
@@ -5127,7 +5137,7 @@ function buildInvoiceRecord(){
    .map(([name,s])=>({name,price:s.price||0}));
   const ad=invAdvanceDogs[did]||null;
   return {dog_id:did, dog_code:d?.dog_code, name:d?.name, breed:d?.breed, size:d?.size, services,
-   disc_type:ds.disc_type||null, disc_value:ds.disc_value||0,
+   disc_type:ds.disc_type||null, disc_value:ds.disc_value||0, disc_base_only:!!ds.disc_base_only,
    groomer_notes:invDogNotes[did]||'',
    advance:ad&&isAdvanceActive()?{
     sessions:ad.sessions,service_type:ad.service_type,
@@ -5375,7 +5385,9 @@ function buildServiceRows(dogsData,counter){
  dogsData.forEach(d=>{
   const dogSubtotal=d.services.reduce((a,s)=>a+s.price,0);
   let dogDisc=0;
-  if(d.disc_type==='percent') dogDisc=Math.round(dogSubtotal*(d.disc_value||0)/100);
+  const dogBase=d.services.filter(s=>s.name==='Basic Grooming').reduce((a,s)=>a+s.price,0);
+  const discBase=d.disc_base_only?dogBase:dogSubtotal;
+  if(d.disc_type==='percent') dogDisc=Math.round(discBase*(d.disc_value||0)/100);
   else if(d.disc_type==='fixed') dogDisc=Math.round(d.disc_value||0);
   const isFree=dogSubtotal===0;
   if(!d.services||!d.services.length) return;
@@ -5447,8 +5459,8 @@ function buildServiceRows(dogsData,counter){
   }
   if(dogDisc>0){
    const discLabel=d.disc_type==='percent'&&d.disc_value
-    ? `Diskon ${d.disc_value}%`
-    : `Diskon`;
+    ? `Diskon ${d.disc_value}%${d.disc_base_only?' (Basic only)':''}`
+    : `Diskon${d.disc_base_only?' (Basic only)':''}`;
    rows+=`<tr class="svc-disc-row">
     <td></td>
     <td class="svc-disc-label">${discLabel}</td>
