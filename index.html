@@ -1247,7 +1247,7 @@ tbody tr:hover{background:var(--subtle)}
  <div class="fg"><label>Type / Breed</label><input id="df-breed" placeholder="Poodle"/></div>
  <div class="fg"><label>Age (tahun)</label><input type="number" id="df-age" placeholder="e.g. 3" min="0" step="0.5"/></div>
  <div class="fg"><label>Weight</label><input id="df-weight" placeholder="e.g. 8 kg"/></div>
- <div class="fg"><label>Size</label><select id="df-size"><option value="">Select…</option><option>XS</option><option>Small</option><option>Medium</option><option>Large</option><option>XL</option></select></div>
+ <div class="fg"><label>Size</label><select id="df-size"><option value="">Select…</option><option>XS</option><option>Small</option><option>Medium</option><option>Large</option><option>XL</option><option>Cat</option></select></div>
  <div class="fg"><label>Coat</label><select id="df-coat"><option value="">Select…</option><option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option></select></div>
  <div class="fg"><label>Coat color</label><input id="df-coat-color" placeholder="e.g. White, Black & white, Golden"/></div>
  <div class="fg full"><label>Preferences / notes</label><textarea id="df-prefs" placeholder="e.g. Anxious around clippers. Lion cut."></textarea></div>
@@ -2569,7 +2569,7 @@ function setCalView(v){
 let calDay=iso(new Date());
 
 /* ---- DURATION LOGIC ---- */
-const DUR_BASE={XS:60,Small:60,S:60,Medium:90,M:90,Large:120,L:120,XL:120};
+const DUR_BASE={XS:60,Small:60,S:60,Medium:90,M:90,Large:120,L:120,XL:120,Cat:60};
 const DUR_ADD={Styling:60,Botak:30,Dematting:30,Deshedding:30};
 const SVC_LIST=['Basic Grooming','Basic + Styling','Basic + Botak','Basic + Dematting','Basic + Deshedding','Basic + Whitening','Basic + Anti Kutu','Basic + Anti Fungal','Basic + Parfume','Wash only'];
 function dogDur(svc,size){
@@ -4382,15 +4382,15 @@ Request: "${input}"
 
 /* ============ INVOICE TAB ============ */
 const PRICING = {
- 'Basic Grooming': {XS:120000, S:140000, M:190000, L:250000, XL:290000},
- 'Styling': {XS:100000, S:100000, M:120000, L:140000, XL:160000},
- 'Botak': {XS:60000, S:60000, M:70000, L:80000, XL:90000},
- 'Dematting': {XS:50000, S:50000, M:50000, L:50000, XL:50000},
- 'Deshedding': {XS:50000, S:50000, M:50000, L:50000, XL:50000},
- 'Anti Fungal': {XS:50000, S:50000, M:55000, L:60000, XL:65000},
- 'Anti Kutu': {XS:25000, S:25000, M:30000, L:35000, XL:40000},
- 'Whitening': {XS:15000, S:15000, M:20000, L:25000, XL:30000},
- 'Parfume': {XS:0, S:0, M:0, L:0, XL:0}
+ 'Basic Grooming': {XS:120000, S:140000, M:190000, L:250000, XL:290000, Cat:120000},
+ 'Styling': {XS:100000, S:100000, M:120000, L:140000, XL:160000, Cat:100000},
+ 'Botak': {XS:60000, S:60000, M:70000, L:80000, XL:90000, Cat:60000},
+ 'Dematting': {XS:50000, S:50000, M:50000, L:50000, XL:50000, Cat:50000},
+ 'Deshedding': {XS:50000, S:50000, M:50000, L:50000, XL:50000, Cat:50000},
+ 'Anti Fungal': {XS:50000, S:50000, M:55000, L:60000, XL:65000, Cat:50000},
+ 'Anti Kutu': {XS:25000, S:25000, M:30000, L:35000, XL:40000, Cat:25000},
+ 'Whitening': {XS:15000, S:15000, M:20000, L:25000, XL:30000, Cat:15000},
+ 'Parfume': {XS:0, S:0, M:0, L:0, XL:0, Cat:0}
 };
 const SERVICE_LIST = Object.keys(PRICING);
 function fmtRp(n){return 'Rp '+(n||0).toLocaleString('id-ID')}
@@ -5086,7 +5086,7 @@ function updateSubsBillingDate(){
 /* ===== TOKEN / ADVANCE BOOKING ===== */
 let invAdvanceDogs={}; // did -> {sessions, service_type, disc_type, disc_value, price_per_session}
 
-function SIZE_RANK(s){return {XS:0,Small:1,S:1,Medium:2,M:2,Large:3,L:3,XL:4}[s]??2}
+function SIZE_RANK(s){return {XS:0,Small:1,S:1,Medium:2,M:2,Large:3,L:3,XL:4,Cat:0}[s]??2}
 
 function getCustomerTokens(custId){
  return tokens.filter(t=>t.customer_id===custId&&(t.sessions_total-t.sessions_used)>0);
