@@ -1172,6 +1172,16 @@ tbody tr:hover{background:var(--subtle)}
       </select>
       <button class="btn btn-d btn-sm" onclick="deleteOldData('visits')">Hapus</button>
      </div>
+     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:13px;min-width:160px">Foto grooming</span>
+      <select id="del-photo-months" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px">
+       <option value="3">Lebih dari 3 bulan lalu</option>
+       <option value="6" selected>Lebih dari 6 bulan lalu</option>
+       <option value="12">Lebih dari 12 bulan lalu</option>
+       <option value="24">Lebih dari 24 bulan lalu</option>
+      </select>
+      <button class="btn btn-d btn-sm" onclick="deleteOldPhotos()">Hapus</button>
+     </div>
     </div>
    </div>
   </div>
@@ -8001,7 +8011,6 @@ async function deleteOldData(table){
  const cutoffISO=iso(cutoff);
  const dateCol={appointments:'appt_date',audit_log:'created_at',visits:'visited_at'}[table];
  if(!dateCol){alert('Unknown table');return}
- // Count first
  const {count}=await db.from(table).select('*',{count:'exact',head:true}).lt(dateCol,cutoffISO);
  if(!count||count===0){alert(`Tidak ada data ${table} lebih dari ${months} bulan lalu.`);return}
  if(!confirm(`Hapus ${count} baris dari ${table} sebelum ${cutoffISO}?\n\nTidak bisa dipulihkan.`)) return;
@@ -8009,6 +8018,43 @@ async function deleteOldData(table){
  if(error){alert('Error: '+error.message);return}
  alert(`${count} baris dihapus dari ${table}.`);
  await loadAll();
+}
+
+async function deleteOldPhotos(){
+ const months=parseInt(document.getElementById('del-photo-months')?.value)||6;
+ const cutoff=new Date(); cutoff.setMonth(cutoff.getMonth()-months);
+ const cutoffISO=iso(cutoff);
+ // Find appointments older than cutoff that have photos
+ const oldAppts=appts.filter(a=>a.appt_date<cutoffISO&&a.photos&&Object.keys(a.photos).length>0);
+ if(!oldAppts.length){alert(`Tidak ada foto dari appointment lebih dari ${months} bulan lalu.`);return}
+ // Build file paths to delete
+ const paths=[];
+ const PHOTO_KEYS=['absency','before','after','ear_left','ear_right','dematting','fungal','injury','other'];
+ oldAppts.forEach(a=>{
+  const p=a.photos||{};
+  PHOTO_KEYS.forEach(k=>{
+   const val=p[k];
+   if(!val) return;
+   if(Array.isArray(val)) val.forEach((_,i)=>paths.push(`${a.id}/${k}_${i}.jpg`));
+   else paths.push(`${a.id}/${k}.jpg`);
+  });
+ });
+ if(!paths.length){alert('Tidak ada foto ditemukan untuk dihapus.');return}
+ if(!confirm(`Hapus ${paths.length} foto dari ${oldAppts.length} appointment sebelum ${cutoffISO}?\n\nTidak bisa dipulihkan.`)) return;
+ // Delete in batches of 100 (Supabase limit)
+ let deleted=0;
+ for(let i=0;i<paths.length;i+=100){
+  const batch=paths.slice(i,i+100);
+  await db.storage.from('grooming-photos').remove(batch);
+  deleted+=batch.length;
+ }
+ // Clear photos field on those appointments
+ for(const a of oldAppts){
+  await db.from('appointments').update({photos:{}}).eq('id',a.id);
+ }
+ alert(`${deleted} foto dihapus dari ${oldAppts.length} appointment.`);
+ await loadAll();
+ renderSettingsStorage();
 }
 
 /* ----- End settings tab ----- */
