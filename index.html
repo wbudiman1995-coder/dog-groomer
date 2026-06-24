@@ -610,7 +610,7 @@ tbody tr:hover{background:var(--subtle)}
  </div>
  <div class="subtabs">
  <button class="subtab active" id="stab-cust" onclick="swSub('cust')">Customers</button>
- <button class="subtab" id="stab-dogs" onclick="swSub('dogs')">Dogs</button>
+ <button class="subtab" id="stab-dogs" onclick="swSub('dogs')">Pets</button>
  <button class="subtab" id="stab-export" onclick="swSub('export')">Export</button>
  </div>
 
@@ -649,7 +649,7 @@ tbody tr:hover{background:var(--subtle)}
  </div>
  <div style="display:flex;gap:6px;flex-wrap:wrap">
  <button class="btn btn-g btn-sm" onclick="swSub('cust')">Back</button>
- <button class="btn btn-p btn-sm" onclick="openAddDog()">+ Add dog</button>
+ <button class="btn btn-p btn-sm" onclick="openAddDog()">+ Add pet</button>
  </div>
  </div>
  <div class="tbl-wrap" style="margin-top:.9rem">
@@ -673,7 +673,7 @@ tbody tr:hover{background:var(--subtle)}
      <span style="font-size:16px;margin-right:8px">&#128100;</span> Customers
     </button>
     <button class="btn btn-g" onclick="exportSheet('dogs')" style="font-size:12px;justify-content:flex-start;padding:10px 14px">
-     <span style="font-size:16px;margin-right:8px">&#128054;</span> Dogs
+     <span style="font-size:16px;margin-right:8px">&#128054;</span> Pets
     </button>
     <button class="btn btn-g" onclick="exportSheet('appointments')" style="font-size:12px;justify-content:flex-start;padding:10px 14px">
      <span style="font-size:16px;margin-right:8px">&#128197;</span> Appointments
@@ -1240,18 +1240,19 @@ tbody tr:hover{background:var(--subtle)}
 <div class="overlay" id="ov-dog">
  <div class="modal">
  <button class="modal-close" onclick="cm('ov-dog')" title="Close">&#x2715;</button>
- <div class="modal-title" id="dog-title">Add dog</div>
+ <div class="modal-title" id="dog-title">Add pet</div>
  <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">For customer: <strong id="dog-cust-lbl"></strong></div>
  <div class="form-grid">
- <div class="fg"><label>Dog name *</label><input id="df-name" placeholder="Buddy"/></div>
- <div class="fg"><label>Type / Breed</label><input id="df-breed" placeholder="Poodle"/></div>
- <div class="fg"><label>Age (tahun)</label><input type="number" id="df-age" placeholder="e.g. 3" min="0" step="0.5"/></div>
- <div class="fg"><label>Weight</label><input id="df-weight" placeholder="e.g. 8 kg"/></div>
- <div class="fg"><label>Size</label><select id="df-size"><option value="">Select…</option><option>XS</option><option>Small</option><option>Medium</option><option>Large</option><option>XL</option><option>Cat</option></select></div>
+ <div class="fg"><label>Jenis hewan *</label><select id="df-pet-type" onchange="onPetTypeChange()" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px"><option value="dog">Dog</option><option value="cat">Cat</option></select></div>
+ <div class="fg"><label>Nama *</label><input id="df-name" placeholder="Buddy"/></div>
+ <div class="fg"><label>Breed / Ras</label><input id="df-breed" placeholder="Poodle"/></div>
+ <div class="fg"><label>Umur (tahun)</label><input type="number" id="df-age" placeholder="e.g. 3" min="0" step="0.5"/></div>
+ <div class="fg"><label>Berat</label><input id="df-weight" placeholder="e.g. 8 kg"/></div>
+ <div class="fg" id="df-size-wrap"><label>Size</label><select id="df-size"><option value="">Select…</option><option>XS</option><option>Small</option><option>Medium</option><option>Large</option><option>XL</option><option>Cat</option></select></div>
  <div class="fg"><label>Coat</label><select id="df-coat"><option value="">Select…</option><option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option></select></div>
- <div class="fg"><label>Coat color</label><input id="df-coat-color" placeholder="e.g. White, Black & white, Golden"/></div>
- <div class="fg full"><label>Preferences / notes</label><textarea id="df-prefs" placeholder="e.g. Anxious around clippers. Lion cut."></textarea></div>
- <div class="fg full"><label>Skin condition history</label><textarea id="df-skin-history" placeholder="e.g. 12 May 2026 — flea behind ears, treated. 03 Apr — minor hot spot on belly." style="min-height:70px"></textarea></div>
+ <div class="fg"><label>Warna</label><input id="df-coat-color" placeholder="e.g. White, Black & white, Golden"/></div>
+ <div class="fg full"><label>Preferensi / catatan</label><textarea id="df-prefs" placeholder="e.g. Anxious around clippers. Lion cut."></textarea></div>
+ <div class="fg full"><label>Riwayat kulit</label><textarea id="df-skin-history" placeholder="e.g. 12 May 2026 — flea behind ears, treated." style="min-height:70px"></textarea></div>
  <div class="fg full">
   <label>Styling references <span style="font-size:10px;color:var(--muted);font-weight:400">(photos auto-expire 60 days, used in groomer reminders)</span></label>
   <div id="df-styling-refs-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;min-height:20px"></div>
@@ -1264,7 +1265,7 @@ tbody tr:hover{background:var(--subtle)}
  </div>
  <div id="df-edit-stamp"></div>
  <div class="form-actions">
- <button class="btn btn-p" onclick="saveDog()" id="dog-save-btn">Save dog</button>
+ <button class="btn btn-p" onclick="saveDog()" id="dog-save-btn">Save</button>
  </div>
  </div>
 </div>
@@ -2279,7 +2280,7 @@ function renderCusts(){
  <td><span class="badge bs">${dc} dog${dc!==1?'s':''}</span></td>
  <td>${gm?`<a class="maps-mini" href="${gm}" target="_blank">Open</a>`:'—'}</td>
  <td><div class="row-actions">
- <button class="icon-btn view" onclick="viewCustDogs('${c.id}')">Dogs</button>
+ <button class="icon-btn view" onclick="viewCustDogs('${c.id}')">Pets</button>
  <button class="icon-btn" onclick="openEditCust('${c.id}')">Edit</button>
  <button class="icon-btn del" onclick="delCust('${c.id}','${esc(c.owner).replace(/'/g,"\\'")}')">Del</button>
  </div></td>
@@ -2303,10 +2304,12 @@ function renderDogsTable(){
  document.getElementById('cb-meta').innerHTML=`<span class="id-pill">${esc(c.customer_code||'—')}</span> · ${esc(c.area)||'—'} · ${c.wa?esc(c.wa):'no WA'}`;
  const list=dogsOf(currentCustId);
  const tb=document.getElementById('dogs-body');
- if(!list.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--muted)">No dogs yet. Click "+ Add dog" above.</td></tr>';return}
- tb.innerHTML=list.map(d=>`<tr>
+ if(!list.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--muted)">No pets yet. Click "+ Add pet" above.</td></tr>';return}
+ tb.innerHTML=list.map(d=>{
+  const petBadge=d.pet_type==='cat'?'<span class="badge" style="background:#f3e8ff;color:#7c3aed;font-size:9px">CAT</span> ':'';
+  return `<tr>
  <td><span class="id-pill">${esc(d.dog_code||'—')}</span></td>
- <td><strong>${esc(d.name)}</strong></td>
+ <td><strong>${petBadge}${esc(d.name)}</strong></td>
  <td>${esc(d.breed)||'—'}</td>
  <td>${calcAge(d.age, d.created_at)||'—'}</td>
  <td>${esc(d.weight)||'—'}</td>
@@ -2316,7 +2319,7 @@ function renderDogsTable(){
  <button class="icon-btn" onclick="openEditDog('${d.id}')">Edit</button>
  <button class="icon-btn del" onclick="delDog('${d.id}','${esc(d.name).replace(/'/g,"\\'")}')">Del</button>
  </div></td>
- </tr>`).join('');
+ </tr>`;}).join('');
 }
 
 /* CUSTOMER MODAL */
@@ -2407,20 +2410,35 @@ function openAddDog(){
  renderStylingRefsGrid();
  const stampEl=document.getElementById('df-edit-stamp'); if(stampEl) stampEl.innerHTML='';
  const c=custs.find(x=>x.id===currentCustId);
- document.getElementById('dog-title').textContent='Add dog';
- document.getElementById('dog-save-btn').textContent='Save dog';
+ document.getElementById('dog-title').textContent='Add pet';
+ document.getElementById('dog-save-btn').textContent='Save';
  document.getElementById('dog-cust-lbl').textContent=c?c.owner:'—';
  ['df-name','df-breed','df-age','df-weight','df-prefs','df-coat-color','df-skin-history'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=''});
  document.getElementById('df-size').value='';
  document.getElementById('df-coat').value='';
+ const ptEl=document.getElementById('df-pet-type'); if(ptEl) ptEl.value='dog';
+ onPetTypeChange();
  om('ov-dog');
+}
+
+function onPetTypeChange(){
+ const type=document.getElementById('df-pet-type')?.value||'dog';
+ const sizeEl=document.getElementById('df-size');
+ if(type==='cat'){
+  if(sizeEl) sizeEl.value='Cat';
+  const sizeWrap=document.getElementById('df-size-wrap');
+  if(sizeWrap) sizeWrap.style.display='none';
+ } else {
+  const sizeWrap=document.getElementById('df-size-wrap');
+  if(sizeWrap) sizeWrap.style.display='';
+ }
 }
 
 function openEditDog(id){
  const d=dogs.find(x=>x.id===id); if(!d) return;
  dogEditId=id;
  const c=custs.find(x=>x.id===d.customer_id);
- document.getElementById('dog-title').textContent='Edit dog';
+ document.getElementById('dog-title').textContent='Edit pet';
  document.getElementById('dog-save-btn').textContent='Update';
  document.getElementById('dog-cust-lbl').textContent=c?c.owner:'—';
  document.getElementById('df-name').value=d.name||'';
@@ -2432,6 +2450,8 @@ function openEditDog(id){
  document.getElementById('df-coat-color').value=d.coat_color||'';
  document.getElementById('df-prefs').value=d.prefs||'';
  const sh=document.getElementById('df-skin-history'); if(sh) sh.value=d.skin_history||'';
+ const ptEl=document.getElementById('df-pet-type'); if(ptEl) ptEl.value=d.pet_type||'dog';
+ onPetTypeChange();
  _stylingRefsBuffer=Array.isArray(d.styling_refs)?[...d.styling_refs]:[];
  renderStylingRefsGrid();
  const stampEl=document.getElementById('df-edit-stamp'); if(stampEl) stampEl.innerHTML=editStampHTML(d)+renderAuditFooter('dog',id);
@@ -2440,9 +2460,11 @@ function openEditDog(id){
 
 async function saveDog(){
  const name=document.getElementById('df-name').value.trim();
- if(!name){alert('Dog name required.');return}
+ if(!name){alert('Pet name required.');return}
+ const petType=document.getElementById('df-pet-type')?.value||'dog';
  const p={
  name,
+ pet_type:petType,
  customer_id:currentCustId,
  breed:document.getElementById('df-breed').value.trim(),
  age:document.getElementById('df-age').value.trim(),
@@ -2460,7 +2482,6 @@ async function saveDog(){
   await db.from('dogs').update(p).eq('id',dogEditId);
   await logAudit('dog',dogEditId,'update',{old:oldRec,new:p,label:p.name});
  } else {
-  // Generate dog_code = CUST-XXX-D{N} based on existing dogs for this customer
   const cust=custs.find(x=>x.id===currentCustId);
   const existing=dogsOf(currentCustId);
   let maxN=0;
@@ -2472,15 +2493,15 @@ async function saveDog(){
   const {data:inserted}=await db.from('dogs').insert(p).select().single();
   if(inserted) await logAudit('dog',inserted.id,'create',{new:p,label:p.name});
  }
- cm('ov-dog'); await loadAll();
+ cm('ov-dog'); await loadAll(); renderDogsTable();
 }
 
 async function delDog(id,name){
- if(!confirm(`Delete dog "${name}"? Cannot be undone.`)) return;
+ if(!confirm(`Delete "${name}"? Cannot be undone.`)) return;
  const oldRec=dogs.find(d=>d.id===id);
  await db.from('dogs').delete().eq('id',id);
  await logAudit('dog',id,'delete',{old:oldRec,label:name});
- await loadAll();
+ await loadAll(); renderDogsTable();
 }
 
 async function addVisit(dogId){
