@@ -3215,51 +3215,69 @@ function onWizCustChange(){
  } else {info.style.display='none'}
 }
 
+function parseSvcBase(svcStr){
+ if(!svcStr) return ['Basic Grooming'];
+ if(svcStr.includes(',')) return svcStr.split(',').map(s=>s.trim()).filter(s=>PRICING[s]||s==='Basic Grooming');
+ if(svcStr.startsWith('Basic + ')){const a=svcStr.replace('Basic + ','').trim();return ['Basic Grooming',...(PRICING[a]?[a]:[])]}
+ return PRICING[svcStr]?[svcStr]:['Basic Grooming'];
+}
+
 function renderWizDogs(){
  const wrap=document.getElementById('wiz-dog-list');
  const cdogs=dogs.filter(d=>d.customer_id===wiz.custId);
- if(!cdogs.length){wrap.innerHTML='<div style="color:var(--muted);font-size:12px">No dogs for this customer.</div>';return}
+ if(!cdogs.length){wrap.innerHTML='<div style="color:var(--muted);font-size:12px">No pets for this customer.</div>';return}
  wrap.innerHTML=cdogs.map(d=>{
   const ds=wiz.dogSvcs.find(x=>x.did===d.id);
-  const sel=ds?.svc||'Basic Grooming';
-  // Batch O.6 — skin history + last groomed banner
+  const checkedSvcs=ds?.svcs||[];
   const lastG=d.last_groomed_at?`<div style="font-size:11px;color:${daysSince(d.last_groomed_at)>=14?'#dc2626':'var(--muted)'};margin-top:3px">Last groomed: ${fmtD(d.last_groomed_at)} (${daysSince(d.last_groomed_at)} hari lalu)</div>`:'<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:3px">Belum pernah grooming</div>';
   const skinHistory=d.skin_history?`<div style="font-size:11px;color:#92400e;background:#fef3c7;padding:6px 8px;border-radius:5px;margin-top:6px;border-left:3px solid #ca8a04"><strong>Catatan kondisi kulit:</strong><br>${esc(d.skin_history).replace(/\n/g,'<br>')}</div>`:'';
   const stylingCount=(d.styling_refs||[]).filter(r=>!isStyleRefExpired(r)).length;
   const stylingBadge=stylingCount?`<span style="font-size:10px;background:#dcfce7;color:#15803d;padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:600">${stylingCount} styling ref</span>`:'';
+  const svcBoxes=SERVICE_LIST.map(s=>`
+   <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:3px 0;min-height:28px">
+    <input type="checkbox" ${checkedSvcs.includes(s)?'checked':''} onchange="onWizSvcToggle('${d.id}','${s}',this.checked)" style="width:14px;height:14px"/>
+    ${esc(s)}
+   </label>`).join('');
   return `<div style="padding:10px;background:var(--subtle);border-radius:var(--r);margin-bottom:6px;border:2px solid ${ds?'var(--green-md)':'var(--border)'}">
    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:${ds?'8px':'0'}">
     <input type="checkbox" ${ds?'checked':''} onchange="onWizDogToggle('${d.id}',this.checked)" style="width:16px;height:16px"/>
     <div style="flex:1">
      <strong>${esc(d.name)}</strong>
-     <span style="font-size:11px;color:var(--muted);margin-left:5px">${esc(d.breed||'-')} \u00B7 ${esc(d.size||'?')}</span>
-     ${stylingBadge}
-     ${lastG}
+     <span style="font-size:11px;color:var(--muted);margin-left:5px">${esc(d.breed||'-')} · ${esc(d.size||'?')}</span>
+     ${stylingBadge}${lastG}
     </div>
    </label>
    ${skinHistory}
-   <div id="wiz-svc-${d.id}" style="display:${ds?'flex':'none'};gap:8px;align-items:center;margin-left:24px;margin-top:8px">
-    <select style="flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:var(--r);font-size:12px" onchange="onWizSvc('${d.id}',this.value)">
-     ${SVC_LIST.map(s=>`<option ${s===sel?'selected':''}>${s}</option>`).join('')}
-    </select>
-    <input type="number" id="wiz-dur-${d.id}" value="${dogDur(sel,d.size)}" min="15" step="15"
-     style="width:60px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center"
-     onchange="onWizDurChange('${d.id}',this.value)" title="Adjust duration"/>
-    <span style="font-size:10px;color:var(--muted)">min</span>
+   <div id="wiz-svc-${d.id}" style="display:${ds?'block':'none'};margin-left:24px;margin-top:8px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px;margin-bottom:8px">
+     ${svcBoxes}
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+     <span style="font-size:11px;color:var(--muted)">Durasi:</span>
+     <input type="number" id="wiz-dur-${d.id}" value="${ds?getWizDogDur(ds):60}" min="15" step="15"
+      style="width:60px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center"
+      onchange="onWizDurChange('${d.id}',this.value)" title="Adjust duration"/>
+     <span style="font-size:10px;color:var(--muted)">min</span>
+    </div>
    </div>
   </div>`;
  }).join('');
 }
 
 function onWizDogToggle(did,on){
- if(on){if(!wiz.dogSvcs.find(x=>x.did===did))wiz.dogSvcs.push({did,svc:'Basic Grooming',customDur:null})}
+ if(on){if(!wiz.dogSvcs.find(x=>x.did===did))wiz.dogSvcs.push({did,svc:'Basic Grooming',svcs:['Basic Grooming'],customDur:null})}
  else{wiz.dogSvcs=wiz.dogSvcs.filter(x=>x.did!==did)}
  renderWizDogs();
 }
-function onWizSvc(did,svc){
- const ds=wiz.dogSvcs.find(x=>x.did===did);if(ds){ds.svc=svc;ds.customDur=null;}
+function onWizSvcToggle(did,svc,checked){
+ const ds=wiz.dogSvcs.find(x=>x.did===did);if(!ds)return;
+ if(!Array.isArray(ds.svcs)) ds.svcs=parseSvcBase(ds.svc);
+ if(checked&&!ds.svcs.includes(svc)) ds.svcs.push(svc);
+ else if(!checked) ds.svcs=ds.svcs.filter(s=>s!==svc);
+ ds.svc=ds.svcs.length?ds.svcs.join(', '):'';
+ ds.customDur=null;
  const d=dogs.find(x=>x.id===did);
- const dur=dogDur(svc,d?.size);
+ const dur=dogDur(ds.svc,d?.size);
  const inp=document.getElementById('wiz-dur-'+did);
  if(inp)inp.value=dur;
  renderWizSlots();
@@ -3424,7 +3442,7 @@ function openAppt(dateISO,groomerId,startMins){
 function openApptEdit(id){
  const a=appts.find(x=>x.id===id);if(!a)return;
  const d=dogs.find(x=>x.id===a.dog_id);
- wiz={step:4,custId:d?.customer_id||null,dogSvcs:d?[{did:d.id,svc:a.service_base||'Basic Grooming',customDur:null}]:[],groomerId:a.groomer_id,date:a.appt_date,startMins:t2m(a.appt_time||'09:00'),editId:id,tokenId:a.token_id||null,isFree:a.session_source==='free',freeDogs:a.session_source==='free'&&d?new Set([d.id]):new Set()};
+ wiz={step:4,custId:d?.customer_id||null,dogSvcs:d?[{did:d.id,svc:a.service_base||'Basic Grooming',svcs:parseSvcBase(a.service_base),customDur:null}]:[],groomerId:a.groomer_id,date:a.appt_date,startMins:t2m(a.appt_time||'09:00'),editId:id,tokenId:a.token_id||null,isFree:a.session_source==='free',freeDogs:a.session_source==='free'&&d?new Set([d.id]):new Set()};
  document.getElementById('appt-title').textContent='Edit appointment';
  document.getElementById('appt-save-btn').textContent='Update';
  document.getElementById('appt-del-btn').style.display='inline-flex';
@@ -4783,15 +4801,11 @@ function toggleInvDog(id,el){
    const appt=invDate?appts.find(a=>a.dog_id===id&&a.appt_date===invDate):null;
    const svcBase=appt?.service_base||'Basic Grooming';
    const isFreeAppt=appt?.session_source==='free';
-   // Parse "Basic + Addon" → service entries
-   const basePrice=isFreeAppt?0:priceFor('Basic Grooming',d?.size);
-   const services={'Basic Grooming':{checked:true,price:basePrice}};
-   if(svcBase.startsWith('Basic + ')){
-    const addon=svcBase.replace('Basic + ','').trim();
-    if(PRICING[addon]) services[addon]={checked:true,price:isFreeAppt?0:priceFor(addon,d?.size)};
-   } else if(svcBase!=='Basic Grooming'&&svcBase!=='Wash only'&&PRICING[svcBase]){
-    services[svcBase]={checked:true,price:isFreeAppt?0:priceFor(svcBase,d?.size)};
-   }
+   // Parse service_base — handles comma-separated and legacy "Basic + X" format
+   const svcList=parseSvcBase(svcBase);
+   const services={};
+   svcList.forEach(s=>{services[s]={checked:true,price:isFreeAppt?0:priceFor(s,d?.size)};});
+   if(!Object.keys(services).length) services['Basic Grooming']={checked:true,price:isFreeAppt?0:priceFor('Basic Grooming',d?.size)};
    // Per-dog discount from appointment (only for non-free normal sessions)
    const discType=(!isFreeAppt&&appt?.appt_disc_type)||null;
    const discValue=(!isFreeAppt&&appt?.appt_disc_value)||0;
