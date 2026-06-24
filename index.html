@@ -4679,6 +4679,24 @@ function openInvoiceForEdit(id){
   renderInvDogServices();
   recalcInvoice();
   updateInvoiceModeBanner();
+  // Show admin notes from linked appointments (read-only reminder for admin)
+  const invDate=inv.invoice_date;
+  const dogIds=(inv.dogs||[]).map(d=>d.dog_id).filter(Boolean);
+  const adminNotes=[...new Set(
+   appts
+    .filter(a=>a.appt_date===invDate&&dogIds.includes(a.dog_id)&&a.admin_note)
+    .map(a=>a.admin_note)
+  )];
+  const anDisp=document.getElementById('inv-admin-note-display');
+  const anText=document.getElementById('inv-admin-note-text');
+  if(anDisp&&anText){
+   if(adminNotes.length){
+    anDisp.style.display='block';
+    anText.textContent=adminNotes.join(' · ');
+   } else {
+    anDisp.style.display='none';
+   }
+  }
  });
 }
 
