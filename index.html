@@ -1495,6 +1495,33 @@ tbody tr:hover{background:var(--subtle)}
  </div>
 </div>
 
+<!-- SUBSCRIPTION PAYMENT MODAL -->
+<div class="overlay" id="ov-subs-payment">
+ <div class="modal" style="max-width:400px">
+  <button class="modal-close" onclick="cm('ov-subs-payment')" title="Close">&#x2715;</button>
+  <div class="modal-title">Catat pembayaran subscription</div>
+  <input type="hidden" id="sp-cust-id"/>
+  <input type="hidden" id="sp-month-key"/>
+  <div class="form-grid">
+   <div class="fg">
+    <label>Tanggal bayar</label>
+    <input type="date" id="sp-date"/>
+   </div>
+   <div class="fg">
+    <label>Jumlah (Rp)</label>
+    <input type="number" id="sp-amount" min="0" placeholder="0"/>
+   </div>
+   <div class="fg full">
+    <label>Catatan</label>
+    <input id="sp-notes" placeholder="e.g. Transfer BCA, lunas"/>
+   </div>
+  </div>
+  <div class="form-actions">
+   <button class="btn btn-p" onclick="saveSubsPayment()">Simpan</button>
+  </div>
+ </div>
+</div>
+
 <!-- CAPITAL INJECTION MODAL -->
 <div class="overlay" id="ov-capital">
  <div class="modal" style="max-width:400px">
@@ -1573,6 +1600,7 @@ let auditEntries=[], groomerBlocks=[];
 // Batch O.15
 let complaints=[];
 let capitalInjections=[];
+let subsPayments=[];
 // Batch H — auth state
 let adminUsers=[], currentUser=null, currentAdminRow=null;
 // Batch J — payroll
@@ -2063,7 +2091,7 @@ function swSub(sub){
 }
 
 async function loadAll() {
- const [cr,dr,vr,ar,gr,ir,br,tr,sr,aur,psr,gpr,alr,gbr,cmr,cir] = await Promise.all([
+ const [cr,dr,vr,ar,gr,ir,br,tr,sr,aur,psr,gpr,alr,gbr,cmr,cir,spr] = await Promise.all([
  db.from('customers').select('*').order('created_at',{ascending:false}),
  db.from('dogs').select('*').order('created_at',{ascending:false}),
  db.from('visits').select('*,dogs(name,size)').order('visited_at',{ascending:false}),
@@ -2079,12 +2107,14 @@ async function loadAll() {
  db.from('audit_log').select('*').order('created_at',{ascending:false}).limit(500),
  db.from('groomer_blocks').select('*').order('block_date',{ascending:false}),
  db.from('complaints').select('*').order('complaint_date',{ascending:false}),
- db.from('capital_injections').select('*').order('injection_date',{ascending:false})
+ db.from('capital_injections').select('*').order('injection_date',{ascending:false}),
+ db.from('subscription_payments').select('*').order('payment_date',{ascending:false})
  ]);
  custs=cr.data||[]; dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[]; groomers=gr.data||[]; invoices=ir.data||[]; bankSettings=br.data||{}; tokens=tr.data||[]; subscriptions=sr.data||[]; adminUsers=aur.data||[];
  auditEntries=alr.data||[]; groomerBlocks=gbr.data||[];
  complaints=cmr.data||[];
  capitalInjections=cir.data||[];
+ subsPayments=spr.data||[];
  // Batch O.6 — admin email lookup cache for edit-history display
  window._adminEmails={};
  adminUsers.forEach(a=>{window._adminEmails[a.id]=a.email||a.name||'admin'});
@@ -2483,14 +2513,11 @@ function t2m(t){const[h,m]=(t||'09:00').split(':').map(Number);return h*60+m}
 function m2t(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}
 const SSTART=8*60+30,SEND=18*60,SSTEP=30,SH=44;
 
-function isBlocked(gid,date,start,dur,skipIds,custId){
+function isBlocked(gid,date,start,dur,skipIds){
  const skip=Array.isArray(skipIds)?skipIds:(skipIds?[skipIds]:[]);
  return appts.some(a=>{
   if(skip.includes(a.id)||a.appt_date!==date||a.groomer_id!==gid)return false;
-  if(a.status==='cancelled') return false; // cancelled doesn't block
-  // Same customer = same location, allow back-to-back
-  const ad=dogs.find(x=>x.id===a.dog_id);
-  if(custId && ad?.customer_id===custId) return false;
+  if(a.status==='cancelled') return false;
   const as=t2m(a.appt_time),ae=as+(a.duration_mins||60);
   return start<ae&&(start+dur)>as;
  });
@@ -2863,7 +2890,7 @@ function _showDropPreview(slotEl,nd,ng,nm){
  _dropPreviewEl.innerHTML=`<span style="font-size:9px;font-weight:700;color:#2563eb">${m2t(nm)} – ${m2t(endM)}</span>`;
  // Check overlap hint
  const aDog=dogs.find(d=>d.id===a.dog_id);
- const conflict=checkApptOverlap(a.id,nd,ng,nm,dur,aDog?.customer_id);
+ const conflict=checkApptOverlap(a.id,nd,ng,nm,dur);
  if(conflict){
   _dropPreviewEl.style.background='rgba(220,38,38,.1)';
   _dropPreviewEl.style.border='2px dashed #dc2626';
@@ -2886,7 +2913,7 @@ async function onDrop(e){
  if(a.appt_date===nd&&a.groomer_id===ng&&a.appt_time?.slice(0,5)===m2t(nm)) return;
  // Overlap check
  const aDog=dogs.find(d=>d.id===a.dog_id);
- const conflict=checkApptOverlap(a.id,nd,ng,nm,a.duration_mins,aDog?.customer_id);
+ const conflict=checkApptOverlap(a.id,nd,ng,nm,a.duration_mins);
  if(conflict){
   const otherDog=dogs.find(d=>d.id===conflict.dog_id);
   showToast(`Bentrok dengan ${otherDog?.name||'appointment lain'} jam ${conflict.appt_time?.slice(0,5)||''}`);
@@ -2945,7 +2972,7 @@ function onApptTouchStart(e,apptId){
     const newTime=m2t(nm)+':00';
     if(!(a.appt_date===nd&&a.groomer_id===ng&&a.appt_time?.slice(0,5)===m2t(nm))){
      const aDog=dogs.find(d=>d.id===a.dog_id);
-     const conflict=checkApptOverlap(a.id,nd,ng,nm,a.duration_mins,aDog?.customer_id);
+     const conflict=checkApptOverlap(a.id,nd,ng,nm,a.duration_mins);
      if(conflict){
       const otherDog=dogs.find(d=>d.id===conflict.dog_id);
       showToast(`Bentrok dengan ${otherDog?.name||'appt lain'} jam ${conflict.appt_time?.slice(0,5)||''}`);
@@ -2974,17 +3001,13 @@ function onApptTouchStart(e,apptId){
  document.addEventListener('touchcancel',cleanup);
 }
 // Batch O — overlap check helper (used by drag-drop, wizard, mass-move)
-function checkApptOverlap(apptId, newDate, newGroomerId, newStartMins, durationMins, custId){
+function checkApptOverlap(apptId, newDate, newGroomerId, newStartMins, durationMins){
  const newEnd = newStartMins + (durationMins||60);
  const conflict = appts.find(a=>{
   if(a.id===apptId) return false;
   if(a.appt_date!==newDate) return false;
   if(a.groomer_id!==newGroomerId) return false;
   if(a.status==='cancelled') return false;
-  if(custId){
-   const ad=dogs.find(x=>x.id===a.dog_id);
-   if(ad?.customer_id===custId) return false;
-  }
   const aStart=t2m(a.appt_time?.slice(0,5)||'00:00');
   const aEnd=aStart+(a.duration_mins||60);
   return newStartMins<aEnd&&newEnd>aStart;
@@ -3200,7 +3223,7 @@ function renderWizSlots(){
 
  const slots=[];for(let m=SSTART;m<SEND;m+=SSTEP)slots.push(m);
  wrap.innerHTML=slots.filter(m=>m+totalDur<=SEND).map(m=>{
-  const blocked=isBlocked(wiz.groomerId,wiz.date,m,totalDur,wiz.editId,wiz.custId);
+  const blocked=isBlocked(wiz.groomerId,wiz.date,m,totalDur,wiz.editId);
   const sel=m===wiz.startMins;
   return `<button class="slot-btn${sel?' sel':''}${blocked?' blocked':''}" ${blocked?'disabled':''} onclick="selectWizSlot(${m})">${m2t(m)}</button>`;
  }).join('');
@@ -3492,33 +3515,31 @@ async function saveAppt(){
   });
   cursor+=dur;
  });
- // Batch O.14 — final defensive overlap check before write
- // Each candidate insert needs to clear vs all OTHER appts (not in this batch + not self)
- const skipIds=wiz.editId?[wiz.editId]:[];
- for(const inc of inserts){
-  const startMins=t2m(inc.appt_time.slice(0,5));
-  const conflict=appts.find(a=>{
-   if(skipIds.includes(a.id)) return false;
-   if(a.appt_date!==inc.appt_date) return false;
-   if(a.groomer_id!==inc.groomer_id) return false;
-   if(a.status==='cancelled') return false;
-   // Same-customer back-to-back allowed
-   if(wiz.custId){
-    const ad=dogs.find(x=>x.id===a.dog_id);
-    if(ad?.customer_id===wiz.custId) return false;
+  // Each candidate insert needs to clear vs all OTHER appts (not in this batch + not self)
+  const skipIds=wiz.editId?[wiz.editId]:[];
+  // Also skip other dogs being inserted in same session (they are staggered sequentially by cursor)
+  const insertDogIds=inserts.map(x=>x.dog_id);
+  for(const inc of inserts){
+   const startMins=t2m(inc.appt_time.slice(0,5));
+   const conflict=appts.find(a=>{
+    if(skipIds.includes(a.id)) return false;
+    if(a.appt_date!==inc.appt_date) return false;
+    if(a.groomer_id!==inc.groomer_id) return false;
+    if(a.status==='cancelled') return false;
+    // Skip other dogs in THIS booking batch (they are sequentially staggered)
+    if(insertDogIds.includes(a.dog_id)&&a.id===wiz.editId) return false;
+    const aStart=t2m(a.appt_time?.slice(0,5)||'00:00');
+    const aEnd=aStart+(a.duration_mins||60);
+    const incEnd=startMins+(inc.duration_mins||60);
+    return startMins<aEnd&&incEnd>aStart;
+   });
+   if(conflict){
+    const otherDog=dogs.find(d=>d.id===conflict.dog_id);
+    const inDog=dogs.find(d=>d.id===inc.dog_id);
+    alert(`Slot bentrok!\n\n${inDog?.name||'?'} jam ${inc.appt_time.slice(0,5)} (${inc.duration_mins}m) overlap dengan ${otherDog?.name||'appt lain'} jam ${conflict.appt_time?.slice(0,5)||''} (${conflict.duration_mins||60}m).\n\nGanti slot waktu atau kurangi durasi service.`);
+    return;
    }
-   const aStart=t2m(a.appt_time?.slice(0,5)||'00:00');
-   const aEnd=aStart+(a.duration_mins||60);
-   const incEnd=startMins+(inc.duration_mins||60);
-   return startMins<aEnd&&incEnd>aStart;
-  });
-  if(conflict){
-   const otherDog=dogs.find(d=>d.id===conflict.dog_id);
-   const inDog=dogs.find(d=>d.id===inc.dog_id);
-   alert(`Slot bentrok!\n\n${inDog?.name||'?'} jam ${inc.appt_time.slice(0,5)} (${inc.duration_mins}m) overlap dengan ${otherDog?.name||'appt lain'} jam ${conflict.appt_time?.slice(0,5)||''} (${conflict.duration_mins||60}m).\n\nGanti slot waktu atau kurangi durasi service.`);
-   return;
   }
- }
  if(wiz.editId){
   const oldRec=appts.find(a=>a.id===wiz.editId);
   // Batch O.13 — merge performance tracking fields into the update
@@ -3546,10 +3567,18 @@ async function saveAppt(){
  } else {
   const {data:insertedAppts,error}=await db.from('appointments').insert(inserts).select();
   if(error){alert('Error: '+error.message);return}
-  // Log create for each inserted appt
   for(const a of (insertedAppts||[])){
    const dogName=dogs.find(d=>d.id===a.dog_id)?.name||'?';
    await logAudit('appointment',a.id,'create',{new:a,label:dogName+' '+a.appt_date});
+   // Deduct token immediately on booking
+   if(a.session_source==='advance'&&a.token_id&&!a.token_used){
+    const tok=tokens.find(t=>t.id===a.token_id);
+    if(tok){
+     const newUsed=Math.min(tok.sessions_total,(tok.sessions_used||0)+1);
+     await db.from('tokens').update({sessions_used:newUsed}).eq('id',a.token_id);
+     await db.from('appointments').update({token_used:true}).eq('id',a.id);
+    }
+   }
   }
  }
  calDay=wiz.date;
@@ -3569,11 +3598,20 @@ async function delAppt(id){
  await loadAll();renderCal();
 }
 
-// Batch O.10 — appt delete: check for linked visit + log audit
+// Batch O.10 — appt delete: check for linked visit + log audit + token refund
 async function deleteAppointmentWithVisitCheck(apptId){
  const oldAppt=appts.find(a=>a.id===apptId);
  if(!oldAppt) return;
  const dogName=dogs.find(d=>d.id===oldAppt.dog_id)?.name||'?';
+ // Auto-refund token if appointment used one
+ if(oldAppt.session_source==='advance'&&oldAppt.token_id&&oldAppt.token_used){
+  const tok=tokens.find(t=>t.id===oldAppt.token_id);
+  if(tok){
+   const newUsed=Math.max(0,(tok.sessions_used||0)-1);
+   await db.from('tokens').update({sessions_used:newUsed}).eq('id',oldAppt.token_id);
+   await db.from('appointments').update({token_used:false}).eq('id',apptId);
+  }
+ }
  // Check for linked visit (same dog + date)
  const linkedVisit=visits.find(v=>v.dog_id===oldAppt.dog_id&&v.visited_at===oldAppt.appt_date);
  if(linkedVisit){
@@ -4450,7 +4488,7 @@ function openInvoiceForEdit(id){
    if(chip&&!chip.classList.contains('on')){toggleInvDog(did,chip);}
    // Restore services
    if(d.services&&d.services.length){
-    invDogServices[did]={services:{},disc_type:d.disc_type||null,disc_value:d.disc_value||0};
+    invDogServices[did]={services:{},disc_type:d.disc_type||null,disc_value:d.disc_value||0,disc_base_only:!!d.disc_base_only};
     d.services.forEach(s=>{invDogServices[did].services[s.name]={checked:true,price:s.price||0};});
    }
    // Restore advance config
@@ -6069,6 +6107,7 @@ function renderMembership(){
    <td><span class="subs-badge ${stClass}">${esc((r.status||'').toUpperCase())}</span></td>
    <td style="font-size:11px;color:var(--muted)">${esc(r.source_invoice||'-')}</td>
    <td><div class="row-actions">
+    ${r._kind==='subscription'&&r.status==='active'?`<button class="icon-btn" onclick="openSubsPaymentModal('${r.customer_id}','${iso(new Date()).slice(0,7)}',${tierMonthlyPrice(r.type,dogs.find(d=>d.id===r.dog_id)?.size||'Medium')})">Bayar</button>`:''}
     <button class="icon-btn" onclick="openMembEdit('${r._kind}','${r.id}')">Edit</button>
     <button class="icon-btn del" onclick="delMemb('${r._kind}','${r.id}','${esc(owner).replace(/'/g,"\\'")}')">Del</button>
    </div></td>
@@ -7125,9 +7164,7 @@ async function autoLogPastAppointments(){
  const today=iso(new Date());
  if(_lastHistoryCheck===today)return;
  _lastHistoryCheck=today;
- const cutoff=new Date();cutoff.setDate(cutoff.getDate()-7);
- const cutoffIso=iso(cutoff);
- const pastAppts=appts.filter(a=>a.appt_date>=cutoffIso&&a.appt_date<today);
+ const pastAppts=appts.filter(a=>a.appt_date<today&&a.status!=='cancelled');
  if(!pastAppts.length)return;
  // Log visits
  const existingKeys=new Set(visits.map(v=>v.dog_id+'::'+v.visited_at));
@@ -7137,18 +7174,7 @@ async function autoLogPastAppointments(){
   const {error}=await db.from('visits').insert(rows);
   if(!error) console.log('Auto-logged '+rows.length+' past appts to history');
  }
- // Deduct tokens for appointments that used them
- const apptWithTokens=pastAppts.filter(a=>a.token_id&&!a.token_used);
- for(const a of apptWithTokens){
-  const tok=tokens.find(t=>t.id===a.token_id);
-  if(!tok) continue;
-  const newUsed=Math.min(tok.sessions_total,(tok.sessions_used||0)+1);
-  await db.from('tokens').update({sessions_used:newUsed}).eq('id',tok.id);
-  await db.from('appointments').update({token_used:true}).eq('id',a.id);
-  console.log(`Deducted 1 token from ${tok.id}, now ${newUsed}/${tok.sessions_total} used`);
- }
- // Batch O.12 — Deduct subscription sessions for past appts with session_source='subscription'
- // Backfill: scan ALL past subscription appts not yet deducted (not just last 7 days)
+ // Deduct subscription sessions for past appts (still deferred — subs billing is monthly)
  const subsAppts=appts.filter(a=>
   a.appt_date<today
   && a.session_source==='subscription'
@@ -7833,6 +7859,43 @@ async function deleteCapital(id){
  if(!confirm('Hapus injeksi ini?')) return;
  const {error}=await db.from('capital_injections').delete().eq('id',id);
  if(error){alert('Error: '+error.message);return}
+ await loadAll();
+}
+
+/* ----- Subscription payments ----- */
+let _spSubIds=[];
+
+function openSubsPaymentModal(custId,monthKey,defaultAmount){
+ document.getElementById('sp-cust-id').value=custId;
+ document.getElementById('sp-month-key').value=monthKey;
+ document.getElementById('sp-date').value=iso(new Date());
+ document.getElementById('sp-amount').value=defaultAmount||0;
+ document.getElementById('sp-notes').value='';
+ // Find active subscription IDs for this customer
+ _spSubIds=subscriptions.filter(s=>s.customer_id===custId&&s.status==='active').map(s=>s.id);
+ om('ov-subs-payment');
+}
+
+async function saveSubsPayment(){
+ const custId=document.getElementById('sp-cust-id').value;
+ const monthKey=document.getElementById('sp-month-key').value;
+ const amount=parseInt(document.getElementById('sp-amount').value)||0;
+ const dt=document.getElementById('sp-date').value;
+ const notes=document.getElementById('sp-notes').value.trim();
+ if(!amount||!dt){alert('Isi jumlah dan tanggal.');return}
+ if(!_spSubIds.length){alert('Tidak ada subscription aktif.');return}
+ // Insert one payment record per subscription
+ const rows=_spSubIds.map(sid=>({
+  subscription_id:sid,
+  customer_id:custId,
+  amount:Math.round(amount/_spSubIds.length),
+  payment_date:dt,
+  month_covered:monthKey,
+  notes:notes||null
+ }));
+ const {error}=await db.from('subscription_payments').insert(rows);
+ if(error){alert('Error: '+error.message);return}
+ cm('ov-subs-payment');
  await loadAll();
 }
 
@@ -8766,68 +8829,63 @@ function renderFollowups(){
 // Batch O.4 — Render subscription billing UI on dashboard
 function renderSubsBilling(){
  const el=document.getElementById('dash-subs-billing'); if(!el) return;
- // Find active subscriptions, group by customer
  const today=new Date();
  const todayISO=iso(today);
  const activeSubs=subscriptions.filter(s=>s.status==='active'&&(!s.expires_at||s.expires_at>=todayISO));
  if(!activeSubs.length){el.innerHTML='';return}
 
- // Group by customer
+ const monthStart=new Date(today.getFullYear(),today.getMonth(),1);
+ const monthEnd=new Date(today.getFullYear(),today.getMonth()+1,0);
+ const msISO=iso(monthStart),meISO=iso(monthEnd);
+ const monthName=monthStart.toLocaleDateString('id-ID',{month:'long',year:'numeric'});
+ const monthKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+
  const byCust={};
  activeSubs.forEach(s=>{
   if(!byCust[s.customer_id]) byCust[s.customer_id]={cust:custs.find(c=>c.id===s.customer_id),subs:[]};
   byCust[s.customer_id].subs.push(s);
  });
 
- // For each customer, check if a subscription-billing invoice already exists for THIS month
- const monthStart=new Date(today.getFullYear(),today.getMonth(),1);
- const monthEnd=new Date(today.getFullYear(),today.getMonth()+1,0);
- const msISO=iso(monthStart), meISO=iso(monthEnd);
- const monthName=monthStart.toLocaleDateString('id-ID',{month:'long',year:'numeric'});
-
  const rows=Object.values(byCust).filter(g=>g.cust).map(group=>{
   const c=group.cust;
   const subs=group.subs;
-  const billedThisMonth=invoices.some(i=>i.customer_id===c.id&&i.is_subscription_billing&&i.invoice_date>=msISO&&i.invoice_date<=meISO);
-  // Compute total amount: sum of (tier price × dog size) per subscription
   let totalAmount=0;
   const lineItems=subs.map(s=>{
    const dog=dogs.find(d=>d.id===s.dog_id);
-   const size=dog?.size||'Medium';
-   const amt=tierMonthlyPrice(s.type,size);
+   const amt=tierMonthlyPrice(s.type,dog?.size||'Medium');
    totalAmount+=amt;
-   return {dog,sub:s,size,amount:amt};
+   return {dog,sub:s,amount:amt};
   });
-
-  return {c,subs,lineItems,totalAmount,billedThisMonth};
+  const paidThisMonth=subsPayments.some(p=>
+   subs.some(s=>s.id===p.subscription_id)
+   &&p.month_covered===monthKey
+  );
+  return {c,subs,lineItems,totalAmount,paidThisMonth};
  });
 
- const pendingCount=rows.filter(r=>!r.billedThisMonth).length;
- if(!rows.length||(pendingCount===0&&!rows.some(r=>r.billedThisMonth))){el.innerHTML='';return}
+ const pendingCount=rows.filter(r=>!r.paidThisMonth).length;
+ if(!rows.length){el.innerHTML='';return}
 
  el.innerHTML=`<div class="card" style="padding:14px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
    <div>
-    <div style="font-size:13px;font-weight:600">Monthly subscription billing — ${esc(monthName)}</div>
-    <div style="font-size:11px;color:var(--muted)">${pendingCount} of ${rows.length} subscribers belum di-invoice bulan ini</div>
+    <div style="font-size:13px;font-weight:600">Subscription billing — ${esc(monthName)}</div>
+    <div style="font-size:11px;color:var(--muted)">${pendingCount} dari ${rows.length} subscriber belum bayar</div>
    </div>
   </div>
   <div style="display:flex;flex-direction:column;gap:8px">
    ${rows.map(r=>{
     const dogNames=r.lineItems.map(li=>li.dog?.name||'?').join(', ');
-    const tierSummary=r.lineItems.map(li=>`${tierLabel(li.sub.type)} × ${li.size}`).join(' + ');
-    const status=r.billedThisMonth
-     ? `<span class="badge bs">Sudah dibilling</span>`
-     : `<button class="btn btn-p btn-sm" onclick="createSubsBillingInvoice('${r.c.id}')">Buat invoice</button>`;
-    const _subsWaBase=normalizeWA(r.c.wa);
-    const waLink=_subsWaBase?`https://wa.me/${_subsWaBase}?text=${encodeURIComponent(buildSubsBillingMessage(r.c,r.lineItems,r.totalAmount,monthName))}`:null;
-    const waBtn=waLink?`<a class="btn btn-g btn-sm" href="${waLink}" target="_blank" style="margin-left:6px">WA</a>`:'';
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:${r.billedThisMonth?'#dcfce7':'#fef3c7'};border-radius:5px;flex-wrap:wrap;gap:8px">
+    const tierSummary=r.lineItems.map(li=>`${tierLabel(li.sub.type)}`).join(' + ');
+    const status=r.paidThisMonth
+     ?`<span class="badge bs">Sudah bayar</span>`
+     :`<button class="btn btn-p btn-sm" onclick="openSubsPaymentModal('${r.c.id}','${monthKey}',${r.totalAmount})">Catat bayar</button>`;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:${r.paidThisMonth?'#dcfce7':'#fef3c7'};border-radius:5px;flex-wrap:wrap;gap:8px">
      <div style="flex:1;min-width:0">
       <div style="font-weight:600;font-size:13px"><span class="c360-clickable" onclick="openCust360('${r.c.id}')">${esc(r.c.owner)}</span> <span style="font-size:11px;color:var(--muted);font-weight:400">${esc(r.c.customer_code||'')}</span></div>
       <div style="font-size:11px;color:var(--muted)">${esc(dogNames)} — ${esc(tierSummary)} — ${fmtRp(r.totalAmount)}</div>
      </div>
-     <div style="display:flex;gap:6px;align-items:center">${status}${waBtn}</div>
+     <div>${status}</div>
     </div>`;
    }).join('')}
   </div>
@@ -8842,8 +8900,9 @@ function buildSubsBillingMessage(cust,lineItems,totalAmount,monthName){
  }).join('\n');
  const today=new Date();
  const day=today.getDate();
- const dueLine=day<=5
-  ? `Jatuh tempo: 5 ${monthName.split(' ')[0]} (5 hari lagi atau sebelumnya)`
+ const dueDay=parseInt(document.getElementById('inv-subs-due-day')?.value)||5;
+ const dueLine=day<=dueDay
+  ? `Jatuh tempo: tanggal ${dueDay} bulan ini`
   : `Jatuh tempo: silakan WA balik untuk konfirmasi`;
  return `Halo kak ${firstName},
 
