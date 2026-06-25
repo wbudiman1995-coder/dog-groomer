@@ -3851,7 +3851,7 @@ async function saveAppt(){
   cursor+=dur;
  });
   // Each candidate insert needs to clear vs all OTHER appts (not in this batch + not self)
-  const skipIds=wiz.editId?[wiz.editId]:[];
+  const skipIds=wiz.editIds?.length>1?[...wiz.editIds]:(wiz.editId?[wiz.editId]:[]);
   // Also skip other dogs being inserted in same session (they are staggered sequentially by cursor)
   const insertDogIds=inserts.map(x=>x.dog_id);
   for(const inc of inserts){
