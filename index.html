@@ -2730,8 +2730,27 @@ function t2m(t){const[h,m]=(t||'09:00').split(':').map(Number);return h*60+m}
 function m2t(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}
 const SSTART=8*60+30,SEND=18*60,SSTEP=30,SH=44;
 
+function groupConsecutiveAppts(dayAppts){
+ const sorted=[...dayAppts].sort((a,b)=>t2m(a.appt_time||'09:00')-t2m(b.appt_time||'09:00'));
+ const groups=[];
+ sorted.forEach(a=>{
+  const dog=dogs.find(d=>d.id===a.dog_id);
+  const custId=dog?.customer_id;
+  if(custId&&groups.length){
+   const last=groups[groups.length-1];
+   const lastA=last[last.length-1];
+   const lastDog=dogs.find(d=>d.id===lastA.dog_id);
+   const lastEnd=t2m(lastA.appt_time||'09:00')+(lastA.duration_mins||60);
+   if(lastDog?.customer_id===custId&&t2m(a.appt_time||'09:00')<=lastEnd+15){
+    last.push(a);return;
+   }
+  }
+  groups.push([a]);
+ });
+ return groups;
+}
+
 function isBlocked(gid,date,start,dur,skipIds){
- const skip=Array.isArray(skipIds)?skipIds:(skipIds?[skipIds]:[]);
  return appts.some(a=>{
   if(skip.includes(a.id)||a.appt_date!==date||a.groomer_id!==gid)return false;
   if(a.status==='cancelled') return false;
@@ -2861,52 +2880,58 @@ function renderCal(){
      style="position:absolute;top:${top}px;height:${SH}px;width:100%;border-top:1px solid ${m%60?'transparent':'var(--border)'};box-sizing:border-box;cursor:pointer"
      onclick="openAppt('${w.iso_}','${g.id}',${m})"></div>`;
    });
-   // Appointments
+   // Appointments — group same-customer consecutive appts into merged blocks
    const dayAppts=appts.filter(a=>a.appt_date===w.iso_&&a.groomer_id===g.id);
-   dayAppts.forEach(a=>{
+   const groups=groupConsecutiveAppts(dayAppts);
+   groups.forEach(group=>{
+    const a=group[0]; // primary (or only) appointment
     const sm=t2m(a.appt_time||'09:00');
-    const dur=a.duration_mins||60;
+    const totalDur=group.reduce((s,x)=>s+(x.duration_mins||60),0);
     const top=Math.max(0,((sm-SSTART)/SSTEP)*SH);
-    const ht=Math.max((dur/SSTEP)*SH-2,22);
+    const ht=Math.max((totalDur/SSTEP)*SH-2,22);
     const col=a.status==='confirmed'?'#3b82f6':a.status==='done'?'#16a34a':(g.color||'#16a34a');
     const bg=a.status==='confirmed'?'#dbeafe':a.status==='done'?'#dcfce7':col+'1a';
     const textCol=a.status==='confirmed'?'#1e40af':a.status==='done'?'#15803d':col;
-    const d=dogs.find(x=>x.id===a.dog_id)||{};
-    const owner=d.customer_id?getOwnerName(d.customer_id):'';
-    const cust=d.customer_id?custs.find(x=>x.id===d.customer_id):null;
-    // Batch O.12 — show kecamatan + kota on desktop, kecamatan only on phone
-    // Two spans: .ab-loc-full (desktop) shows "Kembangan, Jakarta Barat"
-    //            .ab-loc-short (phone) shows "Kembangan"
-    const kec=cust?.kecamatan||'';
-    const kota=cust?.kota||cust?.area||'';
-    const locFull=[kec,kota].filter(Boolean).join(', ');
-    const locShort=kec||kota;
-    const statusDot=a.status==='confirmed'?'dot-confirmed':a.status==='done'?'dot-done':'dot-pending';
     const isMSel=massSelected.has(a.id);
-    // session_source coloring overrides default. Free shows on all statuses (admin marks manually);
-    // subs/advance only show when confirmed (system-derived from booking flow).
-    const showOverlay = a.session_source && a.session_source!=='normal' && (
-     a.session_source==='free' || a.status==='confirmed' || a.status==='done'
-    );
-    const srcClass = showOverlay ? ' src-'+a.session_source : '';
-    // Batch K + O.1: badge for session_source
-    const srcBadge = showOverlay
-     ? (a.session_source==='subscription'?'<span class="ab-badge ab-badge-S">S</span>'
-       :a.session_source==='advance'?'<span class="ab-badge ab-badge-A">A</span>'
-       :a.session_source==='free'?'<span class="ab-badge ab-badge-F">F</span>':'')
-     : '';
-    html+=`<div class="appt-block${isMSel?' mass-selected':''}${srcClass}"
-     draggable="true"
-     ondragstart="onDragStart(event,'${a.id}')" ondragend="onDragEnd(event)"
-     ontouchstart="onApptTouchStart(event,'${a.id}')"
-     onclick="event.stopPropagation();handleApptClick(event,'${a.id}')"
-     style="top:${top}px;height:${ht}px;background:${bg};border-left-color:${col};color:${textCol}">
-     <span class="ab-time"><span class="appt-status-dot ${statusDot}"></span>${m2t(sm)}${srcBadge}</span>
-     <span class="ab-name">${esc(a.dogs?.name||d.name||'?')}</span>
-     ${locFull?`<span class="ab-loc-full">${esc(locFull)}</span>`:''}
-     ${locShort?`<span class="ab-loc-short">${esc(locShort)}</span>`:''}
-     <span class="ab-svc">${esc(owner)}${a.service_base?' · '+esc(a.service_base.split(',')[0]):''}</span>
-    </div>`;
+    const showOverlay=a.session_source&&a.session_source!=='normal'&&(a.session_source==='free'||a.status==='confirmed'||a.status==='done');
+    const srcClass=showOverlay?' src-'+a.session_source:'';
+    const srcBadge=showOverlay?(a.session_source==='subscription'?'<span class="ab-badge ab-badge-S">S</span>':a.session_source==='advance'?'<span class="ab-badge ab-badge-A">A</span>':a.session_source==='free'?'<span class="ab-badge ab-badge-F">F</span>':''):'';
+    const statusDot=a.status==='confirmed'?'dot-confirmed':a.status==='done'?'dot-done':'dot-pending';
+    if(group.length>1){
+     // Merged multi-dog block
+     const firstDog=dogs.find(x=>x.id===a.dog_id)||{};
+     const cust=custs.find(x=>x.id===firstDog.customer_id)||{};
+     const dogNames=group.map(x=>dogs.find(d=>d.id===x.dog_id)?.name||'?').join(', ');
+     const borderStyle=`border-left:5px solid ${col}`;
+     html+=`<div class="appt-block${isMSel?' mass-selected':''}${srcClass}"
+      onclick="event.stopPropagation();handleApptClick(event,'${a.id}')"
+      style="top:${top}px;height:${ht}px;background:${bg};${borderStyle};color:${textCol};cursor:pointer">
+      <span class="ab-time"><span class="appt-status-dot ${statusDot}"></span>${m2t(sm)}${srcBadge}</span>
+      <span class="ab-name">${esc(cust.owner||'?')} <span style="font-weight:400;font-size:9px">${group.length} anjing</span></span>
+      <span class="ab-svc">${esc(dogNames)}</span>
+     </div>`;
+    } else {
+     // Single appointment block (original logic)
+     const d=dogs.find(x=>x.id===a.dog_id)||{};
+     const owner=d.customer_id?getOwnerName(d.customer_id):'';
+     const cust=d.customer_id?custs.find(x=>x.id===d.customer_id):null;
+     const kec=cust?.kecamatan||'';
+     const kota=cust?.kota||cust?.area||'';
+     const locFull=[kec,kota].filter(Boolean).join(', ');
+     const locShort=kec||kota;
+     html+=`<div class="appt-block${isMSel?' mass-selected':''}${srcClass}"
+      draggable="true"
+      ondragstart="onDragStart(event,'${a.id}')" ondragend="onDragEnd(event)"
+      ontouchstart="onApptTouchStart(event,'${a.id}')"
+      onclick="event.stopPropagation();handleApptClick(event,'${a.id}')"
+      style="top:${top}px;height:${ht}px;background:${bg};border-left-color:${col};color:${textCol}">
+      <span class="ab-time"><span class="appt-status-dot ${statusDot}"></span>${m2t(sm)}${srcBadge}</span>
+      <span class="ab-name">${esc(a.dogs?.name||d.name||'?')}</span>
+      ${locFull?`<span class="ab-loc-full">${esc(locFull)}</span>`:''}
+      ${locShort?`<span class="ab-loc-short">${esc(locShort)}</span>`:''}
+      <span class="ab-svc">${esc(owner)}${a.service_base?' · '+esc(a.service_base.split(',')[0]):''}</span>
+     </div>`;
+    }
    });
    html+=`</div>`;
   });
@@ -3917,14 +3942,24 @@ function swGroomer(sub){
  else if(sub==='attendance') renderAttendance();
 }
 
+let attendanceCycleAnchor=new Date();
+
 function renderAttendance(){
  const el=document.getElementById('attendance-content'); if(!el) return;
+ const cycle=getPayrollCycle(attendanceCycleAnchor);
  const twoMonthsAgo=new Date(); twoMonthsAgo.setMonth(twoMonthsAgo.getMonth()-2);
  const cutoff=iso(twoMonthsAgo);
- // Collect all appointments with absency photos in last 2 months
+ const todayISO=iso(new Date());
+ const lateRows=groomers.filter(g=>g.active).map(g=>{
+  const late=calcGroomerLateCountForCycle(g.id,cycle.start,cycle.end);
+  return `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;border-bottom:1px solid var(--border)">
+   <span style="display:flex;align-items:center;gap:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${g.color||'#16a34a'}"></span>${esc(g.name)}</span>
+   <span>${late>0?`<span class="badge bm">${late}x terlambat</span>`:'<span style="color:var(--muted);font-size:11px">Tepat waktu</span>'}</span>
+  </div>`;
+ }).join('');
  const items=[];
  appts.forEach(a=>{
-  if(a.appt_date<cutoff) return;
+  if(a.appt_date<cutoff||a.appt_date>todayISO) return;
   const absency=a.photos?.absency;
   if(!absency) return;
   const g=groomers.find(x=>x.id===a.groomer_id);
@@ -3933,14 +3968,24 @@ function renderAttendance(){
   const ts=typeof absency==='object'?absency.timestamp:null;
   const lat=typeof absency==='object'?absency.lat:null;
   const lng=typeof absency==='object'?absency.lng:null;
-  items.push({date:a.appt_date,time:a.appt_time,groomer:g?.name||'?',dog:d?.name||'?',url,ts,lat,lng,apptId:a.id});
+  items.push({date:a.appt_date,time:a.appt_time,groomer:g?.name||'?',dog:d?.name||'?',url,ts,lat,lng,apptId:a.id,isLate:a.absency_late});
  });
- if(!items.length){el.innerHTML='<div style="color:var(--muted);padding:1rem">Tidak ada foto absen dalam 2 bulan terakhir.</div>';return}
- // Group by date
  const byDate={};
  items.forEach(it=>{if(!byDate[it.date]) byDate[it.date]=[];byDate[it.date].push(it);});
  const sortedDates=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
- el.innerHTML=sortedDates.map(date=>{
+ el.innerHTML=`<div class="card" style="padding:12px 14px;margin-bottom:1rem">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+   <div style="font-size:13px;font-weight:600">Keterlambatan absen — ${cycle.start} s/d ${cycle.end}</div>
+   <div style="display:flex;gap:6px">
+    <button class="btn btn-g btn-sm" onclick="attendanceCycleAnchor.setDate(attendanceCycleAnchor.getDate()-30);renderAttendance()">‹ Sebelumnya</button>
+    <button class="btn btn-g btn-sm" onclick="attendanceCycleAnchor=new Date();renderAttendance()">Sekarang</button>
+    <button class="btn btn-g btn-sm" onclick="attendanceCycleAnchor.setDate(attendanceCycleAnchor.getDate()+30);renderAttendance()">Berikutnya ›</button>
+   </div>
+  </div>
+  ${lateRows||'<div style="color:var(--muted);font-size:12px">Tidak ada groomer aktif</div>'}
+ </div>
+ ${!sortedDates.length?'<div style=\'color:var(--muted);padding:1rem\'>Tidak ada foto absen dalam 2 bulan terakhir.</div>':
+ sortedDates.map(date=>{
   const dayItems=byDate[date].sort((a,b)=>(a.time||'').localeCompare(b.time||''));
   const dayLabel=new Date(date+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   return `<div style="margin-bottom:1.5rem">
@@ -3948,19 +3993,12 @@ function renderAttendance(){
    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
     ${dayItems.map(it=>{
      const uploadTime=it.ts?new Date(it.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):'—';
-     // Determine if this was a late upload
-     let isLate=false;
-     if(it.ts&&it.time){
-      const [ah,am]=it.time.split(':').map(Number);
-      const apptStart=new Date(it.date+'T'+String(ah).padStart(2,'0')+':'+String(am).padStart(2,'0')+':00');
-      isLate=new Date(it.ts).getTime()>apptStart.getTime()+5*60*1000;
-     }
+     let isLate=it.isLate;
+     if(!isLate&&it.ts&&it.time){const[ah,am]=it.time.split(':').map(Number);const apptStart=new Date(it.date+'T'+String(ah).padStart(2,'0')+':'+String(am).padStart(2,'0')+':00');isLate=new Date(it.ts).getTime()>apptStart.getTime()+5*60*1000;}
      const lateBadge=isLate?'<span style="font-size:10px;background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:4px;font-weight:600;margin-top:3px;display:inline-block">Terlambat</span>':'';
      const mapsLink=it.lat?`<a href="https://maps.google.com/?q=${it.lat},${it.lng}" target="_blank" style="font-size:11px;color:var(--primary)">Buka Maps</a>`:'<span style="font-size:11px;color:var(--muted)">Lokasi tidak tersedia</span>';
      return `<div class="card" style="padding:10px">
-      <a href="${esc(it.url)}" target="_blank">
-       <img src="${esc(it.url)}" style="width:100%;border-radius:6px;aspect-ratio:4/3;object-fit:cover;margin-bottom:8px"/>
-      </a>
+      <a href="${esc(it.url)}" target="_blank"><img src="${esc(it.url)}" style="width:100%;border-radius:6px;aspect-ratio:4/3;object-fit:cover;margin-bottom:8px"/></a>
       <div style="font-weight:600;font-size:13px">${esc(it.groomer)}</div>
       <div style="font-size:11px;color:var(--muted)">Jadwal: ${it.time?it.time.slice(0,5):'—'} · ${esc(it.dog)}</div>
       <div style="font-size:11px;margin-top:4px">Upload: <strong>${uploadTime}</strong> ${lateBadge}</div>
@@ -3969,7 +4007,27 @@ function renderAttendance(){
     }).join('')}
    </div>
   </div>`;
- }).join('');
+ }).join('')}`;
+}
+
+function calcGroomerLateCountForCycle(groomerId,cycleStart,cycleEnd){
+ const todayISO=iso(new Date());
+ const g=groomers.find(x=>x.id===groomerId);
+ const workingDays=(g?.working_days||'Mon,Tue,Wed,Thu,Fri,Sat').split(',');
+ const dayMap=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+ const cycleAppts=appts.filter(a=>a.groomer_id===groomerId&&a.appt_date>=cycleStart&&a.appt_date<=cycleEnd&&a.appt_date<todayISO&&a.status!=='cancelled');
+ const byDate={};
+ cycleAppts.forEach(a=>{if(!byDate[a.appt_date])byDate[a.appt_date]=[];byDate[a.appt_date].push(a);});
+ let late=0;
+ Object.entries(byDate).forEach(([date,dayAppts])=>{
+  const blocked=groomerBlocks.some(b=>b.block_date===date&&(!b.groomer_id||b.groomer_id===groomerId));
+  if(blocked) return;
+  const dow=dayMap[new Date(date+'T00:00:00').getDay()];
+  if(!workingDays.includes(dow)) return;
+  const first=dayAppts.sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''))[0];
+  if(first.absency_late||!first.photos?.absency) late++;
+ });
+ return late;
 }
 
 function calcGroomerLateCount(groomerId){
