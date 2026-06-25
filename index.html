@@ -629,13 +629,14 @@ tbody tr:hover{background:var(--subtle)}
  </div>
  <div class="tbl-wrap">
  <table><thead><tr>
- <th onclick="sortCusts('owner')" style="cursor:pointer;user-select:none">Owner <span id="csort-owner">↕</span></th>
- <th onclick="sortCusts('wa')" style="cursor:pointer;user-select:none">WhatsApp</th>
- <th onclick="sortCusts('area')" style="cursor:pointer;user-select:none">Area <span id="csort-area">↕</span></th>
+ <th onclick="sortCusts('code')" style="cursor:pointer;user-select:none">Code <span id="csort-code">↕</span></th>
+ <th onclick="sortCusts('owner')" style="cursor:pointer;user-select:none">Name <span id="csort-owner">↕</span></th>
+ <th>WhatsApp</th>
+ <th onclick="sortCusts('area')" style="cursor:pointer;user-select:none">Location <span id="csort-area">↕</span></th>
  <th onclick="sortCusts('source')" style="cursor:pointer;user-select:none">Source <span id="csort-source">↕</span></th>
  <th onclick="sortCusts('pets')" style="cursor:pointer;user-select:none">Pets <span id="csort-pets">↕</span></th>
  <th onclick="sortCusts('appts')" style="cursor:pointer;user-select:none">Appts <span id="csort-appts">↕</span></th>
- <th>Maps</th><th></th>
+ <th>Link</th><th></th>
  </tr></thead>
  <tbody id="cust-body"></tbody></table>
  </div>
@@ -2367,6 +2368,7 @@ function renderCusts(){
  }
  // Sort
  const getVal=(c,key)=>{
+  if(key==='code') return (c.customer_code||'').toLowerCase();
   if(key==='owner') return (c.owner||'').toLowerCase();
   if(key==='area') return (c.area||'').toLowerCase();
   if(key==='source') return (c.source||'').toLowerCase();
@@ -2376,7 +2378,7 @@ function renderCusts(){
  };
  rows.sort((a,b)=>{const va=getVal(a,custSort.key),vb=getVal(b,custSort.key);return typeof va==='number'?(va-vb)*custSort.dir:(va>vb?1:-1)*custSort.dir;});
  // Update sort arrows
- ['owner','area','source','pets','appts'].forEach(k=>{const el=document.getElementById('csort-'+k);if(el)el.textContent=custSort.key===k?(custSort.dir===1?'↑':'↓'):'↕';});
+ ['code','owner','area','source','pets','appts'].forEach(k=>{const el=document.getElementById('csort-'+k);if(el)el.textContent=custSort.key===k?(custSort.dir===1?'↑':'↓'):'↕';});
  const tb=document.getElementById('cust-body');
  if(!rows.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">No customers yet. Click "+ Add customer" above.</td></tr>';return}
  const srcLabel={ads:'Ads',free_session:'Free session',organic:'Organic',family:'Family',friend:'Friend'};
