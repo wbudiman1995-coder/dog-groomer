@@ -2904,9 +2904,9 @@ function renderCal(){
      const firstDog=dogs.find(x=>x.id===a.dog_id)||{};
      const cust=custs.find(x=>x.id===firstDog.customer_id)||{};
      const dogNames=group.map(x=>dogs.find(d=>d.id===x.dog_id)?.name||'?').join(', ');
-     const borderStyle=`border-left:5px solid ${col}`;
+     const groupIds=group.map(x=>`'${x.id}'`).join(',');
      html+=`<div class="appt-block${isMSel?' mass-selected':''}${srcClass}"
-      onclick="event.stopPropagation();handleApptClick(event,'${a.id}')"
+      onclick="event.stopPropagation();openGroupEdit([${groupIds}])"
       style="top:${top}px;height:${ht}px;background:${bg};${borderStyle};color:${textCol};cursor:pointer">
       <span class="ab-time"><span class="appt-status-dot ${statusDot}"></span>${m2t(sm)}${srcBadge}</span>
       <span class="ab-name">${esc(cust.owner||'?')} <span style="font-weight:400;font-size:9px">${group.length} anjing</span></span>
@@ -3703,6 +3703,32 @@ function openApptEdit(id){
 }
 
 // Batch M2 — one-click invoice from appointment modal
+function openGroupEdit(ids){
+ const apptList=ids.map(id=>appts.find(a=>a.id===id)).filter(Boolean);
+ if(!apptList.length) return;
+ const firstA=apptList[0];
+ const firstDog=dogs.find(d=>d.id===firstA.dog_id);
+ const dogSvcs=apptList.map(a=>{
+  const d=dogs.find(x=>x.id===a.dog_id)||{};
+  return {did:a.dog_id,svc:a.service_base||'Basic Grooming',svcs:parseSvcBase(a.service_base),
+   customDur:a.duration_mins||null,note:a.appt_note||'',discType:a.appt_disc_type||'',discValue:a.appt_disc_value||0};
+ });
+ wiz={step:4,custId:firstDog?.customer_id||null,dogSvcs,groomerId:firstA.groomer_id,
+  date:firstA.appt_date,startMins:t2m(firstA.appt_time||'09:00'),
+  editId:firstA.id,editIds:ids,
+  tokenId:firstA.token_id||null,isFree:false,freeDogs:new Set()};
+ document.getElementById('appt-title').textContent=`Edit group (${ids.length} anjing)`;
+ document.getElementById('appt-save-btn').textContent='Update semua';
+ document.getElementById('appt-del-btn').style.display='none';
+ const confirmBtn=document.getElementById('appt-confirm-btn'); if(confirmBtn) confirmBtn.style.display='none';
+ const invBtn=document.getElementById('appt-invoice-btn'); if(invBtn) invBtn.style.display='none';
+ const cnElE=document.getElementById('appt-customer-note'); if(cnElE) cnElE.value=firstA.customer_note||'';
+ const anElE=document.getElementById('appt-admin-note'); if(anElE) anElE.value=firstA.admin_note||'';
+ om('ov-appt');
+ wizShow(4);
+ renderWizSummary();
+}
+
 function invoiceFromApptModal(){
  if(!wiz.editId) return;
  const a=appts.find(x=>x.id===wiz.editId); if(!a) return;
@@ -3870,9 +3896,27 @@ async function saveAppt(){
    perfFields.actual_duration_mins=isNaN(ad)?null:Math.max(0,ad);
   }
   const updatePayload={...inserts[0],...perfFields};
-  await db.from('appointments').update(updatePayload).eq('id',wiz.editId);
-  const dogName=dogs.find(d=>d.id===oldRec?.dog_id)?.name||'?';
-  await logAudit('appointment',wiz.editId,'update',{old:oldRec,new:updatePayload,label:dogName+' '+updatePayload.appt_date});
+  if(wiz.editIds?.length>1){
+   // Group edit: update each appointment with its per-dog data
+   for(let i=0;i<wiz.editIds.length;i++){
+    const eid=wiz.editIds[i];
+    const ds=wiz.dogSvcs[i];
+    if(!ds) continue;
+    const dogNote=document.getElementById('appt-note-'+ds.did)?.value.trim()||null;
+    const dogDiscType=document.getElementById('appt-disc-type-'+ds.did)?.value||null;
+    const dogDiscValue=parseFloat(document.getElementById('appt-disc-value-'+ds.did)?.value)||0;
+    await db.from('appointments').update({
+     service_base:ds.svc,duration_mins:getWizDogDur(ds),
+     appt_note:dogNote,appt_disc_type:dogDiscType||null,appt_disc_value:dogDiscValue,
+     customer_note:custNote,admin_note:adminNote,...editStamp()
+    }).eq('id',eid);
+    await logAudit('appointment',eid,'update',{label:(dogs.find(d=>d.id===ds.did)?.name||'?')+' '+wiz.date});
+   }
+  } else {
+   await db.from('appointments').update(updatePayload).eq('id',wiz.editId);
+   const dogName=dogs.find(d=>d.id===oldRec?.dog_id)?.name||'?';
+   await logAudit('appointment',wiz.editId,'update',{old:oldRec,new:updatePayload,label:dogName+' '+updatePayload.appt_date});
+  }
  } else {
   const {data:insertedAppts,error}=await db.from('appointments').insert(inserts).select();
   if(error){alert('Error: '+error.message);return}
