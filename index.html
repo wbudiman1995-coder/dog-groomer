@@ -629,7 +629,13 @@ tbody tr:hover{background:var(--subtle)}
  </div>
  <div class="tbl-wrap">
  <table><thead><tr>
- <th>ID</th><th>Owner</th><th>WhatsApp</th><th>Area</th><th>Source</th><th>Pets</th><th>Appts</th><th>Maps</th><th></th>
+ <th onclick="sortCusts('owner')" style="cursor:pointer;user-select:none">Owner <span id="csort-owner">↕</span></th>
+ <th onclick="sortCusts('wa')" style="cursor:pointer;user-select:none">WhatsApp</th>
+ <th onclick="sortCusts('area')" style="cursor:pointer;user-select:none">Area <span id="csort-area">↕</span></th>
+ <th onclick="sortCusts('source')" style="cursor:pointer;user-select:none">Source <span id="csort-source">↕</span></th>
+ <th onclick="sortCusts('pets')" style="cursor:pointer;user-select:none">Pets <span id="csort-pets">↕</span></th>
+ <th onclick="sortCusts('appts')" style="cursor:pointer;user-select:none">Appts <span id="csort-appts">↕</span></th>
+ <th>Maps</th><th></th>
  </tr></thead>
  <tbody id="cust-body"></tbody></table>
  </div>
@@ -654,7 +660,7 @@ tbody tr:hover{background:var(--subtle)}
  </div>
  <div class="tbl-wrap" style="margin-top:.9rem">
  <table><thead><tr>
- <th>Dog ID</th><th>Name</th><th>Breed</th><th>Age</th><th>Weight</th><th>Color</th><th>Preferences</th><th></th>
+ <th>Dog ID</th><th onclick="sortDogs('name')" style="cursor:pointer;user-select:none">Name <span id="dsort-name">↕</span></th><th>Breed</th><th onclick="sortDogs('age')" style="cursor:pointer;user-select:none">Age <span id="dsort-age">↕</span></th><th>Weight</th><th>Color</th><th>Preferences</th><th></th>
  </tr></thead>
  <tbody id="dogs-body"></tbody></table>
  </div>
@@ -876,6 +882,18 @@ tbody tr:hover{background:var(--subtle)}
    </div>
   </div>
   <div id="inv-subs-due-preview" style="display:none;font-size:12px;color:#15803d;padding:6px 10px;background:#dcfce7;border-radius:5px;margin-top:6px">Due date akan otomatis ditampilkan di PDF</div>
+ </div>
+
+ <div id="inv-subs-schedule-card" style="display:none" class="card">
+  <div style="padding:1rem;padding-bottom:0">
+   <div class="det-lbl" style="margin-bottom:6px">6c. Jadwal rutin di kalender</div>
+   <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Set jadwal berulang untuk subscription ini. Akan dibuat otomatis di kalender sesuai jumlah sesi.</div>
+  </div>
+  <div id="inv-subs-schedule-dogs" style="padding:0 1rem"></div>
+  <div style="padding:1rem;padding-top:8px;border-top:1px solid var(--border);margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+   <button class="btn btn-p btn-sm" onclick="createSubsScheduleAppointments()">Buat jadwal di kalender</button>
+   <span style="font-size:11px;color:var(--muted)">Groomer belum ditentukan — isi nanti via kalender</span>
+  </div>
  </div>
 
  <div class="card" style="padding:1rem;margin-bottom:1rem">
@@ -1742,7 +1760,8 @@ let dogs=[], visits=[], appts=[], custs=[], groomers=[], invoices=[], tokens=[],
 let auditEntries=[], groomerBlocks=[];
 // Batch O.15
 let complaints=[];
-let capitalInjections=[];
+let custSort={key:'owner',dir:1};
+let dogSort={key:'name',dir:1};
 let subsPayments=[];
 let expenses=[];
 // Batch H — auth state
@@ -2332,6 +2351,11 @@ function subsBadgeHTML(custId){
 }
 
 /* CUSTOMERS TABLE */
+function sortCusts(key){
+ if(custSort.key===key) custSort.dir*=-1; else {custSort.key=key;custSort.dir=1;}
+ renderCusts();
+}
+
 function renderCusts(){
  const s=(document.getElementById('cs')?.value||'').toLowerCase();
  const srcFilter=document.getElementById('cs-source')?.value||'';
@@ -2341,6 +2365,18 @@ function renderCusts(){
   if(srcFilter==='__none__') rows=rows.filter(c=>!c.source);
   else rows=rows.filter(c=>c.source===srcFilter);
  }
+ // Sort
+ const getVal=(c,key)=>{
+  if(key==='owner') return (c.owner||'').toLowerCase();
+  if(key==='area') return (c.area||'').toLowerCase();
+  if(key==='source') return (c.source||'').toLowerCase();
+  if(key==='pets') return dogsOf(c.id).length;
+  if(key==='appts') return appts.filter(a=>dogsOf(c.id).map(d=>d.id).includes(a.dog_id)).length;
+  return '';
+ };
+ rows.sort((a,b)=>{const va=getVal(a,custSort.key),vb=getVal(b,custSort.key);return typeof va==='number'?(va-vb)*custSort.dir:(va>vb?1:-1)*custSort.dir;});
+ // Update sort arrows
+ ['owner','area','source','pets','appts'].forEach(k=>{const el=document.getElementById('csort-'+k);if(el)el.textContent=custSort.key===k?(custSort.dir===1?'↑':'↓'):'↕';});
  const tb=document.getElementById('cust-body');
  if(!rows.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">No customers yet. Click "+ Add customer" above.</td></tr>';return}
  const srcLabel={ads:'Ads',free_session:'Free session',organic:'Organic',family:'Family',friend:'Friend'};
@@ -2374,6 +2410,11 @@ function viewCustDogs(id){
  swSub('dogs');
 }
 
+function sortDogs(key){
+ if(dogSort.key===key) dogSort.dir*=-1; else {dogSort.key=key;dogSort.dir=1;}
+ renderDogsTable();
+}
+
 function renderDogsTable(){
  const empty=document.getElementById('dogs-empty');
  const view=document.getElementById('dogs-view');
@@ -2383,7 +2424,12 @@ function renderDogsTable(){
  empty.style.display='none';view.style.display='block';
  document.getElementById('cb-name').textContent=c.owner;
  document.getElementById('cb-meta').innerHTML=`<span class="id-pill">${esc(c.customer_code||'—')}</span> · ${esc(c.area)||'—'} · ${c.wa?esc(c.wa):'no WA'}`;
- const list=dogsOf(currentCustId);
+ const list=dogsOf(currentCustId).slice().sort((a,b)=>{
+  const va=dogSort.key==='name'?(a.name||'').toLowerCase():(parseFloat(a.age)||0);
+  const vb=dogSort.key==='name'?(b.name||'').toLowerCase():(parseFloat(b.age)||0);
+  return typeof va==='number'?(va-vb)*dogSort.dir:(va>vb?1:va<vb?-1:0)*dogSort.dir;
+ });
+ ['name','age'].forEach(k=>{const el=document.getElementById('dsort-'+k);if(el)el.textContent=dogSort.key===k?(dogSort.dir===1?'↑':'↓'):'↕';});
  const tb=document.getElementById('dogs-body');
  if(!list.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--muted)">No pets yet. Click "+ Add pet" above.</td></tr>';return}
  tb.innerHTML=list.map(d=>{
@@ -4767,6 +4813,7 @@ function onInvSearchChange(val){
 
 function resetInvoice(){
  const bnr=document.getElementById('inv-admin-notes-banner'); if(bnr) bnr.style.display='none';
+ const sched=document.getElementById('inv-subs-schedule-card'); if(sched) sched.style.display='none';
  invSelectedCust=null; invSelectedDogs=[]; invDogServices={}; invDogNotes={}; invPhotos={}; invAdvanceDogs={}; invEditId=null;
  const g=id=>document.getElementById(id); // helper
  if(g('inv-customer-search')) g('inv-customer-search').value='';
@@ -5028,6 +5075,7 @@ function toggleInvDog(id,el){
  renderInvDogServices();
  if(isAdvanceActive()) renderAdvanceDogs();
  updateInvAdminNotesBanner();
+ renderSubsSchedulePicker();
 }
 
 function renderInvDogServices(){
@@ -5265,6 +5313,95 @@ function onIntervalChange(){
 function onSubsBillingToggle(){
  updateInvDueDate();
  renderInvoicePreview();
+ renderSubsSchedulePicker();
+}
+
+function renderSubsSchedulePicker(){
+ const card=document.getElementById('inv-subs-schedule-card');
+ const listEl=document.getElementById('inv-subs-schedule-dogs');
+ if(!card||!listEl) return;
+ const subsOn=document.getElementById('inv-subs-billing')?.checked;
+ if(!subsOn||!invSelectedDogs.length){card.style.display='none';return}
+ card.style.display='block';
+ const DAYS=['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
+ const DAY_VALS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+ listEl.innerHTML=invSelectedDogs.map(did=>{
+  const dog=dogs.find(d=>d.id===did);
+  const ds=invDogServices[did];
+  // Detect subs type from advance config or default
+  const subsType=ds?.advance?.subs_type||invSubsType||'monthly';
+  const freqLabel={weekly:'Setiap minggu',biweekly:'Setiap 2 minggu',monthly:'Setiap bulan'}[subsType]||'';
+  const sessions=ds?.advance?.sessions||{weekly:4,biweekly:2,monthly:1}[subsType]||4;
+  return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+   <div style="font-weight:600;font-size:13px;margin-bottom:8px">${esc(dog?.name||'?')} <span style="font-size:11px;color:var(--muted);font-weight:400">${esc(freqLabel)} · ${sessions} sesi</span></div>
+   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <div>
+     <label style="font-size:11px;color:var(--muted)">Hari</label><br>
+     <select id="sched-day-${did}" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px">
+      ${DAYS.map((d,i)=>`<option value="${DAY_VALS[i]}">${d}</option>`).join('')}
+     </select>
+    </div>
+    <div>
+     <label style="font-size:11px;color:var(--muted)">Jam</label><br>
+     <input type="time" id="sched-time-${did}" value="09:00" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
+    </div>
+    <div>
+     <label style="font-size:11px;color:var(--muted)">Mulai dari</label><br>
+     <input type="date" id="sched-start-${did}" value="${document.getElementById('inv-date')?.value||iso(new Date())}" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
+    </div>
+   </div>
+  </div>`;
+ }).join('');
+}
+
+async function createSubsScheduleAppointments(){
+ const toCreate=[];
+ const conflicts=[];
+ const DAY_VALS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+ for(const did of invSelectedDogs){
+  const dog=dogs.find(d=>d.id===did); if(!dog) continue;
+  const ds=invDogServices[did];
+  const subsType=ds?.advance?.subs_type||invSubsType||'monthly';
+  const sessions=ds?.advance?.sessions||{weekly:4,biweekly:2,monthly:1}[subsType]||4;
+  const freqDays={weekly:7,biweekly:14,monthly:30}[subsType]||7;
+
+  const dayName=document.getElementById('sched-day-'+did)?.value||'Monday';
+  const time=document.getElementById('sched-time-'+did)?.value||'09:00';
+  const startStr=document.getElementById('sched-start-'+did)?.value||iso(new Date());
+  const svcBase=Object.keys(ds?.services||{}).filter(s=>ds.services[s].checked).join(', ')||'Basic Grooming';
+  const dur=dogDur(svcBase,dog.size);
+
+  // Find first occurrence of dayName on or after startStr
+  let d=new Date(startStr+'T00:00:00');
+  const targetDay=DAY_VALS.indexOf(dayName);
+  while(d.getDay()!==targetDay) d.setDate(d.getDate()+1);
+
+  for(let i=0;i<sessions;i++){
+   const dateISO=iso(d);
+   // Check if dog already has appointment on this date
+   const existing=appts.find(a=>a.dog_id===did&&a.appt_date===dateISO&&a.status!=='cancelled');
+   if(existing){
+    conflicts.push({dogName:dog.name,date:dateISO,existingTime:existing.appt_time?.slice(0,5)||'?'});
+   } else {
+    toCreate.push({dog_id:did,customer_id:dog.customer_id,appt_date:dateISO,appt_time:time+':00',service_base:svcBase,duration_mins:dur,session_source:'subscription',status:'pending',token_used:false,subs_deducted:false});
+   }
+   d.setDate(d.getDate()+freqDays);
+  }
+ }
+
+ // Show conflict summary and confirm
+ if(conflicts.length){
+  const lines=conflicts.map(c=>`• ${c.dogName} — ${c.date} (ada appt jam ${c.existingTime})`).join('\n');
+  const proceed=confirm(`${conflicts.length} slot sudah ada appointment:\n\n${lines}\n\nSlot konflik akan dilewati.\nBuat ${toCreate.length} appointment baru?`);
+  if(!proceed) return;
+ }
+
+ if(!toCreate.length){alert('Tidak ada jadwal baru yang bisa dibuat (semua konflik).');return}
+ const {error}=await db.from('appointments').insert(toCreate);
+ if(error){alert('Error: '+error.message);return}
+ showToast(`${toCreate.length} jadwal berhasil dibuat di kalender!`,'success');
+ await loadAll();
 }
 
 // Batch O.9 — invoice date changed → auto-update due_date field per current rules
