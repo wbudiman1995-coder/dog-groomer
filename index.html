@@ -2743,7 +2743,7 @@ function groupConsecutiveAppts(dayAppts){
    const lastA=last[last.length-1];
    const lastDog=dogs.find(d=>d.id===lastA.dog_id);
    const lastEnd=t2m(lastA.appt_time||'09:00')+(lastA.duration_mins||60);
-   if(lastDog?.customer_id===custId&&t2m(a.appt_time||'09:00')<=lastEnd+15){
+   if(lastDog?.customer_id===custId&&t2m(a.appt_time||'09:00')<=lastEnd){
     last.push(a);return;
    }
   }
@@ -3599,7 +3599,8 @@ function openApptEdit(id){
  wiz={step:4,custId:d?.customer_id||null,dogSvcs:d?[{did:d.id,svc:a.service_base||'Basic Grooming',svcs:parseSvcBase(a.service_base),customDur:null}]:[],groomerId:a.groomer_id,date:a.appt_date,startMins:t2m(a.appt_time||'09:00'),editId:id,tokenId:a.token_id||null,isFree:a.session_source==='free',freeDogs:a.session_source==='free'&&d?new Set([d.id]):new Set()};
  document.getElementById('appt-title').textContent='Edit appointment';
  document.getElementById('appt-save-btn').textContent='Update';
- document.getElementById('appt-del-btn').style.display='inline-flex';
+ const delBtnSingle=document.getElementById('appt-del-btn');
+ if(delBtnSingle){delBtnSingle.style.display='inline-flex';delBtnSingle.textContent='Delete';}
  const compBtn=document.getElementById('appt-complaint-btn'); if(compBtn) compBtn.style.display='inline-flex';
  const confirmBtn=document.getElementById('appt-confirm-btn');
  if(confirmBtn){
@@ -3719,7 +3720,8 @@ function openGroupEdit(ids){
   tokenId:firstA.token_id||null,isFree:false,freeDogs:new Set()};
  document.getElementById('appt-title').textContent=`Edit group (${ids.length} anjing)`;
  document.getElementById('appt-save-btn').textContent='Update semua';
- document.getElementById('appt-del-btn').style.display='none';
+ const delBtn=document.getElementById('appt-del-btn');
+ if(delBtn){delBtn.style.display='inline-flex';delBtn.textContent='Hapus semua';}
  const confirmBtn=document.getElementById('appt-confirm-btn'); if(confirmBtn) confirmBtn.style.display='none';
  const invBtn=document.getElementById('appt-invoice-btn'); if(invBtn) invBtn.style.display='none';
  const cnElE=document.getElementById('appt-customer-note'); if(cnElE) cnElE.value=firstA.customer_note||'';
@@ -3940,8 +3942,14 @@ async function saveAppt(){
 
 async function delApptFromModal(){
  if(!wiz.editId)return;
- if(!confirm('Delete this appointment?'))return;
- await deleteAppointmentWithVisitCheck(wiz.editId);
+ const isGroup=wiz.editIds?.length>1;
+ const msg=isGroup?`Hapus semua ${wiz.editIds.length} appointment dalam group ini?`:'Delete this appointment?';
+ if(!confirm(msg))return;
+ if(isGroup){
+  for(const id of wiz.editIds) await deleteAppointmentWithVisitCheck(id);
+ } else {
+  await deleteAppointmentWithVisitCheck(wiz.editId);
+ }
  cm('ov-appt');await loadAll();renderCal();
 }
 
