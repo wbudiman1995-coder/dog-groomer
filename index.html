@@ -2907,7 +2907,7 @@ function renderCal(){
      const groupIds=group.map(x=>`'${x.id}'`).join(',');
      html+=`<div class="appt-block${isMSel?' mass-selected':''}${srcClass}"
       onclick="event.stopPropagation();openGroupEdit([${groupIds}])"
-      style="top:${top}px;height:${ht}px;background:${bg};${borderStyle};color:${textCol};cursor:pointer">
+      style="top:${top}px;height:${ht}px;background:${bg};border-left:5px solid ${col};color:${textCol};cursor:pointer">
       <span class="ab-time"><span class="appt-status-dot ${statusDot}"></span>${m2t(sm)}${srcBadge}</span>
       <span class="ab-name">${esc(cust.owner||'?')} <span style="font-weight:400;font-size:9px">${group.length} anjing</span></span>
       <span class="ab-svc">${esc(dogNames)}</span>
