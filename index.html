@@ -752,6 +752,10 @@ tbody tr:hover{background:var(--subtle)}
  <button class="btn btn-g btn-sm" onclick="resetInvoice()">Reset</button>
  </div>
  <div data-inv-mode-banner style="display:none;background:#fef3c7;border:1px solid #fde68a;color:#92400e;padding:8px 12px;border-radius:8px;margin-bottom:1rem;font-size:13px"></div>
+ <div id="inv-admin-notes-banner" style="display:none;background:#fef3c7;border-left:4px solid #f59e0b;padding:10px 14px;border-radius:6px;margin-bottom:1rem">
+  <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Catatan internal (admin only)</div>
+  <div id="inv-admin-notes-list" style="font-size:13px;color:#78350f;display:flex;flex-direction:column;gap:3px"></div>
+ </div>
 
  <div class="card" style="padding:1rem;margin-bottom:1rem">
  <div class="det-lbl">1. Pilih customer</div>
@@ -868,10 +872,6 @@ tbody tr:hover{background:var(--subtle)}
  <div class="card" style="padding:1rem;margin-bottom:1rem">
  <div class="det-lbl">7. Catatan</div>
  <textarea id="inv-notes" placeholder="Catatan invoice (opsional)" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle);min-height:60px;font-family:inherit"></textarea>
- <div id="inv-admin-note-display" style="display:none;margin-top:8px;padding:8px 10px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:4px;font-size:12px">
-  <span style="font-weight:600;font-size:10px;text-transform:uppercase;color:#92400e;letter-spacing:.5px">Catatan internal (admin only)</span>
-  <div id="inv-admin-note-text" style="margin-top:3px;color:#78350f"></div>
- </div>
  </div>
 
  <div class="sum-bar" id="inv-summary">Subtotal: Rp 0 · Total: Rp 0</div>
@@ -902,8 +902,20 @@ tbody tr:hover{background:var(--subtle)}
   <button class="subtab active" id="fstab-invoices" onclick="swFin('invoices')">Invoices</button>
   <button class="subtab" id="fstab-visits" onclick="swFin('visits')">Visits</button>
   <button class="subtab" id="fstab-payroll" onclick="swFin('payroll')">Payroll</button>
+  <button class="subtab" id="fstab-expenses" onclick="swFin('expenses')">Expenses</button>
   <button class="subtab" id="fstab-capital" onclick="swFin('capital')">Capital</button>
   <button class="subtab" id="fstab-bank" onclick="swFin('bank')">Bank</button>
+ </div>
+
+ <!-- Cash on hand — always visible -->
+ <div id="cash-on-hand-card" class="card" style="padding:.75rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+  <div>
+   <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Kas tersedia saat ini</div>
+   <div id="cash-on-hand-value" style="font-size:22px;font-weight:700;color:var(--green-dk)">Rp 0</div>
+  </div>
+  <div style="font-size:11px;color:var(--muted);text-align:right">
+   <div id="cash-breakdown" style="line-height:1.7"></div>
+  </div>
  </div>
 
  <div class="subsec active" id="fsec-invoices">
@@ -960,6 +972,19 @@ tbody tr:hover{background:var(--subtle)}
    </div>
   </div>
   <div id="payroll-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px"></div>
+ </div>
+
+ <div class="subsec" id="fsec-expenses">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+   <div style="font-size:13px;color:var(--muted)">Pengeluaran operasional</div>
+   <button class="btn btn-p btn-sm" onclick="openExpenseModal()">+ Tambah pengeluaran</button>
+  </div>
+  <div class="tbl-wrap">
+   <table><thead><tr>
+    <th>Tanggal</th><th>Item</th><th>Jumlah</th><th>Catatan</th><th></th>
+   </tr></thead>
+   <tbody id="expenses-body"></tbody></table>
+  </div>
  </div>
 
  <div class="subsec" id="fsec-capital">
@@ -1504,6 +1529,7 @@ tbody tr:hover{background:var(--subtle)}
  <div class="fg full"><label>Name *</label><input id="gf-name" placeholder="e.g. Pak Budi"/></div>
  <div class="fg"><label>Phone</label><input id="gf-phone" placeholder="08xxxxxxxxxx"/></div>
  <div class="fg"><label>Color</label><input type="color" id="gf-color" value="#16a34a" style="height:38px;padding:2px"/></div>
+ <div class="fg"><label>Gaji pokok (Rp/bulan)</label><input type="number" id="gf-basic-salary" value="0" min="0" placeholder="0"/></div>
  <div class="fg full"><label><input type="checkbox" id="gf-active" checked style="margin-right:6px;vertical-align:middle"/>Active (shows on calendar)</label></div>
  </div>
  <div class="form-actions">
@@ -1562,6 +1588,35 @@ tbody tr:hover{background:var(--subtle)}
  <div class="form-actions">
  <button class="btn btn-p" onclick="savePayrollSettings()">Save</button>
  </div>
+ </div>
+</div>
+
+<!-- EXPENSE MODAL -->
+<div class="overlay" id="ov-expense">
+ <div class="modal" style="max-width:400px">
+  <button class="modal-close" onclick="cm('ov-expense')" title="Close">&#x2715;</button>
+  <div class="modal-title">Tambah pengeluaran</div>
+  <div class="form-grid">
+   <div class="fg">
+    <label>Tanggal</label>
+    <input type="date" id="exp-date"/>
+   </div>
+   <div class="fg">
+    <label>Jumlah (Rp)</label>
+    <input type="number" id="exp-amount" min="0" placeholder="0"/>
+   </div>
+   <div class="fg full">
+    <label>Item / Deskripsi</label>
+    <input id="exp-item" placeholder="e.g. Shampoo botol besar, Gunting baru"/>
+   </div>
+   <div class="fg full">
+    <label>Catatan</label>
+    <input id="exp-notes" placeholder="Opsional"/>
+   </div>
+  </div>
+  <div class="form-actions">
+   <button class="btn btn-p" onclick="saveExpense()">Simpan</button>
+  </div>
  </div>
 </div>
 
@@ -1671,6 +1726,7 @@ let auditEntries=[], groomerBlocks=[];
 let complaints=[];
 let capitalInjections=[];
 let subsPayments=[];
+let expenses=[];
 // Batch H — auth state
 let adminUsers=[], currentUser=null, currentAdminRow=null;
 // Batch J — payroll
@@ -2140,6 +2196,7 @@ function sw(tab) {
   renderCal();
  }
  if(tab==='groomers') renderGroomers();
+ if(tab==='financial'){ swFin('invoices'); renderCashOnHand(); }
  if(tab==='invoice') initInvoiceTab();
  if(tab==='settings'){ swSettings('storage'); }
  if(tab==='reminders') initReminders();
@@ -2161,7 +2218,7 @@ function swSub(sub){
 }
 
 async function loadAll() {
- const [cr,dr,vr,ar,gr,ir,br,tr,sr,aur,psr,gpr,alr,gbr,cmr,cir,spr] = await Promise.all([
+ const [cr,dr,vr,ar,gr,ir,br,tr,sr,aur,psr,gpr,alr,gbr,cmr,cir,spr,expr] = await Promise.all([
  db.from('customers').select('*').order('created_at',{ascending:false}),
  db.from('dogs').select('*').order('created_at',{ascending:false}),
  db.from('visits').select('*,dogs(name,size)').order('visited_at',{ascending:false}),
@@ -2178,13 +2235,15 @@ async function loadAll() {
  db.from('groomer_blocks').select('*').order('block_date',{ascending:false}),
  db.from('complaints').select('*').order('complaint_date',{ascending:false}),
  db.from('capital_injections').select('*').order('injection_date',{ascending:false}),
- db.from('subscription_payments').select('*').order('payment_date',{ascending:false})
+ db.from('subscription_payments').select('*').order('payment_date',{ascending:false}),
+ db.from('expenses').select('*').order('expense_date',{ascending:false})
  ]);
  custs=cr.data||[]; dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[]; groomers=gr.data||[]; invoices=ir.data||[]; bankSettings=br.data||{}; tokens=tr.data||[]; subscriptions=sr.data||[]; adminUsers=aur.data||[];
  auditEntries=alr.data||[]; groomerBlocks=gbr.data||[];
  complaints=cmr.data||[];
  capitalInjections=cir.data||[];
  subsPayments=spr.data||[];
+ expenses=expr.data||[];
  // Batch O.6 — admin email lookup cache for edit-history display
  window._adminEmails={};
  adminUsers.forEach(a=>{window._adminEmails[a.id]=a.email||a.name||'admin'});
@@ -2218,6 +2277,7 @@ async function loadAll() {
   if(fsub==='invoices') renderFinancial();
   else if(fsub==='visits') renderVisits();
   else if(fsub==='payroll') renderPayroll();
+  else if(fsub==='expenses') renderExpenses();
   else if(fsub==='capital') renderCapital();
   else if(fsub==='bank') renderBankDisplay();
  }
@@ -4173,6 +4233,7 @@ function openAddGroomer(){
  document.getElementById('gf-phone').value='';
  document.getElementById('gf-color').value='#16a34a';
  document.getElementById('gf-active').checked=true;
+ const bsEl=document.getElementById('gf-basic-salary'); if(bsEl) bsEl.value=0;
  om('ov-groomer');
 }
 
@@ -4185,6 +4246,7 @@ function openEditGroomer(id){
  document.getElementById('gf-phone').value=g.phone||'';
  document.getElementById('gf-color').value=g.color||'#16a34a';
  document.getElementById('gf-active').checked=g.active!==false;
+ const bsEl=document.getElementById('gf-basic-salary'); if(bsEl) bsEl.value=g.basic_salary||0;
  om('ov-groomer');
 }
 
@@ -4195,11 +4257,11 @@ async function saveGroomer(){
  name,
  phone:document.getElementById('gf-phone').value.trim(),
  color:document.getElementById('gf-color').value,
- active:document.getElementById('gf-active').checked
+ active:document.getElementById('gf-active').checked,
+ basic_salary:parseInt(document.getElementById('gf-basic-salary')?.value)||0
  };
  if(groomerEditId){await db.from('groomers').update(p).eq('id',groomerEditId)}
  else{
-  // Batch O.7 — generate random access_token for new groomer
   p.access_token=Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,10);
   await db.from('groomers').insert(p);
  }
@@ -4575,6 +4637,7 @@ function onInvSearchChange(val){
 }
 
 function resetInvoice(){
+ const bnr=document.getElementById('inv-admin-notes-banner'); if(bnr) bnr.style.display='none';
  invSelectedCust=null; invSelectedDogs=[]; invDogServices={}; invDogNotes={}; invPhotos={}; invAdvanceDogs={}; invEditId=null;
  const g=id=>document.getElementById(id); // helper
  if(g('inv-customer-search')) g('inv-customer-search').value='';
@@ -4601,8 +4664,23 @@ function resetInvoice(){
  updateInvoiceModeBanner();
 }
 
-function updateInvoiceModeBanner(){
+function updateInvAdminNotesBanner(){
+ const banner=document.getElementById('inv-admin-notes-banner');
+ const list=document.getElementById('inv-admin-notes-list');
+ if(!banner||!list) return;
+ const invDate=document.getElementById('inv-date')?.value;
+ if(!invDate||!invSelectedDogs.length){banner.style.display='none';return}
+ const notes=[];
+ invSelectedDogs.forEach(did=>{
+  const a=appts.find(ap=>ap.dog_id===did&&ap.appt_date===invDate&&ap.admin_note);
+  if(a){const d=dogs.find(x=>x.id===did);notes.push({name:d?.name||'?',note:a.admin_note});}
+ });
+ if(!notes.length){banner.style.display='none';return}
+ banner.style.display='block';
+ list.innerHTML=notes.map(n=>`<div>• <strong>${esc(n.name)}:</strong> ${esc(n.note)}</div>`).join('');
+}
  // Best-effort banner showing whether we're editing or creating
+function updateInvoiceModeBanner(){
  const titleEl=document.querySelector('[data-inv-mode-banner]');
  if(!titleEl) return;
  if(invEditId){
@@ -4679,24 +4757,7 @@ function openInvoiceForEdit(id){
   renderInvDogServices();
   recalcInvoice();
   updateInvoiceModeBanner();
-  // Show admin notes from linked appointments (read-only reminder for admin)
-  const invDate=inv.invoice_date;
-  const dogIds=(inv.dogs||[]).map(d=>d.dog_id).filter(Boolean);
-  const adminNotes=[...new Set(
-   appts
-    .filter(a=>a.appt_date===invDate&&dogIds.includes(a.dog_id)&&a.admin_note)
-    .map(a=>a.admin_note)
-  )];
-  const anDisp=document.getElementById('inv-admin-note-display');
-  const anText=document.getElementById('inv-admin-note-text');
-  if(anDisp&&anText){
-   if(adminNotes.length){
-    anDisp.style.display='block';
-    anText.textContent=adminNotes.join(' · ');
-   } else {
-    anDisp.style.display='none';
-   }
-  }
+  updateInvAdminNotesBanner();
  });
 }
 
@@ -4837,6 +4898,7 @@ function toggleInvDog(id,el){
  }
  renderInvDogServices();
  if(isAdvanceActive()) renderAdvanceDogs();
+ updateInvAdminNotesBanner();
 }
 
 function renderInvDogServices(){
@@ -7669,14 +7731,9 @@ async function loadInvFromAppointment(apptId){
  const a=appts.find(x=>x.id===apptId);if(!a){alert('Appointment not found');return;}
  const d=dogs.find(x=>x.id===a.dog_id);if(!d){alert('Dog not found');return;}
  const cid=d.customer_id;if(!cid){alert('Customer not linked');return;}
- // Populate admin note display
+ // Show admin notes from linked appointments
  const adminNoteText=a.admin_note||'';
- const anDisp=document.getElementById('inv-admin-note-display');
- const anText=document.getElementById('inv-admin-note-text');
- if(anDisp&&anText){
-  anDisp.style.display=adminNoteText?'block':'none';
-  anText.textContent=adminNoteText;
- }
+ if(adminNoteText) updateInvAdminNotesBanner();
  // Re-fetch appointments for this date to get latest groomer photos
  const {data:freshAppts}=await db.from('appointments').select('*').eq('appt_date',a.appt_date);
  if(freshAppts) freshAppts.forEach(fa=>{
@@ -7962,6 +8019,7 @@ function swFin(sub){
  if(sub==='invoices') renderFinancial();
  else if(sub==='visits') renderVisits();
  else if(sub==='payroll') renderPayroll();
+ else if(sub==='expenses') renderExpenses();
  else if(sub==='capital') renderCapital();
  else if(sub==='bank') renderBankDisplay();
 }
@@ -8111,6 +8169,61 @@ async function deleteOldPhotos(){
 }
 
 /* ----- End settings tab ----- */
+/* ----- Expenses + Cash on Hand ----- */
+function renderCashOnHand(){
+ const totalIn=capitalInjections.reduce((s,r)=>s+(r.amount||0),0);
+ const totalExp=expenses.reduce((s,r)=>s+(r.amount||0),0);
+ const totalSalary=groomerPayouts.filter(p=>p.status==='paid').reduce((s,p)=>s+(p.amount||0)+(p.bonus||0),0);
+ const cash=totalIn-totalExp-totalSalary;
+ const el=document.getElementById('cash-on-hand-value');
+ const bd=document.getElementById('cash-breakdown');
+ if(el){el.textContent=fmtRp(cash);el.style.color=cash>=0?'var(--green-dk)':'#dc2626';}
+ if(bd) bd.innerHTML=`+ Injeksi modal: ${fmtRp(totalIn)}<br>− Pengeluaran: ${fmtRp(totalExp)}<br>− Gaji dibayar: ${fmtRp(totalSalary)}`;
+}
+
+function renderExpenses(){
+ renderCashOnHand();
+ const bodyEl=document.getElementById('expenses-body'); if(!bodyEl) return;
+ if(!expenses.length){
+  bodyEl.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">Belum ada pengeluaran.</td></tr>';
+  return;
+ }
+ bodyEl.innerHTML=expenses.map(r=>`<tr>
+  <td>${r.expense_date||'—'}</td>
+  <td style="font-weight:500">${esc(r.item||'—')}</td>
+  <td style="font-weight:600;color:#dc2626">−${fmtRp(r.amount||0)}</td>
+  <td style="color:var(--muted);font-size:12px">${esc(r.notes||'')}</td>
+  <td><button class="btn btn-d btn-sm" onclick="deleteExpense('${r.id}')">Hapus</button></td>
+ </tr>`).join('');
+}
+
+function openExpenseModal(){
+ document.getElementById('exp-date').value=iso(new Date());
+ document.getElementById('exp-amount').value='';
+ document.getElementById('exp-item').value='';
+ document.getElementById('exp-notes').value='';
+ om('ov-expense');
+}
+
+async function saveExpense(){
+ const item=document.getElementById('exp-item').value.trim();
+ const amount=parseInt(document.getElementById('exp-amount').value)||0;
+ const dt=document.getElementById('exp-date').value;
+ const notes=document.getElementById('exp-notes').value.trim();
+ if(!item||!amount||!dt){alert('Isi item, jumlah, dan tanggal.');return}
+ const {error}=await db.from('expenses').insert({item,amount,expense_date:dt,notes:notes||null});
+ if(error){alert('Error: '+error.message);return}
+ cm('ov-expense'); await loadAll(); renderExpenses();
+}
+
+async function deleteExpense(id){
+ if(!confirm('Hapus pengeluaran ini?')) return;
+ const {error}=await db.from('expenses').delete().eq('id',id);
+ if(error){alert('Error: '+error.message);return}
+ await loadAll(); renderExpenses();
+}
+
+/* ----- Capital injection tracker ----- */
 const CAPITAL_PEOPLE=['winston','xavier','henry'];
 const CAPITAL_COLORS={winston:'#6366f1',xavier:'#0ea5e9',henry:'#10b981'};
 
@@ -8328,8 +8441,14 @@ async function markGroomerPaid(groomerId,cycleStart,cycleEnd){
  const cycle={start:cycleStart,end:cycleEnd};
  const {sizes,total}=computeGroomerDogsInCycle(groomerId,cycle);
  const rate=payrollSettings.rate_per_dog||20000;
- const amount=total*rate;
- if(!confirm(`Mark ${g.name} as paid?\n\nCycle: ${cycleStart} to ${cycleEnd}\nDogs: ${total}\nIncentive: Rp ${amount.toLocaleString('id-ID')}\n\nIni mengunci angka untuk cycle ini.`)) return;
+ const incentive=total*rate;
+ const basicSalary=g.basic_salary||0;
+ const bonusStr=prompt(`Bonus untuk ${g.name} cycle ini? (Rp, kosongkan jika tidak ada)`,'0');
+ if(bonusStr===null) return;
+ const bonus=parseInt(bonusStr)||0;
+ const amount=incentive+bonus;
+ const totalIncBasic=basicSalary+amount;
+ if(!confirm(`Bayar ${g.name}?\n\nCycle: ${cycleStart} → ${cycleEnd}\nDogs: ${total} × Rp ${rate.toLocaleString('id-ID')} = Rp ${incentive.toLocaleString('id-ID')}\nBonus: Rp ${bonus.toLocaleString('id-ID')}\nGaji pokok: Rp ${basicSalary.toLocaleString('id-ID')}/bulan (dibayar terpisah)\n\nTotal incentive + bonus: Rp ${amount.toLocaleString('id-ID')}`)) return;
  const row={
   groomer_id:groomerId,
   cycle_start:cycleStart,
@@ -8337,10 +8456,10 @@ async function markGroomerPaid(groomerId,cycleStart,cycleEnd){
   dogs_counted:sizes,
   rate_used:rate,
   amount,
+  bonus,
   status:'paid',
   paid_at:new Date().toISOString()
  };
- // Upsert: if pending row already exists for this cycle, update; else insert
  const existing=groomerPayouts.find(p=>p.groomer_id===groomerId&&p.cycle_start===cycleStart);
  let resp;
  if(existing) resp=await db.from('groomer_payouts').update(row).eq('id',existing.id);
