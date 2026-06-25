@@ -523,10 +523,9 @@ function renderGroupedAppt(group, isFirstGroup, isToday){
     ${dog.prefs?`<div class="dog-prefs">${esc(dog.prefs)}</div>`:''}
     ${skinBlock}${stylingBlock}
    </div>
-   ${a.customer_note?`<div class="appt-note" style="background:#eff6ff;border-left-color:#3b82f6">Catatan customer: ${esc(a.customer_note)}</div>`:''}
-   ${note?`<div class="appt-note">Catatan admin: ${esc(note)}</div>`:''}
+   ${note?`<div class="appt-note">Catatan groomer: ${esc(note)}</div>`:''}
    <div style="margin-top:8px">
-    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Catatan groomer (sesi ini)</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Tambah catatan sesi</div>
     <textarea id="gnote-${a.id}" rows="2" placeholder="Tulis catatan tentang anjing ini..." style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;resize:vertical" oninput="saveGroomerNote('${a.id}',this.value)">${esc(note)}</textarea>
    </div>
    ${photosHTML}
@@ -620,10 +619,9 @@ function renderAppt(a, isFirst=false){
    ${skinBlock}
    ${stylingBlock}
   </div>
-  ${a.customer_note?`<div class="appt-note" style="background:#eff6ff;border-left-color:#3b82f6">Catatan customer: ${esc(a.customer_note)}</div>`:''}
-  ${note?`<div class="appt-note">Catatan admin: ${esc(note)}</div>`:''}
+  ${note?`<div class="appt-note">Catatan groomer: ${esc(note)}</div>`:''}
   <div style="margin-top:8px">
-   <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Catatan groomer (sesi ini)</div>
+   <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Tambah catatan sesi</div>
    <textarea id="gnote-${a.id}" rows="2" placeholder="Tulis catatan tentang anjing ini..." style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;resize:vertical" oninput="saveGroomerNote('${a.id}',this.value)">${esc(note)}</textarea>
   </div>
   ${renderPhotoGrid(a)}
