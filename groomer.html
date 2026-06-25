@@ -415,11 +415,34 @@ function renderActiveTab(){
   return;
  }
 
- content.innerHTML=renderToolChecklist(dates)+sections.map(({date,isToday,appts})=>{
+ // Compute global late banner (first group of today, first appt in that group)
+ const now=new Date();
+ const todayISO=now.toISOString().slice(0,10);
+ const todaySec=sections.find(s=>s.isToday);
+ let globalLateBanner='';
+ if(todaySec&&todaySec.appts.length){
+  const todayGroups=groupApptsByCustomer(todaySec.appts);
+  const firstAppt=todayGroups[0]?.[0];
+  if(firstAppt&&!firstAppt.photos?.absency){
+   const [ah,am]=(firstAppt.appt_time||'00:00').split(':').map(Number);
+   if(now.getHours()*60+now.getMinutes()>ah*60+am+5){
+    globalLateBanner=`<div id="late-banner" style="background:#dc2626;color:#fff;padding:12px 16px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:10px;border-radius:8px;margin-bottom:12px">
+     <span style="font-size:22px">&#9888;</span>
+     <div>
+      <div>Terlambat upload foto absen!</div>
+      <div style="font-size:11px;font-weight:400;opacity:.9">Harap upload foto kehadiran sekarang untuk jadwal jam ${String(ah).padStart(2,'0')}:${String(am).padStart(2,'0')}.</div>
+     </div>
+    </div>`;
+   }
+  }
+ }
+
+ content.innerHTML=globalLateBanner+renderToolChecklist(dates)+sections.map(({date,isToday,appts})=>{
   if(!appts.length) return '';
+  const groups=groupApptsByCustomer(appts);
   return `<div class="day-section">
    <div class="day-header ${isToday?'today':''}">${esc(fmtDateLong(date))}</div>
-   ${appts.map(renderAppt).join('')}
+   ${groups.map((group,gi)=>group.length>1?renderGroupedAppt(group,gi===0&&isToday,isToday):renderAppt(group[0],gi===0&&isToday)).join('')}
   </div>`;
  }).join('');
 }
@@ -430,7 +453,103 @@ function isStyleRefExpired(ref){
  return days>60;
 }
 
-function renderAppt(a){
+function groupApptsByCustomer(appts){
+ const sorted=[...appts].sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
+ const groups=[];
+ sorted.forEach(a=>{
+  const dog=dataCache.dogs.find(d=>d.id===a.dog_id);
+  const custId=dog?.customer_id;
+  if(custId&&groups.length){
+   const last=groups[groups.length-1];
+   const lastA=last[last.length-1];
+   const lastDog=dataCache.dogs.find(d=>d.id===lastA.dog_id);
+   const lastEndMin=parseInt((lastA.appt_time||'00:00').split(':')[0])*60+parseInt((lastA.appt_time||'00:00').split(':')[1])+(lastA.duration_mins||60);
+   const startMin=parseInt((a.appt_time||'00:00').split(':')[0])*60+parseInt((a.appt_time||'00:00').split(':')[1]);
+   if(lastDog?.customer_id===custId&&startMin<=lastEndMin+15){last.push(a);return;}
+  }
+  groups.push([a]);
+ });
+ return groups;
+}
+
+function renderGroupedAppt(group, isFirstGroup, isToday){
+ const firstA=group[0];
+ const cust=dataCache.custs.find(c=>{const d=dataCache.dogs.find(x=>x.id===firstA.dog_id);return c.id===d?.customer_id;})||{};
+ const firstDog=dataCache.dogs.find(d=>d.id===firstA.dog_id)||{};
+ const addrParts=[cust.address,cust.kecamatan,cust.kota].filter(Boolean);
+ const addrStr=addrParts.join(', ')||'(alamat tidak tersedia)';
+ const mapsLink=cust.gmaps_link||'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(addrParts.concat(['Jakarta']).join(', '));
+ const now=new Date();
+ const todayISO=now.toISOString().slice(0,10);
+ // Full time span
+ const startMin=parseInt((firstA.appt_time||'09:00').split(':')[0])*60+parseInt((firstA.appt_time||'09:00').split(':')[1]);
+ const totalDur=group.reduce((s,a)=>s+(a.duration_mins||60),0);
+ const endMin=startMin+totalDur;
+ const fmtM=m=>`${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+ const status=firstA.status||'pending';
+ // Late warning: check if first absency is missing
+ let lateWarning='';
+ if(isFirstGroup&&isToday&&!firstA.photos?.absency){
+  const [ah,am]=(firstA.appt_time||'00:00').split(':').map(Number);
+  if(now.getHours()*60+now.getMinutes()>ah*60+am+5){
+   lateWarning=`<div style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px"><span style="font-size:18px">&#9888;</span> Terlambat upload foto absen! Harap upload sekarang.</div>`;
+  }
+ }
+ // Absency section (once, tied to firstA)
+ const absencyPhoto=renderSingleSlot(firstA.id,(firstA.photos?.absency?.url||firstA.photos?.absency),'absency',true);
+ const absencyMeta=firstA.photos?.absency?.timestamp?`<div class="photo-meta">${new Date(firstA.photos.absency.timestamp).toLocaleString('id-ID')}${firstA.photos.absency.lat?` · <a href="https://maps.google.com/?q=${firstA.photos.absency.lat},${firstA.photos.absency.lng}" target="_blank" style="color:var(--primary)">Lokasi</a>`:''}</div>`:'';
+ // Per-dog sections (before/after/ears/conditions + groomer notes)
+ const dogSections=group.map(a=>{
+  const dog=dataCache.dogs.find(d=>d.id===a.dog_id)||{};
+  const refs=Array.isArray(dog.styling_refs)?dog.styling_refs.filter(r=>!isStyleRefExpired(r)):[];
+  const svc=a.service_base||'Basic Grooming';
+  const note=(a.appt_note||'').replace(/\s*\(\d+\/\d+\)\s*$/,'').trim();
+  const skinBlock=dog.skin_history?`<div class="dog-skin"><strong>Kondisi kulit</strong>${esc(dog.skin_history)}</div>`:'';
+  const stylingBlock=refs.length?`<div class="dog-styling"><div class="dog-styling-label">Styling references (${refs.length})</div><div class="dog-styling-imgs">${refs.slice(0,6).map(r=>`<a href="${esc(r.url)}" target="_blank"><img src="${esc(r.url)}" alt="ref"/></a>`).join('')}</div></div>`:'';
+  const PHOTO_WITHOUT_ABSENCY=PHOTO_TYPES.filter(pt=>pt.key!=='absency');
+  let photosHTML='<div class="appt-photos">';let lastSec='';
+  PHOTO_WITHOUT_ABSENCY.forEach(pt=>{
+   if(pt.conditional&&!svc.includes(pt.conditional)) return;
+   if(pt.section&&pt.section!==lastSec){photosHTML+=`<div class="photo-section-label">${pt.section}</div>`;lastSec=pt.section;}
+   if(pt.multi){photosHTML+=renderMultiSlot(a.id,a.photos||{},pt);}
+   else{const val=(a.photos||{})[pt.key];const url=typeof val==='object'?val?.url:val;photosHTML+=`<div class="photo-slot${pt.full?' full':''}"><div class="photo-slot-label">${pt.label}</div>${renderSingleSlot(a.id,url,pt.key,pt.hasGeo)}</div>`;}
+  });
+  photosHTML+='</div>';
+  return `<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">
+   <div class="dog-card">
+    <div class="dog-name">${esc(dog.name||'?')}</div>
+    <div class="dog-meta">${esc([dog.breed,dog.size,dog.coat,dog.coat_color].filter(Boolean).join(' · ')||'-')}</div>
+    <div class="dog-svc">${esc(svc)}</div>
+    ${dog.prefs?`<div class="dog-prefs">${esc(dog.prefs)}</div>`:''}
+    ${skinBlock}${stylingBlock}
+   </div>
+   ${a.customer_note?`<div class="appt-note" style="background:#eff6ff;border-left-color:#3b82f6">Catatan customer: ${esc(a.customer_note)}</div>`:''}
+   ${note?`<div class="appt-note">Catatan admin: ${esc(note)}</div>`:''}
+   <div style="margin-top:8px">
+    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Catatan groomer (sesi ini)</div>
+    <textarea id="gnote-${a.id}" rows="2" placeholder="Tulis catatan tentang anjing ini..." style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;resize:vertical" oninput="saveGroomerNote('${a.id}',this.value)">${esc(note)}</textarea>
+   </div>
+   ${photosHTML}
+  </div>`;
+ }).join('');
+ return `<div class="appt ${status}">
+  ${lateWarning}
+  <div class="appt-time">
+   <span class="appt-time-big">${fmtM(startMin)} – ${fmtM(endMin)}</span>
+   <span class="appt-duration">${totalDur} min · ${group.length} anjing</span>
+   <span class="appt-status ${status}">${esc(status)}</span>
+  </div>
+  <div class="appt-cust">${esc(cust.owner||'?')}</div>
+  <div class="appt-addr">${esc(addrStr)}<br/><a href="${mapsLink}" target="_blank">Buka di Google Maps →</a></div>
+  <div class="appt-photos">
+   <div class="photo-section-label">Bukti Kehadiran</div>
+   <div class="photo-slot full"><div class="photo-slot-label">Kehadiran</div>${absencyPhoto}${absencyMeta}</div>
+  </div>
+  ${dogSections}
+ </div>`;
+}
+
+function renderAppt(a, isFirst=false){
  const dog=dataCache.dogs.find(d=>d.id===a.dog_id);
  const cust=dog?dataCache.custs.find(c=>c.id===dog.customer_id):null;
  if(!dog||!cust) return ''; // skip if related data missing
@@ -465,7 +584,25 @@ function renderAppt(a){
   </div>
  </div>`:'';
 
+ const now=new Date();
+ const todayISO=now.toISOString().slice(0,10);
+ const apptDate=a.appt_date||'';
+ const isToday=apptDate===todayISO;
+ // Late attendance warning: only on first appointment of the day
+ let lateWarning='';
+ if(isFirst&&isToday&&!a.photos?.absency){
+  const [ah,am]=(a.appt_time||'00:00').split(':').map(Number);
+  const apptStartMin=ah*60+am;
+  const nowMin=now.getHours()*60+now.getMinutes();
+  if(nowMin>apptStartMin+5){
+   lateWarning=`<div style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">
+    <span style="font-size:18px">&#9888;</span> Terlambat upload foto absen! Harap upload sekarang.
+   </div>`;
+  }
+ }
+
  return `<div class="appt ${status}">
+  ${lateWarning}
   <div class="appt-time">
    <span class="appt-time-big">${esc(time)} – ${esc(endTime)}</span>
    <span class="appt-duration">${dur} min</span>
@@ -483,7 +620,12 @@ function renderAppt(a){
    ${skinBlock}
    ${stylingBlock}
   </div>
-  ${note?`<div class="appt-note">Catatan: ${esc(note)}</div>`:''}
+  ${a.customer_note?`<div class="appt-note" style="background:#eff6ff;border-left-color:#3b82f6">Catatan customer: ${esc(a.customer_note)}</div>`:''}
+  ${note?`<div class="appt-note">Catatan admin: ${esc(note)}</div>`:''}
+  <div style="margin-top:8px">
+   <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Catatan groomer (sesi ini)</div>
+   <textarea id="gnote-${a.id}" rows="2" placeholder="Tulis catatan tentang anjing ini..." style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;resize:vertical" oninput="saveGroomerNote('${a.id}',this.value)">${esc(note)}</textarea>
+  </div>
   ${renderPhotoGrid(a)}
  </div>`;
 }
@@ -583,6 +725,16 @@ let _pendingType=null;
 let _pendingGeo=false;
 let _pendingMulti=false;
 
+let _groomerNoteTimers={};
+function saveGroomerNote(apptId,val){
+ clearTimeout(_groomerNoteTimers[apptId]);
+ _groomerNoteTimers[apptId]=setTimeout(async()=>{
+  await db.from('appointments').update({appt_note:val.trim()||null}).eq('id',apptId);
+  const appt=dataCache.appts.find(a=>a.id===apptId);
+  if(appt) appt.appt_note=val.trim()||null;
+ },800);
+}
+
 function capturePhoto(apptId,type,hasGeo,multi,fromGallery){
  _pendingApptId=apptId;
  _pendingType=type;
@@ -646,6 +798,18 @@ async function onPhotoCapture(input){
 
   const {error:dbErr}=await db.from('appointments').update({photos}).eq('id',apptId);
   if(dbErr) throw dbErr;
+  // If absency photo uploaded late, set absency_late=true (persists even if photo later deleted)
+  if(type==='absency'&&hasGeo){
+   const aRef=dataCache.appts.find(a=>a.id===apptId);
+   if(aRef){
+    const [ah,am]=(aRef.appt_time||'00:00').split(':').map(Number);
+    const apptStart=new Date(aRef.appt_date+'T'+String(ah).padStart(2,'0')+':'+String(am).padStart(2,'0')+':00');
+    if(new Date().getTime()>apptStart.getTime()+5*60*1000){
+     await db.from('appointments').update({absency_late:true}).eq('id',apptId);
+     if(aRef) aRef.absency_late=true;
+    }
+   }
+  }
   if(appt) appt.photos=photos;
   renderActiveTab();
  } catch(err) {
