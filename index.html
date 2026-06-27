@@ -3501,42 +3501,102 @@ function selectWizSlot(m){wiz.startMins=m;renderWizSlots()}
 
 function renderWizSummary(){
  const c=custs.find(x=>x.id===wiz.custId)||{};
- const g=groomers.find(x=>x.id===wiz.groomerId)||{};
  const totalDur=wiz.dogSvcs.reduce((s,ds)=>s+getWizDogDur(ds),0);
- const dogLines=wiz.dogSvcs.map(ds=>{
-  const d=dogs.find(x=>x.id===ds.did)||{};
-  return `<div style="font-size:12px;margin-left:8px">${esc(d.name)} — ${esc(ds.svc)} (${getWizDogDur(ds)} min)</div>`;
- }).join('');
  const tok=wiz.tokenId?tokens.find(t=>t.id===wiz.tokenId):null;
  const tokLine=tok?`<div style="font-size:12px;background:#fef3c7;border-radius:4px;padding:3px 8px;margin-top:4px"><strong>Token:</strong> ${esc(tok.service_type)} · ${esc(tok.dog_size)} · ${tok.sessions_total-tok.sessions_used} sesi tersisa</div>`:'';
  const isEdit=!!(wiz.editId);
- const groomerOpts=groomers.filter(g=>g.active).map(g=>`<option value="${g.id}" ${g.id===wiz.groomerId?'selected':''}>${esc(g.name)}</option>`).join('');
- const rescheduleFields=isEdit?`
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;padding:8px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px">
-   <div style="grid-column:1/-1;font-size:10px;font-weight:700;color:#0369a1;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Ubah jadwal</div>
-   <div>
-    <label style="font-size:11px;color:var(--muted)">Tanggal</label>
-    <input type="date" id="edit-date" value="${wiz.date||''}" onchange="wiz.date=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
+ const isGroupEdit=wiz.editIds?.length>1;
+
+ if(isEdit){
+  // EDIT MODE: show slot picker instead of static summary
+  const groomerOpts=groomers.filter(g=>g.active).map(g=>`<option value="${g.id}" ${g.id===wiz.groomerId?'selected':''}>${esc(g.name)}</option>`).join('');
+  const dogCheckboxes=isGroupEdit?`
+   <div style="margin-bottom:10px">
+    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Pilih anjing yang dijadwalkan ulang</div>
+    ${wiz.dogSvcs.map(ds=>{
+     const d=dogs.find(x=>x.id===ds.did)||{};
+     const apptId=wiz.editIds?.find(id=>appts.find(a=>a.id===id)?.dog_id===ds.did);
+     const checked=wiz.rescheduleSet?.has(apptId);
+     return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0;cursor:pointer">
+      <input type="checkbox" ${checked?'checked':''} onchange="toggleReschedule('${apptId}',this.checked)" style="width:14px;height:14px"/>
+      <span>${esc(d.name||'?')} <span style="color:var(--muted)">${esc(ds.svc)} · ${getWizDogDur(ds)} min</span></span>
+     </label>`;
+    }).join('')}
+   </div>`:'';
+  document.getElementById('wiz-summary').innerHTML=`
+   <div style="font-size:12px;margin-bottom:8px"><strong>Customer:</strong> ${esc(c.owner||'?')}</div>
+   ${tokLine}
+   ${dogCheckboxes}
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+    <div>
+     <label style="font-size:11px;color:var(--muted)">Groomer</label>
+     <select id="edit-groomer-sel" onchange="wiz.groomerId=this.value;wiz.startMins=null;wiz.slotConflict=false;renderEditSlots()" style="width:100%;padding:5px 7px;border:1px solid var(--border);border-radius:4px;font-size:12px">${groomerOpts}</select>
+    </div>
+    <div>
+     <label style="font-size:11px;color:var(--muted)">Tanggal</label>
+     <input type="date" id="edit-date-inp" value="${wiz.date||''}" onchange="wiz.date=this.value;wiz.startMins=null;wiz.slotConflict=false;renderEditSlots()" style="width:100%;padding:5px 7px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
+    </div>
    </div>
-   <div>
-    <label style="font-size:11px;color:var(--muted)">Jam</label>
-    <input type="time" id="edit-time" value="${m2t(wiz.startMins)}" onchange="wiz.startMins=t2m(this.value)" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
-   </div>
-   <div style="grid-column:1/-1">
-    <label style="font-size:11px;color:var(--muted)">Groomer</label>
-    <select id="edit-groomer" onchange="wiz.groomerId=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px">${groomerOpts}</select>
-   </div>
-  </div>`:'';
- document.getElementById('wiz-summary').innerHTML=`
-  <div><strong>Customer:</strong> ${esc(c.owner||'?')}</div>
-  <div><strong>Dog(s):</strong></div>${dogLines}
-  ${isEdit?'':`<div><strong>Groomer:</strong> ${esc(g.name||'?')}</div>
-  <div><strong>Date:</strong> ${new Date(wiz.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</div>
-  <div><strong>Time:</strong> ${m2t(wiz.startMins)} – ${m2t(wiz.startMins+totalDur)}</div>`}
-  ${tokLine}
-  ${rescheduleFields}
- `;
+   <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px">Pilih slot waktu</div>
+   <div id="edit-slots" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px"></div>
+   <div id="edit-conflict-msg" style="display:none;font-size:12px;color:#dc2626;padding:4px 8px;background:#fee2e2;border-radius:4px;margin-bottom:6px"></div>
+  `;
+  renderEditSlots();
+ } else {
+  // NEW BOOKING: read-only summary
+  const g=groomers.find(x=>x.id===wiz.groomerId)||{};
+  const dogLines=wiz.dogSvcs.map(ds=>{
+   const d=dogs.find(x=>x.id===ds.did)||{};
+   return `<div style="font-size:12px;margin-left:8px">${esc(d.name)} — ${esc(ds.svc)} (${getWizDogDur(ds)} min)</div>`;
+  }).join('');
+  document.getElementById('wiz-summary').innerHTML=`
+   <div><strong>Customer:</strong> ${esc(c.owner||'?')}</div>
+   <div><strong>Dog(s):</strong></div>${dogLines}
+   <div><strong>Groomer:</strong> ${esc(g.name||'?')}</div>
+   <div><strong>Date:</strong> ${new Date(wiz.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</div>
+   <div><strong>Time:</strong> ${m2t(wiz.startMins)} – ${m2t(wiz.startMins+totalDur)}</div>
+   ${tokLine}
+  `;
+ }
  renderWizStep4Dogs();
+}
+
+function renderEditSlots(){
+ const wrap=document.getElementById('edit-slots'); if(!wrap) return;
+ if(!wiz.groomerId||!wiz.date){
+  wrap.innerHTML='<div style="color:var(--muted);font-size:12px">Pilih groomer dan tanggal dulu.</div>';return;
+ }
+ // Duration = only dogs being rescheduled
+ const reschDur=wiz.editIds?.length>1
+  ?wiz.dogSvcs.filter(ds=>{const id=wiz.editIds?.find(eid=>appts.find(a=>a.id===eid)?.dog_id===ds.did);return wiz.rescheduleSet?.has(id);}).reduce((s,ds)=>s+getWizDogDur(ds),0)
+  :wiz.dogSvcs.reduce((s,ds)=>s+getWizDogDur(ds),0);
+ if(!reschDur){wrap.innerHTML='<div style="color:var(--muted);font-size:12px">Pilih minimal 1 anjing.</div>';return;}
+ const skipIds=wiz.rescheduleSet?[...wiz.rescheduleSet]:(wiz.editId?[wiz.editId]:[]);
+ const slots=[];for(let m=SSTART;m<SEND;m+=SSTEP)slots.push(m);
+ wrap.innerHTML=slots.filter(m=>m+reschDur<=SEND).map(m=>{
+  const blocked=isBlocked(wiz.groomerId,wiz.date,m,reschDur,skipIds);
+  const sel=m===wiz.startMins;
+  if(blocked){
+   return `<button onclick="selectEditSlot(${m},true)" style="padding:4px 8px;border:1px solid #fca5a5;border-radius:4px;font-size:11px;cursor:pointer;background:${sel?'#dc2626':'#fee2e2'};color:${sel?'#fff':'#dc2626'}">${m2t(m)}</button>`;
+  }
+  return `<button onclick="selectEditSlot(${m},false)" style="padding:4px 8px;border:1px solid ${sel?'var(--green-dk)':'var(--border)'};border-radius:4px;font-size:11px;cursor:pointer;background:${sel?'var(--green-dk)':'var(--surface)'};color:${sel?'#fff':'inherit'}">${m2t(m)}</button>`;
+ }).join('');
+}
+
+function selectEditSlot(m,isConflict){
+ wiz.startMins=m;
+ wiz.slotConflict=isConflict;
+ const msg=document.getElementById('edit-conflict-msg');
+ if(msg){msg.style.display=isConflict?'block':'none';if(isConflict)msg.textContent='Slot ini bentrok dengan appt lain. Pilih slot lain atau simpan untuk override.';}
+ renderEditSlots();
+}
+
+function toggleReschedule(apptId,checked){
+ if(!wiz.rescheduleSet) wiz.rescheduleSet=new Set();
+ if(checked) wiz.rescheduleSet.add(apptId);
+ else wiz.rescheduleSet.delete(apptId);
+ wiz.startMins=null; wiz.slotConflict=false;
+ renderEditSlots();
 }
 
 function renderWizStep4Dogs(){
@@ -3643,7 +3703,7 @@ function openAppt(dateISO,groomerId,startMins){
 function openApptEdit(id){
  const a=appts.find(x=>x.id===id);if(!a)return;
  const d=dogs.find(x=>x.id===a.dog_id);
- wiz={step:4,custId:d?.customer_id||null,dogSvcs:d?[{did:d.id,svc:a.service_base||'Basic Grooming',svcs:parseSvcBase(a.service_base),customDur:null}]:[],groomerId:a.groomer_id,date:a.appt_date,startMins:t2m(a.appt_time||'09:00'),editId:id,tokenId:a.token_id||null,isFree:a.session_source==='free',freeDogs:a.session_source==='free'&&d?new Set([d.id]):new Set()};
+ wiz={step:4,custId:d?.customer_id||null,dogSvcs:d?[{did:d.id,svc:a.service_base||'Basic Grooming',svcs:parseSvcBase(a.service_base),customDur:null}]:[],groomerId:a.groomer_id,date:a.appt_date,startMins:t2m(a.appt_time||'09:00'),editId:id,rescheduleSet:new Set([id]),slotConflict:false,tokenId:a.token_id||null,isFree:a.session_source==='free',freeDogs:a.session_source==='free'&&d?new Set([d.id]):new Set()};
  document.getElementById('appt-title').textContent='Edit appointment';
  document.getElementById('appt-save-btn').textContent='Update';
  const delBtnSingle=document.getElementById('appt-del-btn');
@@ -3763,7 +3823,7 @@ function openGroupEdit(ids){
  });
  wiz={step:4,custId:firstDog?.customer_id||null,dogSvcs,groomerId:firstA.groomer_id,
   date:firstA.appt_date,startMins:t2m(firstA.appt_time||'09:00'),
-  editId:firstA.id,editIds:ids,
+  editId:firstA.id,editIds:ids,rescheduleSet:new Set(ids),slotConflict:false,
   tokenId:firstA.token_id||null,isFree:false,freeDogs:new Set()};
  document.getElementById('appt-title').textContent=`Edit group (${ids.length} anjing)`;
  document.getElementById('appt-save-btn').textContent='Update semua';
@@ -3947,17 +4007,27 @@ async function saveAppt(){
    perfFields.actual_duration_mins=isNaN(ad)?null:Math.max(0,ad);
   }
   const updatePayload={...inserts[0],...perfFields};
+  if(wiz.slotConflict){
+   alert('Slot bentrok! Pilih slot lain (merah = bentrok, hijau = tersedia).');
+   return;
+  }
   if(wiz.editIds?.length>1){
-   // Group edit: update each appointment with its per-dog data
+   // Group edit: update only appointments in rescheduleSet, skip the rest
    for(let i=0;i<wiz.editIds.length;i++){
     const eid=wiz.editIds[i];
+    if(wiz.rescheduleSet&&!wiz.rescheduleSet.has(eid)) continue; // skip unchecked dogs
     const ds=wiz.dogSvcs[i];
     if(!ds) continue;
     const dogNote=document.getElementById('appt-note-'+ds.did)?.value.trim()||null;
     const dogDiscType=document.getElementById('appt-disc-type-'+ds.did)?.value||null;
     const dogDiscValue=parseFloat(document.getElementById('appt-disc-value-'+ds.did)?.value)||0;
+    // Cursor: stagger rescheduled dogs sequentially
+    const reschDogs=wiz.dogSvcs.filter((_,j)=>wiz.rescheduleSet?.has(wiz.editIds[j]));
+    const myIdx=reschDogs.findIndex(d=>d.did===ds.did);
+    const myCursor=wiz.startMins+reschDogs.slice(0,myIdx).reduce((s,d)=>s+getWizDogDur(d),0);
     await db.from('appointments').update({
      service_base:ds.svc,duration_mins:getWizDogDur(ds),
+     appt_date:wiz.date,appt_time:m2t(myCursor)+':00',groomer_id:wiz.groomerId,
      appt_note:dogNote,appt_disc_type:dogDiscType||null,appt_disc_value:dogDiscValue,
      customer_note:custNote,admin_note:adminNote,...editStamp()
     }).eq('id',eid);
