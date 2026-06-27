@@ -2905,11 +2905,17 @@ function renderCal(){
      const cust=custs.find(x=>x.id===firstDog.customer_id)||{};
      const dogNames=group.map(x=>dogs.find(d=>d.id===x.dog_id)?.name||'?').join(', ');
      const groupIds=group.map(x=>`'${x.id}'`).join(',');
+     const kec=cust.kecamatan||'';
+     const kota=cust.kota||cust.area||'';
+     const locFull=[kec,kota].filter(Boolean).join(', ');
+     const locShort=kec||kota;
      html+=`<div class="appt-block${isMSel?' mass-selected':''}${srcClass}"
       onclick="event.stopPropagation();openGroupEdit([${groupIds}])"
       style="top:${top}px;height:${ht}px;background:${bg};border-left:5px solid ${col};color:${textCol};cursor:pointer">
       <span class="ab-time"><span class="appt-status-dot ${statusDot}"></span>${m2t(sm)}${srcBadge}</span>
       <span class="ab-name">${esc(cust.owner||'?')} <span style="font-weight:400;font-size:9px">${group.length} anjing</span></span>
+      ${locFull?`<span class="ab-loc-full">${esc(locFull)}</span>`:''}
+      ${locShort?`<span class="ab-loc-short">${esc(locShort)}</span>`:''}
       <span class="ab-svc">${esc(dogNames)}</span>
      </div>`;
     } else {
@@ -3503,13 +3509,32 @@ function renderWizSummary(){
  }).join('');
  const tok=wiz.tokenId?tokens.find(t=>t.id===wiz.tokenId):null;
  const tokLine=tok?`<div style="font-size:12px;background:#fef3c7;border-radius:4px;padding:3px 8px;margin-top:4px"><strong>Token:</strong> ${esc(tok.service_type)} · ${esc(tok.dog_size)} · ${tok.sessions_total-tok.sessions_used} sesi tersisa</div>`:'';
+ const isEdit=!!(wiz.editId);
+ const groomerOpts=groomers.filter(g=>g.active).map(g=>`<option value="${g.id}" ${g.id===wiz.groomerId?'selected':''}>${esc(g.name)}</option>`).join('');
+ const rescheduleFields=isEdit?`
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;padding:8px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px">
+   <div style="grid-column:1/-1;font-size:10px;font-weight:700;color:#0369a1;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Ubah jadwal</div>
+   <div>
+    <label style="font-size:11px;color:var(--muted)">Tanggal</label>
+    <input type="date" id="edit-date" value="${wiz.date||''}" onchange="wiz.date=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
+   </div>
+   <div>
+    <label style="font-size:11px;color:var(--muted)">Jam</label>
+    <input type="time" id="edit-time" value="${m2t(wiz.startMins)}" onchange="wiz.startMins=t2m(this.value)" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
+   </div>
+   <div style="grid-column:1/-1">
+    <label style="font-size:11px;color:var(--muted)">Groomer</label>
+    <select id="edit-groomer" onchange="wiz.groomerId=this.value" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px">${groomerOpts}</select>
+   </div>
+  </div>`:'';
  document.getElementById('wiz-summary').innerHTML=`
   <div><strong>Customer:</strong> ${esc(c.owner||'?')}</div>
   <div><strong>Dog(s):</strong></div>${dogLines}
-  <div><strong>Groomer:</strong> ${esc(g.name||'?')}</div>
+  ${isEdit?'':`<div><strong>Groomer:</strong> ${esc(g.name||'?')}</div>
   <div><strong>Date:</strong> ${new Date(wiz.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</div>
-  <div><strong>Time:</strong> ${m2t(wiz.startMins)} – ${m2t(wiz.startMins+totalDur)}</div>
+  <div><strong>Time:</strong> ${m2t(wiz.startMins)} – ${m2t(wiz.startMins+totalDur)}</div>`}
   ${tokLine}
+  ${rescheduleFields}
  `;
  renderWizStep4Dogs();
 }
@@ -3517,10 +3542,13 @@ function renderWizSummary(){
 function renderWizStep4Dogs(){
  const container=document.getElementById('wiz-4-dogs'); if(!container) return;
  const multi=wiz.dogSvcs.length>1;
+ const isGroupEdit=wiz.editIds?.length>1;
  container.innerHTML=wiz.dogSvcs.map((ds,i)=>{
   const d=dogs.find(x=>x.id===ds.did);
-  const header=multi?`<div style="font-size:11px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${esc(d?.name||'?')} — ${esc(ds.svc)}</div>`:'';
-  return `<div style="background:var(--subtle);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:.7rem">
+  const header=multi?`<div style="font-size:11px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding-right:24px">${esc(d?.name||'?')} — ${esc(ds.svc)}</div>`:'';
+  const xBtn=isGroupEdit?`<button onclick="deleteApptFromGroup('${ds.did}')" title="Hapus appointment ini" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(220,38,38,.12);color:#dc2626;font-size:14px;font-weight:700;cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;justify-content:center" onmouseover="this.style.background='rgba(220,38,38,.25)'" onmouseout="this.style.background='rgba(220,38,38,.12)'">&#x2715;</button>`:'';
+  return `<div style="position:relative;background:var(--subtle);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:.7rem">
+   ${xBtn}
    ${header}
    <div class="fg" style="margin-bottom:6px">
     <label style="font-size:11px">Catatan groomer <span style="font-weight:400;color:var(--muted)">— ke groomer saja</span></label>
@@ -3546,6 +3574,25 @@ function renderWizStep4Dogs(){
   const dvEl=document.getElementById('appt-disc-value-'+ds.did);
   if(dvEl&&ds.discValue) dvEl.value=ds.discValue;
  });
+}
+
+async function deleteApptFromGroup(did){
+ // Find the appointment ID matching this dog in the current group
+ const apptId=wiz.editIds?.find(id=>appts.find(a=>a.id===id)?.dog_id===did);
+ if(!apptId){alert('Appointment tidak ditemukan.');return}
+ const dogName=dogs.find(d=>d.id===did)?.name||'?';
+ if(!confirm(`Hapus appointment ${dogName} dari group ini?`)) return;
+ await deleteAppointmentWithVisitCheck(apptId);
+ // Remove from wiz state
+ wiz.editIds=wiz.editIds.filter(id=>id!==apptId);
+ wiz.dogSvcs=wiz.dogSvcs.filter(ds=>ds.did!==did);
+ await loadAll();
+ if(wiz.editIds.length===0){cm('ov-appt');renderCal();return}
+ // Update title
+ const titleEl=document.getElementById('appt-title');
+ if(titleEl) titleEl.textContent=`Edit group (${wiz.editIds.length} anjing)`;
+ renderWizStep4Dogs();
+ renderCal();
 }
 
 function populateWizCustList(){
@@ -3752,7 +3799,9 @@ async function confirmApptFromModal(){
  const a=appts.find(x=>x.id===wiz.editId);if(!a)return;
  if(a.status!=='pending') return; // confirmed→done is auto-handled by autoLogPastAppointments
  await db.from('appointments').update({status:'confirmed'}).eq('id',wiz.editId);
- cm('ov-appt');await loadAll();
+ const cIdx=appts.findIndex(a=>a.id===wiz.editId);
+ if(cIdx>=0) appts[cIdx].status='confirmed';
+ cm('ov-appt'); renderCal(); loadAll();
 }
 
 // Batch O.13 — performance tracking helpers
@@ -3937,7 +3986,24 @@ async function saveAppt(){
   }
  }
  calDay=wiz.date;
- cm('ov-appt');await loadAll();renderCal();
+ // Instant refresh: patch local appts array, render immediately
+ if(wiz.editId){
+  if(wiz.editIds?.length>1){
+   wiz.editIds.forEach((eid,i)=>{
+    const ds=wiz.dogSvcs[i];
+    const idx=appts.findIndex(a=>a.id===eid);
+    if(idx>=0&&ds) Object.assign(appts[idx],{appt_date:wiz.date,appt_time:m2t(wiz.startMins)+':00',groomer_id:wiz.groomerId,service_base:ds.svc,duration_mins:getWizDogDur(ds)});
+   });
+  } else {
+   const idx=appts.findIndex(a=>a.id===wiz.editId);
+   if(idx>=0) Object.assign(appts[idx],{appt_date:wiz.date,appt_time:m2t(wiz.startMins)+':00',groomer_id:wiz.groomerId,service_base:wiz.dogSvcs[0]?.svc,duration_mins:getWizDogDur(wiz.dogSvcs[0])});
+  }
+ } else if(typeof insertedAppts!=='undefined'&&insertedAppts?.length){
+  insertedAppts.forEach(a=>appts.push(a));
+ }
+ cm('ov-appt');
+ renderCal(); // immediate
+ loadAll();   // background sync (no await)
 }
 
 async function delApptFromModal(){
@@ -3946,11 +4012,13 @@ async function delApptFromModal(){
  const msg=isGroup?`Hapus semua ${wiz.editIds.length} appointment dalam group ini?`:'Delete this appointment?';
  if(!confirm(msg))return;
  if(isGroup){
-  for(const id of wiz.editIds) await deleteAppointmentWithVisitCheck(id);
+  for(const id of wiz.editIds){await deleteAppointmentWithVisitCheck(id);}
+  wiz.editIds.forEach(id=>{const i=appts.findIndex(a=>a.id===id);if(i>=0)appts.splice(i,1);});
  } else {
   await deleteAppointmentWithVisitCheck(wiz.editId);
+  const i=appts.findIndex(a=>a.id===wiz.editId);if(i>=0)appts.splice(i,1);
  }
- cm('ov-appt');await loadAll();renderCal();
+ cm('ov-appt'); renderCal(); loadAll();
 }
 
 async function delAppt(id){
