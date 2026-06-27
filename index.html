@@ -3515,11 +3515,10 @@ function renderWizSummary(){
     <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Pilih anjing yang dijadwalkan ulang</div>
     ${wiz.dogSvcs.map(ds=>{
      const d=dogs.find(x=>x.id===ds.did)||{};
-     const apptId=wiz.editIds?.find(id=>appts.find(a=>a.id===id)?.dog_id===ds.did);
-     const checked=wiz.rescheduleSet?.has(apptId);
+     const checked=!wiz.rescheduleSet||wiz.rescheduleSet.has(ds.apptId||ds.did);
      return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0;cursor:pointer">
-      <input type="checkbox" ${checked?'checked':''} onchange="toggleReschedule('${apptId}',this.checked)" style="width:14px;height:14px"/>
-      <span>${esc(d.name||'?')} <span style="color:var(--muted)">${esc(ds.svc)} · ${getWizDogDur(ds)} min</span></span>
+      <input type="checkbox" ${checked?'checked':''} onchange="toggleReschedule('${ds.apptId||ds.did}',this.checked)" style="width:14px;height:14px"/>
+      <span><strong>${esc(d.name||'?')}</strong> <span style="color:var(--muted)">${esc(ds.svc)} · ${getWizDogDur(ds)} min</span></span>
      </label>`;
     }).join('')}
    </div>`:'';
@@ -3566,10 +3565,11 @@ function renderEditSlots(){
  if(!wiz.groomerId||!wiz.date){
   wrap.innerHTML='<div style="color:var(--muted);font-size:12px">Pilih groomer dan tanggal dulu.</div>';return;
  }
- // Duration = only dogs being rescheduled
- const reschDur=wiz.editIds?.length>1
-  ?wiz.dogSvcs.filter(ds=>{const id=wiz.editIds?.find(eid=>appts.find(a=>a.id===eid)?.dog_id===ds.did);return wiz.rescheduleSet?.has(id);}).reduce((s,ds)=>s+getWizDogDur(ds),0)
-  :wiz.dogSvcs.reduce((s,ds)=>s+getWizDogDur(ds),0);
+ // Duration = sum of dogs being rescheduled (use ds.apptId or fall back to all)
+ const reschDur=wiz.dogSvcs.reduce((s,ds)=>{
+  if(wiz.rescheduleSet&&wiz.rescheduleSet.size>0&&!wiz.rescheduleSet.has(ds.apptId||ds.did)) return s;
+  return s+getWizDogDur(ds);
+ },0)||wiz.dogSvcs.reduce((s,ds)=>s+getWizDogDur(ds),0);
  if(!reschDur){wrap.innerHTML='<div style="color:var(--muted);font-size:12px">Pilih minimal 1 anjing.</div>';return;}
  const skipIds=wiz.rescheduleSet?[...wiz.rescheduleSet]:(wiz.editId?[wiz.editId]:[]);
  const slots=[];for(let m=SSTART;m<SEND;m+=SSTEP)slots.push(m);
@@ -3637,8 +3637,8 @@ function renderWizStep4Dogs(){
 }
 
 async function deleteApptFromGroup(did){
- // Find the appointment ID matching this dog in the current group
- const apptId=wiz.editIds?.find(id=>appts.find(a=>a.id===id)?.dog_id===did);
+ const ds=wiz.dogSvcs.find(x=>x.did===did);
+ const apptId=ds?.apptId||(wiz.editIds?.find(id=>appts.find(a=>a.id===id)?.dog_id===did));
  if(!apptId){alert('Appointment tidak ditemukan.');return}
  const dogName=dogs.find(d=>d.id===did)?.name||'?';
  if(!confirm(`Hapus appointment ${dogName} dari group ini?`)) return;
@@ -3819,7 +3819,8 @@ function openGroupEdit(ids){
  const dogSvcs=apptList.map(a=>{
   const d=dogs.find(x=>x.id===a.dog_id)||{};
   return {did:a.dog_id,svc:a.service_base||'Basic Grooming',svcs:parseSvcBase(a.service_base),
-   customDur:a.duration_mins||null,note:a.appt_note||'',discType:a.appt_disc_type||'',discValue:a.appt_disc_value||0};
+   customDur:a.duration_mins||null,note:a.appt_note||'',discType:a.appt_disc_type||'',discValue:a.appt_disc_value||0,
+   apptId:a.id};
  });
  wiz={step:4,custId:firstDog?.customer_id||null,dogSvcs,groomerId:firstA.groomer_id,
   date:firstA.appt_date,startMins:t2m(firstA.appt_time||'09:00'),
