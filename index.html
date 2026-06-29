@@ -3537,7 +3537,7 @@ function renderWizSummary(){
     </div>
    </div>
    <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px">Pilih slot waktu</div>
-   <div id="edit-slots" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px"></div>
+   <div id="edit-slots" style="margin-bottom:6px"></div>
    <div id="edit-conflict-msg" style="display:none;font-size:12px;color:#dc2626;padding:4px 8px;background:#fee2e2;border-radius:4px;margin-bottom:6px"></div>
   `;
   renderEditSlots();
@@ -3573,14 +3573,26 @@ function renderEditSlots(){
  if(!reschDur){wrap.innerHTML='<div style="color:var(--muted);font-size:12px">Pilih minimal 1 anjing.</div>';return;}
  const skipIds=wiz.rescheduleSet?[...wiz.rescheduleSet]:(wiz.editId?[wiz.editId]:[]);
  const slots=[];for(let m=SSTART;m<SEND;m+=SSTEP)slots.push(m);
- wrap.innerHTML=slots.filter(m=>m+reschDur<=SEND).map(m=>{
-  const blocked=isBlocked(wiz.groomerId,wiz.date,m,reschDur,skipIds);
+ // Show ALL slots — visually distinct: green=free, red=blocked, gray=outside hours
+ const slotBtns=slots.map(m=>{
   const sel=m===wiz.startMins;
-  if(blocked){
-   return `<button onclick="selectEditSlot(${m},true)" style="padding:4px 8px;border:1px solid #fca5a5;border-radius:4px;font-size:11px;cursor:pointer;background:${sel?'#dc2626':'#fee2e2'};color:${sel?'#fff':'#dc2626'}">${m2t(m)}</button>`;
+  const outOfHours=m+reschDur>SEND;
+  const blocked=!outOfHours&&isBlocked(wiz.groomerId,wiz.date,m,reschDur,skipIds);
+  if(outOfHours){
+   return `<button disabled title="Tidak cukup waktu sebelum tutup" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:5px;font-size:11px;cursor:not-allowed;background:#f3f4f6;color:#9ca3af">${m2t(m)}</button>`;
   }
-  return `<button onclick="selectEditSlot(${m},false)" style="padding:4px 8px;border:1px solid ${sel?'var(--green-dk)':'var(--border)'};border-radius:4px;font-size:11px;cursor:pointer;background:${sel?'var(--green-dk)':'var(--surface)'};color:${sel?'#fff':'inherit'}">${m2t(m)}</button>`;
+  if(blocked){
+   return `<button onclick="selectEditSlot(${m},true)" title="Bentrok dengan appt lain" style="padding:6px 10px;border:2px solid #fca5a5;border-radius:5px;font-size:11px;cursor:pointer;background:${sel?'#dc2626':'#fee2e2'};color:${sel?'#fff':'#991b1b'};font-weight:${sel?'700':'500'}">${m2t(m)}</button>`;
+  }
+  return `<button onclick="selectEditSlot(${m},false)" style="padding:6px 10px;border:2px solid ${sel?'#15803d':'#86efac'};border-radius:5px;font-size:11px;cursor:pointer;background:${sel?'#15803d':'#dcfce7'};color:${sel?'#fff':'#15803d'};font-weight:${sel?'700':'500'}">${m2t(m)}</button>`;
  }).join('');
+ const legend=`<div style="display:flex;gap:10px;font-size:10px;color:var(--muted);margin-bottom:6px;flex-wrap:wrap">
+  <span><span style="display:inline-block;width:10px;height:10px;background:#dcfce7;border:1.5px solid #86efac;border-radius:3px;vertical-align:middle;margin-right:3px"></span>Tersedia</span>
+  <span><span style="display:inline-block;width:10px;height:10px;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:3px;vertical-align:middle;margin-right:3px"></span>Bentrok</span>
+  <span><span style="display:inline-block;width:10px;height:10px;background:#f3f4f6;border:1.5px solid #e5e7eb;border-radius:3px;vertical-align:middle;margin-right:3px"></span>Tidak cukup waktu</span>
+  <span style="margin-left:auto;font-weight:600;color:var(--green-dk)">Total durasi: ${reschDur} min</span>
+ </div>`;
+ wrap.innerHTML=legend+'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(60px,1fr));gap:5px">'+slotBtns+'</div>';
 }
 
 function selectEditSlot(m,isConflict){
