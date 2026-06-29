@@ -1628,6 +1628,19 @@ tbody tr:hover{background:var(--subtle)}
  </div>
 </div>
 
+<!-- SUBSCRIPTION SESSIONS MODAL -->
+<div class="overlay" id="ov-subs-sessions">
+ <div class="modal" style="max-width:520px">
+  <button class="modal-close" onclick="cm('ov-subs-sessions')" title="Close">&#x2715;</button>
+  <div class="modal-title" id="subs-sessions-title">Subscription Sessions</div>
+  <div id="subs-sessions-summary" style="padding:10px 12px;background:var(--subtle);border-radius:6px;font-size:13px;margin-bottom:1rem"></div>
+  <div id="subs-sessions-list" style="max-height:50vh;overflow-y:auto"></div>
+  <div style="margin-top:1rem;font-size:11px;color:var(--muted);background:#fef3c7;padding:8px 10px;border-radius:5px;line-height:1.5">
+   <strong>Tip:</strong> Hapus appointment yang batal/tidak jadi untuk mengurangi count.
+  </div>
+ </div>
+</div>
+
 <!-- EXPENSE MODAL -->
 <div class="overlay" id="ov-expense">
  <div class="modal" style="max-width:400px">
@@ -3942,8 +3955,8 @@ async function saveAppt(){
   if(projectedUsed>total){
    const dog=dogs.find(d=>d.id===dogId);
    const remaining=Math.max(0,total-used-futureUndeducted);
-   alert(`Subscription habis untuk ${dog?.name||'?'}\n\n${sub.type||'Subs'} sessions: ${used}/${total} sudah dipakai${futureUndeducted?', '+futureUndeducted+' future appts sudah booked':''}.\nSisa: ${remaining} sesi.\nKamu booking ${inThisBooking} sesi baru — over by ${projectedUsed-total}.\n\nBatalkan booking atau renew subscription dulu.`);
-   return;
+   const proceed=confirm(`Subscription habis untuk ${dog?.name||'?'}\n\n${sub.type||'Subs'} sessions: ${used}/${total} sudah dipakai${futureUndeducted?', '+futureUndeducted+' future appts sudah booked':''}.\nSisa: ${remaining} sesi.\nKamu booking ${inThisBooking} sesi baru — over by ${projectedUsed-total}.\n\nTekan OK untuk override (carry-over ke periode berikutnya).\nTekan Cancel untuk batalkan.`);
+   if(!proceed) return;
   }
  }
  wiz.dogSvcs.forEach((ds,i)=>{
@@ -6869,6 +6882,7 @@ function renderMembership(){
    <td style="font-size:11px;color:var(--muted)">${esc(r.source_invoice||'-')}</td>
    <td><div class="row-actions">
     ${r._kind==='subscription'&&r.status==='active'?`<button class="icon-btn" onclick="openSubsPaymentModal('${r.customer_id}','${iso(new Date()).slice(0,7)}',${tierMonthlyPrice(r.type,dogs.find(d=>d.id===r.dog_id)?.size||'Medium')})">Bayar</button>`:''}
+    ${r._kind==='subscription'?`<button class="icon-btn view" onclick="openSubsSessions('${r.id}')">Sessions</button>`:''}
     <button class="icon-btn" onclick="openMembEdit('${r._kind}','${r.id}')">Edit</button>
     <button class="icon-btn del" onclick="delMemb('${r._kind}','${r.id}','${esc(owner).replace(/'/g,"\\'")}')">Del</button>
    </div></td>
@@ -8835,6 +8849,64 @@ async function deleteCapital(id){
 
 /* ----- Subscription payments ----- */
 let _spSubIds=[];
+
+function openSubsSessions(subId){
+ const sub=subscriptions.find(s=>s.id===subId); if(!sub){alert('Subscription tidak ditemukan');return}
+ const cust=custs.find(c=>c.id===sub.customer_id);
+ const dog=sub.dog_id?dogs.find(d=>d.id===sub.dog_id):null;
+ const used=sub.sessions_used||0,total=sub.sessions_total||0;
+ const startedAt=sub.started_at||'';
+ const linkedAppts=appts.filter(a=>{
+  if(a.session_source!=='subscription') return false;
+  if(sub.dog_id&&a.dog_id!==sub.dog_id) return false;
+  const aDog=dogs.find(d=>d.id===a.dog_id);
+  if(!sub.dog_id&&aDog?.customer_id!==sub.customer_id) return false;
+  if(startedAt&&a.appt_date<startedAt) return false;
+  return true;
+ }).sort((a,b)=>(b.appt_date||'').localeCompare(a.appt_date||''));
+ document.getElementById('subs-sessions-title').textContent=`Sessions — ${cust?.owner||'?'}${dog?' / '+dog.name:''}`;
+ document.getElementById('subs-sessions-summary').innerHTML=`
+  <div><strong>Type:</strong> ${esc(sub.type||'-')} · <strong>Sessions:</strong> ${used}/${total} (DB count)</div>
+  <div style="font-size:12px;color:var(--muted);margin-top:3px">Linked appointments: ${linkedAppts.length} · Future undeducted: ${linkedAppts.filter(a=>a.appt_date>=iso(new Date())&&!a.subs_deducted&&a.status!=='cancelled').length}</div>
+ `;
+ const listEl=document.getElementById('subs-sessions-list');
+ if(!linkedAppts.length){
+  listEl.innerHTML='<div style="color:var(--muted);padding:1rem;text-align:center">Belum ada appointment terkait.</div>';
+ } else {
+  listEl.innerHTML=linkedAppts.map(a=>{
+   const aDog=dogs.find(d=>d.id===a.dog_id);
+   const g=groomers.find(x=>x.id===a.groomer_id);
+   const statusColor={pending:'#f59e0b',confirmed:'#3b82f6',done:'#16a34a',cancelled:'#9ca3af'}[a.status]||'#666';
+   const deducted=a.subs_deducted?'<span style="font-size:10px;color:#15803d">&#10003; deducted</span>':'<span style="font-size:10px;color:#dc2626">not yet</span>';
+   return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border);gap:8px">
+    <div style="flex:1;min-width:0">
+     <div style="font-size:13px;font-weight:500">${fmtD(a.appt_date)} ${a.appt_time?a.appt_time.slice(0,5):''}</div>
+     <div style="font-size:11px;color:var(--muted)">${esc(aDog?.name||'?')} · ${esc(g?.name||'?')} · <span style="color:${statusColor};font-weight:600">${esc(a.status||'')}</span> · ${deducted}</div>
+    </div>
+    <button class="btn btn-d btn-sm" onclick="delSubsSession('${a.id}','${subId}')">Hapus</button>
+   </div>`;
+  }).join('');
+ }
+ om('ov-subs-sessions');
+}
+
+async function delSubsSession(apptId,subId){
+ const a=appts.find(x=>x.id===apptId); if(!a) return;
+ const aDog=dogs.find(d=>d.id===a.dog_id);
+ if(!confirm(`Hapus appointment ${aDog?.name||'?'} ${a.appt_date}?\n\nIni akan mengurangi count subscription dipakai bila sudah ter-deducted.`)) return;
+ if(a.subs_deducted){
+  const sub=subscriptions.find(s=>s.id===subId);
+  if(sub){
+   const newUsed=Math.max(0,(sub.sessions_used||0)-1);
+   await db.from('subscriptions').update({sessions_used:newUsed}).eq('id',subId);
+   sub.sessions_used=newUsed;
+  }
+ }
+ await deleteAppointmentWithVisitCheck(apptId);
+ const i=appts.findIndex(x=>x.id===apptId); if(i>=0) appts.splice(i,1);
+ openSubsSessions(subId);
+ renderCal(); renderMembership(); loadAll();
+}
 
 function openSubsPaymentModal(custId,monthKey,defaultAmount){
  document.getElementById('sp-cust-id').value=custId;
