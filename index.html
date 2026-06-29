@@ -2753,6 +2753,7 @@ function groupConsecutiveAppts(dayAppts){
 }
 
 function isBlocked(gid,date,start,dur,skipIds){
+ const skip=Array.isArray(skipIds)?skipIds:(skipIds?[skipIds]:[]);
  return appts.some(a=>{
   if(skip.includes(a.id)||a.appt_date!==date||a.groomer_id!==gid)return false;
   if(a.status==='cancelled') return false;
