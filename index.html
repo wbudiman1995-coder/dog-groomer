@@ -1285,6 +1285,7 @@ tbody tr:hover{background:var(--subtle)}
  </div>
  <div class="fg"></div>
  <div class="fg full"><label>Preferences / notes</label><textarea id="cf-prefs" placeholder="Customer-level notes, contact preferences, etc."></textarea></div>
+ <div id="cf-custom-fields" style="grid-column:1/-1"></div>
  </div>
  <div id="cf-edit-stamp"></div>
  <div class="form-actions">
@@ -1310,6 +1311,7 @@ tbody tr:hover{background:var(--subtle)}
  <div class="fg"><label>Warna</label><input id="df-coat-color" placeholder="e.g. White, Black & white, Golden"/></div>
  <div class="fg full"><label>Preferensi / catatan</label><textarea id="df-prefs" placeholder="e.g. Anxious around clippers. Lion cut."></textarea></div>
  <div class="fg full"><label>Riwayat kulit</label><textarea id="df-skin-history" placeholder="e.g. 12 May 2026 — flea behind ears, treated." style="min-height:70px"></textarea></div>
+ <div id="df-custom-fields" style="grid-column:1/-1"></div>
  <div class="fg full">
   <label>Styling references <span style="font-size:10px;color:var(--muted);font-weight:400">(photos auto-expire 60 days, used in groomer reminders)</span></label>
   <div id="df-styling-refs-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;min-height:20px"></div>
@@ -1793,6 +1795,8 @@ let HP_LOGO="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAC1CAIAAACVhifWA
 let BIZ_NAME='HomePaw', BIZ_TAGLINE='Dog Home Grooming \u00B7 Jakarta', WA_CLOSING_TPL='Terima kasih sudah mempercayai {biz} \uD83D\uDC3E';
 let _cfgLogoData=null;
 function waClosing(){return WA_CLOSING_TPL.replace(/\{biz\}/g,BIZ_NAME)}
+let CUSTOM_FIELDS={customers:[],pets:[]};
+let _cfgCustomFields=null;
 let invSelectedCust=null, invSelectedDogs=[], invDogServices={}, invDogNotes={}, invEditId=null;
 let invPhotos={};
 let invExtraCharges=[]; // [{label, amount}]
@@ -2327,26 +2331,44 @@ async function loadAll() {
  const apptDogEl=document.getElementById('appt-dog'); if(apptDogEl) apptDogEl.innerHTML='<option value="">Select dog…</option>'+opts;
  const gopts=groomers.filter(g=>g.active).map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
  const apptGrEl=document.getElementById('appt-groomer'); if(apptGrEl) apptGrEl.innerHTML='<option value="">Select groomer…</option>'+gopts;
- // Re-render active tab
- const activeTab=document.querySelector('.nav-tab.active')?.id?.replace('tab-','');
- if(activeTab==='dashboard') renderDashboard();
- else if(activeTab==='database') renderCusts();
- else if(activeTab==='calendar') renderCal();
- else if(activeTab==='groomers') renderGroomers();
- else if(activeTab==='financial'){
-  // Re-render whichever financial subtab is active
-  const fsub=document.querySelector('#sec-financial > .subtabs > .subtab.active')?.id?.replace('fstab-','')||'invoices';
-  if(fsub==='invoices') renderFinancial();
-  else if(fsub==='visits') renderVisits();
-  else if(fsub==='payroll') renderPayroll();
-  else if(fsub==='expenses') renderExpenses();
-  else if(fsub==='capital') renderCapital();
-  else if(fsub==='bank') renderBankDisplay();
- }
- else if(activeTab==='reminders') generateReminders();
- else if(activeTab==='membership') renderMembership();
- else if(activeTab==='access') renderAccess();
- else renderCusts();
+ // Re-render whatever is currently on screen
+ refreshActiveView();
+}
+
+// Single source of truth for refreshing the visible view after any data change.
+// Re-renders the active tab + active subtab + open Customer 360 panel.
+// Deliberately skips editing surfaces (Invoice form, Config form) so in-progress input is not wiped.
+function refreshActiveView(){
+ try{
+  // Open Customer 360 panel
+  const panel=document.getElementById('c360-panel');
+  if(panel&&panel.classList.contains('open')&&typeof c360CurrentCustId!=='undefined'&&c360CurrentCustId){
+   const c=custs.find(x=>x.id===c360CurrentCustId);
+   if(c){ renderCust360Header(c); renderCust360Body(); }
+  }
+  const activeTab=document.querySelector('.nav-tab.active')?.id?.replace('tab-','');
+  const subActive=(scope,prefix)=>document.querySelector(scope+' .subtab.active')?.id?.replace(prefix,'');
+  if(activeTab==='dashboard') renderDashboard();
+  else if(activeTab==='database'){ subActive('#sec-database','stab-')==='dogs'?renderDogsTable():renderCusts(); }
+  else if(activeTab==='calendar') renderCal();
+  else if(activeTab==='groomers'){ subActive('#sec-groomers','gtab-')==='attendance'?renderAttendance():renderGroomers(); }
+  else if(activeTab==='financial'){
+   const fsub=subActive('#sec-financial','fstab-')||'invoices';
+   if(fsub==='invoices') renderFinancial();
+   else if(fsub==='visits') renderVisits();
+   else if(fsub==='payroll') renderPayroll();
+   else if(fsub==='expenses') renderExpenses();
+   else if(fsub==='capital') renderCapital();
+   else if(fsub==='bank') renderBankDisplay();
+   renderCashOnHand();
+  }
+  else if(activeTab==='reminders'){ subActive('#sec-reminders','rstab-')==='customer'?generateCustomerReminders():generateReminders(); }
+  else if(activeTab==='membership') renderMembership();
+  else if(activeTab==='access') renderAccess();
+  else if(activeTab==='history') renderHistoryTab();
+  else if(activeTab==='settings'){ if(subActive('#sec-settings','stab-')==='storage') renderSettingsStorage(); }
+  // 'invoice' tab intentionally not refreshed: it is an editing form.
+ }catch(e){ console.error('refreshActiveView error',e); }
 }
 
 function getOwnerName(custId){
@@ -2485,6 +2507,7 @@ function openAddCust(){
  populateKotaSelect(document.getElementById('cf-kota'));
  populateKecSelect(document.getElementById('cf-kec'),'');
  const stampEl=document.getElementById('cf-edit-stamp'); if(stampEl) stampEl.innerHTML='';
+ renderCustomFields('customers','cf-custom-',{},'cf-custom-fields');
  om('ov-cust');
 }
 
@@ -2503,6 +2526,7 @@ function openEditCust(id){
  document.getElementById('cf-kota').value=c.kota||'';
  populateKecSelect(document.getElementById('cf-kec'),c.kota||'');
  document.getElementById('cf-kec').value=c.kecamatan||'';
+ renderCustomFields('customers','cf-custom-',c.custom||{},'cf-custom-fields');
  const stampEl=document.getElementById('cf-edit-stamp'); if(stampEl) stampEl.innerHTML=editStampHTML(c)+renderAuditFooter('customer',id);
  om('ov-cust');
 }
@@ -2523,8 +2547,10 @@ async function saveCust(){
  gmaps_link:document.getElementById('cf-gmaps').value.trim(),
  prefs:document.getElementById('cf-prefs').value.trim(),
  source:source||null,
+ custom:readCustomFields('customers','cf-custom-'),
  ...editStamp()
  };
+ if(!(CUSTOM_FIELDS.customers||[]).length) delete p.custom;
  if(custEditId){
   const oldRec=custs.find(c=>c.id===custEditId);
   await db.from('customers').update(p).eq('id',custEditId);
@@ -2571,6 +2597,7 @@ function openAddDog(){
  document.getElementById('df-coat').value='';
  const ptEl=document.getElementById('df-pet-type'); if(ptEl) ptEl.value='dog';
  onPetTypeChange();
+ renderCustomFields('pets','df-custom-',{},'df-custom-fields');
  om('ov-dog');
 }
 
@@ -2608,6 +2635,7 @@ function openEditDog(id){
  _stylingRefsBuffer=Array.isArray(d.styling_refs)?[...d.styling_refs]:[];
  renderStylingRefsGrid();
  const stampEl=document.getElementById('df-edit-stamp'); if(stampEl) stampEl.innerHTML=editStampHTML(d)+renderAuditFooter('dog',id);
+ renderCustomFields('pets','df-custom-',d.custom||{},'df-custom-fields');
  om('ov-dog');
 }
 
@@ -2628,8 +2656,10 @@ async function saveDog(){
  prefs:document.getElementById('df-prefs').value.trim(),
  skin_history:document.getElementById('df-skin-history')?.value.trim()||null,
  styling_refs:_stylingRefsBuffer||[],
+ custom:readCustomFields('pets','df-custom-'),
  ...editStamp()
  };
+ if(!(CUSTOM_FIELDS.pets||[]).length) delete p.custom;
  if(dogEditId){
   const oldRec=dogs.find(d=>d.id===dogEditId);
   await db.from('dogs').update(p).eq('id',dogEditId);
@@ -4972,7 +5002,8 @@ const CFG_DEFAULTS={
  styleRefTtlDays:STYLE_REFS_TTL_DAYS,
  followupDays:STALE_DAYS,
  branding:{bizName:BIZ_NAME,tagline:BIZ_TAGLINE,logo:HP_LOGO},
- waClosing:WA_CLOSING_TPL
+ waClosing:WA_CLOSING_TPL,
+ customFields:{customers:[],pets:[]}
 };
 function applyCfg(){
  CFG=(bankSettings&&bankSettings.config)||{};
@@ -4989,6 +5020,7 @@ function applyCfg(){
  if(CFG.followupDays>0) STALE_DAYS=CFG.followupDays;
  if(CFG.branding){if(CFG.branding.bizName)BIZ_NAME=CFG.branding.bizName;if(CFG.branding.tagline)BIZ_TAGLINE=CFG.branding.tagline;if(CFG.branding.logo)HP_LOGO=CFG.branding.logo;}
  if(CFG.waClosing) WA_CLOSING_TPL=CFG.waClosing;
+ if(CFG.customFields) CUSTOM_FIELDS={customers:CFG.customFields.customers||[],pets:CFG.customFields.pets||[]};
  SERVICE_LIST=Object.keys(PRICING);
 }
 function fmtRp(n){return 'Rp '+(n||0).toLocaleString('id-ID')}
@@ -8671,9 +8703,53 @@ function swSettings(sub){
 }
 
 /* ===== CONFIGURATION (Phase 1) ===== */
+/* ===== CUSTOM FIELDS (user-defined) ===== */
+// Render custom-field inputs into a container, prefilled from a record's `custom` map.
+function renderCustomFields(entity,prefix,values,containerId){
+ const el=document.getElementById(containerId); if(!el) return;
+ const defs=CUSTOM_FIELDS[entity]||[];
+ values=values||{};
+ if(!defs.length){el.innerHTML='';return}
+ const rows=defs.map(f=>{
+  const v=values[f.id];
+  const id=prefix+f.id;
+  let input;
+  if(f.type==='number') input=`<input type="number" id="${id}" value="${v!=null?esc(String(v)):''}"/>`;
+  else if(f.type==='date') input=`<input type="date" id="${id}" value="${v?esc(String(v)):''}"/>`;
+  else if(f.type==='bool') input=`<label style="font-weight:400;display:flex;align-items:center;gap:6px"><input type="checkbox" id="${id}" ${v?'checked':''}/>Ya</label>`;
+  else if(f.type==='dropdown'){ const opts=(f.options||[]).map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join(''); input=`<select id="${id}"><option value="">—</option>${opts}</select>`; }
+  else input=`<input type="text" id="${id}" value="${v!=null?esc(String(v)):''}"/>`;
+  return `<div class="fg"><label>${esc(f.label)}</label>${input}</div>`;
+ }).join('');
+ el.innerHTML=`<div style="grid-column:1/-1;border-top:1px solid var(--border);margin-top:6px;padding-top:10px"><div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Info tambahan</div><div class="form-grid">${rows}</div></div>`;
+}
+// Read custom-field values from a rendered form back into a map.
+function readCustomFields(entity,prefix){
+ const out={};
+ (CUSTOM_FIELDS[entity]||[]).forEach(f=>{
+  const elx=document.getElementById(prefix+f.id); if(!elx) return;
+  if(f.type==='bool') out[f.id]=elx.checked;
+  else if(f.type==='number'){ const n=elx.value.trim(); out[f.id]=n===''?null:Number(n); }
+  else out[f.id]=elx.value.trim()||null;
+ });
+ return out;
+}
+// Read-only display block for Customer 360 (entity values).
+function customFieldsDisplay(entity,values){
+ const defs=CUSTOM_FIELDS[entity]||[]; values=values||{};
+ const rows=defs.map(f=>{
+  let v=values[f.id];
+  if(v==null||v==='') return '';
+  if(f.type==='bool') v=v?'Ya':'Tidak';
+  return `<div><strong>${esc(f.label)}:</strong> ${esc(String(v))}</div>`;
+ }).filter(Boolean);
+ return rows.length?rows.join(''):'';
+}
+
 function renderConfig(){
  const el=document.getElementById('config-body'); if(!el) return;
  _cfgLogoData=HP_LOGO;
+ _cfgCustomFields=JSON.parse(JSON.stringify(CUSTOM_FIELDS));
  const services=Object.keys(PRICING);
  const psizes=Object.keys(PRICING[services[0]]||{XS:0,S:0,M:0,L:0,XL:0,Cat:0});
  const fld=(id,val,w)=>`<input id="${id}" type="number" value="${val}" style="width:${w||70}px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px;text-align:right"/>`;
@@ -8717,7 +8793,9 @@ function renderConfig(){
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Penutup pesan WhatsApp <span style="font-size:11px;color:var(--muted)"><code>{biz}</code> = nama bisnis</span><input id="cfg-wa-closing" type="text" value="${esc(WA_CLOSING_TPL)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
     <div style="font-size:12px">Logo (invoice)<div style="display:flex;align-items:center;gap:12px;margin-top:5px"><img id="cfg-logo-preview" src="${HP_LOGO}" alt="logo" style="height:60px;width:auto;border:1px solid var(--border);border-radius:6px;background:#fff;padding:2px"/><input type="file" accept="image/*" onchange="onCfgLogoChange(this)" style="font-size:12px"/></div></div>
    </div>`)}
+  ${sec('Custom fields',`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Tambah info sendiri ke Customer / Pet. Muncul di form & Customer 360.</div><div id="cfg-customfields-body"></div>`)}
  `;
+ cfRenderCustomFieldsEditor();
 }
 
 async function saveConfig(){
@@ -8746,9 +8824,11 @@ async function saveConfig(){
   const kecs=line.slice(i+1).split(',').map(s=>s.trim()).filter(Boolean);
   areas[kota]=kecs;
  });
+ cfSyncFromDOM();
  const config={pricing,tiers,durBase,durAdd,sourceLabels,dueDayDefault,hours,followupDays,styleRefTtlDays,tnc,areas,
   branding:{bizName:gv('cfg-biz-name')?.value.trim()||'HomePaw',tagline:gv('cfg-biz-tagline')?.value.trim()||'',logo:_cfgLogoData||HP_LOGO},
-  waClosing:gv('cfg-wa-closing')?.value.trim()||WA_CLOSING_TPL};
+  waClosing:gv('cfg-wa-closing')?.value.trim()||WA_CLOSING_TPL,
+  customFields:_cfgCustomFields||{customers:[],pets:[]}};
  const {error}=await db.from('business_settings').upsert({id:1,config,updated_at:new Date().toISOString()});
  if(error){alert('Gagal simpan: '+error.message);return}
  await loadAll();
@@ -8763,6 +8843,51 @@ async function resetConfig(){
  await loadAll();
  renderConfig();
  showToast('Konfigurasi direset ke default','success');
+}
+
+function cfRenderCustomFieldsEditor(){
+ const el=document.getElementById('cfg-customfields-body'); if(!el||!_cfgCustomFields) return;
+ const entLabel={pets:'Pet',customers:'Customer'};
+ const typeOpts=[['text','Teks'],['number','Angka'],['date','Tanggal'],['dropdown','Pilihan'],['bool','Ya/Tidak']];
+ const inStyle='padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px';
+ const block=ent=>{
+  const fields=_cfgCustomFields[ent]||[];
+  const rows=fields.map((f,i)=>{
+   const types=typeOpts.map(([v,l])=>`<option value="${v}" ${f.type===v?'selected':''}>${l}</option>`).join('');
+   const optInput=f.type==='dropdown'
+     ?`<input id="cfcf-${ent}-${i}-options" type="text" value="${esc((f.options||[]).join(', '))}" placeholder="opsi1, opsi2" style="${inStyle};flex:1;min-width:120px"/>`
+     :`<span style="font-size:11px;color:var(--muted);flex:1;min-width:120px">—</span>`;
+   return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+     <input id="cfcf-${ent}-${i}-label" type="text" value="${esc(f.label||'')}" placeholder="Label" style="${inStyle};width:160px"/>
+     <select id="cfcf-${ent}-${i}-type" onchange="cfSyncFromDOM();cfRenderCustomFieldsEditor()" style="${inStyle}">${types}</select>
+     ${optInput}
+     <button class="icon-btn del" onclick="cfRemoveField('${ent}',${i})">Hapus</button>
+   </div>`;
+  }).join('');
+  return `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:600;margin-bottom:6px">${entLabel[ent]}</div>${rows||'<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Belum ada field.</div>'}<button class="btn" style="background:var(--subtle);font-size:12px" onclick="cfAddField('${ent}')">+ Tambah field</button></div>`;
+ };
+ el.innerHTML=block('pets')+block('customers');
+}
+function cfSyncFromDOM(){
+ if(!_cfgCustomFields) return;
+ ['pets','customers'].forEach(ent=>{
+  (_cfgCustomFields[ent]||[]).forEach((f,i)=>{
+   const lab=document.getElementById(`cfcf-${ent}-${i}-label`); if(lab) f.label=lab.value.trim();
+   const ty=document.getElementById(`cfcf-${ent}-${i}-type`); if(ty) f.type=ty.value;
+   const op=document.getElementById(`cfcf-${ent}-${i}-options`); if(op) f.options=op.value.split(',').map(s=>s.trim()).filter(Boolean);
+  });
+ });
+}
+function cfAddField(ent){
+ cfSyncFromDOM();
+ if(!_cfgCustomFields[ent]) _cfgCustomFields[ent]=[];
+ _cfgCustomFields[ent].push({id:'f'+Math.random().toString(36).slice(2,8),label:'',type:'text',options:[]});
+ cfRenderCustomFieldsEditor();
+}
+function cfRemoveField(ent,idx){
+ cfSyncFromDOM();
+ if(_cfgCustomFields[ent]) _cfgCustomFields[ent].splice(idx,1);
+ cfRenderCustomFieldsEditor();
 }
 
 async function onCfgLogoChange(input){
@@ -9635,10 +9760,13 @@ function c360RenderDogs(c){
     <div class="c360-card-meta">${visitCount} visit${visitCount!==1?'s':''}</div>
     ${skinHist}
     ${stylBlock}
+    ${(()=>{const cf=customFieldsDisplay('pets',d.custom);return cf?`<div class="c360-card-meta" style="margin-top:6px;line-height:1.6">${cf}</div>`:''})()}
    </div>`;
   }).join('')
   : `<div class="c360-empty">No dogs yet for this customer.</div>`;
- return activeBlock+upcomingBlock+dogsBlock;
+ const custCf=customFieldsDisplay('customers',c.custom);
+ const custCfBlock=custCf?`<div class="c360-section-lbl">Info tambahan</div><div class="c360-card" style="line-height:1.6">${custCf}</div>`:'';
+ return custCfBlock+activeBlock+upcomingBlock+dogsBlock;
 }
 
 function c360RenderVisits(c){
