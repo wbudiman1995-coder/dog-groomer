@@ -1774,6 +1774,7 @@ tbody tr:hover{background:var(--subtle)}
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 let dogs=[], visits=[], appts=[], custs=[], groomers=[], invoices=[], tokens=[], subscriptions=[], bankSettings={}, custEditId=null, dogEditId=null, currentCustId=null, apptDate=null, apptEditId=null, groomerEditId=null, membEditState=null;
+let STALE_DAYS=14;
 let CFG={}, DUE_DAY_DEFAULT=5, SOURCE_LABELS={ads:'Ads',free_session:'Free session',organic:'Organic',family:'Family',friend:'Friend'};
 // Batch O.10
 let auditEntries=[], groomerBlocks=[];
@@ -1989,7 +1990,7 @@ function lastGroomedDisplay(d){
 
 // Batch O.6 — Styling reference photos (Supabase Storage bucket "dog-style-refs")
 const STYLE_REFS_BUCKET='dog-style-refs';
-const STYLE_REFS_TTL_DAYS=60;
+let STYLE_REFS_TTL_DAYS=60;
 let _stylingRefsBuffer=[];
 
 function isStyleRefExpired(ref){
@@ -2137,7 +2138,7 @@ function tierMonthlyPrice(t, dogSize){
  return Math.round(base*sess*(1-disc));
 }
 
-const MEMBERSHIP_TNC=[
+let MEMBERSHIP_TNC=[
  'Setiap membership berlaku untuk 1 pet dan tidak dapat dialihkan ke pet lainnya',
  'Membership bersifat non-refundable dan tidak dapat dipindahkan ke bulan berikutnya',
  'Invoice akan ditagihkan tiap awal bulan dan jatuh tempo di tanggal 5 setiap bulan',
@@ -2206,7 +2207,7 @@ function formatPhoneDisplay(raw){
  // Group: 3-4-4 or adapt
  return '+62 '+local.slice(0,3)+'-'+local.slice(3,7)+'-'+local.slice(7);
 }
-const AREAS = {
+let AREAS = {
  'Jakarta Pusat': ['Cempaka Putih','Gambir','Johar Baru','Kemayoran','Menteng','Sawah Besar','Senen','Tanah Abang'],
  'Jakarta Utara': ['Cilincing','Kelapa Gading','Koja','Pademangan','Penjaringan','Tanjung Priok'],
  'Jakarta Selatan': ['Cilandak','Jagakarsa','Kebayoran Baru','Kebayoran Lama','Mampang Prapatan','Pancoran','Pasar Minggu','Pesanggrahan','Setiabudi','Tebet'],
@@ -2750,7 +2751,7 @@ function dogDur(svc,size){
 }
 function t2m(t){const[h,m]=(t||'09:00').split(':').map(Number);return h*60+m}
 function m2t(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}
-const SSTART=8*60+30,SEND=18*60,SSTEP=30,SH=44;
+let SSTART=8*60+30,SEND=18*60;const SSTEP=30,SH=44;
 
 function groupConsecutiveAppts(dayAppts){
  const sorted=[...dayAppts].sort((a,b)=>t2m(a.appt_time||'09:00')-t2m(b.appt_time||'09:00'));
@@ -4961,7 +4962,12 @@ const CFG_DEFAULTS={
  durBase:JSON.parse(JSON.stringify(DUR_BASE)),
  durAdd:JSON.parse(JSON.stringify(DUR_ADD)),
  sourceLabels:JSON.parse(JSON.stringify(SOURCE_LABELS)),
- dueDayDefault:5
+ dueDayDefault:5,
+ hours:{open:m2t(SSTART),close:m2t(SEND)},
+ tnc:JSON.parse(JSON.stringify(MEMBERSHIP_TNC)),
+ areas:JSON.parse(JSON.stringify(AREAS)),
+ styleRefTtlDays:STYLE_REFS_TTL_DAYS,
+ followupDays:STALE_DAYS
 };
 function applyCfg(){
  CFG=(bankSettings&&bankSettings.config)||{};
@@ -4971,6 +4977,11 @@ function applyCfg(){
  if(CFG.durAdd) DUR_ADD=CFG.durAdd;
  if(CFG.sourceLabels&&Object.keys(CFG.sourceLabels).length) SOURCE_LABELS=CFG.sourceLabels;
  DUE_DAY_DEFAULT=(CFG.dueDayDefault!=null)?CFG.dueDayDefault:5;
+ if(CFG.hours&&CFG.hours.open&&CFG.hours.close){const o=t2m(CFG.hours.open),c=t2m(CFG.hours.close);if(o<c){SSTART=o;SEND=c;}}
+ if(Array.isArray(CFG.tnc)&&CFG.tnc.length) MEMBERSHIP_TNC=CFG.tnc;
+ if(CFG.areas&&Object.keys(CFG.areas).length) AREAS=CFG.areas;
+ if(CFG.styleRefTtlDays>0) STYLE_REFS_TTL_DAYS=CFG.styleRefTtlDays;
+ if(CFG.followupDays>0) STALE_DAYS=CFG.followupDays;
  SERVICE_LIST=Object.keys(PRICING);
 }
 function fmtRp(n){return 'Rp '+(n||0).toLocaleString('id-ID')}
@@ -8687,6 +8698,10 @@ function renderConfig(){
   ${sec('Durasi default',`<div style="display:flex;gap:32px;flex-wrap:wrap"><div><div style="font-size:11px;color:var(--muted);margin-bottom:6px">Base per ukuran</div><div style="display:flex;flex-direction:column;gap:5px">${durBaseRows}</div></div><div><div style="font-size:11px;color:var(--muted);margin-bottom:6px">Tambahan per layanan</div><div style="display:flex;flex-direction:column;gap:5px">${durAddRows}</div></div></div>`)}
   ${sec('Sumber customer (label)',`<div style="display:flex;flex-direction:column;gap:6px">${srcRows}</div>`)}
   ${sec('Invoice',`<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px">Tanggal jatuh tempo default</span>${fld('cfg-dueday',DUE_DAY_DEFAULT,50)}</div>`)}
+  ${sec('Jam operasional',`<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><label style="font-size:12px;display:flex;align-items:center;gap:6px">Buka <input id="cfg-hours-open" type="time" value="${m2t(SSTART)}" style="padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label><label style="font-size:12px;display:flex;align-items:center;gap:6px">Tutup <input id="cfg-hours-close" type="time" value="${m2t(SEND)}" style="padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label><span style="font-size:11px;color:var(--muted)">Slot tetap 30 menit.</span></div>`)}
+  ${sec('Threshold',`<div style="display:flex;gap:24px;flex-wrap:wrap"><label style="font-size:12px;display:flex;align-items:center;gap:6px">Follow-up "belum grooming" setelah ${fld('cfg-followup-days',STALE_DAYS,50)} hari</label><label style="font-size:12px;display:flex;align-items:center;gap:6px">Foto styling ref kedaluwarsa ${fld('cfg-styleref-ttl',STYLE_REFS_TTL_DAYS,50)} hari</label></div>`)}
+  ${sec('Syarat & ketentuan membership',`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Satu baris = satu poin.</div><textarea id="cfg-tnc" rows="7" style="width:100%;max-width:640px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(MEMBERSHIP_TNC.join('\n'))}</textarea>`)}
+  ${sec('Area layanan',`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Format per baris: <code>Kota: kecamatan1, kecamatan2, ...</code></div><textarea id="cfg-areas" rows="8" style="width:100%;max-width:640px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(Object.entries(AREAS).map(([k,v])=>`${k}: ${(v||[]).join(', ')}`).join('\n'))}</textarea>`)}
  `;
 }
 
@@ -8705,7 +8720,18 @@ async function saveConfig(){
  const sourceLabels={};
  Object.keys(SOURCE_LABELS).forEach(k=>{sourceLabels[k]=gv(`cfg-src-${k}`)?.value.trim()||k});
  const dueDayDefault=Math.min(28,Math.max(1,parseInt(gv('cfg-dueday')?.value)||5));
- const config={pricing,tiers,durBase,durAdd,sourceLabels,dueDayDefault};
+ const hours={open:gv('cfg-hours-open')?.value||'08:30',close:gv('cfg-hours-close')?.value||'18:00'};
+ const followupDays=Math.max(1,parseInt(gv('cfg-followup-days')?.value)||14);
+ const styleRefTtlDays=Math.max(1,parseInt(gv('cfg-styleref-ttl')?.value)||60);
+ const tnc=(gv('cfg-tnc')?.value||'').split('\n').map(s=>s.trim()).filter(Boolean);
+ const areas={};
+ (gv('cfg-areas')?.value||'').split('\n').forEach(line=>{
+  const i=line.indexOf(':'); if(i<0) return;
+  const kota=line.slice(0,i).trim(); if(!kota) return;
+  const kecs=line.slice(i+1).split(',').map(s=>s.trim()).filter(Boolean);
+  areas[kota]=kecs;
+ });
+ const config={pricing,tiers,durBase,durAdd,sourceLabels,dueDayDefault,hours,followupDays,styleRefTtlDays,tnc,areas};
  const {error}=await db.from('business_settings').upsert({id:1,config,updated_at:new Date().toISOString()});
  if(error){alert('Gagal simpan: '+error.message);return}
  await loadAll();
@@ -9962,7 +9988,7 @@ function renderDashboard(){
 function renderFollowups(){
  const el=document.getElementById('dash-followups'); if(!el) return;
  const today=new Date();
- const threshold=14;
+ const threshold=STALE_DAYS;
  // For each dog: compute days since last_groomed_at (or fall back to most recent visit date)
  const overdue=dogs.map(d=>{
   let lastDate=d.last_groomed_at;
