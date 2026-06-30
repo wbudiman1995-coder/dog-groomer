@@ -1187,6 +1187,7 @@ tbody tr:hover{background:var(--subtle)}
    <button class="subtab active" id="stab-storage" onclick="swSettings('storage')">Storage</button>
    <button class="subtab" id="stab-data" onclick="swSettings('data')">Data</button>
    <button class="subtab" id="stab-ideas" onclick="swSettings('ideas')">Roadmap</button>
+   <button class="subtab" id="stab-config" onclick="swSettings('config')">Configuration</button>
   </div>
   <div class="subsec active" id="ssec-storage">
    <div id="settings-storage-content"><div style="color:var(--muted);padding:1rem">Loading...</div></div>
@@ -1251,6 +1252,9 @@ tbody tr:hover{background:var(--subtle)}
     </div>
     <div style="margin-top:12px;font-size:11px;color:var(--muted)">Minta mana yang paling dibutuhkan untuk dibangun.</div>
    </div>
+  </div>
+  <div class="subsec" id="ssec-config">
+   <div id="config-body" style="padding:1rem 0"></div>
   </div>
  </div>
 
@@ -1770,6 +1774,7 @@ tbody tr:hover{background:var(--subtle)}
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 let dogs=[], visits=[], appts=[], custs=[], groomers=[], invoices=[], tokens=[], subscriptions=[], bankSettings={}, custEditId=null, dogEditId=null, currentCustId=null, apptDate=null, apptEditId=null, groomerEditId=null, membEditState=null;
+let CFG={}, DUE_DAY_DEFAULT=5, SOURCE_LABELS={ads:'Ads',free_session:'Free session',organic:'Organic',family:'Family',friend:'Friend'};
 // Batch O.10
 let auditEntries=[], groomerBlocks=[];
 // Batch O.15
@@ -2115,7 +2120,7 @@ async function bumpDogLastGroomed(dogId,visitDate){
 }
 
 // Batch O.3 — Paw membership tier helpers
-const PAW_TIER={
+let PAW_TIER={
  monthly:   {label:'Paw Basic',     freq:'1x/bulan',     sessions:1, discount:5},
  biweekly:  {label:'Paw Essential', freq:'1x/2 minggu',  sessions:2, discount:10},
  weekly:    {label:'Paw Prime',     freq:'1x/minggu',    sessions:4, discount:15}
@@ -2301,6 +2306,7 @@ async function loadAll() {
  adminUsers.forEach(a=>{window._adminEmails[a.id]=a.email||a.name||'admin'});
  if(psr.data) payrollSettings=psr.data;
  groomerPayouts=gpr.data||[];
+ applyCfg();
  refreshAccessBadge();
  // Rebuild dropdowns
  const opts=dogs.map(d=>`<option value="${d.id}">${esc(d.name)} (${esc(getOwnerName(d.customer_id))})</option>`).join('');
@@ -2395,7 +2401,7 @@ function renderCusts(){
  ['code','owner','area','source','pets','appts'].forEach(k=>{const el=document.getElementById('csort-'+k);if(el)el.textContent=custSort.key===k?(custSort.dir===1?'↑':'↓'):'↕';});
  const tb=document.getElementById('cust-body');
  if(!rows.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">No customers yet. Click "+ Add customer" above.</td></tr>';return}
- const srcLabel={ads:'Ads',free_session:'Free session',organic:'Organic',family:'Family',friend:'Friend'};
+ const srcLabel=SOURCE_LABELS;
  const srcBadge={ads:'bm',free_session:'bs',organic:'bs',family:'bl',friend:'bl'};
  tb.innerHTML=rows.map(c=>{
  const dc=dogsOf(c.id).length;
@@ -2733,8 +2739,8 @@ function setCalView(v){
 let calDay=iso(new Date());
 
 /* ---- DURATION LOGIC ---- */
-const DUR_BASE={XS:60,Small:60,S:60,Medium:90,M:90,Large:120,L:120,XL:120,Cat:60};
-const DUR_ADD={Styling:60,Botak:30,Dematting:30,Deshedding:30};
+let DUR_BASE={XS:60,Small:60,S:60,Medium:90,M:90,Large:120,L:120,XL:120,Cat:60};
+let DUR_ADD={Styling:60,Botak:30,Dematting:30,Deshedding:30};
 const SVC_LIST=['Basic Grooming','Basic + Styling','Basic + Botak','Basic + Dematting','Basic + Deshedding','Basic + Whitening','Basic + Anti Kutu','Basic + Anti Fungal','Basic + Parfume','Wash only'];
 function dogDur(svc,size){
  const base=DUR_BASE[size]||60;
@@ -4937,7 +4943,7 @@ Request: "${input}"
 }
 
 /* ============ INVOICE TAB ============ */
-const PRICING = {
+let PRICING = {
  'Basic Grooming': {XS:120000, S:140000, M:190000, L:250000, XL:290000, Cat:120000},
  'Styling': {XS:100000, S:100000, M:120000, L:140000, XL:160000, Cat:100000},
  'Botak': {XS:60000, S:60000, M:70000, L:80000, XL:90000, Cat:60000},
@@ -4948,7 +4954,25 @@ const PRICING = {
  'Whitening': {XS:15000, S:15000, M:20000, L:25000, XL:30000, Cat:15000},
  'Parfume': {XS:0, S:0, M:0, L:0, XL:0, Cat:0}
 };
-const SERVICE_LIST = Object.keys(PRICING);
+let SERVICE_LIST = Object.keys(PRICING);
+const CFG_DEFAULTS={
+ pricing:JSON.parse(JSON.stringify(PRICING)),
+ tiers:JSON.parse(JSON.stringify(PAW_TIER)),
+ durBase:JSON.parse(JSON.stringify(DUR_BASE)),
+ durAdd:JSON.parse(JSON.stringify(DUR_ADD)),
+ sourceLabels:JSON.parse(JSON.stringify(SOURCE_LABELS)),
+ dueDayDefault:5
+};
+function applyCfg(){
+ CFG=(bankSettings&&bankSettings.config)||{};
+ if(CFG.pricing&&Object.keys(CFG.pricing).length) PRICING=CFG.pricing;
+ if(CFG.tiers&&Object.keys(CFG.tiers).length) PAW_TIER=CFG.tiers;
+ if(CFG.durBase&&Object.keys(CFG.durBase).length) DUR_BASE=CFG.durBase;
+ if(CFG.durAdd) DUR_ADD=CFG.durAdd;
+ if(CFG.sourceLabels&&Object.keys(CFG.sourceLabels).length) SOURCE_LABELS=CFG.sourceLabels;
+ DUE_DAY_DEFAULT=(CFG.dueDayDefault!=null)?CFG.dueDayDefault:5;
+ SERVICE_LIST=Object.keys(PRICING);
+}
 function fmtRp(n){return 'Rp '+(n||0).toLocaleString('id-ID')}
 function priceFor(svc,size){const s=size==='Small'?'S':size==='Medium'?'M':size==='Large'?'L':(size||'M'); return PRICING[svc]?.[s]??0}
 
@@ -5112,6 +5136,7 @@ function resetInvoice(){
  if(g('inv-disc-base-only')) g('inv-disc-base-only').checked=false;
  if(g('inv-subs-billing')) g('inv-subs-billing').checked=false;
  if(g('inv-due-date')) g('inv-due-date').value='';
+ if(g('inv-subs-due-day')) g('inv-subs-due-day').value=DUE_DAY_DEFAULT;
  if(g('inv-doc-mode')) g('inv-doc-mode').value='auto';
  invExtraCharges=[];
  renderExtraCharges();
@@ -5704,7 +5729,7 @@ function updateInvDueDate(){
  const invDate=new Date(invDateStr+'T00:00:00');
  const subsCb=document.getElementById('inv-subs-billing');
  if(subsCb?.checked){
-  const dueDay=parseInt(document.getElementById('inv-subs-due-day')?.value)||5;
+  const dueDay=parseInt(document.getElementById('inv-subs-due-day')?.value)||DUE_DAY_DEFAULT;
   const day=invDate.getDate();
   if(day<=dueDay){
    const due=new Date(invDate.getFullYear(),invDate.getMonth(),dueDay);
@@ -5728,7 +5753,7 @@ function updateSubsBillingDate(){
  const invDateStr=document.getElementById('inv-date')?.value;
  if(!invDateStr){preview.style.display='none';return}
  const invDate=new Date(invDateStr+'T00:00:00');
- const dueDay=parseInt(document.getElementById('inv-subs-due-day')?.value)||5;
+ const dueDay=parseInt(document.getElementById('inv-subs-due-day')?.value)||DUE_DAY_DEFAULT;
  const day=invDate.getDate();
  if(day<=dueDay){
   const due=new Date(invDate.getFullYear(),invDate.getMonth(),dueDay);
@@ -8624,6 +8649,77 @@ function swSettings(sub){
  document.querySelectorAll('#sec-settings .subsec').forEach(s=>s.classList.remove('active'));
  const sec=document.getElementById('ssec-'+sub); if(sec) sec.classList.add('active');
  if(sub==='storage') renderSettingsStorage();
+ if(sub==='config') renderConfig();
+}
+
+/* ===== CONFIGURATION (Phase 1) ===== */
+function renderConfig(){
+ const el=document.getElementById('config-body'); if(!el) return;
+ const services=Object.keys(PRICING);
+ const psizes=Object.keys(PRICING[services[0]]||{XS:0,S:0,M:0,L:0,XL:0,Cat:0});
+ const fld=(id,val,w)=>`<input id="${id}" type="number" value="${val}" style="width:${w||70}px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px;text-align:right"/>`;
+ const txt=(id,val,w)=>`<input id="${id}" type="text" value="${esc(String(val))}" style="width:${w||120}px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>`;
+ let pricingRows=services.map((svc,i)=>{
+  const cells=psizes.map(sz=>`<td style="padding:3px 4px">${fld(`cfg-price-${i}-${esc(sz)}`,PRICING[svc][sz]??0)}</td>`).join('');
+  return `<tr><td style="padding:3px 6px;font-size:12px;white-space:nowrap">${esc(svc)}</td>${cells}</tr>`;
+ }).join('');
+ const pricingTbl=`<table style="border-collapse:collapse"><thead><tr><th style="text-align:left;font-size:11px;color:var(--muted)">Service</th>${psizes.map(s=>`<th style="font-size:11px;color:var(--muted);padding:0 4px">${esc(s)}</th>`).join('')}</tr></thead><tbody>${pricingRows}</tbody></table>`;
+ const tierKeys=Object.keys(PAW_TIER);
+ const tierRows=tierKeys.map(k=>{
+  const t=PAW_TIER[k];
+  return `<tr><td style="padding:3px 6px;font-size:12px">${esc(k)}</td><td style="padding:3px 4px">${txt(`cfg-tier-${k}-label`,t.label,110)}</td><td style="padding:3px 4px">${txt(`cfg-tier-${k}-freq`,t.freq,100)}</td><td style="padding:3px 4px">${fld(`cfg-tier-${k}-sessions`,t.sessions,50)}</td><td style="padding:3px 4px">${fld(`cfg-tier-${k}-discount`,t.discount,50)}</td></tr>`;
+ }).join('');
+ const tierTbl=`<table style="border-collapse:collapse"><thead><tr><th style="text-align:left;font-size:11px;color:var(--muted)">Key</th><th style="font-size:11px;color:var(--muted)">Label</th><th style="font-size:11px;color:var(--muted)">Freq</th><th style="font-size:11px;color:var(--muted)">Sesi</th><th style="font-size:11px;color:var(--muted)">Disc %</th></tr></thead><tbody>${tierRows}</tbody></table>`;
+ const durBaseRows=Object.keys(DUR_BASE).map(k=>`<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;width:60px">${esc(k)}</span>${fld(`cfg-durbase-${esc(k)}`,DUR_BASE[k],60)}<span style="font-size:11px;color:var(--muted)">min</span></div>`).join('');
+ const durAddRows=Object.keys(DUR_ADD).map(k=>`<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;width:90px">+ ${esc(k)}</span>${fld(`cfg-duradd-${esc(k)}`,DUR_ADD[k],60)}<span style="font-size:11px;color:var(--muted)">min</span></div>`).join('');
+ const srcRows=Object.keys(SOURCE_LABELS).map(k=>`<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;width:100px">${esc(k)}</span>${txt(`cfg-src-${esc(k)}`,SOURCE_LABELS[k],140)}</div>`).join('');
+ const sec=(title,body)=>`<div class="card" style="padding:1rem;margin-bottom:14px"><div style="font-size:13px;font-weight:600;margin-bottom:10px">${title}</div>${body}</div>`;
+ el.innerHTML=`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+   <div style="font-size:11px;color:var(--muted)">Tersimpan di Supabase. Berlaku untuk semua admin setelah simpan.</div>
+   <div style="display:flex;gap:8px">
+    <button class="btn" style="background:var(--subtle)" onclick="resetConfig()">Reset ke default</button>
+    <button class="btn" style="background:#16a34a;color:#fff" onclick="saveConfig()">Simpan konfigurasi</button>
+   </div>
+  </div>
+  ${sec('Harga layanan (Rp per ukuran)',pricingTbl)}
+  ${sec('Membership tiers',tierTbl)}
+  ${sec('Durasi default',`<div style="display:flex;gap:32px;flex-wrap:wrap"><div><div style="font-size:11px;color:var(--muted);margin-bottom:6px">Base per ukuran</div><div style="display:flex;flex-direction:column;gap:5px">${durBaseRows}</div></div><div><div style="font-size:11px;color:var(--muted);margin-bottom:6px">Tambahan per layanan</div><div style="display:flex;flex-direction:column;gap:5px">${durAddRows}</div></div></div>`)}
+  ${sec('Sumber customer (label)',`<div style="display:flex;flex-direction:column;gap:6px">${srcRows}</div>`)}
+  ${sec('Invoice',`<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px">Tanggal jatuh tempo default</span>${fld('cfg-dueday',DUE_DAY_DEFAULT,50)}</div>`)}
+ `;
+}
+
+async function saveConfig(){
+ const services=Object.keys(PRICING);
+ const psizes=Object.keys(PRICING[services[0]]||{});
+ const gv=id=>document.getElementById(id);
+ const pricing={};
+ services.forEach((svc,i)=>{pricing[svc]={};psizes.forEach(sz=>{pricing[svc][sz]=parseInt(gv(`cfg-price-${i}-${sz}`)?.value)||0});});
+ const tiers={};
+ Object.keys(PAW_TIER).forEach(k=>{tiers[k]={label:gv(`cfg-tier-${k}-label`)?.value.trim()||k,freq:gv(`cfg-tier-${k}-freq`)?.value.trim()||'',sessions:parseInt(gv(`cfg-tier-${k}-sessions`)?.value)||1,discount:parseFloat(gv(`cfg-tier-${k}-discount`)?.value)||0};});
+ const durBase={};
+ Object.keys(DUR_BASE).forEach(k=>{durBase[k]=parseInt(gv(`cfg-durbase-${k}`)?.value)||0});
+ const durAdd={};
+ Object.keys(DUR_ADD).forEach(k=>{durAdd[k]=parseInt(gv(`cfg-duradd-${k}`)?.value)||0});
+ const sourceLabels={};
+ Object.keys(SOURCE_LABELS).forEach(k=>{sourceLabels[k]=gv(`cfg-src-${k}`)?.value.trim()||k});
+ const dueDayDefault=Math.min(28,Math.max(1,parseInt(gv('cfg-dueday')?.value)||5));
+ const config={pricing,tiers,durBase,durAdd,sourceLabels,dueDayDefault};
+ const {error}=await db.from('business_settings').upsert({id:1,config,updated_at:new Date().toISOString()});
+ if(error){alert('Gagal simpan: '+error.message);return}
+ await loadAll();
+ renderConfig();
+ showToast('Konfigurasi tersimpan','success');
+}
+
+async function resetConfig(){
+ if(!confirm('Reset semua konfigurasi ke default bawaan?')) return;
+ const {error}=await db.from('business_settings').upsert({id:1,config:{},updated_at:new Date().toISOString()});
+ if(error){alert('Gagal reset: '+error.message);return}
+ await loadAll();
+ renderConfig();
+ showToast('Konfigurasi direset ke default','success');
 }
 
 async function renderSettingsStorage(){
@@ -9384,7 +9480,7 @@ function lifetimeSpend(custId){
 function renderCust360Header(c){
  const dogList=dogs.filter(d=>d.customer_id===c.id);
  const lifetime=lifetimeSpend(c.id);
- const srcLabel={ads:'Ads',free_session:'Free session',organic:'Organic',family:'Family',friend:'Friend'};
+ const srcLabel=SOURCE_LABELS;
  const srcBadge=c.source?`<span class="c360-stat"><strong>Source:</strong> ${esc(srcLabel[c.source]||c.source)}</span>`:'';
  const waLinkUrl=c.wa?waLink(c.wa):null;
  const gmaps=c.gmaps_link||(c.address?'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent([c.address,c.kota,'Jakarta'].filter(Boolean).join(', ')):null);
@@ -9727,7 +9823,7 @@ function dashboardSourceROI(period){
   if(i.customer_id) bySource[src].customers.add(i.customer_id);
   bySource[src].revenue+=(i.total||0);
  });
- const labels={ads:'Ads',free_session:'Free session',organic:'Organic',family:'Family',friend:'Friend',_untagged:'Not tagged'};
+ const labels={...SOURCE_LABELS,_untagged:'Not tagged'};
  const rows=Object.entries(bySource).map(([src,d])=>({
   src,
   label:labels[src]||src,
@@ -9996,7 +10092,7 @@ function buildSubsBillingMessage(cust,lineItems,totalAmount,monthName){
  }).join('\n');
  const today=new Date();
  const day=today.getDate();
- const dueDay=parseInt(document.getElementById('inv-subs-due-day')?.value)||5;
+ const dueDay=parseInt(document.getElementById('inv-subs-due-day')?.value)||DUE_DAY_DEFAULT;
  const dueLine=day<=dueDay
   ? `Jatuh tempo: tanggal ${dueDay} bulan ini`
   : `Jatuh tempo: silakan WA balik untuk konfirmasi`;
