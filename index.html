@@ -1795,6 +1795,9 @@ let HP_LOGO="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAC1CAIAAACVhifWA
 let BIZ_NAME='HomePaw', BIZ_TAGLINE='Dog Home Grooming \u00B7 Jakarta', WA_CLOSING_TPL='Terima kasih sudah mempercayai {biz} \uD83D\uDC3E';
 let _cfgLogoData=null;
 function waClosing(){return WA_CLOSING_TPL.replace(/\{biz\}/g,BIZ_NAME)}
+let WA_TPL_DONE='Halo kak {nama},\n\nGrooming {dogs} sudah selesai hari ini!\n\nDetail layanan:\n{layanan}\n\nStatus: \u2714 SUDAH DIBAYAR (subscription/prepaid)\nTidak ada tagihan tambahan.\n\n\uD83D\uDCCE Detail lengkap (foto & catatan groomer) terlampir di invoice PDF.\n\nTerima kasih sudah mempercayai {biz} \uD83D\uDC3E\nSampai jumpa grooming berikutnya!';
+let REM_GREETING='Halo kak {nama}', REM_CLOSING='Sampai jumpa besok ya kak!';
+function applyTpl(tpl,vars){return String(tpl||'').replace(/\{(\w+)\}/g,(m,k)=>vars[k]!=null?vars[k]:'')}
 let CUSTOM_FIELDS={customers:[],pets:[]};
 let _cfgCustomFields=null;
 let invSelectedCust=null, invSelectedDogs=[], invDogServices={}, invDogNotes={}, invEditId=null;
@@ -5003,7 +5006,10 @@ const CFG_DEFAULTS={
  followupDays:STALE_DAYS,
  branding:{bizName:BIZ_NAME,tagline:BIZ_TAGLINE,logo:HP_LOGO},
  waClosing:WA_CLOSING_TPL,
- customFields:{customers:[],pets:[]}
+ customFields:{customers:[],pets:[]},
+ waTplDone:WA_TPL_DONE,
+ remGreeting:REM_GREETING,
+ remClosing:REM_CLOSING
 };
 function applyCfg(){
  CFG=(bankSettings&&bankSettings.config)||{};
@@ -5021,6 +5027,9 @@ function applyCfg(){
  if(CFG.branding){if(CFG.branding.bizName)BIZ_NAME=CFG.branding.bizName;if(CFG.branding.tagline)BIZ_TAGLINE=CFG.branding.tagline;if(CFG.branding.logo)HP_LOGO=CFG.branding.logo;}
  if(CFG.waClosing) WA_CLOSING_TPL=CFG.waClosing;
  if(CFG.customFields) CUSTOM_FIELDS={customers:CFG.customFields.customers||[],pets:CFG.customFields.pets||[]};
+ if(CFG.waTplDone) WA_TPL_DONE=CFG.waTplDone;
+ if(CFG.remGreeting!=null) REM_GREETING=CFG.remGreeting;
+ if(CFG.remClosing!=null) REM_CLOSING=CFG.remClosing;
  SERVICE_LIST=Object.keys(PRICING);
 }
 function fmtRp(n){return 'Rp '+(n||0).toLocaleString('id-ID')}
@@ -6724,7 +6733,7 @@ function buildInvoiceWAMessage(rec, custObj){
 
  if(isReport&&rec.total===0){
   // Service report — no payment needed
-  return `Halo kak ${firstName},\n\nGrooming ${dogNames} sudah selesai hari ini!\n\nDetail layanan:\n${svcSummary}\n\nStatus: \u2714 SUDAH DIBAYAR (subscription/prepaid)\nTidak ada tagihan tambahan.\n\n\uD83D\uDCCE Detail lengkap (foto & catatan groomer) terlampir di invoice PDF.\n\n${waClosing()}\nSampai jumpa grooming berikutnya!`;
+  return applyTpl(WA_TPL_DONE,{nama:firstName,dogs:dogNames,layanan:svcSummary,biz:BIZ_NAME});
  }
 
  let msg=`Halo kak ${firstName},\n\nBerikut detail grooming ${dogNames}:\n\n`;
@@ -7575,6 +7584,8 @@ function initReminders(){
  if(!di.value){const t=new Date();t.setDate(t.getDate()+1);di.value=iso(t)}
  const di2=document.getElementById('cust-rem-date');
  if(di2&&!di2.value){const t=new Date();t.setDate(t.getDate()+1);di2.value=iso(t)}
+ const gEl=document.getElementById('cust-rem-greeting'); if(gEl&&!gEl.value) gEl.value=REM_GREETING;
+ const cEl=document.getElementById('cust-rem-closing'); if(cEl&&!cEl.value) cEl.value=REM_CLOSING;
  generateReminders();
  generateCustomerReminders();
 }
@@ -7618,7 +7629,7 @@ function generateCustomerReminders(){
   const c=group.cust;
   const sortedAppts=group.appts.sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
   const ownerName=c.owner||'';
-  const greeting=greetingTpl||`Halo kak ${ownerName.split(' ')[0]||ownerName}`;
+  const greeting=greetingTpl?applyTpl(greetingTpl,{nama:ownerName.split(' ')[0]||ownerName,biz:BIZ_NAME}):`Halo kak ${ownerName.split(' ')[0]||ownerName}`;
 
   // Build message body — single vs multi dog
   // Batch O.8 — use customer_note (NOT appt_note which is groomer-facing); always append dog.prefs if dog has notes
@@ -8794,6 +8805,13 @@ function renderConfig(){
     <div style="font-size:12px">Logo (invoice)<div style="display:flex;align-items:center;gap:12px;margin-top:5px"><img id="cfg-logo-preview" src="${HP_LOGO}" alt="logo" style="height:60px;width:auto;border:1px solid var(--border);border-radius:6px;background:#fff;padding:2px"/><input type="file" accept="image/*" onchange="onCfgLogoChange(this)" style="font-size:12px"/></div></div>
    </div>`)}
   ${sec('Custom fields',`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Tambah info sendiri ke Customer / Pet. Muncul di form & Customer 360.</div><div id="cfg-customfields-body"></div>`)}
+  ${sec('Pesan WhatsApp',`
+   <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan "grooming selesai" (sudah dibayar) <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{layanan}</code> <code>{biz}</code></span><textarea id="cfg-wa-done" rows="9" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_DONE)}</textarea></label>
+    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Salam reminder customer <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code></span><input id="cfg-rem-greeting" type="text" value="${esc(REM_GREETING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
+    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Penutup reminder customer<input id="cfg-rem-closing" type="text" value="${esc(REM_CLOSING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
+    <div style="font-size:11px;color:var(--muted)">Pesan invoice (belum bayar) tetap dihitung otomatis oleh sistem karena ada logika diskon, biaya tambahan, dan rekening bank.</div>
+   </div>`)}
  `;
  cfRenderCustomFieldsEditor();
 }
@@ -8828,7 +8846,10 @@ async function saveConfig(){
  const config={pricing,tiers,durBase,durAdd,sourceLabels,dueDayDefault,hours,followupDays,styleRefTtlDays,tnc,areas,
   branding:{bizName:gv('cfg-biz-name')?.value.trim()||'HomePaw',tagline:gv('cfg-biz-tagline')?.value.trim()||'',logo:_cfgLogoData||HP_LOGO},
   waClosing:gv('cfg-wa-closing')?.value.trim()||WA_CLOSING_TPL,
-  customFields:_cfgCustomFields||{customers:[],pets:[]}};
+  customFields:_cfgCustomFields||{customers:[],pets:[]},
+  waTplDone:gv('cfg-wa-done')?.value||WA_TPL_DONE,
+  remGreeting:gv('cfg-rem-greeting')?.value??REM_GREETING,
+  remClosing:gv('cfg-rem-closing')?.value??REM_CLOSING};
  const {error}=await db.from('business_settings').upsert({id:1,config,updated_at:new Date().toISOString()});
  if(error){alert('Gagal simpan: '+error.message);return}
  await loadAll();
