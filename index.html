@@ -550,6 +550,7 @@ tbody tr:hover{background:var(--subtle)}
  </div>
  <div class="nav-user" id="nav-user-info" style="display:none">
   <span class="nav-user-email" id="nav-user-email"></span>
+  <button class="btn btn-g btn-sm" onclick="openPrefs()" title="Preferences">&#9881;</button>
   <button class="btn btn-g btn-sm" onclick="doLogout()">Sign out</button>
  </div>
  </div>
@@ -565,7 +566,26 @@ tbody tr:hover{background:var(--subtle)}
  <div class="nav-drawer-body" id="nav-drawer-body"></div>
  <div class="nav-drawer-footer">
   <div class="email" id="drawer-user-email"></div>
+  <button class="btn btn-g btn-sm" style="width:100%;margin-bottom:6px" onclick="closeNavDrawer();openPrefs()">Preferences</button>
   <button class="btn btn-g btn-sm" style="width:100%" onclick="doLogout()">Sign out</button>
+ </div>
+</div>
+
+<!-- Per-user preferences modal -->
+<div class="overlay" id="ov-prefs">
+ <div class="modal" style="max-width:420px">
+  <button class="modal-close" onclick="cm('ov-prefs')" title="Close">&#x2715;</button>
+  <div class="modal-title">Preferences</div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Tersimpan di browser ini saja (per pengguna).</div>
+  <div class="form-grid">
+   <div class="fg full"><label>Halaman awal saat buka</label><select id="pref-landing"><option value="dashboard">Dashboard</option><option value="calendar">Calendar</option><option value="invoice">Invoice</option></select></div>
+   <div class="fg full"><label>Tampilan calendar default</label><select id="pref-calview"><option value="week">Minggu</option><option value="3day">3 hari</option><option value="day">Hari</option></select></div>
+   <div class="fg full"><label>Periode dashboard default</label><select id="pref-dashperiod"><option value="cycle">Cycle berjalan</option><option value="prev_cycle">Cycle lalu</option><option value="this_month">Bulan ini</option><option value="last_month">Bulan lalu</option><option value="last_30">30 hari terakhir</option><option value="last_90">90 hari terakhir</option></select></div>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+   <button class="btn" style="background:var(--subtle)" onclick="cm('ov-prefs')">Batal</button>
+   <button class="btn" style="background:#16a34a;color:#fff" onclick="savePrefsFromModal()">Simpan</button>
+  </div>
  </div>
 </div>
 
@@ -2158,6 +2178,35 @@ let MEMBERSHIP_TNC=[
 ];
 function cm(id){document.getElementById(id).classList.remove('open')}
 function om(id){document.getElementById(id).classList.add('open')}
+// ===== Per-user preferences (localStorage, no backend) =====
+function getPrefs(){ try{return JSON.parse(localStorage.getItem('hp_prefs')||'{}')}catch(e){return {}} }
+function savePrefs(p){ try{localStorage.setItem('hp_prefs',JSON.stringify(p))}catch(e){} }
+function openPrefs(){
+ const p=getPrefs(), g=id=>document.getElementById(id);
+ if(g('pref-landing')) g('pref-landing').value=p.landing||(isOwner()?'dashboard':'calendar');
+ if(g('pref-calview')) g('pref-calview').value=p.calView||calView;
+ if(g('pref-dashperiod')) g('pref-dashperiod').value=p.dashPeriod||'cycle';
+ om('ov-prefs');
+}
+function savePrefsFromModal(){
+ const g=id=>document.getElementById(id);
+ const p={landing:g('pref-landing')?.value,calView:g('pref-calview')?.value,dashPeriod:g('pref-dashperiod')?.value};
+ savePrefs(p);
+ const activeTab=document.querySelector('.nav-tab.active')?.id;
+ if(p.calView){ if(activeTab==='tab-calendar') setCalView(p.calView); else calView=p.calView; }
+ const dp=g('dash-period'); if(dp&&p.dashPeriod){ dp.value=p.dashPeriod; if(activeTab==='tab-dashboard') renderDashboard(); }
+ cm('ov-prefs');
+ showToast('Preferensi tersimpan','success');
+}
+function applyPrefsOnBoot(role){
+ const p=getPrefs();
+ if(p.calView) calView=p.calView;
+ const dp=document.getElementById('dash-period'); if(dp&&p.dashPeriod) dp.value=p.dashPeriod;
+ let landing=p.landing||(role==='owner'?'dashboard':'calendar');
+ const lt=document.getElementById('tab-'+landing);
+ if(!lt||lt.style.display==='none') landing=(role==='owner'?'dashboard':'calendar');
+ sw(landing);
+}
 function esc(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function gmapsUrl(addr,manual){
  if(manual) return manual;
@@ -8570,8 +8619,8 @@ async function checkAuthState(){
   // Owner-only tabs: hide for admins
   const ownerOnlyTabs=['tab-dashboard','tab-financial','tab-access','tab-history','tab-settings'];
   ownerOnlyTabs.forEach(id=>{const el=document.getElementById(id); if(el) el.style.display=row.role==='owner'?'':'none';});
-  // Admins land on Calendar (Dashboard is hidden, cannot be the active tab)
-  if(row.role!=='owner') sw('calendar');
+  // Landing view honours per-user preference (falls back by role)
+  applyPrefsOnBoot(row.role);
   // Boot the app
   await loadAll();
   autoLogPastAppointments();
