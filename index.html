@@ -550,6 +550,7 @@ tbody tr:hover{background:var(--subtle)}
  </div>
  <div class="nav-user" id="nav-user-info" style="display:none">
   <span class="nav-user-email" id="nav-user-email"></span>
+  <button class="btn btn-g btn-sm" onclick="openSearch()" title="Search">&#128269;</button>
   <button class="btn btn-g btn-sm" onclick="openPrefs()" title="Preferences">&#9881;</button>
   <button class="btn btn-g btn-sm" onclick="doLogout()">Sign out</button>
  </div>
@@ -566,8 +567,19 @@ tbody tr:hover{background:var(--subtle)}
  <div class="nav-drawer-body" id="nav-drawer-body"></div>
  <div class="nav-drawer-footer">
   <div class="email" id="drawer-user-email"></div>
+  <button class="btn btn-g btn-sm" style="width:100%;margin-bottom:6px" onclick="closeNavDrawer();openSearch()">Search</button>
   <button class="btn btn-g btn-sm" style="width:100%;margin-bottom:6px" onclick="closeNavDrawer();openPrefs()">Preferences</button>
   <button class="btn btn-g btn-sm" style="width:100%" onclick="doLogout()">Sign out</button>
+ </div>
+</div>
+
+<!-- Global quick search -->
+<div class="overlay" id="ov-search">
+ <div class="modal" style="max-width:520px">
+  <button class="modal-close" onclick="cm('ov-search')" title="Close">&#x2715;</button>
+  <div class="modal-title">Cari</div>
+  <input id="gsearch-input" placeholder="Nama customer, WhatsApp, atau nama pet…" oninput="runGlobalSearch()" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:10px"/>
+  <div id="gsearch-results" style="max-height:50vh;overflow:auto"></div>
  </div>
 </div>
 
@@ -1797,6 +1809,7 @@ const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 let dogs=[], visits=[], appts=[], custs=[], groomers=[], invoices=[], tokens=[], subscriptions=[], bankSettings={}, custEditId=null, dogEditId=null, currentCustId=null, apptDate=null, apptEditId=null, groomerEditId=null, membEditState=null;
 let STALE_DAYS=14;
+let TOAST_MS=3500;
 let CFG={}, DUE_DAY_DEFAULT=5, SOURCE_LABELS={ads:'Ads',free_session:'Free session',organic:'Organic',family:'Family',friend:'Friend'};
 // Batch O.10
 let auditEntries=[], groomerBlocks=[];
@@ -2197,6 +2210,29 @@ function savePrefsFromModal(){
  const dp=g('dash-period'); if(dp&&p.dashPeriod){ dp.value=p.dashPeriod; if(activeTab==='tab-dashboard') renderDashboard(); }
  cm('ov-prefs');
  showToast('Preferensi tersimpan','success');
+}
+function openSearch(){
+ om('ov-search');
+ const i=document.getElementById('gsearch-input'); if(i){i.value='';setTimeout(()=>i.focus(),60);}
+ const r=document.getElementById('gsearch-results'); if(r) r.innerHTML='<div style="color:var(--muted);font-size:13px;padding:8px">Ketik untuk mencari…</div>';
+}
+function runGlobalSearch(){
+ const q=(document.getElementById('gsearch-input')?.value||'').trim().toLowerCase();
+ const r=document.getElementById('gsearch-results'); if(!r) return;
+ if(q.length<2){r.innerHTML='<div style="color:var(--muted);font-size:13px;padding:8px">Ketik minimal 2 huruf…</div>';return}
+ const row=(onclickAttr,main,sub)=>`<div onclick="${onclickAttr}" style="padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px" onmouseover="this.style.background='var(--subtle)'" onmouseout="this.style.background=''">${main} <span style="color:var(--muted);font-size:11px">${sub}</span></div>`;
+ const custHits=custs.filter(c=>((c.owner||'').toLowerCase().includes(q)||(c.wa||'').toLowerCase().includes(q))).slice(0,12);
+ const dogHits=dogs.filter(d=>(d.name||'').toLowerCase().includes(q)).slice(0,12);
+ let html='';
+ if(custHits.length){
+  html+='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:6px 0 3px">Customer</div>';
+  html+=custHits.map(c=>row(`cm('ov-search');openCust360('${c.id}')`,esc(c.owner||'—'),c.wa?esc(c.wa):'')).join('');
+ }
+ if(dogHits.length){
+  html+='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:8px 0 3px">Pet</div>';
+  html+=dogHits.map(d=>{const o=custs.find(c=>c.id===d.customer_id);return row(`cm('ov-search');openCust360('${d.customer_id}')`,esc(d.name||'—'),o?'· '+esc(o.owner):'')}).join('');
+ }
+ r.innerHTML=html||'<div style="color:var(--muted);font-size:13px;padding:8px">Tidak ada hasil.</div>';
 }
 function applyPrefsOnBoot(role){
  const p=getPrefs();
@@ -3393,7 +3429,7 @@ function showToast(msg, kind='error'){
  toast.textContent=msg;
  toast.style.opacity='1';
  clearTimeout(toast._timer);
- toast._timer=setTimeout(()=>{toast.style.opacity='0'},3500);
+ toast._timer=setTimeout(()=>{toast.style.opacity='0'},TOAST_MS);
 }
 
 /* ---- 4-STEP BOOKING WIZARD ---- */
@@ -5066,7 +5102,10 @@ const CFG_DEFAULTS={
  customFields:{customers:[],pets:[]},
  waTplDone:WA_TPL_DONE,
  remGreeting:REM_GREETING,
- remClosing:REM_CLOSING
+ remClosing:REM_CLOSING,
+ toastMs:3500,
+ autoLog:true,
+ dashCards:{invoiced:true,paid:true,unpaid:true,payroll:true}
 };
 function applyCfg(){
  CFG=(bankSettings&&bankSettings.config)||{};
@@ -5087,6 +5126,7 @@ function applyCfg(){
  if(CFG.waTplDone) WA_TPL_DONE=CFG.waTplDone;
  if(CFG.remGreeting!=null) REM_GREETING=CFG.remGreeting;
  if(CFG.remClosing!=null) REM_CLOSING=CFG.remClosing;
+ TOAST_MS=CFG.toastMs>0?CFG.toastMs:3500;
  SERVICE_LIST=Object.keys(PRICING);
 }
 function fmtRp(n){return 'Rp '+(n||0).toLocaleString('id-ID')}
@@ -8082,6 +8122,7 @@ function selectWizToken(id){
 }
 
 async function autoLogPastAppointments(){
+ if(CFG.autoLog===false) return;
  const today=iso(new Date());
  if(_lastHistoryCheck===today)return;
  _lastHistoryCheck=today;
@@ -8869,6 +8910,12 @@ function renderConfig(){
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Penutup reminder customer<input id="cfg-rem-closing" type="text" value="${esc(REM_CLOSING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
     <div style="font-size:11px;color:var(--muted)">Pesan invoice (belum bayar) tetap dihitung otomatis oleh sistem karena ada logika diskon, biaya tambahan, dan rekening bank.</div>
    </div>`)}
+  ${sec('Tampilan',`
+   <div style="display:flex;flex-direction:column;gap:12px;max-width:520px">
+    <label style="font-size:12px;display:flex;align-items:center;gap:8px">Durasi notifikasi (ms) <input id="cfg-toast-ms" type="number" value="${TOAST_MS}" min="1000" max="10000" step="500" style="width:90px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
+    <label style="font-size:12px;display:flex;align-items:center;gap:8px"><input id="cfg-autolog" type="checkbox" ${CFG.autoLog!==false?'checked':''}/> Auto-catat kunjungan dari appointment yang sudah lewat</label>
+    <div style="font-size:12px">Kartu dashboard yang tampil:<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px">${['invoiced|Total invoiced','paid|Paid','unpaid|Unpaid','payroll|Payroll est.'].map(x=>{const p=x.split('|');return `<label style="font-size:12px;display:flex;align-items:center;gap:5px"><input id="cfg-dashcard-${p[0]}" type="checkbox" ${(CFG.dashCards||{})[p[0]]!==false?'checked':''}/> ${p[1]}</label>`}).join('')}</div></div>
+   </div>`)}
  `;
  cfRenderCustomFieldsEditor();
 }
@@ -8900,7 +8947,15 @@ async function saveConfig(){
   areas[kota]=kecs;
  });
  cfSyncFromDOM();
- const config={pricing,tiers,durBase,durAdd,sourceLabels,dueDayDefault,hours,followupDays,styleRefTtlDays,tnc,areas,
+ const toastMs=Math.min(10000,Math.max(1000,parseInt(gv('cfg-toast-ms')?.value)||3500));
+ const autoLog=gv('cfg-autolog')?.checked??true;
+ const dashCards={
+  invoiced:gv('cfg-dashcard-invoiced')?.checked!==false,
+  paid:gv('cfg-dashcard-paid')?.checked!==false,
+  unpaid:gv('cfg-dashcard-unpaid')?.checked!==false,
+  payroll:gv('cfg-dashcard-payroll')?.checked!==false
+ };
+ const config={pricing,tiers,durBase,durAdd,sourceLabels,dueDayDefault,hours,followupDays,styleRefTtlDays,tnc,areas,toastMs,autoLog,dashCards,
   branding:{bizName:gv('cfg-biz-name')?.value.trim()||'HomePaw',tagline:gv('cfg-biz-tagline')?.value.trim()||'',logo:_cfgLogoData||HP_LOGO},
   waClosing:gv('cfg-wa-closing')?.value.trim()||WA_CLOSING_TPL,
   customFields:_cfgCustomFields||{customers:[],pets:[]},
@@ -10118,27 +10173,28 @@ function renderDashboard(){
  // ROW 1 — Money pulse cards
  const cardsEl=document.getElementById('dash-cards');
  if(cardsEl){
+  const dc=CFG.dashCards||{};
   cardsEl.innerHTML=`
-   <div class="card" style="padding:14px;border-left:4px solid #6366f1">
+   ${dc.invoiced!==false?`<div class="card" style="padding:14px;border-left:4px solid #6366f1">
     <div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Total invoiced</div>
     <div style="font-size:20px;font-weight:700;color:var(--text)">${fmtRp(m.totalInv)}</div>
     <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.invs.length} invoice${m.invs.length!==1?'s':''} \u00B7 ${m.dogsServed} dogs${m.manualBilledCount?` \u00B7 +${m.manualBilledCount} manual`:''}</div>
-   </div>
-   <div class="card" style="padding:14px;border-left:4px solid #16a34a">
+   </div>`:''}
+   ${dc.paid!==false?`<div class="card" style="padding:14px;border-left:4px solid #16a34a">
     <div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Paid</div>
     <div style="font-size:20px;font-weight:700;color:#15803d">${fmtRp(m.paidInv)}</div>
     <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.invs.filter(i=>i.status==='paid').length} paid</div>
-   </div>
-   <div class="card" style="padding:14px;border-left:4px solid #dc2626">
+   </div>`:''}
+   ${dc.unpaid!==false?`<div class="card" style="padding:14px;border-left:4px solid #dc2626">
     <div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Unpaid</div>
     <div style="font-size:20px;font-weight:700;color:#991b1b">${fmtRp(m.unpaidInv)}</div>
     <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.invs.filter(i=>i.status!=='paid').length} outstanding</div>
-   </div>
-   <div class="card" style="padding:14px;border-left:4px solid #ca8a04">
+   </div>`:''}
+   ${dc.payroll!==false?`<div class="card" style="padding:14px;border-left:4px solid #ca8a04">
     <div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Payroll est.</div>
     <div style="font-size:20px;font-weight:700;color:#854d0e">${fmtRp(m.payrollTotal)}</div>
     <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.dogsServed} \u00D7 ${fmtRp(payrollSettings.rate_per_dog||20000)}</div>
-   </div>`;
+   </div>`:''}`;
  }
 
  // ROW 2 — Action items
