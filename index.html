@@ -3009,6 +3009,7 @@ function renderCal(){
 }
 
 function handleApptClick(event,apptId){
+ if(Date.now()-_lastApptTouchOpen<700) return; // ignore ghost click after a tap-open on touch
  if(event.shiftKey||event.ctrlKey||event.metaKey){
   // Mass select mode
   if(massSelected.has(apptId)) massSelected.delete(apptId);
@@ -3100,6 +3101,7 @@ async function massMove(){
 /* ---- DRAG DROP ---- */
 // ─── Drag & Drop — Google Calendar style ───────────────────────────────────
 let draggedId=null;
+let _lastApptTouchOpen=0;
 let _dragGhost=null; // floating ghost element that follows cursor
 let _dragOffsetY=0;  // cursor offset within the block when drag started
 let _lastDropSlot=null; // {date, gid, m} for drop preview
@@ -3266,7 +3268,13 @@ function onApptTouchStart(e,apptId){
 
  const onEnd=async(ev)=>{
   clearTimeout(longPressTimer);
-  if(!activated){cleanup();return}
+  if(!activated){
+   // Clean tap (no long-press, no drag) — open the editor directly instead of relying on the ghost click
+   _lastApptTouchOpen=Date.now();
+   cleanup();
+   openApptEdit(apptId);
+   return;
+  }
   // Find drop target under finger
   const t=ev.changedTouches[0];
   const target=document.elementFromPoint(t.clientX,t.clientY);
