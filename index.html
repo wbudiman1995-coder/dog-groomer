@@ -536,23 +536,23 @@ tbody tr:hover{background:var(--subtle)}
  <button class="nav-hamburger" onclick="openNavDrawer()" aria-label="Menu">&#9776;</button>
  <div class="nav-brand">Groomer CRM</div>
  <div class="nav-tabs">
- <button class="nav-tab active" onclick="sw('dashboard')" id="tab-dashboard">Dashboard</button>
- <button class="nav-tab" onclick="sw('database')" id="tab-database">Database</button>
- <button class="nav-tab" onclick="sw('calendar')" id="tab-calendar">Calendar</button>
- <button class="nav-tab" onclick="sw('groomers')" id="tab-groomers">Groomers</button>
- <button class="nav-tab" onclick="sw('invoice')" id="tab-invoice">Invoice</button>
- <button class="nav-tab" onclick="sw('financial')" id="tab-financial">Financial</button>
- <button class="nav-tab" onclick="sw('reminders')" id="tab-reminders">Reminders</button>
- <button class="nav-tab" onclick="sw('membership')" id="tab-membership">Membership</button>
- <button class="nav-tab" onclick="sw('access')" id="tab-access" style="display:none">Access<span class="access-badge" id="access-badge" style="display:none">0</span></button>
- <button class="nav-tab" onclick="sw('history')" id="tab-history">History</button>
- <button class="nav-tab" onclick="sw('settings')" id="tab-settings">Settings</button>
+ <button class="nav-tab active" onclick="sw('dashboard')" id="tab-dashboard" data-i18n="nav.dashboard">Dashboard</button>
+ <button class="nav-tab" onclick="sw('database')" id="tab-database" data-i18n="nav.database">Database</button>
+ <button class="nav-tab" onclick="sw('calendar')" id="tab-calendar" data-i18n="nav.calendar">Calendar</button>
+ <button class="nav-tab" onclick="sw('groomers')" id="tab-groomers" data-i18n="nav.groomers">Groomers</button>
+ <button class="nav-tab" onclick="sw('invoice')" id="tab-invoice" data-i18n="nav.invoice">Invoice</button>
+ <button class="nav-tab" onclick="sw('financial')" id="tab-financial" data-i18n="nav.financial">Financial</button>
+ <button class="nav-tab" onclick="sw('reminders')" id="tab-reminders" data-i18n="nav.reminders">Reminders</button>
+ <button class="nav-tab" onclick="sw('membership')" id="tab-membership" data-i18n="nav.membership">Membership</button>
+ <button class="nav-tab" onclick="sw('access')" id="tab-access" style="display:none" data-i18n="nav.access">Access<span class="access-badge" id="access-badge" style="display:none">0</span></button>
+ <button class="nav-tab" onclick="sw('history')" id="tab-history" data-i18n="nav.history">History</button>
+ <button class="nav-tab" onclick="sw('settings')" id="tab-settings" data-i18n="nav.settings">Settings</button>
  </div>
  <div class="nav-user" id="nav-user-info" style="display:none">
   <span class="nav-user-email" id="nav-user-email"></span>
-  <button class="btn btn-g btn-sm" onclick="openSearch()" title="Search">&#128269;</button>
-  <button class="btn btn-g btn-sm" onclick="openPrefs()" title="Preferences">&#9881;</button>
-  <button class="btn btn-g btn-sm" onclick="doLogout()">Sign out</button>
+  <button class="btn btn-g btn-sm" onclick="openSearch()" title="Search" data-i18n-title="ui.search">&#128269;</button>
+  <button class="btn btn-g btn-sm" onclick="openPrefs()" title="Preferences" data-i18n-title="ui.prefs">&#9881;</button>
+  <button class="btn btn-g btn-sm" onclick="doLogout()" data-i18n="ui.signout">Sign out</button>
  </div>
  </div>
 </nav>
@@ -567,9 +567,9 @@ tbody tr:hover{background:var(--subtle)}
  <div class="nav-drawer-body" id="nav-drawer-body"></div>
  <div class="nav-drawer-footer">
   <div class="email" id="drawer-user-email"></div>
-  <button class="btn btn-g btn-sm" style="width:100%;margin-bottom:6px" onclick="closeNavDrawer();openSearch()">Search</button>
-  <button class="btn btn-g btn-sm" style="width:100%;margin-bottom:6px" onclick="closeNavDrawer();openPrefs()">Preferences</button>
-  <button class="btn btn-g btn-sm" style="width:100%" onclick="doLogout()">Sign out</button>
+  <button class="btn btn-g btn-sm" style="width:100%;margin-bottom:6px" onclick="closeNavDrawer();openSearch()" data-i18n="ui.search">Search</button>
+  <button class="btn btn-g btn-sm" style="width:100%;margin-bottom:6px" onclick="closeNavDrawer();openPrefs()" data-i18n="ui.prefs">Preferences</button>
+  <button class="btn btn-g btn-sm" style="width:100%" onclick="doLogout()" data-i18n="ui.signout">Sign out</button>
  </div>
 </div>
 
@@ -593,6 +593,7 @@ tbody tr:hover{background:var(--subtle)}
    <div class="fg full"><label>Halaman awal saat buka</label><select id="pref-landing"><option value="dashboard">Dashboard</option><option value="calendar">Calendar</option><option value="invoice">Invoice</option></select></div>
    <div class="fg full"><label>Tampilan calendar default</label><select id="pref-calview"><option value="week">Minggu</option><option value="3day">3 hari</option><option value="day">Hari</option></select></div>
    <div class="fg full"><label>Periode dashboard default</label><select id="pref-dashperiod"><option value="cycle">Cycle berjalan</option><option value="prev_cycle">Cycle lalu</option><option value="this_month">Bulan ini</option><option value="last_month">Bulan lalu</option><option value="last_30">30 hari terakhir</option><option value="last_90">90 hari terakhir</option></select></div>
+   <div class="fg full"><label>Bahasa / Language</label><select id="pref-lang"><option value="en">English</option><option value="id">Bahasa Indonesia</option></select></div>
   </div>
   <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
    <button class="btn" style="background:var(--subtle)" onclick="cm('ov-prefs')">Batal</button>
@@ -1831,6 +1832,23 @@ function waClosing(){return WA_CLOSING_TPL.replace(/\{biz\}/g,BIZ_NAME)}
 let WA_TPL_DONE='Halo kak {nama},\n\nGrooming {dogs} sudah selesai hari ini!\n\nDetail layanan:\n{layanan}\n\nStatus: \u2714 SUDAH DIBAYAR (subscription/prepaid)\nTidak ada tagihan tambahan.\n\n\uD83D\uDCCE Detail lengkap (foto & catatan groomer) terlampir di invoice PDF.\n\nTerima kasih sudah mempercayai {biz} \uD83D\uDC3E\nSampai jumpa grooming berikutnya!';
 let REM_GREETING='Halo kak {nama}', REM_CLOSING='Sampai jumpa besok ya kak!';
 function applyTpl(tpl,vars){return String(tpl||'').replace(/\{(\w+)\}/g,(m,k)=>vars[k]!=null?vars[k]:'')}
+
+// ===== i18n (translation layer) =====
+// Default 'en' keeps the current on-screen text unchanged. Untranslated keys fall back to the element's existing text.
+let LANG='en';
+const I18N={
+ en:{'nav.dashboard':'Dashboard','nav.database':'Database','nav.calendar':'Calendar','nav.groomers':'Groomers','nav.invoice':'Invoice','nav.financial':'Financial','nav.reminders':'Reminders','nav.membership':'Membership','nav.access':'Access','nav.history':'History','nav.settings':'Settings','ui.signout':'Sign out','ui.search':'Search','ui.prefs':'Preferences'},
+ id:{'nav.dashboard':'Dasbor','nav.database':'Data','nav.calendar':'Kalender','nav.groomers':'Groomer','nav.invoice':'Invoice','nav.financial':'Keuangan','nav.reminders':'Pengingat','nav.membership':'Keanggotaan','nav.access':'Akses','nav.history':'Riwayat','nav.settings':'Pengaturan','ui.signout':'Keluar','ui.search':'Cari','ui.prefs':'Preferensi'}
+};
+function t(key){ const d=I18N[LANG]||{}; if(d[key]!==undefined) return d[key]; return null; }
+function applyI18n(){
+ document.querySelectorAll('[data-i18n]').forEach(el=>{
+  const val=t(el.getAttribute('data-i18n')); if(val==null) return;
+  const tn=[...el.childNodes].find(n=>n.nodeType===3&&n.nodeValue.trim());
+  if(tn) tn.nodeValue=val; else if(!el.children.length) el.textContent=val;
+ });
+ document.querySelectorAll('[data-i18n-title]').forEach(el=>{const v=t(el.getAttribute('data-i18n-title')); if(v!=null) el.title=v;});
+}
 let CUSTOM_FIELDS={customers:[],pets:[]};
 let _cfgCustomFields=null;
 let invSelectedCust=null, invSelectedDogs=[], invDogServices={}, invDogNotes={}, invEditId=null;
@@ -2199,15 +2217,17 @@ function openPrefs(){
  if(g('pref-landing')) g('pref-landing').value=p.landing||(isOwner()?'dashboard':'calendar');
  if(g('pref-calview')) g('pref-calview').value=p.calView||calView;
  if(g('pref-dashperiod')) g('pref-dashperiod').value=p.dashPeriod||'cycle';
+ if(g('pref-lang')) g('pref-lang').value=p.lang||LANG;
  om('ov-prefs');
 }
 function savePrefsFromModal(){
  const g=id=>document.getElementById(id);
- const p={landing:g('pref-landing')?.value,calView:g('pref-calview')?.value,dashPeriod:g('pref-dashperiod')?.value};
+ const p={landing:g('pref-landing')?.value,calView:g('pref-calview')?.value,dashPeriod:g('pref-dashperiod')?.value,lang:g('pref-lang')?.value};
  savePrefs(p);
  const activeTab=document.querySelector('.nav-tab.active')?.id;
  if(p.calView){ if(activeTab==='tab-calendar') setCalView(p.calView); else calView=p.calView; }
  const dp=g('dash-period'); if(dp&&p.dashPeriod){ dp.value=p.dashPeriod; if(activeTab==='tab-dashboard') renderDashboard(); }
+ if(p.lang){ LANG=p.lang; applyI18n(); }
  cm('ov-prefs');
  showToast('Preferensi tersimpan','success');
 }
@@ -2236,6 +2256,7 @@ function runGlobalSearch(){
 }
 function applyPrefsOnBoot(role){
  const p=getPrefs();
+ if(p.lang){ LANG=p.lang; applyI18n(); }
  if(p.calView) calView=p.calView;
  const dp=document.getElementById('dash-period'); if(dp&&p.dashPeriod) dp.value=p.dashPeriod;
  let landing=p.landing||(role==='owner'?'dashboard':'calendar');
@@ -10615,3 +10636,4 @@ checkAuthState();
 
 </body>
 </html>
+   
