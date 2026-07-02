@@ -1602,6 +1602,19 @@ tbody tr:hover{background:var(--subtle)}
  <div class="fg"><label>Phone</label><input id="gf-phone" placeholder="08xxxxxxxxxx"/></div>
  <div class="fg"><label>Color</label><input type="color" id="gf-color" value="#16a34a" style="height:38px;padding:2px"/></div>
  <div class="fg"><label>Gaji pokok (Rp/bulan)</label><input type="number" id="gf-basic-salary" value="0" min="0" placeholder="0"/></div>
+ <div class="fg" id="gf-join-fg"><label>Join date</label><input type="date" id="gf-join-date"/></div>
+ <div class="fg full" id="gf-comp-section" style="border-top:1px solid var(--border);padding-top:8px">
+  <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Komponen gaji (per worker)</div>
+  <div style="display:flex;flex-direction:column;gap:7px;font-size:12px">
+   <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="gf-c-weekly"/> Gaji mingguan (prorata) <input type="number" id="gf-c-weekly-amt" value="200000" style="width:100px;margin-left:auto;padding:2px 4px"/></label>
+   <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="gf-c-nolate"/> Bonus no-late <input type="number" id="gf-c-nolate-amt" value="300000" style="width:100px;margin-left:auto;padding:2px 4px"/></label>
+   <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="gf-c-nosick"/> Bonus no-sakit <input type="number" id="gf-c-nosick-amt" value="300000" style="width:100px;margin-left:auto;padding:2px 4px"/></label>
+   <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="gf-c-styling"/> Styling <input type="number" id="gf-c-styling-pct" value="10" style="width:46px;margin-left:auto;padding:2px 4px"/>% dari harga</label>
+   <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="gf-c-perdog" checked/> Per dog <select id="gf-c-perdog-mode" style="margin-left:auto;padding:2px 4px"><option value="matrix">Size matrix</option><option value="flat">Flat</option></select> <input type="number" id="gf-c-perdog-amt" value="20000" style="width:78px;padding:2px 4px"/></label>
+   <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="gf-c-daily"/> Uang harian <input type="number" id="gf-c-daily-amt" value="30000" style="width:100px;margin-left:auto;padding:2px 4px"/></label>
+   <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="gf-c-retention"/> Deposit retensi <input type="number" id="gf-c-retention-amt" value="500000" style="width:86px;margin-left:auto;padding:2px 4px"/>/bln <input type="number" id="gf-c-retention-months" value="24" style="width:42px;padding:2px 4px"/>bln</label>
+  </div>
+ </div>
  <div class="fg full"><label><input type="checkbox" id="gf-active" checked style="margin-right:6px;vertical-align:middle"/>Active (shows on calendar)</label></div>
  </div>
  <div class="form-actions">
@@ -4858,11 +4871,25 @@ function openAddGroomer(){
  document.getElementById('gf-phone').value='';
  document.getElementById('gf-color').value='#16a34a';
  document.getElementById('gf-active').checked=true;
- const bsEl=document.getElementById('gf-basic-salary'); if(bsEl) bsEl.value=0;
- const bsFg=bsEl?bsEl.closest('.fg'):null; if(bsFg) bsFg.style.display=isOwner()?'':'none';
+ fillGroomerComp(null);
  om('ov-groomer');
 }
 
+function fillGroomerComp(g){
+ const c=groomerComp(g);
+ const S=(id,v)=>{const e=document.getElementById(id); if(e){ if(e.type==='checkbox') e.checked=!!v; else e.value=(v==null?'':v); }};
+ S('gf-basic-salary',g?.basic_salary||0); S('gf-join-date',g?.join_date||'');
+ S('gf-c-weekly',c.weekly.on); S('gf-c-weekly-amt',c.weekly.amount);
+ S('gf-c-nolate',c.noLate.on); S('gf-c-nolate-amt',c.noLate.amount);
+ S('gf-c-nosick',c.noSick.on); S('gf-c-nosick-amt',c.noSick.amount);
+ S('gf-c-styling',c.styling.on); S('gf-c-styling-pct',c.styling.pct);
+ S('gf-c-perdog',c.perDog.on); S('gf-c-perdog-mode',c.perDog.useMatrix?'matrix':'flat'); S('gf-c-perdog-amt',c.perDog.amount);
+ S('gf-c-daily',c.daily.on); S('gf-c-daily-amt',c.daily.amount);
+ S('gf-c-retention',c.retention.on); S('gf-c-retention-amt',c.retention.amount); S('gf-c-retention-months',c.retention.months);
+ const own=isOwner();
+ ['gf-basic-salary','gf-join-date'].forEach(id=>{const fg=document.getElementById(id)?.closest('.fg'); if(fg) fg.style.display=own?'':'none';});
+ const sec=document.getElementById('gf-comp-section'); if(sec) sec.style.display=own?'':'none';
+}
 function openEditGroomer(id){
  const g=groomers.find(x=>x.id===id); if(!g) return;
  groomerEditId=id;
@@ -4872,20 +4899,30 @@ function openEditGroomer(id){
  document.getElementById('gf-phone').value=g.phone||'';
  document.getElementById('gf-color').value=g.color||'#16a34a';
  document.getElementById('gf-active').checked=g.active!==false;
- const bsEl=document.getElementById('gf-basic-salary'); if(bsEl) bsEl.value=g.basic_salary||0;
- const bsFg=bsEl?bsEl.closest('.fg'):null; if(bsFg) bsFg.style.display=isOwner()?'':'none';
+ fillGroomerComp(g);
  om('ov-groomer');
 }
 
 async function saveGroomer(){
  const name=document.getElementById('gf-name').value.trim();
  if(!name){alert('Name required.');return}
+ const gv=id=>document.getElementById(id);
  const p={
  name,
  phone:document.getElementById('gf-phone').value.trim(),
  color:document.getElementById('gf-color').value,
  active:document.getElementById('gf-active').checked,
- basic_salary:parseInt(document.getElementById('gf-basic-salary')?.value)||0
+ basic_salary:parseInt(document.getElementById('gf-basic-salary')?.value)||0,
+ join_date:gv('gf-join-date')?.value||null,
+ comp:{
+  weekly:{on:gv('gf-c-weekly')?.checked||false,amount:parseInt(gv('gf-c-weekly-amt')?.value)||0},
+  noLate:{on:gv('gf-c-nolate')?.checked||false,amount:parseInt(gv('gf-c-nolate-amt')?.value)||0},
+  noSick:{on:gv('gf-c-nosick')?.checked||false,amount:parseInt(gv('gf-c-nosick-amt')?.value)||0},
+  styling:{on:gv('gf-c-styling')?.checked||false,pct:parseFloat(gv('gf-c-styling-pct')?.value)||0},
+  perDog:{on:gv('gf-c-perdog')?.checked||false,useMatrix:(gv('gf-c-perdog-mode')?.value||'matrix')==='matrix',amount:parseInt(gv('gf-c-perdog-amt')?.value)||0},
+  daily:{on:gv('gf-c-daily')?.checked||false,amount:parseInt(gv('gf-c-daily-amt')?.value)||0},
+  retention:{on:gv('gf-c-retention')?.checked||false,amount:parseInt(gv('gf-c-retention-amt')?.value)||0,months:parseInt(gv('gf-c-retention-months')?.value)||24}
+ }
  };
  if(groomerEditId){await db.from('groomers').update(p).eq('id',groomerEditId)}
  else{
@@ -9496,88 +9533,164 @@ function computeGroomerDogsInCycle(groomerId,cycle){
  return {sizes,total,totalAmount};
 }
 
+// ===== Compensation engine (per-worker) =====
+function groomerComp(g){
+ const c=(g&&g.comp)||{};
+ const pick=(o,d)=>o||{};
+ return {
+  weekly:{on:c.weekly?.on??false, amount:c.weekly?.amount??200000},
+  noLate:{on:c.noLate?.on??false, amount:c.noLate?.amount??300000},
+  noSick:{on:c.noSick?.on??false, amount:c.noSick?.amount??300000},
+  styling:{on:c.styling?.on??false, pct:c.styling?.pct??10},
+  perDog:{on:c.perDog?.on??true, useMatrix:c.perDog?.useMatrix??true, amount:c.perDog?.amount??20000},
+  daily:{on:c.daily?.on??false, amount:c.daily?.amount??30000},
+  retention:{on:c.retention?.on??false, amount:c.retention?.amount??500000, months:c.retention?.months??24}
+ };
+}
+function tenureMonths(g){
+ if(!g?.join_date) return null;
+ const j=new Date(g.join_date+'T00:00:00'), n=new Date();
+ let m=(n.getFullYear()-j.getFullYear())*12+(n.getMonth()-j.getMonth());
+ if(n.getDate()<j.getDate()) m--; // not full month yet
+ return Math.max(0,m);
+}
+function _wdList(g){return (g?.working_days||'Mon,Tue,Wed,Thu,Fri,Sat').split(',').map(s=>s.trim()).filter(Boolean);}
+function groomerScheduledDays(g,cycle){
+ const wd=_wdList(g), dayMap=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], today=iso(new Date());
+ let n=0, d=new Date(cycle.start+'T00:00:00'); const end=new Date(cycle.end+'T00:00:00');
+ while(d<=end){ const ds=iso(d); if(ds<=today&&wd.includes(dayMap[d.getDay()])) n++; d.setDate(d.getDate()+1); }
+ return n;
+}
+function groomerBlockedDays(groomerId,cycle,reasons){
+ const g=groomers.find(x=>x.id===groomerId), wd=_wdList(g), dayMap=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], today=iso(new Date());
+ const dates=new Set();
+ (typeof groomerBlocks!=='undefined'?groomerBlocks:[]).forEach(b=>{
+  if(!b.block_date||b.block_date<cycle.start||b.block_date>cycle.end||b.block_date>today) return;
+  if(b.groomer_id&&b.groomer_id!==groomerId) return;
+  if(reasons&&!reasons.includes(b.reason)) return;
+  if(!wd.includes(dayMap[new Date(b.block_date+'T00:00:00').getDay()])) return;
+  dates.add(b.block_date);
+ });
+ return dates.size;
+}
+function groomerStylingRevenue(groomerId,cycle){
+ let rev=0;
+ invoices.forEach(inv=>{
+  if(!inv.invoice_date||inv.invoice_date<cycle.start||inv.invoice_date>cycle.end||inv.groomer_id!==groomerId) return;
+  (inv.dogs||[]).forEach(d=>(d.services||[]).forEach(s=>{ if(s.name==='Styling') rev+=(s.price||0); }));
+ });
+ return rev;
+}
+function computeGroomerPay(g,cycle){
+ const c=groomerComp(g);
+ const scheduled=groomerScheduledDays(g,cycle);
+ const sickDays=groomerBlockedDays(g.id,cycle,['sick']);
+ const offDays=groomerBlockedDays(g.id,cycle,['sick','leave','holiday','libur_mingguan','other']);
+ const daysWorked=Math.max(0,scheduled-offDays);
+ const wdPerWeek=_wdList(g).length||6;
+ const lateCount=calcGroomerLateCountForCycle(g.id,cycle.start,cycle.end);
+ const {total:dogCount,totalAmount:matrixAmount}=computeGroomerDogsInCycle(g.id,cycle);
+ const stylingRev=groomerStylingRevenue(g.id,cycle);
+ const comp={
+  basic: g.basic_salary||0,
+  weekly: c.weekly.on?Math.round((c.weekly.amount/wdPerWeek)*daysWorked):0,
+  noLate: c.noLate.on?(lateCount===0?c.noLate.amount:0):0,
+  noSick: c.noSick.on?(sickDays===0?c.noSick.amount:0):0,
+  styling: c.styling.on?Math.round(stylingRev*c.styling.pct/100):0,
+  perDog: c.perDog.on?(c.perDog.useMatrix?matrixAmount:c.perDog.amount*dogCount):0,
+  daily: c.daily.on?c.daily.amount*daysWorked:0
+ };
+ const takeHome=Object.values(comp).reduce((s,v)=>s+v,0);
+ const ten=tenureMonths(g);
+ let retBalance=0,retPayable=false,retMonths=0;
+ if(c.retention.on&&ten!=null){ retMonths=Math.min(c.retention.months,ten); retBalance=retMonths*c.retention.amount; retPayable=ten>=c.retention.months; }
+ return {c,comp,takeHome,meta:{scheduled,daysWorked,sickDays,lateCount,dogCount,stylingRev,wdPerWeek},retention:{on:c.retention.on,balance:retBalance,payable:retPayable,months:retMonths,target:c.retention.months,per:c.retention.amount,tenure:ten}};
+}
+const COMP_LINES=[['basic','Gaji pokok'],['weekly','Gaji mingguan'],['noLate','Bonus no-late'],['noSick','Bonus no-sakit'],['styling','Styling %'],['perDog','Per dog'],['daily','Uang harian']];
+function recalcPayCard(gid){
+ let sum=0; COMP_LINES.forEach(([k])=>{const el=document.getElementById(`pay-${gid}-${k}`); if(el) sum+=parseInt(el.value)||0;});
+ const t=document.getElementById(`pay-total-${gid}`); if(t) t.textContent=fmtRp(sum);
+}
 function renderPayroll(){
  const cycle=getPayrollCycle(payrollCycleAnchor);
  const lbl=document.getElementById('payroll-cycle-lbl');
  if(lbl) lbl.textContent='Cycle: '+cycle.label;
- const rate=payrollSettings.rate_per_dog||20000;
  const wrap=document.getElementById('payroll-cards');
  if(!wrap) return;
  const activeGroomers=groomers.filter(g=>g.active);
  if(!activeGroomers.length){wrap.innerHTML='<div style="color:var(--muted);padding:1rem">Belum ada groomer aktif.</div>';return}
  let grandTotal=0;
  const cards=activeGroomers.map(g=>{
-  const {sizes,total,totalAmount}=computeGroomerDogsInCycle(g.id,cycle);
-  grandTotal+=totalAmount;
-  const payout=groomerPayouts.find(p=>p.groomer_id===g.id&&p.cycle_start===cycle.start);
+  const payout=groomerPayouts.find(p=>p.groomer_id===g.id&&p.cycle_start===cycle.start&&(p.payout_type||'salary')==='salary');
   const isPaid=payout&&payout.status==='paid';
-  const displayTotal=isPaid?(payout.dogs_counted?Object.values(payout.dogs_counted).reduce((s,n)=>s+n,0):total):total;
-  const displayAmount=isPaid?payout.amount:totalAmount;
-  const displayBonus=isPaid?(payout.bonus||0):0;
-  if(isPaid) grandTotal=grandTotal-totalAmount+payout.amount;
-  const rbs=payrollSettings.rate_by_size||{};
-  const sizeRows=Object.entries(sizes).filter(([,n])=>n>0).map(([s,n])=>{
-   const r=rbs[s]??payrollSettings.rate_per_dog??20000;
-   return `<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);padding:1px 0"><span>${esc(s)}</span><span>${n} × ${fmtRp(r)}</span></div>`;
+  const pay=computeGroomerPay(g,cycle);
+  const m=pay.meta;
+  const notes={basic:'',weekly:`${m.daysWorked}/${m.scheduled} hari`,noLate:`late: ${m.lateCount}`,noSick:`sakit: ${m.sickDays} hari`,styling:`${pay.c.styling.pct}% × ${fmtRp(m.stylingRev)}`,perDog:`${m.dogCount} dog${pay.c.perDog.useMatrix?' (matrix)':''}`,daily:`${m.daysWorked} hari × ${fmtRp(pay.c.daily.amount)}`};
+  const stored=isPaid?(payout.breakdown||{}):null;
+  const val=k=>stored?(stored[k]||0):pay.comp[k];
+  const rows=COMP_LINES.map(([k,label])=>{
+   const auto=pay.comp[k];
+   const input=isPaid?`<strong style="font-size:12px">${fmtRp(val(k))}</strong>`:`<input type="number" id="pay-${g.id}-${k}" value="${auto}" oninput="recalcPayCard('${g.id}')" style="width:110px;text-align:right;padding:2px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>`;
+   return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0"><span style="font-size:11px;color:var(--muted)">${label}${notes[k]?` <span style="opacity:.65">(${notes[k]})</span>`:''}</span>${input}</div>`;
   }).join('');
-  const stylingNote=rbs.styling?`<div style="font-size:10px;color:var(--primary);margin-top:2px">+ Rp ${(rbs.styling||0).toLocaleString('id-ID')} per sesi styling</div>`:'';
+  const total=isPaid?(payout.amount||0):pay.takeHome;
+  grandTotal+=total;
+  const ret=pay.retention;
+  const retPaid=groomerPayouts.find(p=>p.groomer_id===g.id&&p.payout_type==='retention');
+  let retBlock='';
+  if(ret.on){
+   retBlock=`<div style="margin-top:8px;padding:6px 8px;background:#eef2ff;border-radius:5px;font-size:11px">
+    <div style="display:flex;justify-content:space-between"><span style="color:#3730a3;font-weight:600">Deposit retensi</span><span>${fmtRp(retPaid?0:ret.balance)}</span></div>
+    <div style="color:var(--muted);margin-top:2px">${retPaid?`\u2714 Sudah dibayar ${retPaid.paid_at?fmtD(retPaid.paid_at.slice(0,10)):''}`:(ret.tenure==null?'Set join date dulu':`Bulan ${ret.months}/${ret.target} \u00B7 ${fmtRp(ret.per)}/bln`)}</div>
+    ${!retPaid&&ret.payable?`<button class="btn btn-p btn-sm" style="width:100%;margin-top:5px" onclick="payGroomerRetention('${g.id}','${cycle.start}','${cycle.end}',${ret.balance})">Bayar deposit (${fmtRp(ret.balance)})</button>`:''}
+   </div>`;
+  }
   return `<div class="card" style="padding:14px;border-left:4px solid ${esc(g.color||'#16a34a')}">
    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
-    <div>
-     <div style="font-weight:600;font-size:14px">${esc(g.name)}</div>
-     <div style="font-size:11px;color:var(--muted)">${displayTotal} sesi${displayTotal!==1?'':''}</div>
-    </div>
+    <div style="font-weight:600;font-size:14px">${esc(g.name)}</div>
     ${isPaid?`<span class="badge bs" title="Paid ${payout.paid_at?fmtD(payout.paid_at.slice(0,10)):''}">PAID</span>`:`<span class="badge bm">PENDING</span>`}
    </div>
-   <div style="background:var(--subtle);padding:6px 8px;border-radius:5px;margin-bottom:8px;min-height:24px">${sizeRows||'<div style="font-size:11px;color:var(--muted)">No sessions</div>'}${stylingNote}</div>
-   ${isPaid&&displayBonus?`<div style="font-size:11px;color:var(--muted);margin-bottom:4px">Bonus: ${fmtRp(displayBonus)}</div>`:''}
-   <div style="display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--border);padding-top:8px">
-    <span style="font-size:11px;color:var(--muted)">Incentive${isPaid&&displayBonus?' + Bonus':''}</span>
-    <strong style="font-size:15px;color:#16a34a">${fmtRp(displayAmount+(isPaid?displayBonus:0))}</strong>
+   <div style="border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px 0;margin-bottom:8px">${rows}</div>
+   <div style="display:flex;justify-content:space-between;align-items:baseline">
+    <span style="font-size:11px;color:var(--muted)">Take-home</span>
+    <strong style="font-size:16px;color:#16a34a" id="pay-total-${g.id}">${fmtRp(total)}</strong>
    </div>
-   ${isPaid?`<button class="btn btn-g btn-sm" style="width:100%;margin-top:8px" onclick="unmarkGroomerPaid('${g.id}','${cycle.start}')">Undo payment</button>`:`<button class="btn btn-p btn-sm" style="width:100%;margin-top:8px" onclick="markGroomerPaid('${g.id}','${cycle.start}','${cycle.end}')" ${total===0?'disabled':''}>Mark as paid</button>`}
+   ${retBlock}
+   ${isPaid?`<button class="btn btn-g btn-sm" style="width:100%;margin-top:8px" onclick="unmarkGroomerPaid('${g.id}','${cycle.start}')">Undo payment</button>`:`<button class="btn btn-p btn-sm" style="width:100%;margin-top:8px" onclick="markGroomerPaid('${g.id}','${cycle.start}','${cycle.end}')">Mark as paid</button>`}
   </div>`;
  }).join('');
  wrap.innerHTML=cards;
  const totEl=document.getElementById('payroll-total');
- if(totEl) totEl.innerHTML=`Total payroll cycle: <strong style="color:#16a34a">Rp ${grandTotal.toLocaleString('id-ID')}</strong>`;
+ if(totEl) totEl.innerHTML=`Total take-home cycle: <strong style="color:#16a34a">${fmtRp(grandTotal)}</strong>`;
 }
 
 async function markGroomerPaid(groomerId,cycleStart,cycleEnd){
  const g=groomers.find(x=>x.id===groomerId); if(!g){alert('Groomer not found');return}
  const cycle={start:cycleStart,end:cycleEnd};
- const {sizes,total,totalAmount}=computeGroomerDogsInCycle(groomerId,cycle);
- const rate=payrollSettings.rate_per_dog||20000;
- const incentive=totalAmount;
- const basicSalary=g.basic_salary||0;
- const bonusStr=prompt(`Bonus untuk ${g.name} cycle ini? (Rp, kosongkan jika tidak ada)`,'0');
- if(bonusStr===null) return;
- const bonus=parseInt(bonusStr)||0;
- const amount=incentive+bonus;
- const totalIncBasic=basicSalary+amount;
- if(!confirm(`Bayar ${g.name}?\n\nCycle: ${cycleStart} → ${cycleEnd}\nDogs: ${total} × Rp ${rate.toLocaleString('id-ID')} = Rp ${incentive.toLocaleString('id-ID')}\nBonus: Rp ${bonus.toLocaleString('id-ID')}\nGaji pokok: Rp ${basicSalary.toLocaleString('id-ID')}/bulan (dibayar terpisah)\n\nTotal incentive + bonus: Rp ${amount.toLocaleString('id-ID')}`)) return;
- const row={
-  groomer_id:groomerId,
-  cycle_start:cycleStart,
-  cycle_end:cycleEnd,
-  dogs_counted:sizes,
-  rate_used:rate,
-  amount,
-  bonus,
-  status:'paid',
-  paid_at:new Date().toISOString()
- };
- const existing=groomerPayouts.find(p=>p.groomer_id===groomerId&&p.cycle_start===cycleStart);
- let resp;
- if(existing) resp=await db.from('groomer_payouts').update(row).eq('id',existing.id);
- else resp=await db.from('groomer_payouts').insert(row);
+ const {sizes}=computeGroomerDogsInCycle(groomerId,cycle);
+ const breakdown={}; let amount=0;
+ COMP_LINES.forEach(([k])=>{ const el=document.getElementById(`pay-${groomerId}-${k}`); const v=el?(parseInt(el.value)||0):0; breakdown[k]=v; amount+=v; });
+ const lines=COMP_LINES.filter(([k])=>breakdown[k]).map(([k,l])=>`${l}: ${fmtRp(breakdown[k])}`).join('\n');
+ if(!confirm(`Bayar ${g.name}?\n\nCycle: ${cycleStart} → ${cycleEnd}\n\n${lines||'(kosong)'}\n\nTake-home: ${fmtRp(amount)}\n\nDeposit retensi dibayar terpisah bila jatuh tempo.`)) return;
+ const row={ groomer_id:groomerId,cycle_start:cycleStart,cycle_end:cycleEnd,dogs_counted:sizes,amount,breakdown,payout_type:'salary',status:'paid',paid_at:new Date().toISOString() };
+ const existing=groomerPayouts.find(p=>p.groomer_id===groomerId&&p.cycle_start===cycleStart&&(p.payout_type||'salary')==='salary');
+ const resp=existing?await db.from('groomer_payouts').update(row).eq('id',existing.id):await db.from('groomer_payouts').insert(row);
  if(resp.error){alert('Error: '+resp.error.message);return}
+ await loadAll();
+ renderPayroll();
+}
+async function payGroomerRetention(groomerId,cycleStart,cycleEnd,balance){
+ const g=groomers.find(x=>x.id===groomerId); if(!g) return;
+ if(!confirm(`Bayar deposit retensi ${g.name}?\n\nLump-sum: ${fmtRp(balance)}\n(Jatuh tempo setelah 2 tahun kerja.)`)) return;
+ const row={ groomer_id:groomerId,cycle_start:cycleStart,cycle_end:cycleEnd,amount:balance,breakdown:{retention:balance},payout_type:'retention',status:'paid',paid_at:new Date().toISOString() };
+ const {error}=await db.from('groomer_payouts').insert(row);
+ if(error){alert('Error: '+error.message);return}
  await loadAll();
  renderPayroll();
 }
 
 async function unmarkGroomerPaid(groomerId,cycleStart){
- const existing=groomerPayouts.find(p=>p.groomer_id===groomerId&&p.cycle_start===cycleStart);
+ const existing=groomerPayouts.find(p=>p.groomer_id===groomerId&&p.cycle_start===cycleStart&&(p.payout_type||'salary')==='salary');
  if(!existing){alert('Payout record not found');return}
  if(!confirm(`Undo payment for this cycle?\n\nDelete the paid record? Numbers will recalculate live.`)) return;
  const {error}=await db.from('groomer_payouts').delete().eq('id',existing.id);
