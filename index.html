@@ -1838,7 +1838,7 @@ let dogSort={key:'name',dir:1};
 let subsPayments=[];
 let expenses=[];
 // Batch H — auth state
-let adminUsers=[], currentUser=null, currentAdminRow=null;
+let adminUsers=[], currentUser=null, currentAdminRow=null, _authReady=false;
 function isOwner(){return currentAdminRow&&currentAdminRow.role==='owner'}
 // Batch J — payroll
 let payrollSettings={rate_per_dog:20000,cycle_start_day:25}, groomerPayouts=[], payrollCycleAnchor=new Date();
@@ -3115,10 +3115,10 @@ function renderCal(){
       onclick="event.stopPropagation();handleApptClick(event,'${a.id}')"
       style="top:${top}px;height:${ht}px;background:${bg};border-left-color:${col};color:${textCol}">
       <span class="ab-time"><span class="appt-status-dot ${statusDot}"></span>${m2t(sm)}${srcBadge}</span>
-      <span class="ab-name">${esc(a.dogs?.name||d.name||'?')}</span>
+      <span class="ab-name">${esc(owner||'?')}</span>
       ${locFull?`<span class="ab-loc-full">${esc(locFull)}</span>`:''}
       ${locShort?`<span class="ab-loc-short">${esc(locShort)}</span>`:''}
-      <span class="ab-svc">${esc(owner)}${a.service_base?' · '+esc(a.service_base.split(',')[0]):''}</span>
+      <span class="ab-svc">${esc(a.dogs?.name||d.name||'?')}${a.service_base?' \u00B7 '+esc(a.service_base.split(',')[0]):''}</span>
      </div>`;
     }
    });
@@ -8685,6 +8685,7 @@ async function doRecovery(){
 }
 
 async function doLogout(){
+ _authReady=false;
  await db.auth.signOut();
  currentUser=null;currentAdminRow=null;
  setAuthScreen('login');
@@ -8735,6 +8736,7 @@ async function checkAuthState(){
   ownerOnlyTabs.forEach(id=>{const el=document.getElementById(id); if(el) el.style.display=row.role==='owner'?'':'none';});
   // Landing view honours per-user preference (falls back by role)
   applyPrefsOnBoot(row.role);
+  _authReady=true;
   // Boot the app
   await loadAll();
   autoLogPastAppointments();
@@ -8747,9 +8749,9 @@ async function checkAuthState(){
 
 // Auth state listener — re-evaluate on sign-in / sign-out / token refresh
 db.auth.onAuthStateChange((event,session)=>{
- if(event==='SIGNED_IN'||event==='SIGNED_OUT'||event==='TOKEN_REFRESHED'||event==='PASSWORD_RECOVERY'){
-  checkAuthState();
- }
+ if(event==='SIGNED_OUT'||event==='PASSWORD_RECOVERY'){ _authReady=false; checkAuthState(); return; }
+ if(event==='SIGNED_IN'){ if(_authReady) return; checkAuthState(); return; }
+ // TOKEN_REFRESHED (fires on tab refocus) and other events: do NOT re-navigate
 });
 
 /* ========== ACCESS TAB ========== */
@@ -9589,7 +9591,7 @@ function computeGroomerPay(g,cycle){
  const daysWorked=Math.max(0,scheduled-offDays);
  const wdPerWeek=_wdList(g).length||6;
  const lateCount=calcGroomerLateCountForCycle(g.id,cycle.start,cycle.end);
- const {total:dogCount,totalAmount:matrixAmount}=computeGroomerDogsInCycle(g.id,cycle);
+ const {total:dogCount,totalAmount:matrixAmount,sizes:sizeCounts}=computeGroomerDogsInCycle(g.id,cycle);
  const stylingRev=groomerStylingRevenue(g.id,cycle);
  const comp={
   basic: g.basic_salary||0,
@@ -9604,7 +9606,7 @@ function computeGroomerPay(g,cycle){
  const ten=tenureMonths(g);
  let retBalance=0,retPayable=false,retMonths=0;
  if(c.retention.on&&ten!=null){ retMonths=Math.min(c.retention.months,ten); retBalance=retMonths*c.retention.amount; retPayable=ten>=c.retention.months; }
- return {c,comp,takeHome,meta:{scheduled,daysWorked,sickDays,lateCount,dogCount,stylingRev,wdPerWeek},retention:{on:c.retention.on,balance:retBalance,payable:retPayable,months:retMonths,target:c.retention.months,per:c.retention.amount,tenure:ten}};
+ return {c,comp,takeHome,meta:{scheduled,daysWorked,sickDays,lateCount,dogCount,stylingRev,wdPerWeek,sizeCounts},retention:{on:c.retention.on,balance:retBalance,payable:retPayable,months:retMonths,target:c.retention.months,per:c.retention.amount,tenure:ten}};
 }
 const COMP_LINES=[['basic','Gaji pokok'],['weekly','Gaji mingguan'],['noLate','Bonus no-late'],['noSick','Bonus no-sakit'],['styling','Styling %'],['perDog','Per dog'],['daily','Uang harian']];
 function recalcPayCard(gid){
@@ -9651,6 +9653,7 @@ function renderPayroll(){
     ${isPaid?`<span class="badge bs" title="Paid ${payout.paid_at?fmtD(payout.paid_at.slice(0,10)):''}">PAID</span>`:`<span class="badge bm">PENDING</span>`}
    </div>
    <div style="border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px 0;margin-bottom:8px">${rows}</div>
+   <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px;color:var(--muted);margin-bottom:8px">${Object.entries(m.sizeCounts||{}).filter(([,n])=>n>0).map(([s,n])=>`<span style="background:var(--subtle);padding:1px 6px;border-radius:8px">${esc(s)}: <strong>${n}</strong></span>`).join('')||'<span>Belum ada sesi</span>'}</div>
    <div style="display:flex;justify-content:space-between;align-items:baseline">
     <span style="font-size:11px;color:var(--muted)">Take-home</span>
     <strong style="font-size:16px;color:#16a34a" id="pay-total-${g.id}">${fmtRp(total)}</strong>
