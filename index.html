@@ -649,6 +649,7 @@ tbody tr:hover{background:var(--subtle)}
  </div>
 
  <div class="subsec active" id="ssec-cust">
+ <div id="coord-fix-banner" style="display:none;background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:8px;padding:14px 18px;margin-bottom:14px;box-shadow:0 2px 6px rgba(0,0,0,.08)"></div>
  <div class="filter-bar">
  <input id="cs" placeholder="Search customer / area / WA…" oninput="renderCusts()" style="min-width:220px;flex:1"/>
  <select id="cs-source" onchange="renderCusts()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:13px">
@@ -664,7 +665,6 @@ tbody tr:hover{background:var(--subtle)}
   <input type="checkbox" id="cs-nocoord" onchange="renderCusts()" style="margin:0"/>
   <span>📍 Hanya belum ada koord</span>
  </label>
- <button class="btn btn-p btn-sm" onclick="bulkAutoLookupCoords()" title="Auto-cari koordinat semua customer yang punya alamat tapi belum ada koord">🌐 Bulk auto-lookup</button>
  <div id="cs-coord-summary" style="font-size:11px;color:var(--muted);margin-left:auto;padding:6px 0"></div>
  </div>
  <div class="tbl-wrap">
@@ -2582,6 +2582,26 @@ function renderCusts(){
   const pct=total>0?Math.round(withCoords/total*100):0;
   sumEl.innerHTML=`Koord: <strong style="color:${pct>=80?'#16a34a':pct>=50?'#ca8a04':'#dc2626'}">${withCoords}/${total} (${pct}%)</strong> · ${missing} customer belum ada koord`;
  }
+ // Prominent action banner
+ const banner=document.getElementById('coord-fix-banner');
+ if(banner){
+  if(missing>0){
+   const withAddr=custs.filter(c=>(c.latitude==null||c.longitude==null)&&(c.address||'').trim()).length;
+   const noAddr=missing-withAddr;
+   banner.style.display='';
+   banner.innerHTML=`<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="font-size:24px">⚠️</div>
+    <div style="flex:1;min-width:200px">
+     <div style="font-size:15px;font-weight:700;color:#7c2d12">${missing} customer belum ada koordinat</div>
+     <div style="font-size:12px;color:#7c2d12;margin-top:3px">${withAddr} punya alamat (bisa auto-lookup) · ${noAddr} tanpa alamat sama sekali (perlu diisi manual)</div>
+    </div>
+    ${withAddr>0?`<button class="btn btn-p" onclick="bulkAutoLookupCoords()" style="padding:10px 18px;font-size:14px;font-weight:600">🌐 Auto-lookup ${withAddr} customer</button>`:''}
+    <button class="btn btn-g btn-sm" onclick="document.getElementById('cs-nocoord').checked=true;renderCusts()">Lihat list</button>
+   </div>`;
+  } else {
+   banner.style.display='none';
+  }
+ }
  if(s) rows=rows.filter(c=>(c.owner||'').toLowerCase().includes(s)||(c.area||'').toLowerCase().includes(s)||(c.wa||'').toLowerCase().includes(s)||(c.address||'').toLowerCase().includes(s));
  if(srcFilter){
   if(srcFilter==='__none__') rows=rows.filter(c=>!c.source);
@@ -3903,8 +3923,10 @@ async function autoLookupCoords(){
 /* Bulk version: iterate all customers with address but no coords.
    Rate-limited to 1 req/sec per Nominatim usage policy. */
 async function bulkAutoLookupCoords(){
+ console.log('[bulkAutoLookupCoords] fired at', new Date().toISOString());
  const targets=custs.filter(c=>(c.latitude==null||c.longitude==null) && (c.address||'').trim());
  const missing=custs.filter(c=>(c.latitude==null||c.longitude==null) && !(c.address||'').trim());
+ console.log(`[bulkAutoLookupCoords] targets: ${targets.length}, missing address: ${missing.length}`);
  if(!targets.length){
   const msg=missing.length
    ?`Tidak ada customer yang punya alamat tapi belum ada koord.\n\nAda ${missing.length} customer TANPA alamat sama sekali — mereka perlu diisi field "Address" dulu.`
