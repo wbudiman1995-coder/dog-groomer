@@ -4089,7 +4089,28 @@ function locationBadgeHTML(c){
  const bg=st.severity==='red'?'#fee2e2':'#fef3c7';
  const fg=st.severity==='red'?'#991b1b':'#92400e';
  const icon=st.severity==='red'?'⚠️':'📍';
- return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 6px;border-radius:10px;background:${bg};color:${fg};font-weight:600;white-space:nowrap" title="${esc(st.msg)}">${icon} No coord</span>`;
+ const reqBtn=c.wa?` <a href="${buildLocationRequestWALink(c)}" target="_blank" style="text-decoration:none;font-size:10px;padding:1px 6px;border-radius:8px;background:#16a34a;color:#fff;font-weight:600;margin-left:2px" onclick="event.stopPropagation()" title="Minta lokasi via WA">📱 Minta</a>`:'';
+ return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 6px;border-radius:10px;background:${bg};color:${fg};font-weight:600;white-space:nowrap" title="${esc(st.msg)}">${icon} No coord</span>${reqBtn}`;
+}
+
+/* Build a wa.me link that opens WhatsApp with a pre-filled location-request message.
+   Personalized with customer's first name for friendlier tone. */
+function buildLocationRequestWALink(c){
+ if(!c||!c.wa) return '#';
+ const firstName=(c.owner||'').trim().split(/\s+/)[0]||'Bapak/Ibu';
+ const msg=`Hi ${firstName}! 🐾
+
+Untuk memudahkan groomer HomePaw datang ke lokasi Anda tepat waktu, mohon share lokasi ya:
+
+1. Klik icon 📎 (attachment) di chat ini
+2. Pilih "Location" / "Lokasi"
+3. Pilih "Send your current location" (jika sedang di rumah) atau cari alamat rumah
+4. Send ke chat ini
+
+Terima kasih! 🙏
+— HomePaw Grooming`;
+ const phone=normalizeWA(c.wa).replace(/^\+/,'').replace(/\D/g,'');
+ return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
 }
 
 /* ---------- Travel time from previous appt (wizard step 3) ---------- */
@@ -10602,6 +10623,7 @@ function renderCust360Header(c){
  <div class="c360-actions">
   ${waLinkUrl?`<a href="${waLinkUrl}" target="_blank">WhatsApp</a>`:''}
   ${gmaps?`<a href="${gmaps}" target="_blank">Open in Maps</a>`:''}
+  ${(c.latitude==null||c.longitude==null)&&c.wa?`<a href="${buildLocationRequestWALink(c)}" target="_blank" style="background:#fef3c7;border-color:#fbbf24;color:#7c2d12;font-weight:600">📍 Minta lokasi via WA</a>`:''}
   <button onclick="closeCust360();openEditCust('${c.id}')">Edit profile</button>
  </div>`;
  document.getElementById('c360-header').innerHTML=html;
