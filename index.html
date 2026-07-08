@@ -782,6 +782,7 @@ tbody tr:hover{background:var(--subtle)}
  <div class="subtabs" style="margin-bottom:1rem">
   <button class="subtab active" id="gtab-list" onclick="swGroomer('list')">Groomer list</button>
   <button class="subtab" id="gtab-attendance" onclick="swGroomer('attendance')">Attendance</button>
+  <button class="subtab" id="gtab-leaderboard" onclick="swGroomer('leaderboard')">Leaderboard</button>
  </div>
  <div class="subsec active" id="gsec-list">
  <div class="tbl-wrap">
@@ -793,6 +794,9 @@ tbody tr:hover{background:var(--subtle)}
  </div>
  <div class="subsec" id="gsec-attendance">
   <div id="attendance-content"><div style="color:var(--muted);padding:1rem">Loading...</div></div>
+ </div>
+ <div class="subsec" id="gsec-leaderboard">
+  <div id="leaderboard-content"></div>
  </div>
  </div>
 
@@ -1506,6 +1510,7 @@ tbody tr:hover{background:var(--subtle)}
 
   <!-- Step 3: Groomer + Date + Time slots -->
   <div id="wiz-3" style="display:none">
+   <div id="wiz-groomer-suggest" style="display:none;margin-bottom:.6rem;padding:8px 12px;background:linear-gradient(135deg,#fef3c7,#fed7aa);border:1px solid #fde68a;border-radius:var(--r);font-size:12px;cursor:pointer" onclick="applyGroomerSuggestion()"></div>
    <div class="form-grid" style="margin-bottom:.75rem">
     <div class="fg">
      <label>Groomer *</label>
@@ -1555,6 +1560,10 @@ tbody tr:hover{background:var(--subtle)}
    <div class="fg" style="margin-bottom:.9rem">
     <label>Catatan admin (internal) <span style="font-size:10px;color:var(--muted);font-weight:400">— hanya terlihat di invoice, tidak ke customer/groomer</span></label>
     <input id="appt-admin-note" placeholder="e.g. Diskon khusus loyal customer, jangan di-charge parkir"/>
+   </div>
+   <div id="appt-groomer-field-note-wrap" class="fg" style="margin-bottom:.9rem;display:none">
+    <label>Catatan groomer (dari lapangan) <span style="font-size:10px;color:var(--muted);font-weight:400">— read-only, diisi groomer via halaman groomer</span></label>
+    <div id="appt-groomer-field-note" style="padding:8px 12px;background:#fef9c3;border-left:3px solid #ca8a04;border-radius:6px;font-size:13px;color:#713f12;white-space:pre-wrap"></div>
    </div>
    <!-- Grooming photos (read-only, taken from groomer page) -->
    <div id="appt-photos-section" style="display:none;margin-bottom:.9rem">
@@ -1911,7 +1920,7 @@ function editStamp(){
 const AUDIT_TRACKED_FIELDS={
  customer:['owner','wa','address','kota','kecamatan','source','prefs','gmaps_link'],
  dog:['name','breed','size','age','weight','coat','coat_color','prefs','skin_history','customer_id'],
- appointment:['appt_date','appt_time','groomer_id','dog_id','service_base','status','appt_note','customer_note','duration_mins','session_source','late_minutes','late_reason','actual_duration_mins'],
+ appointment:['appt_date','appt_time','groomer_id','dog_id','service_base','status','appt_note','groomer_field_note','customer_note','duration_mins','session_source','late_minutes','late_reason','actual_duration_mins'],
  invoice:['total','subtotal','status','discount_value','discount_amount','is_subscription_billing','due_date','notes'],
  subscription:['type','status','sessions_total','sessions_used','expires_at'],
  visit:['visited_at','service_type','is_billed_manually','billed_amount','billed_note','note'],
@@ -1971,7 +1980,7 @@ function auditFieldLabel(field){
   name:'Name',breed:'Breed',size:'Size',age:'Age',weight:'Weight',coat:'Coat',
   coat_color:'Coat color',skin_history:'Skin history',customer_id:'Owner',
   appt_date:'Date',appt_time:'Time',groomer_id:'Groomer',dog_id:'Dog',
-  service_base:'Service',status:'Status',appt_note:'Note (groomer)',
+  service_base:'Service',status:'Status',appt_note:'Note (groomer)',groomer_field_note:'Catatan groomer (lapangan)',
   customer_note:'Note (customer)',duration_mins:'Duration (min)',session_source:'Source',
   late_minutes:'Late (min)',late_reason:'Late reason',actual_duration_mins:'Actual duration (min)',
   total:'Total',subtotal:'Subtotal',discount_value:'Discount %',discount_amount:'Discount amt',
@@ -2484,7 +2493,12 @@ function refreshActiveView(){
   if(activeTab==='dashboard') renderDashboard();
   else if(activeTab==='database'){ subActive('#sec-database','stab-')==='dogs'?renderDogsTable():renderCusts(); }
   else if(activeTab==='calendar') renderCal();
-  else if(activeTab==='groomers'){ subActive('#sec-groomers','gtab-')==='attendance'?renderAttendance():renderGroomers(); }
+  else if(activeTab==='groomers'){ 
+   const sub=subActive('#sec-groomers','gtab-');
+   if(sub==='attendance') renderAttendance();
+   else if(sub==='leaderboard') renderLeaderboard();
+   else renderGroomers();
+  }
   else if(activeTab==='financial'){
    const fsub=subActive('#sec-financial','fstab-')||'invoices';
    if(fsub==='invoices') renderFinancial();
@@ -2951,7 +2965,7 @@ function isBlocked(gid,date,start,dur,skipIds){
 }
 
 /* ---- CALENDAR STATE ---- */
-let calGroomerFilter=null; // null=all, groomer.id=single
+let calGroomerFilter=new Set(); // empty Set = show all; contains ids = show only those
 let massSelected=new Set(); // appt ids selected
 
 function goToday(){
@@ -2962,16 +2976,28 @@ function goToday(){
  renderCal();
 }
 
+function toggleGroomerFilter(gid){
+ if(gid==null){ calGroomerFilter.clear(); }
+ else if(calGroomerFilter.has(gid)){ calGroomerFilter.delete(gid); }
+ else { calGroomerFilter.add(gid); }
+ renderCal();
+}
+
 function renderGroomerTabs(){
  const tabs=document.getElementById('cal-groomer-tabs');
  if(!tabs)return;
  const active=groomers.filter(g=>g.active);
- tabs.innerHTML=`<button class="cal-groomer-tab${!calGroomerFilter?' active':''}"
-  style="${!calGroomerFilter?'background:#374151;':'background:var(--surface)'}"
-  onclick="calGroomerFilter=null;renderCal()">All</button>`+
-  active.map(g=>`<button class="cal-groomer-tab${calGroomerFilter===g.id?' active':''}"
-  style="${calGroomerFilter===g.id?'background:'+g.color+';':''}"
-  onclick="calGroomerFilter='${g.id}';renderCal()">${esc(g.name)}</button>`).join('');
+ const showAll=calGroomerFilter.size===0;
+ tabs.innerHTML=`<button class="cal-groomer-tab${showAll?' active':''}"
+  style="${showAll?'background:#374151;color:#fff':'background:var(--surface)'}"
+  onclick="toggleGroomerFilter(null)">All</button>`+
+  active.map(g=>{
+   const on=calGroomerFilter.has(g.id);
+   return `<button class="cal-groomer-tab${on?' active':''}"
+    style="${on?'background:'+g.color+';color:#fff;box-shadow:0 0 0 2px #fff, 0 0 0 3px '+g.color:'background:var(--surface);opacity:.75'}"
+    title="${on?'Klik untuk sembunyikan':'Klik untuk tampilkan'}"
+    onclick="toggleGroomerFilter('${g.id}')">${esc(g.name)}${on?' ✓':''}</button>`;
+  }).join('');
 }
 
 /* ---- CALENDAR RENDER (WEEKLY) ---- */
@@ -3008,8 +3034,8 @@ function renderCal(){
   wdays.push({d,iso_:iso(d),lbl:dayName,num:d.getDate(),isToday:d.getTime()===today.getTime()});
  }
 
- const activeG=calGroomerFilter
-  ? groomers.filter(g=>g.active&&g.id===calGroomerFilter)
+ const activeG=calGroomerFilter.size>0
+  ? groomers.filter(g=>g.active&&calGroomerFilter.has(g.id))
   : groomers.filter(g=>g.active);
  const outer=document.getElementById('cal-outer');
  if(!activeG.length){outer.innerHTML='<div class="empty">No active groomers.</div>';return}
@@ -3698,9 +3724,92 @@ function renderWizSlots(){
   const sel=m===wiz.startMins;
   return `<button class="slot-btn${sel?' sel':''}${blocked?' blocked':''}" ${blocked?'disabled':''} onclick="selectWizSlot(${m})">${m2t(m)}</button>`;
  }).join('');
+ renderGroomerSuggestion();
 }
 
 function selectWizSlot(m){wiz.startMins=m;renderWizSlots()}
+
+/* ========== FEATURE 5: AUTO-SUGGEST GROOMER BY AREA + AVAILABILITY ========== */
+function suggestGroomerRank(custId, dateISO, startMins, totalDur, editApptId){
+ if(!dateISO) return [];
+ const cust=custs.find(c=>c.id===custId);
+ const custKota=(cust?.kota||'').trim().toLowerCase();
+ const custKec=(cust?.kecamatan||'').trim().toLowerCase();
+ const active=groomers.filter(g=>g.active);
+ return active.map(g=>{
+  const reasons=[];
+  let score=0;
+  // Availability check (only if startMins given)
+  let available=true;
+  if(startMins!=null && totalDur){
+   const blocked=isBlocked(g.id,dateISO,startMins,totalDur,editApptId);
+   if(blocked){available=false;reasons.push('❌ Slot bentrok');score=-999;}
+  }
+  // Other appts by this groomer on this date
+  const dayAppts=appts.filter(a=>
+   a.groomer_id===g.id && a.appt_date===dateISO && a.status!=='cancelled' && a.id!==editApptId
+  );
+  // Area match: check groomer's other appts on same date
+  let hasSameKec=false, hasSameKota=false;
+  dayAppts.forEach(a=>{
+   const d=dogs.find(x=>x.id===a.dog_id);
+   const c=d?custs.find(x=>x.id===d.customer_id):null;
+   if(!c) return;
+   const cKec=(c.kecamatan||'').trim().toLowerCase();
+   const cKota=(c.kota||'').trim().toLowerCase();
+   if(custKec && cKec===custKec) hasSameKec=true;
+   if(custKota && cKota===custKota) hasSameKota=true;
+  });
+  if(hasSameKec){score+=50;reasons.push('✅ Sudah ada anjing di kecamatan yg sama');}
+  else if(hasSameKota){score+=25;reasons.push('✅ Sudah ada anjing di kota yg sama');}
+  // Workload balance
+  const dayCount=dayAppts.length;
+  if(dayCount===0){score+=5;reasons.push('🆕 Slot kosong (baru mulai)');}
+  else if(dayCount<=3){score+=15;reasons.push(`⚡ Batching bagus (${dayCount} anjing lain)`);}
+  else if(dayCount<=5){score+=5;}
+  else{score-=20;reasons.push(`⚠️ Overload (${dayCount} anjing)`);}
+  // Groomer tier / performance if defined
+  const tier=g.tier||g.experience||null;
+  if(tier==='senior'||tier==='expert') score+=5;
+  return {g,score,available,reasons,dayCount,hasSameKec,hasSameKota};
+ }).sort((a,b)=>b.score-a.score);
+}
+
+function renderGroomerSuggestion(){
+ const wrap=document.getElementById('wiz-groomer-suggest');
+ if(!wrap) return;
+ if(!wiz.custId||!wiz.date){wrap.style.display='none';return;}
+ const totalDur=wiz.dogSvcs.reduce((s,ds)=>s+getWizDogDur(ds),0);
+ const ranked=suggestGroomerRank(wiz.custId, wiz.date, wiz.startMins, totalDur, wiz.editId);
+ const available=ranked.filter(r=>r.available);
+ if(!available.length){wrap.style.display='none';return;}
+ const top=available[0];
+ // Don't show if already picked the top one
+ if(wiz.groomerId===top.g.id){wrap.style.display='none';return;}
+ wrap.style.display='';
+ const reasonText=top.reasons.length?top.reasons.slice(0,2).join(' · '):'Available';
+ wrap.innerHTML=`<div style="display:flex;align-items:center;gap:10px">
+  <span style="font-size:18px">★</span>
+  <div style="flex:1">
+   <div style="font-weight:600;color:var(--primary-dk)">Rekomendasi: ${esc(top.g.name)}</div>
+   <div style="font-size:11px;color:#7c3f00;margin-top:2px">${reasonText}</div>
+  </div>
+  <span style="font-size:11px;background:var(--primary);color:#fff;padding:4px 10px;border-radius:12px;font-weight:600">Pilih</span>
+ </div>`;
+}
+
+function applyGroomerSuggestion(){
+ if(!wiz.custId||!wiz.date) return;
+ const totalDur=wiz.dogSvcs.reduce((s,ds)=>s+getWizDogDur(ds),0);
+ const ranked=suggestGroomerRank(wiz.custId, wiz.date, wiz.startMins, totalDur, wiz.editId);
+ const top=ranked.find(r=>r.available);
+ if(!top) return;
+ wiz.groomerId=top.g.id;
+ wiz.startMins=null;
+ const gs=document.getElementById('wiz-groomer'); if(gs) gs.value=top.g.id;
+ renderWizSlots();
+ renderWizSummary&&renderWizSummary();
+}
 
 function renderWizSummary(){
  const c=custs.find(x=>x.id===wiz.custId)||{};
@@ -3954,6 +4063,16 @@ function openApptEdit(id){
  const cnElE=document.getElementById('appt-customer-note'); if(cnElE) cnElE.value=a.customer_note||'';
  const anElE=document.getElementById('appt-admin-note'); if(anElE) anElE.value=a.admin_note||'';
  const snElE=document.getElementById('appt-session-note'); if(snElE) snElE.value=a.session_note||'';
+ const gfnWrap=document.getElementById('appt-groomer-field-note-wrap');
+ const gfnEl=document.getElementById('appt-groomer-field-note');
+ if(gfnWrap&&gfnEl){
+  if(a.groomer_field_note&&a.groomer_field_note.trim()){
+   gfnEl.textContent=a.groomer_field_note;
+   gfnWrap.style.display='';
+  } else {
+   gfnWrap.style.display='none';
+  }
+ }
  const adtElE=document.getElementById('appt-disc-type'); if(adtElE) adtElE.value=a.appt_disc_type||'';
  const advElE=document.getElementById('appt-disc-value'); if(advElE) advElE.value=a.appt_disc_value||0;
  // Store per-dog data in wiz.dogSvcs[0] for edit mode (single dog)
@@ -4052,6 +4171,21 @@ function openGroupEdit(ids){
  const cnElE=document.getElementById('appt-customer-note'); if(cnElE) cnElE.value=firstA.customer_note||'';
  const anElE=document.getElementById('appt-admin-note'); if(anElE) anElE.value=firstA.admin_note||'';
  const snElE2=document.getElementById('appt-session-note'); if(snElE2) snElE2.value=firstA.session_note||'';
+ const gfnWrap2=document.getElementById('appt-groomer-field-note-wrap');
+ const gfnEl2=document.getElementById('appt-groomer-field-note');
+ if(gfnWrap2&&gfnEl2){
+  // Concat groomer field notes from all appts in group
+  const notes=apptList.map(x=>{
+   const dn=dogs.find(d=>d.id===x.dog_id)?.name||'?';
+   return x.groomer_field_note?.trim()?`[${dn}] ${x.groomer_field_note.trim()}`:null;
+  }).filter(Boolean);
+  if(notes.length){
+   gfnEl2.textContent=notes.join('\n\n');
+   gfnWrap2.style.display='';
+  } else {
+   gfnWrap2.style.display='none';
+  }
+ }
  om('ov-appt');
  wizShow(4);
  renderWizSummary();
@@ -4364,6 +4498,7 @@ function swGroomer(sub){
  const sec=document.getElementById('gsec-'+sub); if(sec) sec.classList.add('active');
  if(sub==='list') renderGroomers();
  else if(sub==='attendance') renderAttendance();
+ else if(sub==='leaderboard') renderLeaderboard();
 }
 
 let attendanceCycleAnchor=new Date();
@@ -10226,6 +10361,106 @@ function renderHistoryTab(){
   }).join('');
 }
 
+/* ========== LEADERBOARD (groomer performance compare) ========== */
+let leaderboardCycleAnchor=new Date();
+let leaderboardSortBy='dogs'; // dogs | revenue | pay | days | late | avg
+
+function renderLeaderboard(){
+ const wrap=document.getElementById('leaderboard-content');
+ if(!wrap) return;
+ const cycle=getPayrollCycle(leaderboardCycleAnchor);
+ const activeG=groomers.filter(g=>g.active);
+ if(!activeG.length){wrap.innerHTML='<div style="color:var(--muted);padding:1rem">Belum ada groomer aktif.</div>';return}
+
+ // Revenue per groomer this cycle (sum of grand_total for invoices where groomer_id matches)
+ const revByG={};
+ invoices.forEach(inv=>{
+  if(!inv.invoice_date||inv.invoice_date<cycle.start||inv.invoice_date>cycle.end) return;
+  if(!inv.groomer_id) return;
+  revByG[inv.groomer_id]=(revByG[inv.groomer_id]||0)+(inv.grand_total||0);
+ });
+
+ const rows=activeG.map(g=>{
+  const p=computeGroomerPay(g,cycle);
+  const revenue=revByG[g.id]||0;
+  const days=p.meta.daysWorked||0;
+  const dogs=p.meta.dogCount||0;
+  const avgPerDay=days>0?(dogs/days):0;
+  return {g,dogs,revenue,pay:p.takeHome,days,late:p.meta.lateCount,styling:p.meta.stylingRev,avgPerDay,sizes:p.meta.sizeCounts};
+ });
+
+ // Sort by selected metric desc (late is asc - fewer is better)
+ rows.sort((a,b)=>{
+  if(leaderboardSortBy==='late') return a.late-b.late;
+  return (b[leaderboardSortBy]||0)-(a[leaderboardSortBy]||0);
+ });
+
+ // Compute grand totals + averages for reference
+ const totalDogs=rows.reduce((s,r)=>s+r.dogs,0);
+ const totalRev=rows.reduce((s,r)=>s+r.revenue,0);
+ const totalPay=rows.reduce((s,r)=>s+r.pay,0);
+ const totalStyling=rows.reduce((s,r)=>s+r.styling,0);
+ const totalLate=rows.reduce((s,r)=>s+r.late,0);
+ const avgDogs=rows.length?(totalDogs/rows.length):0;
+
+ const rankBadge=(idx)=>idx===0?'🥇':idx===1?'🥈':idx===2?'🥉':`${idx+1}`;
+ const th=(key,label)=>`<th style="cursor:pointer;user-select:none;${leaderboardSortBy===key?'background:var(--subtle);color:var(--primary-dk)':''}" onclick="leaderboardSortBy='${key}';renderLeaderboard()">${label}${leaderboardSortBy===key?' ▼':''}</th>`;
+
+ wrap.innerHTML=`
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+   <button class="btn btn-g btn-sm" onclick="leaderboardCycleAnchor=new Date(leaderboardCycleAnchor.getFullYear(),leaderboardCycleAnchor.getMonth()-1,leaderboardCycleAnchor.getDate());renderLeaderboard()">← Prev</button>
+   <span style="font-weight:600;font-size:14px">${esc(cycle.label)}</span>
+   <button class="btn btn-g btn-sm" onclick="leaderboardCycleAnchor=new Date(leaderboardCycleAnchor.getFullYear(),leaderboardCycleAnchor.getMonth()+1,leaderboardCycleAnchor.getDate());renderLeaderboard()">Next →</button>
+   <button class="btn btn-g btn-sm" onclick="leaderboardCycleAnchor=new Date();renderLeaderboard()">Current</button>
+   <span style="margin-left:auto;font-size:11px;color:var(--muted)">Klik header untuk sort</span>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px">
+   <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total dogs</div><div style="font-size:20px;font-weight:700;color:var(--primary-dk)">${totalDogs}</div><div style="font-size:10px;color:var(--muted)">avg ${avgDogs.toFixed(1)}/groomer</div></div>
+   <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total revenue</div><div style="font-size:20px;font-weight:700;color:#16a34a">${fmtRp(totalRev)}</div></div>
+   <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total payroll</div><div style="font-size:20px;font-weight:700;color:#ca8a04">${fmtRp(totalPay)}</div></div>
+   <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Styling revenue</div><div style="font-size:20px;font-weight:700;color:#7c3aed">${fmtRp(totalStyling)}</div></div>
+   <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total late</div><div style="font-size:20px;font-weight:700;color:${totalLate?'#dc2626':'#16a34a'}">${totalLate}</div></div>
+  </div>
+  <div class="tbl-wrap">
+   <table>
+    <thead><tr>
+     <th style="width:40px">#</th>
+     <th>Groomer</th>
+     ${th('dogs','Dogs')}
+     ${th('avgPerDay','Avg/hari')}
+     ${th('revenue','Revenue')}
+     ${th('styling','Styling')}
+     ${th('days','Hari kerja')}
+     ${th('late','Late')}
+     ${th('pay','Take-home')}
+     <th></th>
+    </tr></thead>
+    <tbody>
+     ${rows.map((r,i)=>{
+      const revPct=totalRev>0?Math.round(r.revenue/totalRev*100):0;
+      const dogPct=totalDogs>0?Math.round(r.dogs/totalDogs*100):0;
+      return `<tr>
+       <td style="font-size:18px;text-align:center">${rankBadge(i)}</td>
+       <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${r.g.color||'#999'};margin-right:6px"></span><strong>${esc(r.g.name)}</strong></td>
+       <td><strong>${r.dogs}</strong> <span style="color:var(--muted);font-size:11px">(${dogPct}%)</span></td>
+       <td>${r.avgPerDay.toFixed(1)}</td>
+       <td><strong>${fmtRp(r.revenue)}</strong> <span style="color:var(--muted);font-size:11px">(${revPct}%)</span></td>
+       <td>${fmtRp(r.styling)}</td>
+       <td>${r.days}</td>
+       <td style="color:${r.late>0?'#dc2626':'#16a34a'};font-weight:${r.late>0?'700':'400'}">${r.late}</td>
+       <td><strong>${fmtRp(r.pay)}</strong></td>
+       <td><button class="icon-btn view" onclick="openGroomerReport('${r.g.id}')">Detail</button></td>
+      </tr>`;
+     }).join('')}
+    </tbody>
+   </table>
+  </div>
+  <div style="margin-top:14px;font-size:11px;color:var(--muted);padding:8px 12px;background:var(--subtle);border-radius:6px">
+   Metrik: <strong>Dogs</strong> dari appointments status=done (excl. free). <strong>Revenue</strong> = sum grand_total invoice dengan groomer_id match. <strong>Take-home</strong> dari <code>computeGroomerPay</code> (basic + weekly + bonus + per-dog + styling %). Klik "Detail" untuk breakdown per groomer.
+  </div>
+ `;
+}
+
 /* ========== TALLY / RECONCILE TAB ========== */
 let tallyCycleAnchor=new Date();
 let tallyExpanded={c1:false,c2:false,c3:false,c4a:false,c4b:false,c5:false};
@@ -10988,3 +11223,4 @@ checkAuthState();
 
 </body>
 </html>
+       
