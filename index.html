@@ -3933,26 +3933,16 @@ async function autoLookupCoords(){
  if(!confirm(`Auto-cari koordinat untuk alamat berikut?\n\nInput asli: ${rawAddr||'(kosong)'}\n${cleanAddr!==rawAddr?`Dibersihkan: ${cleanAddr}\n`:''}Query: ${fullAddr}\n\n(OpenStreetMap Nominatim — free, no API key)`)) return;
  if(hint) hint.textContent='⏳ Sedang cari koordinat...';
  try {
-  let g=await _geocode(fullAddr);
-  let data=g.results;
-  let method='street-level';
-  let source=g.source;
-  // Fallback: try just kecamatan + kota if street-level fails
-  if(!data.length && kec && kota){
-   await new Promise(r=>setTimeout(r,400));
-   const fallback=[kec,kota,'Indonesia'].filter(Boolean).join(', ');
-   g=await _geocode(fallback);
-   data=g.results;
-   source=g.source;
-   method='kecamatan-centroid (approximate)';
-  }
+  const g=await _geocode(fullAddr);
+  const data=g.results;
+  const source=g.source;
   if(!data.length){
-   if(hint) hint.innerHTML=`❌ Tidak ada hasil (Photon + Nominatim). <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddr)}" target="_blank" style="color:var(--primary-dk)">Cari manual di Google Maps →</a>`;
-   alert(`Tidak ditemukan koordinat untuk:\n${fullAddr}\n\nTips:\n1. Sederhanakan alamat (buang detail seperti "belakang X" atau nama gang tidak resmi)\n2. Cari manual di Google Maps, klik kanan di titik, copy koordinat, paste ke field lat/lng`);
+   if(hint) hint.innerHTML=`❌ Tidak ada hasil street-level. <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddr)}" target="_blank" style="color:var(--primary-dk)">Cari manual di Google Maps →</a>`;
+   alert(`Tidak ditemukan koordinat untuk:\n${fullAddr}\n\nSaran:\n1. Cari manual di Google Maps → klik kanan di titik → copy koordinat → paste ke lat/lng\n2. Atau minta customer share location via WhatsApp (📎 → Location), copy dari message → paste ke gmaps link → klik Parse`);
    return;
   }
   let picked=data[0];
-  if(data.length>1&&method==='street-level'){
+  if(data.length>1){
    const options=data.map((r,i)=>`${i+1}. ${r.display_name} (${r.type||'?'})`).join('\n');
    const choice=prompt(`Ditemukan ${data.length} hasil. Pilih nomor:\n\n${options}\n\nInput nomor 1-${data.length}:`,'1');
    if(!choice){if(hint)hint.textContent='Cancelled';return;}
@@ -3966,8 +3956,7 @@ async function autoLookupCoords(){
   if(gmapsEl && !gmapsEl.value.trim()){
    gmapsEl.value=`https://www.google.com/maps/?q=${lat},${lng}`;
   }
-  const warn=method!=='street-level'?` <span style="color:#ca8a04;font-weight:600">⚠️ ${method}</span>`:'';
-  if(hint) hint.innerHTML=`✓ Ditemukan via ${source}: <strong>${esc(picked.display_name.slice(0,100))}</strong>${warn}. Verifikasi <a href="https://www.google.com/maps/?q=${lat},${lng}" target="_blank" style="color:var(--primary-dk)">di Google Maps →</a>`;
+  if(hint) hint.innerHTML=`✓ Ditemukan via ${source}: <strong>${esc(picked.display_name.slice(0,100))}</strong>. <span style="color:#dc2626;font-weight:600">⚠ HARAP VERIFIKASI</span> — buka <a href="https://www.google.com/maps/?q=${lat},${lng}" target="_blank" style="color:var(--primary-dk)">di Google Maps →</a> untuk cek pin di rumah yg benar. Kalau salah, hapus lat/lng.`;
  } catch(err){
   if(hint) hint.textContent='❌ Error: '+err.message;
   alert('Geocoder error: '+err.message+'\n\nBisa masalah network atau rate limit. Coba lagi.');
@@ -3996,23 +3985,28 @@ async function _geocodeCustomer(c){
  const cleanAddr=_cleanAddressForGeocoding(c.address);
  const kec=(c.kecamatan||'').trim();
  const kota=(c.kota||'').trim();
- const attempts=[];
- if(cleanAddr){
-  attempts.push({q:[cleanAddr,kec,kota,'Indonesia'].filter(Boolean).join(', '), method:'street-level', precise:true});
-  attempts.push({q:[cleanAddr,kota,'Indonesia'].filter(Boolean).join(', '),      method:'street-simplified', precise:true});
- }
- if(kec&&kota){
-  attempts.push({q:[kec,kota,'Indonesia'].filter(Boolean).join(', '), method:'kecamatan-centroid', precise:false});
- } else if(kota){
-  attempts.push({q:[kota,'Indonesia'].filter(Boolean).join(', '), method:'kota-centroid', precise:false});
- }
+ if(!cleanAddr) return null;  // No street address → no precise geocoding possible; do NOT fall back to centroid
+ const attempts=[
+  {q:[cleanAddr,kec,kota,'Indonesia'].filter(Boolean).join(', '), method:'street-level', precise:true},
+  {q:[cleanAddr,kota,'Indonesia'].filter(Boolean).join(', '),      method:'street-simplified', precise:true},
+ ];
  for(let i=0;i<attempts.length;i++){
   const att=attempts[i];
   const g=await _geocode(att.q);
   if(g.results.length){
-   return {result:g.results[0], method:att.method, precise:att.precise, query:att.q, attemptIdx:i, source:g.source};
+   // Only accept precise (street-level) results. Photon may return a district if no street match — reject that.
+   const r=g.results[0];
+   const displayName=(r.display_name||'').toLowerCase();
+   const streetHint=(cleanAddr.split(',')[0]||'').toLowerCase();
+   // Cheap sanity check: at least one word of the street name should appear in the geocoded display_name
+   const streetWords=streetHint.split(/\s+/).filter(w=>w.length>3);
+   const hasStreetMatch=streetWords.length===0 || streetWords.some(w=>displayName.includes(w));
+   if(hasStreetMatch){
+    return {result:r, method:att.method, precise:true, query:att.q, attemptIdx:i, source:g.source};
+   }
+   // else: geocoder returned a broader match (district/city) — reject silently, try next strategy
   }
-  await new Promise(r=>setTimeout(r,700));  // Photon fair-use rate limit
+  await new Promise(r=>setTimeout(r,700));
  }
  return null;
 }
@@ -4030,11 +4024,11 @@ async function bulkAutoLookupCoords(){
    :'Semua customer sudah ada koordinat. ✓';
   alert(msg); return;
  }
- const est=Math.ceil(targets.length*0.7*2.5);  // 700ms delay × ~2.5 attempts avg
- if(!confirm(`Auto-lookup ${targets.length} customer via OpenStreetMap (Photon + Nominatim fallback)?\n\nStrategi per customer (dicoba berurutan sampai ketemu):\n1. Alamat lengkap (street-level, akurat)\n2. Alamat + kota saja (simplified)\n3. Kecamatan centroid (approximate)\n\nEstimasi ${est} detik.\nHasil disimpan otomatis. Detail per-customer di F12 → Console.\n\n${missing.length?`(${missing.length} customer tanpa alamat sama sekali akan di-skip)`:''}`)) return;
+ const est=Math.ceil(targets.length*0.7*2);  // 700ms delay × ~2 attempts avg (no centroid fallback)
+ if(!confirm(`Auto-lookup ${targets.length} customer via OpenStreetMap (street-level only, tanpa kecamatan-centroid fallback)?\n\nHasil yang tidak akurat dulu bikin banyak titik salah — sekarang hanya menerima street-level match. Yang tidak ketemu bakal ditandai "not found" — perlu diisi manual (WA customer, minta share location).\n\nEstimasi ${est} detik. Hasil disimpan otomatis. Detail per-customer di F12 → Console.\n\n${missing.length?`(${missing.length} customer tanpa alamat sama sekali akan di-skip)`:''}\n\n⚠️ WAJIB tetap verifikasi visual — buka Customer 360 setelah, cek pin di Google Maps benar atau tidak.`)) return;
 
  const summary=document.getElementById('cs-coord-summary');
- let street=0, centroid=0, notFound=0, err=0;
+ let ok=0, notFound=0, err=0;
  const failures=[];
  for(let i=0;i<targets.length;i++){
   const c=targets[i];
@@ -4049,17 +4043,12 @@ async function bulkAutoLookupCoords(){
     }
     await db.from('customers').update(update).eq('id',c.id);
     Object.assign(c, update);
-    if(geo.precise){
-     street++;
-     console.log(`✓ [${i+1}/${targets.length}] ${c.owner} — ${geo.method} via ${geo.source}: "${geo.query}" → ${geo.result.display_name}`);
-    } else {
-     centroid++;
-     console.warn(`📍 [${i+1}/${targets.length}] ${c.owner} — ${geo.method} via ${geo.source} (approximate): "${geo.query}" → ${geo.result.display_name}`);
-    }
+    ok++;
+    console.log(`✓ [${i+1}/${targets.length}] ${c.owner} — ${geo.method} via ${geo.source}: "${geo.query}" → ${geo.result.display_name}`);
    } else {
     notFound++;
     failures.push({owner:c.owner, addr:c.address, kec:c.kecamatan, kota:c.kota});
-    console.error(`✗ [${i+1}/${targets.length}] ${c.owner}: no result. addr="${c.address}" kec="${c.kecamatan}" kota="${c.kota}"`);
+    console.warn(`✗ [${i+1}/${targets.length}] ${c.owner}: no street-level match. addr="${c.address}" kec="${c.kecamatan}" kota="${c.kota}"`);
    }
   } catch(e){
    err++;
@@ -4069,7 +4058,7 @@ async function bulkAutoLookupCoords(){
  renderCusts();
  const skipMsg=missing.length?`\n\n(${missing.length} customer di-skip karena tanpa alamat/kec/kota)`:'';
  const failPreview=failures.length?`\n\nContoh yang gagal (cek F12 Console untuk semua):\n${failures.slice(0,5).map(f=>`• ${f.owner}: "${f.addr||'(no addr)'}" @ ${f.kec||'?'}/${f.kota||'?'}`).join('\n')}`:'';
- alert(`Selesai auto-lookup ${targets.length} customer:\n\n✓ Street-level (akurat): ${street}\n📍 Kecamatan-level (approximate): ${centroid}\n✗ Tidak ditemukan: ${notFound}\n⚠️ Error: ${err}\n\nTotal berhasil: ${street+centroid}/${targets.length}${skipMsg}${failPreview}\n\nUntuk yang failed, edit manual atau simplify alamat lalu retry.`);
+ alert(`Selesai auto-lookup ${targets.length} customer:\n\n✓ Street-level match: ${ok}\n✗ Tidak ditemukan: ${notFound}\n⚠️ Error: ${err}${skipMsg}${failPreview}\n\n⚠️ WAJIB verifikasi visual setiap hasil — buka Customer 360, klik "Open in Maps", cek pin di rumah yang benar. Kalau salah, hapus lat/lng di edit customer.`);
 }
 
 /* Classifies a customer's location data completeness so admin sees at a glance
