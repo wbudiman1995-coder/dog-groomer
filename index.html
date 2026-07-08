@@ -3858,7 +3858,15 @@ function parseCoordsFromGmapsLink(){
  const m2=url.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
  if(m2){
   latEl.value=m2[1]; lngEl.value=m2[2];
-  if(hint) hint.textContent='✓ Berhasil parse dari link';
+  if(hint) hint.textContent='✓ Berhasil parse dari link (!3d/!4d pattern)';
+  return;
+ }
+ // Try ?q=lat,lng format (share URLs, WhatsApp location shares)
+ // Exclude auto-generated URLs (those have exact "/maps/?q=lat,lng" pattern)
+ const m3=url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+ if(m3){
+  latEl.value=m3[1]; lngEl.value=m3[2];
+  if(hint) hint.textContent='✓ Berhasil parse dari link (?q= pattern)';
   return;
  }
  if(hint) hint.textContent='❌ Tidak bisa parse (short link maps.app.goo.gl). Buka link di browser, klik kanan di titik lokasi, copy koordinat pertama sebagai lat, kedua sebagai lng.';
