@@ -546,6 +546,7 @@ tbody tr:hover{background:var(--subtle)}
  <button class="nav-tab" onclick="sw('membership')" id="tab-membership" data-i18n="nav.membership">Membership</button>
  <button class="nav-tab" onclick="sw('access')" id="tab-access" style="display:none" data-i18n="nav.access">Access<span class="access-badge" id="access-badge" style="display:none">0</span></button>
  <button class="nav-tab" onclick="sw('history')" id="tab-history" data-i18n="nav.history">History</button>
+ <button class="nav-tab" onclick="sw('tally')" id="tab-tally" style="display:none" data-i18n="nav.tally">Tally</button>
  <button class="nav-tab" onclick="sw('settings')" id="tab-settings" data-i18n="nav.settings">Settings</button>
  </div>
  <div class="nav-user" id="nav-user-info" style="display:none">
@@ -1213,6 +1214,8 @@ tbody tr:hover{background:var(--subtle)}
  </div>
 </div>
 
+ <div class="sec" id="sec-tally"></div>
+
 <!-- ADD/EDIT CUSTOMER -->
  <div class="sec" id="sec-settings">
   <div class="toolbar"><span class="toolbar-title">Settings</span></div>
@@ -1261,11 +1264,14 @@ tbody tr:hover{background:var(--subtle)}
      </div>
      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span style="font-size:13px;min-width:160px">Foto grooming</span>
-      <select id="del-photo-months" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px">
-       <option value="3">Lebih dari 3 bulan lalu</option>
-       <option value="6" selected>Lebih dari 6 bulan lalu</option>
-       <option value="12">Lebih dari 12 bulan lalu</option>
-       <option value="24">Lebih dari 24 bulan lalu</option>
+      <select id="del-photo-days" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px">
+       <option value="14">Lebih dari 2 minggu lalu</option>
+       <option value="21">Lebih dari 3 minggu lalu</option>
+       <option value="30">Lebih dari 1 bulan lalu</option>
+       <option value="60" selected>Lebih dari 2 bulan lalu (auto-delete threshold)</option>
+       <option value="90">Lebih dari 3 bulan lalu</option>
+       <option value="180">Lebih dari 6 bulan lalu</option>
+       <option value="365">Lebih dari 12 bulan lalu</option>
       </select>
       <button class="btn btn-d btn-sm" onclick="deleteOldPhotos()">Hapus</button>
      </div>
@@ -1854,8 +1860,8 @@ function applyTpl(tpl,vars){return String(tpl||'').replace(/\{(\w+)\}/g,(m,k)=>v
 // Default 'en' keeps the current on-screen text unchanged. Untranslated keys fall back to the element's existing text.
 let LANG='en';
 const I18N={
- en:{'nav.dashboard':'Dashboard','nav.database':'Database','nav.calendar':'Calendar','nav.groomers':'Groomers','nav.invoice':'Invoice','nav.financial':'Financial','nav.reminders':'Reminders','nav.membership':'Membership','nav.access':'Access','nav.history':'History','nav.settings':'Settings','ui.signout':'Sign out','ui.search':'Search','ui.prefs':'Preferences'},
- id:{'nav.dashboard':'Dasbor','nav.database':'Data','nav.calendar':'Kalender','nav.groomers':'Groomer','nav.invoice':'Invoice','nav.financial':'Keuangan','nav.reminders':'Pengingat','nav.membership':'Keanggotaan','nav.access':'Akses','nav.history':'Riwayat','nav.settings':'Pengaturan','ui.signout':'Keluar','ui.search':'Cari','ui.prefs':'Preferensi'}
+ en:{'nav.dashboard':'Dashboard','nav.database':'Database','nav.calendar':'Calendar','nav.groomers':'Groomers','nav.invoice':'Invoice','nav.financial':'Financial','nav.reminders':'Reminders','nav.membership':'Membership','nav.access':'Access','nav.history':'History','nav.tally':'Tally','nav.settings':'Settings','ui.signout':'Sign out','ui.search':'Search','ui.prefs':'Preferences'},
+ id:{'nav.dashboard':'Dasbor','nav.database':'Data','nav.calendar':'Kalender','nav.groomers':'Groomer','nav.invoice':'Invoice','nav.financial':'Keuangan','nav.reminders':'Pengingat','nav.membership':'Keanggotaan','nav.access':'Akses','nav.history':'Riwayat','nav.tally':'Rekonsiliasi','nav.settings':'Pengaturan','ui.signout':'Keluar','ui.search':'Cari','ui.prefs':'Preferensi'}
 };
 function t(key){ const d=I18N[LANG]||{}; if(d[key]!==undefined) return d[key]; return null; }
 function applyI18n(){
@@ -2394,6 +2400,7 @@ function sw(tab) {
  if(tab==='membership') renderMembership();
  if(tab==='access') renderAccess();
  if(tab==='history') renderHistoryTab();
+ if(tab==='tally') renderTally();
 }
 
 function swSub(sub){
@@ -2492,6 +2499,7 @@ function refreshActiveView(){
   else if(activeTab==='membership') renderMembership();
   else if(activeTab==='access') renderAccess();
   else if(activeTab==='history') renderHistoryTab();
+  else if(activeTab==='tally') renderTally();
   else if(activeTab==='settings'){ if(subActive('#sec-settings','stab-')==='storage') renderSettingsStorage(); }
   // 'invoice' tab intentionally not refreshed: it is an editing form.
  }catch(e){ console.error('refreshActiveView error',e); }
@@ -3174,8 +3182,9 @@ async function massDelete(){
  const ids=[...massSelected];
  const {error}=await db.from('appointments').delete().in('id',ids);
  if(error){alert('Error: '+error.message);return}
+ ids.forEach(id=>{const i=appts.findIndex(a=>a.id===id);if(i>=0)appts.splice(i,1)});
  massSelected.clear();
- await loadAll();
+ renderCal();
 }
 
 async function massMove(){
@@ -3215,10 +3224,11 @@ async function massMove(){
  }
  const {error}=await db.from('appointments').update({appt_date:newDate}).in('id',ids);
  if(error){alert('Error: '+error.message);return}
+ ids.forEach(id=>{const i=appts.findIndex(a=>a.id===id);if(i>=0)appts[i].appt_date=newDate});
  massSelected.clear();
  calDay=newDate;
  calStart=weekStart(new Date(newDate+'T00:00:00'));
- await loadAll();
+ renderCal();
 }
 
 /* ---- DRAG DROP ---- */
@@ -3353,8 +3363,10 @@ async function onDrop(e){
   return;
  }
  await db.from('appointments').update({appt_date:nd,groomer_id:ng,appt_time:newTime}).eq('id',draggedId);
+ const idx=appts.findIndex(x=>x.id===draggedId);
+ if(idx>=0){appts[idx].appt_date=nd;appts[idx].groomer_id=ng;appts[idx].appt_time=newTime;}
  showToast('Appointment dipindahkan','success');
- await loadAll();renderCal();
+ renderCal();
 }
 // Batch O — touch reschedule for mobile (long-press → drag)
 let _touchDragState=null;
@@ -3417,7 +3429,9 @@ function onApptTouchStart(e,apptId){
       showToast(`Bentrok dengan ${otherDog?.name||'appt lain'} jam ${conflict.appt_time?.slice(0,5)||''}`);
      } else {
       await db.from('appointments').update({appt_date:nd,groomer_id:ng,appt_time:newTime}).eq('id',apptId);
-      await loadAll();renderCal();
+      const idx=appts.findIndex(x=>x.id===apptId);
+      if(idx>=0){appts[idx].appt_date=nd;appts[idx].groomer_id=ng;appts[idx].appt_time=newTime;}
+      renderCal();
       showToast('Appointment dipindahkan','success');
      }
     }
@@ -3988,7 +4002,7 @@ function openApptEdit(id){
     val.forEach((u,i)=>items.push({label:t.label+(val.length>1?` ${i+1}`:''),url:u}));
    } else {
     const url=typeof val==='object'?val?.url:val;
-    if(url) items.push({label:t.label,url,meta:t.key==='absency'&&typeof val==='object'?val:null});
+    if(url) items.push({label:t.label,url,meta:typeof val==='object'?val:null});
    }
   });
   if(items.length){
@@ -4066,7 +4080,7 @@ async function confirmApptFromModal(){
  await db.from('appointments').update({status:'confirmed'}).eq('id',wiz.editId);
  const cIdx=appts.findIndex(a=>a.id===wiz.editId);
  if(cIdx>=0) appts[cIdx].status='confirmed';
- cm('ov-appt'); renderCal(); loadAll();
+ cm('ov-appt'); renderCal();
 }
 
 // Batch O.13 — performance tracking helpers
@@ -4261,6 +4275,8 @@ async function saveAppt(){
      const newUsed=Math.min(tok.sessions_total,(tok.sessions_used||0)+1);
      await db.from('tokens').update({sessions_used:newUsed}).eq('id',a.token_id);
      await db.from('appointments').update({token_used:true}).eq('id',a.id);
+     tok.sessions_used=newUsed;
+     a.token_used=true;
     }
    }
   }
@@ -4285,8 +4301,7 @@ async function saveAppt(){
   insertedAppts.forEach(a=>appts.push(a));
  }
  cm('ov-appt');
- renderCal(); // immediate
- loadAll();   // background sync (no await)
+ renderCal();
 }
 
 async function delApptFromModal(){
@@ -4301,13 +4316,14 @@ async function delApptFromModal(){
   await deleteAppointmentWithVisitCheck(wiz.editId);
   const i=appts.findIndex(a=>a.id===wiz.editId);if(i>=0)appts.splice(i,1);
  }
- cm('ov-appt'); renderCal(); loadAll();
+ cm('ov-appt'); renderCal();
 }
 
 async function delAppt(id){
  if(!confirm('Remove appointment?'))return;
  await deleteAppointmentWithVisitCheck(id);
- await loadAll();renderCal();
+ const i=appts.findIndex(a=>a.id===id); if(i>=0) appts.splice(i,1);
+ renderCal();
 }
 
 // Batch O.10 — appt delete: check for linked visit + log audit + token refund
@@ -4322,6 +4338,8 @@ async function deleteAppointmentWithVisitCheck(apptId){
    const newUsed=Math.max(0,(tok.sessions_used||0)-1);
    await db.from('tokens').update({sessions_used:newUsed}).eq('id',oldAppt.token_id);
    await db.from('appointments').update({token_used:false}).eq('id',apptId);
+   tok.sessions_used=newUsed;
+   oldAppt.token_used=false;
   }
  }
  // Check for linked visit (same dog + date)
@@ -4332,6 +4350,7 @@ async function deleteAppointmentWithVisitCheck(apptId){
   if(choice.trim().toLowerCase()==='yes'){
    await db.from('visits').delete().eq('id',linkedVisit.id);
    await logAudit('visit',linkedVisit.id,'delete',{old:linkedVisit,label:dogName+' ('+linkedVisit.visited_at+')'});
+   const vi=visits.findIndex(v=>v.id===linkedVisit.id); if(vi>=0) visits.splice(vi,1);
   }
  }
  await db.from('appointments').delete().eq('id',apptId);
@@ -8732,7 +8751,7 @@ async function checkAuthState(){
   if(uiEl) uiEl.style.display='flex';
   if(emEl) emEl.textContent=row.email||currentUser.email||'';
   // Owner-only tabs: hide for admins
-  const ownerOnlyTabs=['tab-dashboard','tab-financial','tab-access','tab-history','tab-settings'];
+  const ownerOnlyTabs=['tab-dashboard','tab-financial','tab-access','tab-history','tab-tally','tab-settings'];
   ownerOnlyTabs.forEach(id=>{const el=document.getElementById(id); if(el) el.style.display=row.role==='owner'?'':'none';});
   // Landing view honours per-user preference (falls back by role)
   applyPrefsOnBoot(row.role);
@@ -9212,12 +9231,12 @@ async function deleteOldData(table){
 }
 
 async function deleteOldPhotos(){
- const months=parseInt(document.getElementById('del-photo-months')?.value)||6;
- const cutoff=new Date(); cutoff.setMonth(cutoff.getMonth()-months);
+ const days=parseInt(document.getElementById('del-photo-days')?.value)||60;
+ const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-days);
  const cutoffISO=iso(cutoff);
  // Find appointments older than cutoff that have photos
  const oldAppts=appts.filter(a=>a.appt_date<cutoffISO&&a.photos&&Object.keys(a.photos).length>0);
- if(!oldAppts.length){alert(`Tidak ada foto dari appointment lebih dari ${months} bulan lalu.`);return}
+ if(!oldAppts.length){alert(`Tidak ada foto dari appointment lebih dari ${days} hari lalu.`);return}
  // Build file paths to delete
  const paths=[];
  const PHOTO_KEYS=['absency','before','after','ear_left','ear_right','dematting','fungal','injury','other'];
@@ -10205,6 +10224,208 @@ function renderHistoryTab(){
     ${byDay[day].map(renderAuditEntry).join('')}
    </div>`;
   }).join('');
+}
+
+/* ========== TALLY / RECONCILE TAB ========== */
+let tallyCycleAnchor=new Date();
+let tallyExpanded={c1:false,c2:false,c3:false,c4a:false,c4b:false,c5:false};
+
+function tallyCheck1_doneApptNoInvoice(cycle){
+ return appts.filter(a=>{
+  if(a.status!=='done') return false;
+  if(a.appt_date<cycle.start||a.appt_date>cycle.end) return false;
+  const inv=findInvoiceForDogsOnDate([a.dog_id],a.appt_date);
+  return !inv;
+ });
+}
+
+function tallyCheck2_invoiceNoDoneAppt(cycle){
+ return invoices.filter(inv=>{
+  if(!inv.invoice_date) return false;
+  if(inv.invoice_date<cycle.start||inv.invoice_date>cycle.end) return false;
+  const dogIds=(inv.dogs||[]).map(d=>d.dog_id).filter(Boolean);
+  if(!dogIds.length) return false;
+  const hasDoneAppt=appts.some(a=>
+   a.status==='done'
+   && a.appt_date===inv.invoice_date
+   && dogIds.includes(a.dog_id)
+  );
+  return !hasDoneAppt;
+ });
+}
+
+function tallyCheck3_doneApptNotInPayroll(cycle){
+ return appts.filter(a=>{
+  if(a.status!=='done') return false;
+  if(a.appt_date<cycle.start||a.appt_date>cycle.end) return false;
+  if(!a.groomer_id) return false;
+  if(a.session_source==='free') return false;
+  const inv=invoices.find(i=>
+   i.invoice_date===a.appt_date
+   && i.groomer_id===a.groomer_id
+   && (i.dogs||[]).some(d=>d.dog_id===a.dog_id)
+  );
+  return !inv;
+ });
+}
+
+function tallyCheck4_visitsApptsMismatch(cycle){
+ const visitsNoAppt=visits.filter(v=>{
+  if(!v.visited_at) return false;
+  if(v.visited_at<cycle.start||v.visited_at>cycle.end) return false;
+  const hasAppt=appts.some(a=>
+   a.dog_id===v.dog_id && a.appt_date===v.visited_at && a.status!=='cancelled'
+  );
+  return !hasAppt;
+ });
+ const apptsNoVisit=appts.filter(a=>{
+  if(a.status!=='done') return false;
+  if(a.appt_date<cycle.start||a.appt_date>cycle.end) return false;
+  const hasVisit=visits.some(v=>v.dog_id===a.dog_id&&v.visited_at===a.appt_date);
+  return !hasVisit;
+ });
+ return {visitsNoAppt,apptsNoVisit};
+}
+
+function tallyCheck5_dogCountMismatch(cycle){
+ const byGroomer={};
+ groomers.forEach(g=>{if(g.active)byGroomer[g.id]={id:g.id,name:g.name,invoiced:0,done:0}});
+ invoices.forEach(inv=>{
+  if(!inv.invoice_date) return;
+  if(inv.invoice_date<cycle.start||inv.invoice_date>cycle.end) return;
+  if(!inv.groomer_id||!byGroomer[inv.groomer_id]) return;
+  byGroomer[inv.groomer_id].invoiced+=(inv.dogs||[]).length;
+ });
+ appts.forEach(a=>{
+  if(a.status!=='done') return;
+  if(a.appt_date<cycle.start||a.appt_date>cycle.end) return;
+  if(!a.groomer_id||!byGroomer[a.groomer_id]) return;
+  if(a.session_source==='free') return;
+  byGroomer[a.groomer_id].done++;
+ });
+ return Object.values(byGroomer).filter(r=>r.invoiced!==r.done);
+}
+
+function tallyPrevCycle(){
+ tallyCycleAnchor=new Date(tallyCycleAnchor.getFullYear(),tallyCycleAnchor.getMonth()-1,tallyCycleAnchor.getDate());
+ renderTally();
+}
+function tallyNextCycle(){
+ tallyCycleAnchor=new Date(tallyCycleAnchor.getFullYear(),tallyCycleAnchor.getMonth()+1,tallyCycleAnchor.getDate());
+ renderTally();
+}
+function tallyResetCycle(){
+ tallyCycleAnchor=new Date();
+ renderTally();
+}
+function tallyToggle(id){
+ tallyExpanded[id]=!tallyExpanded[id];
+ renderTally();
+}
+
+function renderTallyCard(id,title,count,rowsHtml){
+ const color=count===0?'#16a34a':'#dc2626';
+ const bg=count===0?'#dcfce7':'#fee2e2';
+ const arrow=tallyExpanded[id]?'\u25BC':'\u25B6';
+ return `<div class="card" style="padding:0;margin-bottom:8px;overflow:hidden">
+  <div style="padding:10px 14px;background:${bg};display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="tallyToggle('${id}')">
+   <div style="font-size:13px;font-weight:600;color:${color}">
+    ${count===0?'\u2713':'\u26A0'} ${esc(title)} <span style="font-weight:400;font-size:11px">(${count})</span>
+   </div>
+   <span style="color:${color};font-size:14px">${arrow}</span>
+  </div>
+  ${tallyExpanded[id]&&count>0?`<div style="max-height:340px;overflow-y:auto;background:var(--surface)">${rowsHtml}</div>`:''}
+ </div>`;
+}
+
+function renderTally(){
+ const wrap=document.getElementById('sec-tally');
+ if(!wrap) return;
+ const cycle=getPayrollCycle(tallyCycleAnchor);
+
+ const c1=tallyCheck1_doneApptNoInvoice(cycle);
+ const c2=tallyCheck2_invoiceNoDoneAppt(cycle);
+ const c3=tallyCheck3_doneApptNotInPayroll(cycle);
+ const c4=tallyCheck4_visitsApptsMismatch(cycle);
+ const c5=tallyCheck5_dogCountMismatch(cycle);
+
+ const total=c1.length+c2.length+c3.length+c4.visitsNoAppt.length+c4.apptsNoVisit.length+c5.length;
+
+ const rowLine=(main,btnHtml)=>`<div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:8px"><div>${main}</div>${btnHtml||''}</div>`;
+
+ const c1Rows=c1.map(a=>{
+  const d=dogs.find(x=>x.id===a.dog_id);
+  const c=d?custs.find(x=>x.id===d.customer_id):null;
+  return rowLine(
+   `<strong>${esc(a.appt_date)} ${(a.appt_time||'').slice(0,5)}</strong> \u00B7 ${esc(c?.owner||'?')} \u00B7 ${esc(d?.name||'?')} \u00B7 <span style="color:var(--muted);font-size:11px">${esc(a.session_source||'normal')}</span>`,
+   `<button class="icon-btn view" onclick="openApptEdit('${a.id}')">Open</button>`
+  );
+ }).join('');
+
+ const c2Rows=c2.map(inv=>{
+  const dogNames=(inv.dogs||[]).map(d=>d.name).join(', ');
+  return rowLine(
+   `<strong>${esc(inv.invoice_number)}</strong> \u00B7 ${fmtD(inv.invoice_date)} \u00B7 ${esc(inv.owner_name)} \u00B7 <span style="color:var(--muted);font-size:11px">${esc(dogNames)}</span>`,
+   `<button class="icon-btn view" onclick="openInvoiceForEdit('${inv.id}')">Open</button>`
+  );
+ }).join('');
+
+ const c3Rows=c3.map(a=>{
+  const d=dogs.find(x=>x.id===a.dog_id);
+  const c=d?custs.find(x=>x.id===d.customer_id):null;
+  const g=groomers.find(x=>x.id===a.groomer_id);
+  return rowLine(
+   `<strong>${esc(a.appt_date)}</strong> \u00B7 ${esc(g?.name||'?')} \u00B7 ${esc(c?.owner||'?')} \u00B7 ${esc(d?.name||'?')}`,
+   `<button class="icon-btn view" onclick="openApptEdit('${a.id}')">Open</button>`
+  );
+ }).join('');
+
+ const c4aRows=c4.visitsNoAppt.map(v=>{
+  const d=dogs.find(x=>x.id===v.dog_id);
+  const c=d?custs.find(x=>x.id===d.customer_id):null;
+  return rowLine(
+   `<strong>${esc(v.visited_at)}</strong> \u00B7 ${esc(c?.owner||'?')} \u00B7 ${esc(d?.name||'?')}`,
+   `<button class="icon-btn del" onclick="delVisit('${v.id}')">Delete visit</button>`
+  );
+ }).join('');
+
+ const c4bRows=c4.apptsNoVisit.map(a=>{
+  const d=dogs.find(x=>x.id===a.dog_id);
+  const c=d?custs.find(x=>x.id===d.customer_id):null;
+  return rowLine(
+   `<strong>${esc(a.appt_date)}</strong> \u00B7 ${esc(c?.owner||'?')} \u00B7 ${esc(d?.name||'?')}`,
+   `<button class="icon-btn view" onclick="openApptEdit('${a.id}')">Open</button>`
+  );
+ }).join('');
+
+ const c5Rows=c5.map(r=>{
+  const diff=r.invoiced-r.done;
+  return `<div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">
+   <strong>${esc(r.name)}</strong> \u00B7 Invoice: ${r.invoiced} dogs \u00B7 Done appt: ${r.done} dogs \u00B7 <span style="color:${diff>0?'#dc2626':'#ca8a04'};font-weight:600">\u0394 ${diff>0?'+':''}${diff}</span>
+  </div>`;
+ }).join('');
+
+ wrap.innerHTML=`
+  <div class="toolbar">
+   <span class="toolbar-title">Tally / Reconcile</span>
+   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <button class="btn btn-g btn-sm" onclick="tallyPrevCycle()">\u2190 Prev</button>
+    <span style="font-weight:600;font-size:14px">${esc(cycle.label)}</span>
+    <button class="btn btn-g btn-sm" onclick="tallyNextCycle()">Next \u2192</button>
+    <button class="btn btn-g btn-sm" onclick="tallyResetCycle()">Current cycle</button>
+   </div>
+  </div>
+  <div style="font-size:13px;color:${total?'#dc2626':'#15803d'};margin-bottom:12px;padding:10px 14px;background:${total?'#fee2e2':'#dcfce7'};border-radius:6px">
+   <strong>${total===0?'\u2713 No mismatches in this cycle':`\u26A0 ${total} mismatch${total!==1?'es':''} found`}</strong>
+   <div style="font-size:11px;color:var(--muted);margin-top:4px;font-weight:400">Cycle: ${esc(cycle.start)} \u2014 ${esc(cycle.end)}. Klik card untuk lihat detail.</div>
+  </div>
+  ${renderTallyCard('c1','Done appt tanpa invoice',c1.length,c1Rows)}
+  ${renderTallyCard('c2','Invoice tanpa done appt',c2.length,c2Rows)}
+  ${renderTallyCard('c3','Done appt tidak masuk payroll (per groomer)',c3.length,c3Rows)}
+  ${renderTallyCard('c4a','Visit tanpa appointment',c4.visitsNoAppt.length,c4aRows)}
+  ${renderTallyCard('c4b','Done appt tanpa visit',c4.apptsNoVisit.length,c4bRows)}
+  ${renderTallyCard('c5','Dog count mismatch (invoice vs done appt, per groomer)',c5.length,c5Rows)}
+ `;
 }
 
 let _c360NotesTimer=null;
