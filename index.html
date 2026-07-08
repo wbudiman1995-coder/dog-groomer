@@ -3874,7 +3874,7 @@ async function _nominatimSearch(fullAddress){
 }
 
 async function autoLookupCoords(){
- const addr=(document.getElementById('cf-addr')?.value||'').trim();
+ const rawAddr=(document.getElementById('cf-addr')?.value||'').trim();
  const kec=(document.getElementById('cf-kec')?.value||'').trim();
  const kota=(document.getElementById('cf-kota')?.value||'').trim();
  const latEl=document.getElementById('cf-lat');
@@ -3882,23 +3882,32 @@ async function autoLookupCoords(){
  const gmapsEl=document.getElementById('cf-gmaps');
  const hint=document.getElementById('cf-coords-hint');
 
- if(!addr){
-  alert('❌ Alamat kosong di database.\n\nIsi field "Address" dulu, baru bisa auto-lookup koordinat.');
+ if(!rawAddr&&!kec&&!kota){
+  alert('❌ Alamat kosong di database.\n\nIsi minimal field "Address" atau "Kecamatan" + "Kota" dulu, baru bisa auto-lookup koordinat.');
   document.getElementById('cf-addr')?.focus();
   return;
  }
- const fullAddr=[addr,kec,kota,'Jakarta','Indonesia'].filter(Boolean).join(', ');
- if(!confirm(`Auto-cari koordinat untuk alamat berikut?\n\n${fullAddr}\n\n(Menggunakan OpenStreetMap Nominatim — gratis, tanpa API key)`)) return;
+ const cleanAddr=_cleanAddressForGeocoding(rawAddr);
+ const fullAddr=[cleanAddr,kec,kota,'Indonesia'].filter(Boolean).join(', ');
+ if(!confirm(`Auto-cari koordinat untuk alamat berikut?\n\nInput asli: ${rawAddr||'(kosong)'}\n${cleanAddr!==rawAddr?`Dibersihkan: ${cleanAddr}\n`:''}Query: ${fullAddr}\n\n(OpenStreetMap Nominatim — free, no API key)`)) return;
  if(hint) hint.textContent='⏳ Sedang cari koordinat...';
  try {
-  const data=await _nominatimSearch(fullAddr);
+  let data=await _nominatimSearch(fullAddr);
+  let method='street-level';
+  // Fallback: try just kecamatan + kota if street-level fails
+  if(!data.length && kec && kota){
+   await new Promise(r=>setTimeout(r,1200));
+   const fallback=[kec,kota,'Indonesia'].filter(Boolean).join(', ');
+   data=await _nominatimSearch(fallback);
+   method='kecamatan-centroid (approximate)';
+  }
   if(!data.length){
-   if(hint) hint.innerHTML=`❌ Tidak ada hasil dari OpenStreetMap. <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddr)}" target="_blank" style="color:var(--primary-dk)">Cari manual di Google Maps →</a>`;
-   alert(`Tidak ditemukan koordinat untuk:\n${fullAddr}\n\nTips:\n1. Sederhanakan alamat (buang detail berlebihan seperti "belakang warung X")\n2. Cari manual di Google Maps, klik kanan di titik, copy koordinat`);
+   if(hint) hint.innerHTML=`❌ Tidak ada hasil (bahkan kecamatan fallback). <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddr)}" target="_blank" style="color:var(--primary-dk)">Cari manual di Google Maps →</a>`;
+   alert(`Tidak ditemukan koordinat untuk:\n${fullAddr}\n\nTips:\n1. Sederhanakan alamat (buang detail seperti "belakang X" atau nama gang tidak resmi)\n2. Cari manual di Google Maps, klik kanan di titik, copy koordinat, paste ke field lat/lng`);
    return;
   }
   let picked=data[0];
-  if(data.length>1){
+  if(data.length>1&&method==='street-level'){
    const options=data.map((r,i)=>`${i+1}. ${r.display_name} (${r.type||'?'})`).join('\n');
    const choice=prompt(`Ditemukan ${data.length} hasil. Pilih nomor:\n\n${options}\n\nInput nomor 1-${data.length}:`,'1');
    if(!choice){if(hint)hint.textContent='Cancelled';return;}
@@ -3909,69 +3918,117 @@ async function autoLookupCoords(){
   const lat=parseFloat(picked.lat).toFixed(7);
   const lng=parseFloat(picked.lon).toFixed(7);
   latEl.value=lat; lngEl.value=lng;
-  // Populate gmaps_link too if empty
   if(gmapsEl && !gmapsEl.value.trim()){
    gmapsEl.value=`https://www.google.com/maps/?q=${lat},${lng}`;
   }
-  if(hint) hint.innerHTML=`✓ Ditemukan: <strong>${esc(picked.display_name.slice(0,100))}</strong>. Verifikasi <a href="https://www.google.com/maps/?q=${lat},${lng}" target="_blank" style="color:var(--primary-dk)">di Google Maps →</a>`;
+  const warn=method!=='street-level'?` <span style="color:#ca8a04;font-weight:600">⚠️ ${method}</span>`:'';
+  if(hint) hint.innerHTML=`✓ Ditemukan: <strong>${esc(picked.display_name.slice(0,100))}</strong>${warn}. Verifikasi <a href="https://www.google.com/maps/?q=${lat},${lng}" target="_blank" style="color:var(--primary-dk)">di Google Maps →</a>`;
  } catch(err){
   if(hint) hint.textContent='❌ Error: '+err.message;
   alert('Nominatim error: '+err.message+'\n\nBisa masalah network atau rate limit. Coba lagi.');
  }
 }
 
+/* Clean noise from Indonesian addresses that confuses Nominatim */
+function _cleanAddressForGeocoding(rawAddr){
+ return (rawAddr||'')
+  .replace(/\bRT\.?\s*\d+\s*\/?\s*RW?\.?\s*\d+/gi,'')  // "RT 03/RW 05"
+  .replace(/\bRT\.?\s*\d+/gi,'')                        // "RT 03"
+  .replace(/\bRW\.?\s*\d+/gi,'')                        // "RW 05"
+  .replace(/\bBlok\s+\S+/gi,'')                         // "Blok A2"
+  .replace(/\bKel\.?\s+\S+/gi,'')                       // "Kel. Kemang"
+  .replace(/\bKec\.?\s+\S+/gi,'')                       // "Kec. Mampang"
+  .replace(/\(.*?\)/g,'')                               // "(belakang X)"
+  .replace(/[,;]{2,}/g,',')
+  .replace(/\s+/g,' ')
+  .replace(/[,\s]+$/,'')
+  .replace(/^[,\s]+/,'')
+  .trim();
+}
+
+/* Try multiple geocoding strategies per customer. Returns {result, method, precise, query} or null. */
+async function _geocodeCustomer(c){
+ const cleanAddr=_cleanAddressForGeocoding(c.address);
+ const kec=(c.kecamatan||'').trim();
+ const kota=(c.kota||'').trim();
+ const attempts=[];
+ if(cleanAddr){
+  attempts.push({q:[cleanAddr,kec,kota,'Indonesia'].filter(Boolean).join(', '), method:'street-level', precise:true});
+  attempts.push({q:[cleanAddr,kota,'Indonesia'].filter(Boolean).join(', '),      method:'street-simplified', precise:true});
+ }
+ if(kec&&kota){
+  attempts.push({q:[kec,kota,'Indonesia'].filter(Boolean).join(', '), method:'kecamatan-centroid', precise:false});
+ } else if(kota){
+  attempts.push({q:[kota,'Indonesia'].filter(Boolean).join(', '), method:'kota-centroid', precise:false});
+ }
+ for(let i=0;i<attempts.length;i++){
+  const att=attempts[i];
+  try {
+   const r=await _nominatimSearch(att.q);
+   if(r.length){
+    return {result:r[0], method:att.method, precise:att.precise, query:att.q, attemptIdx:i};
+   }
+  } catch(e){
+   console.warn(`  ${c.owner}: Nominatim error on "${att.q}" — ${e.message}`);
+  }
+  await new Promise(r=>setTimeout(r,1200));
+ }
+ return null;
+}
+
 /* Bulk version: iterate all customers with address but no coords.
-   Rate-limited to 1 req/sec per Nominatim usage policy. */
+   Rate-limited to 1.2s per request per Nominatim usage policy. */
 async function bulkAutoLookupCoords(){
  console.log('[bulkAutoLookupCoords] fired at', new Date().toISOString());
- const targets=custs.filter(c=>(c.latitude==null||c.longitude==null) && (c.address||'').trim());
- const missing=custs.filter(c=>(c.latitude==null||c.longitude==null) && !(c.address||'').trim());
- console.log(`[bulkAutoLookupCoords] targets: ${targets.length}, missing address: ${missing.length}`);
+ const targets=custs.filter(c=>(c.latitude==null||c.longitude==null) && ((c.address||'').trim()||(c.kecamatan||'').trim()||(c.kota||'').trim()));
+ const missing=custs.filter(c=>(c.latitude==null||c.longitude==null) && !((c.address||'').trim()||(c.kecamatan||'').trim()||(c.kota||'').trim()));
+ console.log(`[bulkAutoLookupCoords] targets: ${targets.length}, missing all location fields: ${missing.length}`);
  if(!targets.length){
   const msg=missing.length
-   ?`Tidak ada customer yang punya alamat tapi belum ada koord.\n\nAda ${missing.length} customer TANPA alamat sama sekali — mereka perlu diisi field "Address" dulu.`
+   ?`Tidak ada customer yang bisa di-lookup.\n\n${missing.length} customer tanpa alamat/kecamatan/kota sama sekali — perlu diisi manual dulu.`
    :'Semua customer sudah ada koordinat. ✓';
   alert(msg); return;
  }
- const secs=Math.ceil(targets.length*1.1);
- if(!confirm(`Auto-lookup ${targets.length} customer via OpenStreetMap Nominatim?\n\nRate limit: ~1 request/detik → estimasi ${secs} detik total.\n\nHasil disimpan otomatis. Detail per-customer di console browser (F12 → Console).\n\n${missing.length?`(${missing.length} customer TANPA alamat akan di-skip — perlu diisi manual dulu)`:''}`)) return;
+ const est=Math.ceil(targets.length*1.2*2.5);  // avg 2.5 attempts × 1.2s
+ if(!confirm(`Auto-lookup ${targets.length} customer via OpenStreetMap Nominatim?\n\nStrategi per customer (dicoba berurutan sampai ketemu):\n1. Alamat lengkap (street-level, akurat)\n2. Alamat + kota saja (simplified)\n3. Kecamatan centroid (approximate — kurang akurat tapi masih berguna)\n\nEstimasi ${est} detik.\nHasil disimpan otomatis. Detail per-customer di F12 → Console.\n\n${missing.length?`(${missing.length} customer tanpa alamat sama sekali akan di-skip)`:''}`)) return;
+
  const summary=document.getElementById('cs-coord-summary');
- let ok=0, notFound=0, err=0;
- const errList=[];
+ let street=0, centroid=0, notFound=0, err=0;
+ const failures=[];
  for(let i=0;i<targets.length;i++){
   const c=targets[i];
   if(summary) summary.innerHTML=`⏳ Auto-lookup <strong>${i+1}/${targets.length}</strong>: ${esc(c.owner)}...`;
-  const fullAddr=[c.address,c.kecamatan,c.kota,'Jakarta','Indonesia'].filter(Boolean).join(', ');
   try {
-   const data=await _nominatimSearch(fullAddr);
-   if(data.length){
-    const lat=parseFloat(data[0].lat), lng=parseFloat(data[0].lon);
-    await db.from('customers').update({latitude:lat,longitude:lng}).eq('id',c.id);
-    c.latitude=lat; c.longitude=lng;
+   const geo=await _geocodeCustomer(c);
+   if(geo){
+    const lat=parseFloat(geo.result.lat), lng=parseFloat(geo.result.lon);
+    const update={latitude:lat, longitude:lng};
     if(!(c.gmaps_link||'').trim()){
-     const newLink=`https://www.google.com/maps/?q=${lat.toFixed(7)},${lng.toFixed(7)}`;
-     await db.from('customers').update({gmaps_link:newLink}).eq('id',c.id);
-     c.gmaps_link=newLink;
+     update.gmaps_link=`https://www.google.com/maps/?q=${lat.toFixed(7)},${lng.toFixed(7)}`;
     }
-    ok++;
-    console.log(`✓ [${i+1}/${targets.length}] ${c.owner}: ${data[0].display_name}`);
+    await db.from('customers').update(update).eq('id',c.id);
+    Object.assign(c, update);
+    if(geo.precise){
+     street++;
+     console.log(`✓ [${i+1}/${targets.length}] ${c.owner} — ${geo.method}: "${geo.query}" → ${geo.result.display_name}`);
+    } else {
+     centroid++;
+     console.warn(`📍 [${i+1}/${targets.length}] ${c.owner} — ${geo.method} (approximate): "${geo.query}" → ${geo.result.display_name}`);
+    }
    } else {
     notFound++;
-    errList.push(`${c.owner}: no result`);
-    console.warn(`✗ [${i+1}/${targets.length}] ${c.owner}: no result for "${fullAddr}"`);
+    failures.push({owner:c.owner, addr:c.address, kec:c.kecamatan, kota:c.kota});
+    console.error(`✗ [${i+1}/${targets.length}] ${c.owner}: no result. addr="${c.address}" kec="${c.kecamatan}" kota="${c.kota}"`);
    }
   } catch(e){
    err++;
-   errList.push(`${c.owner}: ${e.message}`);
    console.error(`✗ [${i+1}/${targets.length}] ${c.owner}: ${e.message}`);
   }
-  // Rate limit: 1.1s pause between requests
-  await new Promise(r=>setTimeout(r,1100));
  }
  renderCusts();
- const skipMsg=missing.length?`\n\n(${missing.length} customer di-skip karena tidak ada alamat)`:'';
- const errPreview=errList.length?`\n\nContoh yang gagal:\n${errList.slice(0,5).join('\n')}`:'';
- alert(`Selesai auto-lookup ${targets.length} customer:\n\n✓ Berhasil: ${ok}\n✗ Tidak ditemukan: ${notFound}\n⚠️ Error: ${err}\n\nBuka F12 → Console untuk detail per-customer.${skipMsg}${errPreview}`);
+ const skipMsg=missing.length?`\n\n(${missing.length} customer di-skip karena tanpa alamat/kec/kota)`:'';
+ const failPreview=failures.length?`\n\nContoh yang gagal (cek F12 Console untuk semua):\n${failures.slice(0,5).map(f=>`• ${f.owner}: "${f.addr||'(no addr)'}" @ ${f.kec||'?'}/${f.kota||'?'}`).join('\n')}`:'';
+ alert(`Selesai auto-lookup ${targets.length} customer:\n\n✓ Street-level (akurat): ${street}\n📍 Kecamatan-level (approximate): ${centroid}\n✗ Tidak ditemukan: ${notFound}\n⚠️ Error: ${err}\n\nTotal berhasil: ${street+centroid}/${targets.length}${skipMsg}${failPreview}\n\nUntuk yang failed, edit manual atau simplify alamat lalu retry.`);
 }
 
 /* Classifies a customer's location data completeness so admin sees at a glance
