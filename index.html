@@ -3864,13 +3864,54 @@ function parseCoordsFromGmapsLink(){
  if(hint) hint.textContent='❌ Tidak bisa parse (short link maps.app.goo.gl). Buka link di browser, klik kanan di titik lokasi, copy koordinat pertama sebagai lat, kedua sebagai lng.';
 }
 
-/* Auto-lookup coordinates from address using OpenStreetMap Nominatim.
-   Free, no API key, CORS-friendly. Rate limit: 1 req/sec per Nominatim policy. */
-async function _nominatimSearch(fullAddress){
- const url=`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fullAddress)}&format=json&limit=5&countrycodes=id&addressdetails=1`;
+/* Auto-lookup coordinates from address using OpenStreetMap-based geocoders.
+   Primary: Photon (photon.komoot.io) — actively CORS-friendly, ~10 req/sec allowed.
+   Fallback: Nominatim (rate-limited harder, often 429s from browser). */
+async function _photonSearch(q){
+ // Bias toward Jakarta area for better local results
+ const url=`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=5&lat=-6.2&lon=106.85&lang=en`;
  const res=await fetch(url);
- if(!res.ok) throw new Error(`HTTP ${res.status}`);
+ if(!res.ok) throw new Error(`Photon HTTP ${res.status}`);
+ const data=await res.json();
+ // Convert GeoJSON to Nominatim-like format
+ return (data.features||[])
+  .filter(f=>{
+   // Filter to Indonesia only (Photon doesn't have strict countrycodes param)
+   const country=(f.properties?.country||'').toLowerCase();
+   return country==='indonesia'||country==='id';
+  })
+  .map(f=>({
+   lat: String(f.geometry.coordinates[1]),
+   lon: String(f.geometry.coordinates[0]),
+   display_name: [
+    f.properties.name, f.properties.street, f.properties.housenumber,
+    f.properties.district, f.properties.city, f.properties.state, f.properties.country
+   ].filter(Boolean).join(', '),
+   type: f.properties.osm_key||'place'
+  }));
+}
+async function _nominatimSearch(q){
+ const url=`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&countrycodes=id`;
+ const res=await fetch(url);
+ if(!res.ok) throw new Error(`Nominatim HTTP ${res.status}`);
  return await res.json();
+}
+// Combined geocoder: try Photon first, fall back to Nominatim if needed
+async function _geocode(q){
+ try {
+  const r=await _photonSearch(q);
+  if(r.length) return {results:r, source:'photon'};
+ } catch(e){
+  console.warn(`  Photon error for "${q}": ${e.message}`);
+ }
+ // Only try Nominatim if Photon returned zero, not on error (avoid double-error)
+ try {
+  const r=await _nominatimSearch(q);
+  if(r.length) return {results:r, source:'nominatim'};
+ } catch(e){
+  console.warn(`  Nominatim error for "${q}": ${e.message}`);
+ }
+ return {results:[], source:'none'};
 }
 
 async function autoLookupCoords(){
@@ -3892,17 +3933,21 @@ async function autoLookupCoords(){
  if(!confirm(`Auto-cari koordinat untuk alamat berikut?\n\nInput asli: ${rawAddr||'(kosong)'}\n${cleanAddr!==rawAddr?`Dibersihkan: ${cleanAddr}\n`:''}Query: ${fullAddr}\n\n(OpenStreetMap Nominatim — free, no API key)`)) return;
  if(hint) hint.textContent='⏳ Sedang cari koordinat...';
  try {
-  let data=await _nominatimSearch(fullAddr);
+  let g=await _geocode(fullAddr);
+  let data=g.results;
   let method='street-level';
+  let source=g.source;
   // Fallback: try just kecamatan + kota if street-level fails
   if(!data.length && kec && kota){
-   await new Promise(r=>setTimeout(r,1200));
+   await new Promise(r=>setTimeout(r,400));
    const fallback=[kec,kota,'Indonesia'].filter(Boolean).join(', ');
-   data=await _nominatimSearch(fallback);
+   g=await _geocode(fallback);
+   data=g.results;
+   source=g.source;
    method='kecamatan-centroid (approximate)';
   }
   if(!data.length){
-   if(hint) hint.innerHTML=`❌ Tidak ada hasil (bahkan kecamatan fallback). <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddr)}" target="_blank" style="color:var(--primary-dk)">Cari manual di Google Maps →</a>`;
+   if(hint) hint.innerHTML=`❌ Tidak ada hasil (Photon + Nominatim). <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddr)}" target="_blank" style="color:var(--primary-dk)">Cari manual di Google Maps →</a>`;
    alert(`Tidak ditemukan koordinat untuk:\n${fullAddr}\n\nTips:\n1. Sederhanakan alamat (buang detail seperti "belakang X" atau nama gang tidak resmi)\n2. Cari manual di Google Maps, klik kanan di titik, copy koordinat, paste ke field lat/lng`);
    return;
   }
@@ -3922,10 +3967,10 @@ async function autoLookupCoords(){
    gmapsEl.value=`https://www.google.com/maps/?q=${lat},${lng}`;
   }
   const warn=method!=='street-level'?` <span style="color:#ca8a04;font-weight:600">⚠️ ${method}</span>`:'';
-  if(hint) hint.innerHTML=`✓ Ditemukan: <strong>${esc(picked.display_name.slice(0,100))}</strong>${warn}. Verifikasi <a href="https://www.google.com/maps/?q=${lat},${lng}" target="_blank" style="color:var(--primary-dk)">di Google Maps →</a>`;
+  if(hint) hint.innerHTML=`✓ Ditemukan via ${source}: <strong>${esc(picked.display_name.slice(0,100))}</strong>${warn}. Verifikasi <a href="https://www.google.com/maps/?q=${lat},${lng}" target="_blank" style="color:var(--primary-dk)">di Google Maps →</a>`;
  } catch(err){
   if(hint) hint.textContent='❌ Error: '+err.message;
-  alert('Nominatim error: '+err.message+'\n\nBisa masalah network atau rate limit. Coba lagi.');
+  alert('Geocoder error: '+err.message+'\n\nBisa masalah network atau rate limit. Coba lagi.');
  }
 }
 
@@ -3963,15 +4008,11 @@ async function _geocodeCustomer(c){
  }
  for(let i=0;i<attempts.length;i++){
   const att=attempts[i];
-  try {
-   const r=await _nominatimSearch(att.q);
-   if(r.length){
-    return {result:r[0], method:att.method, precise:att.precise, query:att.q, attemptIdx:i};
-   }
-  } catch(e){
-   console.warn(`  ${c.owner}: Nominatim error on "${att.q}" — ${e.message}`);
+  const g=await _geocode(att.q);
+  if(g.results.length){
+   return {result:g.results[0], method:att.method, precise:att.precise, query:att.q, attemptIdx:i, source:g.source};
   }
-  await new Promise(r=>setTimeout(r,1200));
+  await new Promise(r=>setTimeout(r,700));  // Photon fair-use rate limit
  }
  return null;
 }
@@ -3989,8 +4030,8 @@ async function bulkAutoLookupCoords(){
    :'Semua customer sudah ada koordinat. ✓';
   alert(msg); return;
  }
- const est=Math.ceil(targets.length*1.2*2.5);  // avg 2.5 attempts × 1.2s
- if(!confirm(`Auto-lookup ${targets.length} customer via OpenStreetMap Nominatim?\n\nStrategi per customer (dicoba berurutan sampai ketemu):\n1. Alamat lengkap (street-level, akurat)\n2. Alamat + kota saja (simplified)\n3. Kecamatan centroid (approximate — kurang akurat tapi masih berguna)\n\nEstimasi ${est} detik.\nHasil disimpan otomatis. Detail per-customer di F12 → Console.\n\n${missing.length?`(${missing.length} customer tanpa alamat sama sekali akan di-skip)`:''}`)) return;
+ const est=Math.ceil(targets.length*0.7*2.5);  // 700ms delay × ~2.5 attempts avg
+ if(!confirm(`Auto-lookup ${targets.length} customer via OpenStreetMap (Photon + Nominatim fallback)?\n\nStrategi per customer (dicoba berurutan sampai ketemu):\n1. Alamat lengkap (street-level, akurat)\n2. Alamat + kota saja (simplified)\n3. Kecamatan centroid (approximate)\n\nEstimasi ${est} detik.\nHasil disimpan otomatis. Detail per-customer di F12 → Console.\n\n${missing.length?`(${missing.length} customer tanpa alamat sama sekali akan di-skip)`:''}`)) return;
 
  const summary=document.getElementById('cs-coord-summary');
  let street=0, centroid=0, notFound=0, err=0;
@@ -4010,10 +4051,10 @@ async function bulkAutoLookupCoords(){
     Object.assign(c, update);
     if(geo.precise){
      street++;
-     console.log(`✓ [${i+1}/${targets.length}] ${c.owner} — ${geo.method}: "${geo.query}" → ${geo.result.display_name}`);
+     console.log(`✓ [${i+1}/${targets.length}] ${c.owner} — ${geo.method} via ${geo.source}: "${geo.query}" → ${geo.result.display_name}`);
     } else {
      centroid++;
-     console.warn(`📍 [${i+1}/${targets.length}] ${c.owner} — ${geo.method} (approximate): "${geo.query}" → ${geo.result.display_name}`);
+     console.warn(`📍 [${i+1}/${targets.length}] ${c.owner} — ${geo.method} via ${geo.source} (approximate): "${geo.query}" → ${geo.result.display_name}`);
     }
    } else {
     notFound++;
