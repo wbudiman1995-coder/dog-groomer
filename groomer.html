@@ -512,7 +512,12 @@ function renderGroupedAppt(group, isFirstGroup, isToday){
    if(pt.conditional&&!svc.includes(pt.conditional)) return;
    if(pt.section&&pt.section!==lastSec){photosHTML+=`<div class="photo-section-label">${pt.section}</div>`;lastSec=pt.section;}
    if(pt.multi){photosHTML+=renderMultiSlot(a.id,a.photos||{},pt);}
-   else{const val=(a.photos||{})[pt.key];const url=typeof val==='object'?val?.url:val;photosHTML+=`<div class="photo-slot${pt.full?' full':''}"><div class="photo-slot-label">${pt.label}</div>${renderSingleSlot(a.id,url,pt.key,pt.hasGeo)}</div>`;}
+   else{
+    const val=(a.photos||{})[pt.key];
+    const url=typeof val==='object'?val?.url:val;
+    const metaHtml=typeof val==='object'&&val?.timestamp?`<div class="photo-meta">${new Date(val.timestamp).toLocaleString('id-ID')}${val.lat?` · <a href="https://maps.google.com/?q=${val.lat},${val.lng}" target="_blank" style="color:var(--primary)">Lokasi</a>`:''}</div>`:'';
+    photosHTML+=`<div class="photo-slot${pt.full?' full':''}"><div class="photo-slot-label">${pt.label}</div>${renderSingleSlot(a.id,url,pt.key,pt.hasGeo)}${metaHtml}</div>`;
+   }
   });
   photosHTML+='</div>';
   return `<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">
@@ -663,7 +668,7 @@ function renderPhotoGrid(a){
    html+=`<div class="photo-slot${pt.full?' full':''}">
     <div class="photo-slot-label">${pt.label}</div>
     ${renderSingleSlot(a.id,url,pt.key,pt.hasGeo)}
-    ${pt.hasGeo&&typeof val==='object'&&val?.timestamp?`<div class="photo-meta">${new Date(val.timestamp).toLocaleString('id-ID')}${val.lat?` · <a href="https://maps.google.com/?q=${val.lat},${val.lng}" target="_blank" style="color:var(--primary)">Lokasi</a>`:''}</div>`:''}
+    ${typeof val==='object'&&val?.timestamp?`<div class="photo-meta">${new Date(val.timestamp).toLocaleString('id-ID')}${val.lat?` · <a href="https://maps.google.com/?q=${val.lat},${val.lng}" target="_blank" style="color:var(--primary)">Lokasi</a>`:''}</div>`:''}
    </div>`;
   }
  });
@@ -792,7 +797,7 @@ async function onPhotoCapture(input){
     const geo=await getGeoPosition();
     photos[type]={url:publicUrl,timestamp:new Date().toISOString(),lat:geo?.lat||null,lng:geo?.lng||null};
    } else {
-    photos[type]=publicUrl;
+    photos[type]={url:publicUrl,timestamp:new Date().toISOString()};
    }
   }
 
