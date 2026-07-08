@@ -660,6 +660,11 @@ tbody tr:hover{background:var(--subtle)}
   <option value="friend">Friend</option>
   <option value="__none__">Not set</option>
  </select>
+ <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer">
+  <input type="checkbox" id="cs-nocoord" onchange="renderCusts()" style="margin:0"/>
+  <span>📍 Hanya belum ada koord</span>
+ </label>
+ <div id="cs-coord-summary" style="font-size:11px;color:var(--muted);margin-left:auto;padding:6px 0"></div>
  </div>
  <div class="tbl-wrap">
  <table><thead><tr>
@@ -1316,6 +1321,15 @@ tbody tr:hover{background:var(--subtle)}
  <div class="fg"><label>Kota / Kabupaten</label><select id="cf-kota" onchange="onKotaChange()"><option value="">Pilih kota…</option></select></div>
  <div class="fg"><label>Kecamatan</label><select id="cf-kec"><option value="">Pilih kota dulu…</option></select></div>
  <div class="fg full"><label>Google Maps link</label><input id="cf-gmaps" placeholder="https://maps.app.goo.gl/..."/></div>
+ <div class="fg full" style="grid-column:1/-1">
+  <label>Koordinat lokasi <span style="font-size:10px;color:var(--muted);font-weight:400">— untuk estimasi jarak &amp; travel time. Klik "Parse dari gmaps link" atau isi manual.</span></label>
+  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+   <input id="cf-lat" placeholder="Latitude (-6.2xxx)" style="flex:1;min-width:120px" inputmode="decimal"/>
+   <input id="cf-lng" placeholder="Longitude (106.8xxx)" style="flex:1;min-width:120px" inputmode="decimal"/>
+   <button type="button" class="btn btn-g btn-sm" onclick="parseCoordsFromGmapsLink()">Parse dari gmaps</button>
+  </div>
+  <div id="cf-coords-hint" style="font-size:10px;color:var(--muted);margin-top:3px"></div>
+ </div>
  <div class="fg"><label>Sumber customer</label>
   <select id="cf-source">
    <option value="">— Tidak ditentukan —</option>
@@ -1511,6 +1525,7 @@ tbody tr:hover{background:var(--subtle)}
   <!-- Step 3: Groomer + Date + Time slots -->
   <div id="wiz-3" style="display:none">
    <div id="wiz-groomer-suggest" style="display:none;margin-bottom:.6rem;padding:8px 12px;background:linear-gradient(135deg,#fef3c7,#fed7aa);border:1px solid #fde68a;border-radius:var(--r);font-size:12px;cursor:pointer" onclick="applyGroomerSuggestion()"></div>
+   <div id="wiz-travel-estimate" style="display:none;margin-bottom:.6rem;padding:8px 12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:var(--r)"></div>
    <div class="form-grid" style="margin-bottom:.75rem">
     <div class="fg">
      <label>Groomer *</label>
@@ -1918,7 +1933,7 @@ function editStamp(){
 
 // Batch O.10 — audit log infrastructure
 const AUDIT_TRACKED_FIELDS={
- customer:['owner','wa','address','kota','kecamatan','source','prefs','gmaps_link'],
+ customer:['owner','wa','address','kota','kecamatan','source','prefs','gmaps_link','latitude','longitude'],
  dog:['name','breed','size','age','weight','coat','coat_color','prefs','skin_history','customer_id'],
  appointment:['appt_date','appt_time','groomer_id','dog_id','service_base','status','appt_note','groomer_field_note','customer_note','duration_mins','session_source','late_minutes','late_reason','actual_duration_mins'],
  invoice:['total','subtotal','status','discount_value','discount_amount','is_subscription_billing','due_date','notes'],
@@ -1976,7 +1991,7 @@ async function logAudit(entity_type, entity_id, action, opts){
 function auditFieldLabel(field){
  const labels={
   owner:'Owner',wa:'WhatsApp',address:'Address',kota:'Kota',kecamatan:'Kecamatan',
-  source:'Source',prefs:'Preferences',gmaps_link:'Maps link',
+  source:'Source',prefs:'Preferences',gmaps_link:'Maps link',latitude:'Latitude',longitude:'Longitude',
   name:'Name',breed:'Breed',size:'Size',age:'Age',weight:'Weight',coat:'Coat',
   coat_color:'Coat color',skin_history:'Skin history',customer_id:'Owner',
   appt_date:'Date',appt_time:'Time',groomer_id:'Groomer',dog_id:'Dog',
@@ -2554,12 +2569,23 @@ function sortCusts(key){
 function renderCusts(){
  const s=(document.getElementById('cs')?.value||'').toLowerCase();
  const srcFilter=document.getElementById('cs-source')?.value||'';
+ const noCoordOnly=document.getElementById('cs-nocoord')?.checked;
  let rows=[...custs];
+ // Coord summary badge (computed BEFORE filtering so it reflects the whole database)
+ const withCoords=custs.filter(c=>c.latitude!=null&&c.longitude!=null).length;
+ const total=custs.length;
+ const missing=total-withCoords;
+ const sumEl=document.getElementById('cs-coord-summary');
+ if(sumEl){
+  const pct=total>0?Math.round(withCoords/total*100):0;
+  sumEl.innerHTML=`Koord: <strong style="color:${pct>=80?'#16a34a':pct>=50?'#ca8a04':'#dc2626'}">${withCoords}/${total} (${pct}%)</strong> · ${missing} customer belum ada koord`;
+ }
  if(s) rows=rows.filter(c=>(c.owner||'').toLowerCase().includes(s)||(c.area||'').toLowerCase().includes(s)||(c.wa||'').toLowerCase().includes(s)||(c.address||'').toLowerCase().includes(s));
  if(srcFilter){
   if(srcFilter==='__none__') rows=rows.filter(c=>!c.source);
   else rows=rows.filter(c=>c.source===srcFilter);
  }
+ if(noCoordOnly) rows=rows.filter(c=>!(c.latitude!=null&&c.longitude!=null));
  // Sort
  const getVal=(c,key)=>{
   if(key==='code') return (c.customer_code||'').toLowerCase();
@@ -2585,7 +2611,7 @@ function renderCusts(){
  const srcCell=c.source?`<span class="badge ${srcBadge[c.source]||'bs'}">${esc(srcLabel[c.source]||c.source)}</span>`:'<span style="font-size:11px;color:var(--muted)">—</span>';
  return `<tr>
  <td><span class="id-pill">${esc(c.customer_code||'—')}</span></td>
- <td><strong class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner)}</strong>${subsBadgeHTML(c.id)}</td>
+ <td><strong class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner)}</strong>${subsBadgeHTML(c.id)} ${locationBadgeHTML(c)}</td>
  <td>${c.wa?`<a class="wa-lnk" href="${waLink(c.wa)}" target="_blank">${esc(c.wa)}</a>`:'—'}</td>
  <td>${esc(c.area)||'—'}</td>
  <td>${srcCell}</td>
@@ -2650,7 +2676,8 @@ function openAddCust(){
  custEditId=null;
  document.getElementById('cust-title').textContent='Add customer';
  document.getElementById('cust-save-btn').textContent='Save customer';
- ['cf-owner','cf-wa','cf-addr','cf-gmaps','cf-prefs'].forEach(id=>document.getElementById(id).value='');
+ ['cf-owner','cf-wa','cf-addr','cf-gmaps','cf-prefs','cf-lat','cf-lng'].forEach(id=>document.getElementById(id)&&(document.getElementById(id).value=''));
+ const hintEl0=document.getElementById('cf-coords-hint'); if(hintEl0) hintEl0.textContent='';
  const srcEl=document.getElementById('cf-source'); if(srcEl) srcEl.value='';
  populateKotaSelect(document.getElementById('cf-kota'));
  populateKecSelect(document.getElementById('cf-kec'),'');
@@ -2668,6 +2695,10 @@ function openEditCust(id){
  document.getElementById('cf-wa').value=c.wa||'';
  document.getElementById('cf-addr').value=c.address||'';
  document.getElementById('cf-gmaps').value=c.gmaps_link||'';
+ document.getElementById('cf-lat').value=c.latitude!=null?c.latitude:'';
+ document.getElementById('cf-lng').value=c.longitude!=null?c.longitude:'';
+ const hintEl=document.getElementById('cf-coords-hint');
+ if(hintEl) hintEl.textContent=(c.latitude!=null&&c.longitude!=null)?'✓ Koordinat tersimpan':'Belum ada koordinat — jarak tidak bisa dihitung.';
  document.getElementById('cf-prefs').value=c.prefs||'';
  const srcEl=document.getElementById('cf-source'); if(srcEl) srcEl.value=c.source||'';
  populateKotaSelect(document.getElementById('cf-kota'));
@@ -2685,6 +2716,11 @@ async function saveCust(){
  const kota=document.getElementById('cf-kota').value;
  const kec=document.getElementById('cf-kec').value;
  const source=document.getElementById('cf-source')?.value||null;
+ const latRaw=document.getElementById('cf-lat')?.value.trim()||'';
+ const lngRaw=document.getElementById('cf-lng')?.value.trim()||'';
+ const lat=latRaw?parseFloat(latRaw):null;
+ const lng=lngRaw?parseFloat(lngRaw):null;
+ if((latRaw&&isNaN(lat))||(lngRaw&&isNaN(lng))){alert('Koordinat tidak valid. Isi angka desimal atau kosongkan.');return}
  const p={
  owner,
  wa:document.getElementById('cf-wa').value.trim(),
@@ -2693,6 +2729,8 @@ async function saveCust(){
  kecamatan:kec,
  area:[kota,kec].filter(Boolean).join(' - '),
  gmaps_link:document.getElementById('cf-gmaps').value.trim(),
+ latitude:lat,
+ longitude:lng,
  prefs:document.getElementById('cf-prefs').value.trim(),
  source:source||null,
  custom:readCustomFields('customers','cf-custom-'),
@@ -3689,11 +3727,10 @@ function onWizGroomerChange(){
 }
 
 function renderWizSlots(){
- // Always repopulate groomer dropdown fresh
+ // Populate groomer dropdown sorted by suggestion rank (top = bold + ★)
+ populateWizGroomerOptions();
  const gs=document.getElementById('wiz-groomer');
- gs.innerHTML='<option value="">Select groomer…</option>'+
-  groomers.filter(g=>g.active).map(g=>`<option value="${g.id}" ${g.id===wiz.groomerId?'selected':''}>${esc(g.name)}</option>`).join('');
- gs.onchange=()=>{wiz.groomerId=gs.value;wiz.startMins=null;renderWizSlots()};
+ if(gs) gs.onchange=()=>{wiz.groomerId=gs.value;wiz.startMins=null;renderWizSlots()};
 
  // Always sync date: input takes priority over wiz.date
  const di=document.getElementById('wiz-date');
@@ -3715,7 +3752,10 @@ function renderWizSlots(){
  const wrap=document.getElementById('wiz-slots');
  if(!wrap) return;
  if(!wiz.groomerId||!wiz.date){
-  wrap.innerHTML='<div style="color:var(--muted);font-size:12px;grid-column:1/-1">Select groomer and date first.</div>';return;
+  wrap.innerHTML='<div style="color:var(--muted);font-size:12px;grid-column:1/-1">Select groomer and date first.</div>';
+  renderGroomerSuggestion();
+  renderTravelEstimate();
+  return;
  }
 
  const slots=[];for(let m=SSTART;m<SEND;m+=SSTEP)slots.push(m);
@@ -3725,53 +3765,235 @@ function renderWizSlots(){
   return `<button class="slot-btn${sel?' sel':''}${blocked?' blocked':''}" ${blocked?'disabled':''} onclick="selectWizSlot(${m})">${m2t(m)}</button>`;
  }).join('');
  renderGroomerSuggestion();
+ renderTravelEstimate();
 }
 
 function selectWizSlot(m){wiz.startMins=m;renderWizSlots()}
 
 /* ========== FEATURE 5: AUTO-SUGGEST GROOMER BY AREA + AVAILABILITY ========== */
+
+/* ---------- Geo utilities ---------- */
+function haversineKm(lat1,lng1,lat2,lng2){
+ if(lat1==null||lng1==null||lat2==null||lng2==null) return null;
+ const R=6371; // km
+ const toRad=v=>v*Math.PI/180;
+ const dLat=toRad(lat2-lat1), dLng=toRad(lng2-lng1);
+ const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+ return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+// Jakarta traffic multiplier by day-of-week + hour. Returns {mult, label, buffer_pct}.
+// Not live data — static heuristic based on typical Jakarta patterns.
+// Range 1.2x (off-peak) to 1.5x (rush hour) — satisfies "40-50% safety buffer" request.
+function trafficMultiplier(dateStr, timeStr){
+ const dt=new Date((dateStr||iso(new Date()))+'T'+(timeStr||'12:00')+':00');
+ if(isNaN(dt.getTime())) return {mult:1.35, label:'default', buffer_pct:35};
+ const day=dt.getDay(); // 0=Sun … 6=Sat
+ const hour=dt.getHours();
+ const isWeekend=(day===0||day===6);
+ if(!isWeekend){
+  if((hour>=7&&hour<10)||(hour>=16&&hour<20))
+   return {mult:1.5, label:'weekday rush hour', buffer_pct:50};
+  if(hour>=10&&hour<16)
+   return {mult:1.3, label:'weekday siang', buffer_pct:30};
+  return {mult:1.2, label:'weekday off-peak', buffer_pct:20};
+ } else {
+  if(hour>=12&&hour<19)
+   return {mult:1.4, label:'weekend siang (mall traffic)', buffer_pct:40};
+  if(hour>=19&&hour<22)
+   return {mult:1.3, label:'weekend malam', buffer_pct:30};
+  return {mult:1.2, label:'weekend off-peak', buffer_pct:20};
+ }
+}
+const _ROAD_FACTOR=1.3;      // haversine straight-line → real road distance
+const _BASE_MIN_PER_KM=3;    // ~20 km/h ideal (base speed before traffic multiplier)
+const _PARK_BUFFER_MIN=3;    // parking + reach-the-door buffer
+
+// km + optional (dateStr, timeStr) → estimated minutes; returns null if km unknown
+function estimateTravelMins(km, dateStr, timeStr){
+ if(km==null||isNaN(km)) return null;
+ const {mult}=trafficMultiplier(dateStr, timeStr);
+ const raw = km * _ROAD_FACTOR * _BASE_MIN_PER_KM * mult + _PARK_BUFFER_MIN;
+ return Math.max(5, Math.round(raw));
+}
+
+function parseCoordsFromGmapsLink(){
+ const el=document.getElementById('cf-gmaps');
+ const latEl=document.getElementById('cf-lat');
+ const lngEl=document.getElementById('cf-lng');
+ const hint=document.getElementById('cf-coords-hint');
+ if(!el||!latEl||!lngEl) return;
+ const url=el.value.trim();
+ if(!url){if(hint)hint.textContent='Isi gmaps link dulu.';return;}
+ // Match @lat,lng in full google.com/maps URLs
+ const m=url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+ if(m){
+  latEl.value=m[1]; lngEl.value=m[2];
+  if(hint) hint.textContent='✓ Berhasil parse dari link';
+  return;
+ }
+ // Try !3d/!4d format (place links)
+ const m2=url.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+ if(m2){
+  latEl.value=m2[1]; lngEl.value=m2[2];
+  if(hint) hint.textContent='✓ Berhasil parse dari link';
+  return;
+ }
+ if(hint) hint.textContent='❌ Tidak bisa parse (short link maps.app.goo.gl). Buka link di browser, klik kanan di titik lokasi, copy koordinat pertama sebagai lat, kedua sebagai lng.';
+}
+
+/* Classifies a customer's location data completeness so admin sees at a glance
+   which customers block distance estimation. Returns {ok, code, msg, severity}. */
+function customerLocationStatus(c){
+ if(!c) return {ok:false,code:'none',msg:'—',severity:'muted'};
+ if(c.latitude!=null&&c.longitude!=null) return {ok:true,code:'ok',msg:'Koord OK'};
+ const link=(c.gmaps_link||'').trim();
+ if(!link) return {ok:false,code:'nolink',msg:'Belum ada gmaps link',severity:'red'};
+ if(/^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs)/i.test(link))
+  return {ok:false,code:'shortlink',msg:'Short link — butuh URL lengkap dari google.com/maps',severity:'red'};
+ if(/@(-?\d+\.\d+),(-?\d+\.\d+)/.test(link)||/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/.test(link))
+  return {ok:false,code:'unparsed',msg:'Full link OK, tapi coord belum di-parse — Edit → Parse',severity:'orange'};
+ return {ok:false,code:'invalid',msg:'Format link tidak dikenali',severity:'orange'};
+}
+
+function locationBadgeHTML(c){
+ const st=customerLocationStatus(c);
+ if(st.ok) return '';
+ const bg=st.severity==='red'?'#fee2e2':'#fef3c7';
+ const fg=st.severity==='red'?'#991b1b':'#92400e';
+ const icon=st.severity==='red'?'⚠️':'📍';
+ return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 6px;border-radius:10px;background:${bg};color:${fg};font-weight:600;white-space:nowrap" title="${esc(st.msg)}">${icon} No coord</span>`;
+}
+
+/* ---------- Travel time from previous appt (wizard step 3) ---------- */
+function findGroomerPrevAppt(groomerId, dateISO, targetStartMins, editApptId){
+ // Latest appt of this groomer on same date ending before or at targetStartMins
+ const dayAppts=appts.filter(a=>
+  a.groomer_id===groomerId && a.appt_date===dateISO && a.status!=='cancelled'
+  && a.id!==editApptId && a.appt_time
+ );
+ if(!dayAppts.length) return null;
+ // Sort by end time desc, pick most recent that ends before targetStartMins (or just latest if no target)
+ const withEnd=dayAppts.map(a=>{
+  const [h,m]=a.appt_time.split(':').map(Number);
+  const start=h*60+m;
+  const end=start+(a.duration_mins||60);
+  return {a,start,end};
+ }).sort((x,y)=>y.end-x.end);
+ if(targetStartMins==null) return withEnd[0].a;
+ const prev=withEnd.find(x=>x.end<=targetStartMins);
+ return prev?prev.a:null;
+}
+function renderTravelEstimate(){
+ const wrap=document.getElementById('wiz-travel-estimate');
+ if(!wrap) return;
+ if(!wiz.custId||!wiz.groomerId||!wiz.date){wrap.style.display='none';return;}
+ const cust=custs.find(c=>c.id===wiz.custId);
+ if(!cust||cust.latitude==null||cust.longitude==null){
+  const st=customerLocationStatus(cust);
+  wrap.style.display='';
+  wrap.innerHTML=`<div style="font-size:11px;color:var(--muted)">📍 ${esc(st.msg||'Customer belum ada koordinat')} — travel estimate tidak bisa dihitung. <a href="#" onclick="cm('ov-appt');openEditCust('${wiz.custId}');return false" style="color:var(--primary-dk)">Fix →</a></div>`;
+  return;
+ }
+ const prev=findGroomerPrevAppt(wiz.groomerId, wiz.date, wiz.startMins, wiz.editId);
+ if(!prev){
+  wrap.style.display='';
+  wrap.innerHTML=`<div style="font-size:11px;color:var(--muted)">🏁 Groomer belum ada appointment sebelum ini di ${esc(wiz.date)} — appt pertama hari itu.</div>`;
+  return;
+ }
+ const prevDog=dogs.find(d=>d.id===prev.dog_id);
+ const prevCust=prevDog?custs.find(c=>c.id===prevDog.customer_id):null;
+ if(!prevCust||prevCust.latitude==null||prevCust.longitude==null){
+  const st=customerLocationStatus(prevCust);
+  wrap.style.display='';
+  wrap.innerHTML=`<div style="font-size:11px;color:var(--muted)">📍 Appt sebelum ini (${esc(prevCust?.owner||'?')}) belum ada koord — ${esc(st.msg||'')}.</div>`;
+  return;
+ }
+ const km=haversineKm(prevCust.latitude,prevCust.longitude,cust.latitude,cust.longitude);
+ // Use proposed appt time (target arrival) as the traffic-time reference
+ const timeStr=wiz.startMins!=null?m2t(wiz.startMins):(prev.appt_time||'12:00').slice(0,5);
+ const traffic=trafficMultiplier(wiz.date, timeStr);
+ const mins=estimateTravelMins(km, wiz.date, timeStr);
+ const [ph,pm]=prev.appt_time.split(':').map(Number);
+ const prevEndMin=ph*60+pm+(prev.duration_mins||60);
+ const prevEnd=`${String(Math.floor(prevEndMin/60)).padStart(2,'0')}:${String(prevEndMin%60).padStart(2,'0')}`;
+ const arrival=wiz.startMins!=null?m2t(wiz.startMins):'-';
+ const bufferOK=wiz.startMins!=null?(wiz.startMins - prevEndMin):null;
+ const bufferWarn=bufferOK!=null && bufferOK<mins;
+ wrap.style.display='';
+ wrap.innerHTML=`<div style="display:flex;align-items:flex-start;gap:10px;font-size:12px">
+  <span style="font-size:16px">🚗</span>
+  <div style="flex:1">
+   <div>Dari <strong>${esc(prevCust.owner||'?')}</strong> (selesai ${prevEnd}) → <strong>${esc(cust.owner||'?')}</strong>${wiz.startMins!=null?` (mulai ${arrival})`:''}</div>
+   <div style="color:var(--muted);margin-top:2px">≈ <strong>${km.toFixed(1)} km</strong> · estimasi <strong>${mins} menit</strong> perjalanan${bufferWarn?` <span style="color:#dc2626;font-weight:600">⚠️ Buffer cuma ${bufferOK}min, kurang dari estimasi</span>`:(bufferOK!=null?` <span style="color:#16a34a">✓ Buffer ${bufferOK}min cukup</span>`:'')}</div>
+   <div style="color:var(--muted);margin-top:2px;font-size:10px">🚦 ${esc(traffic.label)} (+${traffic.buffer_pct}% buffer) · haversine + road factor 1.3 · not live traffic</div>
+  </div>
+ </div>`;
+}
+
+/* ---------- Enhanced suggest with distance ---------- */
 function suggestGroomerRank(custId, dateISO, startMins, totalDur, editApptId){
  if(!dateISO) return [];
  const cust=custs.find(c=>c.id===custId);
- const custKota=(cust?.kota||'').trim().toLowerCase();
- const custKec=(cust?.kecamatan||'').trim().toLowerCase();
+ if(!cust) return [];
+ const custKota=(cust.kota||'').trim().toLowerCase();
+ const custKec=(cust.kecamatan||'').trim().toLowerCase();
+ const hasCoords=cust.latitude!=null&&cust.longitude!=null;
  const active=groomers.filter(g=>g.active);
  return active.map(g=>{
   const reasons=[];
   let score=0;
-  // Availability check (only if startMins given)
   let available=true;
+  let distanceKm=null, travelMins=null, prevCust=null;
   if(startMins!=null && totalDur){
    const blocked=isBlocked(g.id,dateISO,startMins,totalDur,editApptId);
    if(blocked){available=false;reasons.push('❌ Slot bentrok');score=-999;}
   }
-  // Other appts by this groomer on this date
   const dayAppts=appts.filter(a=>
    a.groomer_id===g.id && a.appt_date===dateISO && a.status!=='cancelled' && a.id!==editApptId
   );
-  // Area match: check groomer's other appts on same date
-  let hasSameKec=false, hasSameKota=false;
-  dayAppts.forEach(a=>{
-   const d=dogs.find(x=>x.id===a.dog_id);
-   const c=d?custs.find(x=>x.id===d.customer_id):null;
-   if(!c) return;
-   const cKec=(c.kecamatan||'').trim().toLowerCase();
-   const cKota=(c.kota||'').trim().toLowerCase();
-   if(custKec && cKec===custKec) hasSameKec=true;
-   if(custKota && cKota===custKota) hasSameKota=true;
-  });
-  if(hasSameKec){score+=50;reasons.push('✅ Sudah ada anjing di kecamatan yg sama');}
-  else if(hasSameKota){score+=25;reasons.push('✅ Sudah ada anjing di kota yg sama');}
-  // Workload balance
+  // Distance from groomer's previous appt to target customer
+  if(hasCoords){
+   const prev=findGroomerPrevAppt(g.id, dateISO, startMins, editApptId);
+   if(prev){
+    const pd=dogs.find(d=>d.id===prev.dog_id);
+    const pc=pd?custs.find(c=>c.id===pd.customer_id):null;
+    if(pc&&pc.latitude!=null&&pc.longitude!=null){
+     distanceKm=haversineKm(pc.latitude,pc.longitude,cust.latitude,cust.longitude);
+     const timeStr=startMins!=null?m2t(startMins):(prev.appt_time||'12:00').slice(0,5);
+     travelMins=estimateTravelMins(distanceKm, dateISO, timeStr);
+     prevCust=pc.owner;
+     // Distance scoring: closer = higher
+     if(distanceKm<1){score+=60;reasons.push(`🎯 ${distanceKm.toFixed(1)}km dari ${esc(pc.owner)}`);}
+     else if(distanceKm<3){score+=45;reasons.push(`🎯 ${distanceKm.toFixed(1)}km dari ${esc(pc.owner)}`);}
+     else if(distanceKm<7){score+=25;reasons.push(`📍 ${distanceKm.toFixed(1)}km dari ${esc(pc.owner)}`);}
+     else if(distanceKm<15){score+=5;reasons.push(`📍 ${distanceKm.toFixed(1)}km`);}
+     else{score-=15;reasons.push(`⚠️ ${distanceKm.toFixed(1)}km jauh`);}
+    }
+   }
+  }
+  // Fallback: text-based area matching if no distance computed
+  if(distanceKm==null){
+   let hasSameKec=false, hasSameKota=false;
+   dayAppts.forEach(a=>{
+    const d=dogs.find(x=>x.id===a.dog_id);
+    const c=d?custs.find(x=>x.id===d.customer_id):null;
+    if(!c) return;
+    if(custKec && (c.kecamatan||'').trim().toLowerCase()===custKec) hasSameKec=true;
+    if(custKota && (c.kota||'').trim().toLowerCase()===custKota) hasSameKota=true;
+   });
+   if(hasSameKec){score+=50;reasons.push('✅ Kecamatan match');}
+   else if(hasSameKota){score+=25;reasons.push('✅ Kota match');}
+  }
+  // Workload
   const dayCount=dayAppts.length;
-  if(dayCount===0){score+=5;reasons.push('🆕 Slot kosong (baru mulai)');}
-  else if(dayCount<=3){score+=15;reasons.push(`⚡ Batching bagus (${dayCount} anjing lain)`);}
+  if(dayCount===0){score+=5;reasons.push('🆕 Slot kosong');}
+  else if(dayCount<=3){score+=15;reasons.push(`⚡ Batching (${dayCount} anjing)`);}
   else if(dayCount<=5){score+=5;}
-  else{score-=20;reasons.push(`⚠️ Overload (${dayCount} anjing)`);}
-  // Groomer tier / performance if defined
+  else{score-=20;reasons.push(`⚠️ Overload (${dayCount})`);}
   const tier=g.tier||g.experience||null;
   if(tier==='senior'||tier==='expert') score+=5;
-  return {g,score,available,reasons,dayCount,hasSameKec,hasSameKota};
+  return {g,score,available,reasons,dayCount,distanceKm,travelMins,prevCust};
  }).sort((a,b)=>b.score-a.score);
 }
 
@@ -3784,14 +4006,15 @@ function renderGroomerSuggestion(){
  const available=ranked.filter(r=>r.available);
  if(!available.length){wrap.style.display='none';return;}
  const top=available[0];
- // Don't show if already picked the top one
+ // If user already picked the top one, hide banner
  if(wiz.groomerId===top.g.id){wrap.style.display='none';return;}
  wrap.style.display='';
+ const distTxt=top.distanceKm!=null?` · ${top.distanceKm.toFixed(1)}km / ~${top.travelMins}min dari ${esc(top.prevCust)}`:'';
  const reasonText=top.reasons.length?top.reasons.slice(0,2).join(' · '):'Available';
  wrap.innerHTML=`<div style="display:flex;align-items:center;gap:10px">
   <span style="font-size:18px">★</span>
   <div style="flex:1">
-   <div style="font-weight:600;color:var(--primary-dk)">Rekomendasi: ${esc(top.g.name)}</div>
+   <div style="font-weight:700;color:var(--primary-dk)">Rekomendasi: ${esc(top.g.name)}${distTxt}</div>
    <div style="font-size:11px;color:#7c3f00;margin-top:2px">${reasonText}</div>
   </div>
   <span style="font-size:11px;background:var(--primary);color:#fff;padding:4px 10px;border-radius:12px;font-weight:600">Pilih</span>
@@ -3809,6 +4032,26 @@ function applyGroomerSuggestion(){
  const gs=document.getElementById('wiz-groomer'); if(gs) gs.value=top.g.id;
  renderWizSlots();
  renderWizSummary&&renderWizSummary();
+}
+
+/* ---------- Sort + bold groomer dropdown by suggestion rank ---------- */
+function populateWizGroomerOptions(){
+ const gs=document.getElementById('wiz-groomer'); if(!gs) return;
+ if(!wiz.custId||!wiz.date){
+  gs.innerHTML='<option value="">Select groomer…</option>'+
+   groomers.filter(g=>g.active).map(g=>`<option value="${g.id}" ${g.id===wiz.groomerId?'selected':''}>${esc(g.name)}</option>`).join('');
+  return;
+ }
+ const totalDur=wiz.dogSvcs.reduce((s,ds)=>s+getWizDogDur(ds),0);
+ const ranked=suggestGroomerRank(wiz.custId, wiz.date, wiz.startMins, totalDur, wiz.editId);
+ gs.innerHTML='<option value="">Select groomer…</option>'+
+  ranked.map((r,i)=>{
+   const isTop=i===0&&r.available;
+   const prefix=isTop?'★ ':'';
+   const distSuffix=r.distanceKm!=null?` — ${r.distanceKm.toFixed(1)}km/${r.travelMins}min`:'';
+   const unavSuffix=r.available?'':' — bentrok';
+   return `<option value="${r.g.id}" ${r.g.id===wiz.groomerId?'selected':''} ${!r.available?'disabled':''} style="${isTop?'font-weight:700':''}">${prefix}${esc(r.g.name)}${distSuffix}${unavSuffix}</option>`;
+  }).join('');
 }
 
 function renderWizSummary(){
@@ -10123,7 +10366,7 @@ function renderCust360Header(c){
   <div class="c360-title">${esc(c.customer_code||'CUST-???')} \u00B7 ${esc(c.owner||'?')}${subsBadgeHTML(c.id)}</div>
   <button class="c360-close" onclick="closeCust360()" title="Close (ESC)">&#x2715;</button>
  </div>
- <div class="c360-subtitle">${esc(wa)}${wa&&addrLine?' \u00B7 ':''}${esc(addrLine)}</div>
+ <div class="c360-subtitle">${esc(wa)}${wa&&addrLine?' \u00B7 ':''}${esc(addrLine)} ${locationBadgeHTML(c)}</div>
  <div class="c360-stats">
   ${srcBadge}
   <span class="c360-stat"><strong>Dogs:</strong> ${dogList.length}</span>
@@ -11223,4 +11466,4 @@ checkAuthState();
 
 </body>
 </html>
-       
+ 
