@@ -503,7 +503,8 @@ function renderGroupedAppt(group, isFirstGroup, isToday){
   const dog=dataCache.dogs.find(d=>d.id===a.dog_id)||{};
   const refs=Array.isArray(dog.styling_refs)?dog.styling_refs.filter(r=>!isStyleRefExpired(r)):[];
   const svc=a.service_base||'Basic Grooming';
-  const note=(a.appt_note||'').replace(/\s*\(\d+\/\d+\)\s*$/,'').trim();
+  const adminNote=(a.appt_note||'').replace(/\s*\(\d+\/\d+\)\s*$/,'').trim();
+  const groomerNote=(a.groomer_field_note||'').trim();
   const skinBlock=dog.skin_history?`<div class="dog-skin"><strong>Kondisi kulit</strong>${esc(dog.skin_history)}</div>`:'';
   const stylingBlock=refs.length?`<div class="dog-styling"><div class="dog-styling-label">Styling references (${refs.length})</div><div class="dog-styling-imgs">${refs.slice(0,6).map(r=>`<a href="${esc(r.url)}" target="_blank"><img src="${esc(r.url)}" alt="ref"/></a>`).join('')}</div></div>`:'';
   const PHOTO_WITHOUT_ABSENCY=PHOTO_TYPES.filter(pt=>pt.key!=='absency');
@@ -528,10 +529,10 @@ function renderGroupedAppt(group, isFirstGroup, isToday){
     ${dog.prefs?`<div class="dog-prefs">${esc(dog.prefs)}</div>`:''}
     ${skinBlock}${stylingBlock}
    </div>
-   ${note?`<div class="appt-note">Catatan groomer: ${esc(note)}</div>`:''}
+   ${adminNote?`<div class="appt-note">Instruksi admin: ${esc(adminNote)}</div>`:''}
    <div style="margin-top:8px">
-    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Tambah catatan sesi</div>
-    <textarea id="gnote-${a.id}" rows="2" placeholder="Tulis catatan tentang anjing ini..." style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;resize:vertical" oninput="saveGroomerNote('${a.id}',this.value)">${esc(note)}</textarea>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Catatan groomer (untuk admin)</div>
+    <textarea id="gnote-${a.id}" rows="2" placeholder="Tulis catatan tentang anjing ini..." style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;resize:vertical" oninput="saveGroomerNote('${a.id}',this.value)">${esc(groomerNote)}</textarea>
    </div>
    ${photosHTML}
   </div>`;
@@ -574,8 +575,10 @@ function renderAppt(a, isFirst=false){
  // Dog info
  const dogMeta=[dog.breed,dog.size,dog.coat,dog.coat_color].filter(Boolean).join(' · ');
  const svc=a.service_base||'Basic Grooming';
- // Clean appt_note (strip per-dog markers like (1/2))
- const note=(a.appt_note||'').replace(/\s*\(\d+\/\d+\)\s*$/,'').trim();
+ // Clean appt_note (strip per-dog markers like (1/2)) — admin's note
+ const adminNote=(a.appt_note||'').replace(/\s*\(\d+\/\d+\)\s*$/,'').trim();
+ // Groomer's own field report
+ const groomerNote=(a.groomer_field_note||'').trim();
 
  // Skin condition
  const skinBlock=dog.skin_history?`<div class="dog-skin"><strong>Kondisi kulit</strong>${esc(dog.skin_history)}</div>`:'';
@@ -626,10 +629,10 @@ function renderAppt(a, isFirst=false){
    ${skinBlock}
    ${stylingBlock}
   </div>
-  ${note?`<div class="appt-note">Catatan groomer: ${esc(note)}</div>`:''}
+  ${adminNote?`<div class="appt-note">Instruksi admin: ${esc(adminNote)}</div>`:''}
   <div style="margin-top:8px">
-   <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Tambah catatan sesi</div>
-   <textarea id="gnote-${a.id}" rows="2" placeholder="Tulis catatan tentang anjing ini..." style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;resize:vertical" oninput="saveGroomerNote('${a.id}',this.value)">${esc(note)}</textarea>
+   <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Catatan groomer (untuk admin)</div>
+   <textarea id="gnote-${a.id}" rows="2" placeholder="Tulis catatan tentang anjing ini..." style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;resize:vertical" oninput="saveGroomerNote('${a.id}',this.value)">${esc(groomerNote)}</textarea>
   </div>
   ${renderPhotoGrid(a)}
  </div>`;
@@ -734,9 +737,9 @@ let _groomerNoteTimers={};
 function saveGroomerNote(apptId,val){
  clearTimeout(_groomerNoteTimers[apptId]);
  _groomerNoteTimers[apptId]=setTimeout(async()=>{
-  await db.from('appointments').update({appt_note:val.trim()||null}).eq('id',apptId);
+  await db.from('appointments').update({groomer_field_note:val.trim()||null}).eq('id',apptId);
   const appt=dataCache.appts.find(a=>a.id===apptId);
-  if(appt) appt.appt_note=val.trim()||null;
+  if(appt) appt.groomer_field_note=val.trim()||null;
  },800);
 }
 
