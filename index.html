@@ -1329,6 +1329,7 @@ tbody tr:hover{background:var(--subtle)}
    <input id="cf-lat" placeholder="Latitude (-6.2xxx)" style="flex:1;min-width:120px" inputmode="decimal"/>
    <input id="cf-lng" placeholder="Longitude (106.8xxx)" style="flex:1;min-width:120px" inputmode="decimal"/>
    <button type="button" class="btn btn-g btn-sm" onclick="parseCoordsFromGmapsLink()">Parse dari gmaps</button>
+   <button type="button" class="btn btn-g btn-sm" onclick="expandShortLinkAndParse()" style="background:#dbeafe;color:#1e40af;border-color:#3b82f6" title="Untuk short link (maps.app.goo.gl / share.google) — expand via server">🔗 Expand short link</button>
   </div>
   <div id="cf-coords-hint" style="font-size:10px;color:var(--muted);margin-top:3px"></div>
  </div>
@@ -1489,7 +1490,7 @@ tbody tr:hover{background:var(--subtle)}
 </div>
 
 <div class="overlay" id="ov-appt">
- <div class="modal" style="max-width:500px">
+ <div class="modal" style="max-width:640px">
   <button class="modal-close" onclick="cm('ov-appt')" title="Close">&#x2715;</button>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.1rem">
    <div class="modal-title" id="appt-title" style="margin:0">Schedule appointment</div>
@@ -1499,13 +1500,13 @@ tbody tr:hover{background:var(--subtle)}
   <!-- Step 1: Customer -->
   <div id="wiz-1">
    <div class="fg" style="margin-bottom:.9rem;position:relative">
-    <label>Customer *</label>
-    <input id="appt-cust-search" placeholder="Type name, address, or dog…" autocomplete="off"
+    <label style="font-size:13px;font-weight:600">Customer *</label>
+    <input id="appt-cust-search" placeholder="Ketik nama, alamat, atau nama anjing…" autocomplete="off"
     oninput="onWizCustSearch(this.value)"
     onfocus="onWizCustSearch(this.value)"
     onblur="setTimeout(()=>{const dd=document.getElementById('appt-cust-dd');if(dd)dd.style.display='none'},200)"
-    style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--subtle)"/>
-   <div id="appt-cust-dd" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);max-height:280px;overflow-y:auto;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.1);margin-top:2px"></div>
+    style="width:100%;padding:12px 14px;border:2px solid var(--primary);border-radius:var(--r);font-size:15px;background:var(--surface);box-shadow:0 2px 6px rgba(224,123,57,.15)"/>
+   <div id="appt-cust-dd" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);max-height:380px;overflow-y:auto;z-index:50;box-shadow:0 6px 18px rgba(0,0,0,.15);margin-top:4px"></div>
    <input type="hidden" id="appt-cust"/>
    </div>
    <div id="wiz-cust-info" style="display:none;background:var(--green-lt);border-radius:var(--r);padding:8px 12px;font-size:12px;margin-bottom:.9rem"></div>
@@ -1937,7 +1938,7 @@ function editStamp(){
 const AUDIT_TRACKED_FIELDS={
  customer:['owner','wa','address','kota','kecamatan','source','prefs','gmaps_link','latitude','longitude'],
  dog:['name','breed','size','age','weight','coat','coat_color','prefs','skin_history','customer_id'],
- appointment:['appt_date','appt_time','groomer_id','dog_id','service_base','status','appt_note','groomer_field_note','customer_note','duration_mins','session_source','late_minutes','late_reason','actual_duration_mins'],
+ appointment:['appt_date','appt_time','groomer_id','dog_id','service_base','status','appt_note','groomer_field_note','customer_note','duration_mins','session_source','late_minutes','late_reason','actual_duration_mins','appt_disc_type','appt_disc_value','appt_disc_by_category'],
  invoice:['total','subtotal','status','discount_value','discount_amount','is_subscription_billing','due_date','notes'],
  subscription:['type','status','sessions_total','sessions_used','expires_at'],
  visit:['visited_at','service_type','is_billed_manually','billed_amount','billed_note','note'],
@@ -2582,7 +2583,13 @@ function renderCusts(){
  const sumEl=document.getElementById('cs-coord-summary');
  if(sumEl){
   const pct=total>0?Math.round(withCoords/total*100):0;
-  sumEl.innerHTML=`Koord: <strong style="color:${pct>=80?'#16a34a':pct>=50?'#ca8a04':'#dc2626'}">${withCoords}/${total} (${pct}%)</strong> · ${missing} customer belum ada koord`;
+  // Count customers with short gmaps links (that CAN be expanded server-side)
+  const shortLinkCount=custs.filter(c=>{
+   if(c.latitude!=null&&c.longitude!=null) return false;  // already has coords
+   const gm=(c.gmaps_link||'').trim();
+   return /^https?:\/\/(maps\.app\.goo\.gl|share\.google|goo\.gl\/maps)\//i.test(gm);
+  }).length;
+  sumEl.innerHTML=`Koord: <strong style="color:${pct>=80?'#16a34a':pct>=50?'#ca8a04':'#dc2626'}">${withCoords}/${total} (${pct}%)</strong> · ${missing} belum ada koord${shortLinkCount>0?` · <button onclick="bulkExpandShortLinks()" style="padding:3px 8px;background:#dbeafe;color:#1e40af;border:1px solid #3b82f6;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;margin-left:6px" title="Expand ${shortLinkCount} short link via server (auto-extract koord)">🔗 Expand ${shortLinkCount} short link</button>`:''}`;
  }
  if(s) rows=rows.filter(c=>(c.owner||'').toLowerCase().includes(s)||(c.area||'').toLowerCase().includes(s)||(c.wa||'').toLowerCase().includes(s)||(c.address||'').toLowerCase().includes(s));
  if(srcFilter){
@@ -3664,10 +3671,10 @@ function onWizCustSearch(val){
  dd.innerHTML=matches.map(({c,myDogs})=>{
   const addr=[c.address,c.kecamatan,c.kota].filter(Boolean).join(', ')||'(no address)';
   const dogNames=myDogs.map(d=>d.name).filter(Boolean).join(', ')||'(no dogs)';
-  return `<div onclick="pickWizCust('${c.id}')" style="padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px" onmouseover="this.style.background='var(--subtle)'" onmouseout="this.style.background=''">
-   <div style="font-weight:600">${esc(c.owner||'?')}</div>
-   <div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(addr)}</div>
-   <div style="font-size:11px;color:var(--green-dk);margin-top:1px"> ${esc(dogNames)}</div>
+  return `<div onclick="pickWizCust('${c.id}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:14px" onmouseover="this.style.background='var(--subtle)'" onmouseout="this.style.background=''">
+   <div style="font-weight:700;font-size:15px">${esc(c.owner||'?')}</div>
+   <div style="font-size:12px;color:var(--muted);margin-top:3px">${esc(addr)}</div>
+   <div style="font-size:12px;color:var(--green-dk);margin-top:2px;font-weight:500">🐕 ${esc(dogNames)}</div>
   </div>`;
  }).join('');
  dd.style.display='block';
@@ -3918,7 +3925,96 @@ function locationBadgeHTML(c){
  const bg=st.severity==='red'?'#fee2e2':'#fef3c7';
  const fg=st.severity==='red'?'#991b1b':'#92400e';
  const icon=st.severity==='red'?'⚠️':'📍';
- return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 6px;border-radius:10px;background:${bg};color:${fg};font-weight:600;white-space:nowrap" title="${esc(st.msg)}">${icon} No coord</span>`;
+ const reqBtn=c.wa?` <a href="${buildLocationRequestWALink(c)}" target="_blank" style="text-decoration:none;font-size:10px;padding:1px 6px;border-radius:8px;background:#16a34a;color:#fff;font-weight:600;margin-left:2px" onclick="event.stopPropagation()" title="Minta lokasi via WA">📱 Minta</a>`:'';
+ return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 6px;border-radius:10px;background:${bg};color:${fg};font-weight:600;white-space:nowrap" title="${esc(st.msg)}">${icon} No coord</span>${reqBtn}`;
+}
+
+/* Build a wa.me link that opens WhatsApp with a pre-filled location-request message. */
+function buildLocationRequestWALink(c){
+ if(!c||!c.wa) return '#';
+ const firstName=(c.owner||'').trim().split(/\s+/)[0]||'Bapak/Ibu';
+ const msg=`Hi ${firstName}! 🐾\n\nUntuk memudahkan groomer HomePaw datang ke lokasi Anda tepat waktu, mohon share lokasi ya:\n\n1. Klik icon 📎 (attachment) di chat ini\n2. Pilih "Location" / "Lokasi"\n3. Pilih "Send your current location" (jika sedang di rumah) atau cari alamat rumah\n4. Send ke chat ini\n\nTerima kasih! 🙏\n— HomePaw Grooming`;
+ const phone=normalizeWA(c.wa).replace(/^\+/,'').replace(/\D/g,'');
+ return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+}
+
+/* ---------- Server-side short link expansion (Vercel /api/expand-gmaps) ---------- */
+async function _expandShortLinkViaServer(shortUrl){
+ const res=await fetch('/api/expand-gmaps?url='+encodeURIComponent(shortUrl),{signal:AbortSignal.timeout(12000)});
+ if(!res.ok){
+  const err=await res.json().catch(()=>({error:'HTTP '+res.status}));
+  throw new Error(err.error||('HTTP '+res.status));
+ }
+ return await res.json();  // {expanded, coords: {lat,lng}|null, source}
+}
+
+/* Single-customer expand (called from edit modal button) */
+async function expandShortLinkAndParse(){
+ const gmapsEl=document.getElementById('cf-gmaps');
+ const latEl=document.getElementById('cf-lat');
+ const lngEl=document.getElementById('cf-lng');
+ const hint=document.getElementById('cf-coords-hint');
+ const url=(gmapsEl?.value||'').trim();
+ if(!url){if(hint) hint.textContent='❌ Isi gmaps link dulu';return;}
+ if(!/^https?:\/\/(maps\.app\.goo\.gl|share\.google|goo\.gl\/maps)\//i.test(url)){
+  if(hint) hint.textContent='❌ Ini bukan short link. Pakai tombol "Parse dari gmaps" untuk full URL.';return;
+ }
+ if(hint) hint.textContent='⏳ Expanding via server...';
+ try {
+  const r=await _expandShortLinkViaServer(url);
+  if(r.coords){
+   latEl.value=r.coords.lat.toFixed(7);
+   lngEl.value=r.coords.lng.toFixed(7);
+   // Replace short link with the expanded full URL so it's parseable next time
+   if(r.expanded && r.expanded !== url) gmapsEl.value=r.expanded;
+   if(hint) hint.innerHTML=`✓ Coord ditemukan (source: ${r.source}). <a href="https://www.google.com/maps/?q=${r.coords.lat},${r.coords.lng}" target="_blank" style="color:var(--primary-dk)">Verifikasi di Maps →</a>`;
+  } else {
+   if(hint) hint.innerHTML=`⚠️ Expanded ke <a href="${esc(r.expanded||'#')}" target="_blank">${esc((r.expanded||'').slice(0,60))}...</a> tapi tidak ada koord. Buka manual di Maps → klik kanan → copy.`;
+  }
+ } catch(e){
+  if(hint) hint.textContent='❌ Error: '+e.message;
+ }
+}
+
+/* Bulk expand all short links across customers (called from database tab summary) */
+async function bulkExpandShortLinks(){
+ const targets=custs.filter(c=>{
+  if(c.latitude!=null&&c.longitude!=null) return false;
+  const gm=(c.gmaps_link||'').trim();
+  return /^https?:\/\/(maps\.app\.goo\.gl|share\.google|goo\.gl\/maps)\//i.test(gm);
+ });
+ if(!targets.length){alert('Tidak ada short link yang perlu di-expand');return;}
+ if(!confirm(`Expand ${targets.length} short link via server?\n\nSetiap link akan di-expand, lalu koord + full URL disimpan otomatis. Estimasi ${Math.ceil(targets.length*1.5)} detik.\n\n⚠️ Google kadang blokir Vercel IP setelah banyak request. Kalau ada yang gagal, coba lagi nanti.`)) return;
+ const summary=document.getElementById('cs-coord-summary');
+ let ok=0, noCoord=0, err=0;
+ const failures=[];
+ for(let i=0;i<targets.length;i++){
+  const c=targets[i];
+  if(summary) summary.innerHTML=`⏳ Expanding <strong>${i+1}/${targets.length}</strong>: ${esc(c.owner)}...`;
+  try {
+   const r=await _expandShortLinkViaServer(c.gmaps_link);
+   if(r.coords){
+    const update={latitude:r.coords.lat, longitude:r.coords.lng};
+    if(r.expanded && r.expanded !== c.gmaps_link) update.gmaps_link=r.expanded;
+    await db.from('customers').update(update).eq('id',c.id);
+    Object.assign(c, update);
+    ok++;
+    console.log(`✓ [${i+1}/${targets.length}] ${c.owner} — coord: ${r.coords.lat},${r.coords.lng} (source: ${r.source})`);
+   } else {
+    noCoord++;
+    failures.push({owner:c.owner, expanded:r.expanded||'(none)'});
+    console.warn(`⚠️ [${i+1}/${targets.length}] ${c.owner} — expanded but no coord: ${r.expanded}`);
+   }
+  } catch(e){
+   err++;
+   failures.push({owner:c.owner, error:e.message});
+   console.error(`✗ [${i+1}/${targets.length}] ${c.owner}: ${e.message}`);
+  }
+  await new Promise(r=>setTimeout(r,800));  // rate limit to be gentle on Google
+ }
+ renderCusts();
+ const failMsg=failures.length?`\n\nContoh yang gagal (cek F12 Console untuk detail):\n${failures.slice(0,5).map(f=>`• ${f.owner}: ${f.error||'no coord in expanded URL'}`).join('\n')}`:'';
+ alert(`Selesai expand ${targets.length} short link:\n\n✓ Berhasil (koord tersimpan): ${ok}\n⚠️ Expanded tapi tidak ada koord: ${noCoord}\n✗ Error: ${err}${failMsg}\n\n⚠️ Verifikasi visual setiap hasil — buka Customer 360, klik Open in Maps, cek pin di rumah yang benar.`);
 }
 
 /* ---------- Travel time from previous appt (wizard step 3) ---------- */
@@ -4230,6 +4326,7 @@ function renderWizStep4Dogs(){
   const d=dogs.find(x=>x.id===ds.did);
   const header=multi?`<div style="font-size:11px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding-right:24px">${esc(d?.name||'?')} — ${esc(ds.svc)}</div>`:'';
   const xBtn=isGroupEdit?`<button onclick="deleteApptFromGroup('${ds.did}')" title="Hapus appointment ini" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(220,38,38,.12);color:#dc2626;font-size:14px;font-weight:700;cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;justify-content:center" onmouseover="this.style.background='rgba(220,38,38,.25)'" onmouseout="this.style.background='rgba(220,38,38,.12)'">&#x2715;</button>`:'';
+  const usesAdvanced=!!ds.discByCategory;
   return `<div style="position:relative;background:var(--subtle);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:.7rem">
    ${xBtn}
    ${header}
@@ -4237,7 +4334,8 @@ function renderWizStep4Dogs(){
     <label style="font-size:11px">Catatan groomer <span style="font-weight:400;color:var(--muted)">— ke groomer saja</span></label>
     <input id="appt-note-${ds.did}" placeholder="e.g. Lion cut, pelan-pelan di kaki" style="padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;width:100%"/>
    </div>
-   <div style="display:flex;align-items:center;gap:5px">
+   <!-- Simple discount (legacy) -->
+   <div id="appt-disc-simple-${ds.did}" style="display:${usesAdvanced?'none':'flex'};align-items:center;gap:5px;flex-wrap:wrap">
     <span style="font-size:11px;color:var(--muted)">Diskon:</span>
     <select id="appt-disc-type-${ds.did}" style="padding:4px 7px;border:1px solid var(--border);border-radius:4px;font-size:11px;background:var(--surface)">
      <option value="">Tidak ada</option>
@@ -4245,6 +4343,27 @@ function renderWizStep4Dogs(){
      <option value="fixed">Rp</option>
     </select>
     <input type="number" id="appt-disc-value-${ds.did}" value="0" min="0" placeholder="0" style="width:65px;padding:4px 7px;border:1px solid var(--border);border-radius:4px;font-size:11px"/>
+    <button type="button" onclick="enableApptDiscPerCategory('${ds.did}')" style="font-size:10px;padding:3px 7px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--muted);cursor:pointer;margin-left:auto" title="Diskon berbeda untuk Basic / Styling / Others">▶ Per kategori</button>
+   </div>
+   <!-- Per-category discount (advanced) -->
+   <div id="appt-disc-adv-${ds.did}" style="display:${usesAdvanced?'block':'none'};padding:8px;background:#fef3c7;border:1px solid #fbbf24;border-radius:5px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+     <div style="font-size:11px;color:#78350f;font-weight:600">📊 Diskon per kategori:</div>
+     <button type="button" onclick="disableApptDiscPerCategory('${ds.did}')" style="font-size:10px;padding:2px 6px;border:none;background:transparent;color:#78350f;cursor:pointer;text-decoration:underline" title="Kembali ke diskon simple">◀ Simple</button>
+    </div>
+    ${['basic','styling','others'].map(cat=>{
+     const catLabel=cat==='basic'?'Basic Grooming':(cat==='styling'?'Styling':'Others');
+     return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:3px">
+      <span style="width:110px;color:#78350f">${catLabel}:</span>
+      <select id="appt-disc-${cat}-type-${ds.did}" style="padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;background:var(--surface)">
+       <option value="">-</option>
+       <option value="percent">%</option>
+       <option value="fixed">Rp</option>
+      </select>
+      <input type="number" id="appt-disc-${cat}-value-${ds.did}" value="0" min="0" style="width:75px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px"/>
+     </div>`;
+    }).join('')}
+    <div style="font-size:10px;color:#78350f;margin-top:4px;font-style:italic">Kosongkan type = skip kategori. Discount akan carry ke invoice.</div>
    </div>
   </div>`;
  }).join('');
@@ -4252,11 +4371,54 @@ function renderWizStep4Dogs(){
  wiz.dogSvcs.forEach(ds=>{
   const noteEl=document.getElementById('appt-note-'+ds.did);
   if(noteEl&&ds.note) noteEl.value=ds.note;
-  const dtEl=document.getElementById('appt-disc-type-'+ds.did);
-  if(dtEl&&ds.discType) dtEl.value=ds.discType;
-  const dvEl=document.getElementById('appt-disc-value-'+ds.did);
-  if(dvEl&&ds.discValue) dvEl.value=ds.discValue;
+  if(ds.discByCategory){
+   // Advanced mode
+   ['basic','styling','others'].forEach(cat=>{
+    const t=document.getElementById(`appt-disc-${cat}-type-${ds.did}`);
+    const v=document.getElementById(`appt-disc-${cat}-value-${ds.did}`);
+    if(t) t.value=ds.discByCategory[cat]?.type||'';
+    if(v) v.value=ds.discByCategory[cat]?.value||0;
+   });
+  } else {
+   // Simple mode
+   const dtEl=document.getElementById('appt-disc-type-'+ds.did);
+   if(dtEl&&ds.discType) dtEl.value=ds.discType;
+   const dvEl=document.getElementById('appt-disc-value-'+ds.did);
+   if(dvEl&&ds.discValue) dvEl.value=ds.discValue;
+  }
  });
+}
+
+/* Toggle between simple and per-category discount in wizard step 4.
+   State stored on wiz.dogSvcs[i].discByCategory (null = simple). */
+function enableApptDiscPerCategory(did){
+ const ds=wiz.dogSvcs.find(x=>x.did===did);
+ if(!ds) return;
+ // Migrate current simple discount into per-category (if set)
+ const currentType=document.getElementById('appt-disc-type-'+did)?.value||'';
+ const currentValue=parseFloat(document.getElementById('appt-disc-value-'+did)?.value)||0;
+ ds.discByCategory={
+  basic: currentType?{type:currentType, value:currentValue}:null,
+  styling: null,
+  others: null
+ };
+ // Clear simple
+ ds.discType=''; ds.discValue=0;
+ renderWizStep4Dogs();
+}
+function disableApptDiscPerCategory(did){
+ const ds=wiz.dogSvcs.find(x=>x.did===did);
+ if(!ds) return;
+ // Optional: preserve basic as the simple discount if only basic was set
+ const cat=ds.discByCategory||{};
+ if(cat.basic?.type && !cat.styling?.type && !cat.others?.type){
+  ds.discType=cat.basic.type;
+  ds.discValue=cat.basic.value;
+ } else {
+  ds.discType=''; ds.discValue=0;
+ }
+ ds.discByCategory=null;
+ renderWizStep4Dogs();
 }
 
 async function deleteApptFromGroup(did){
@@ -4379,6 +4541,8 @@ function openApptEdit(id){
   wiz.dogSvcs[0].note=a.appt_note||'';
   wiz.dogSvcs[0].discType=a.appt_disc_type||'';
   wiz.dogSvcs[0].discValue=a.appt_disc_value||0;
+  // Session E — load per-category discount if present
+  wiz.dogSvcs[0].discByCategory=a.appt_disc_by_category||null;
  }
  const aesEl=document.getElementById('appt-edit-stamp'); if(aesEl) aesEl.innerHTML=editStampHTML(a)+renderAuditFooter('appointment',id);
  // Batch O.13 — show perf section only for past/done appts
@@ -4455,6 +4619,7 @@ function openGroupEdit(ids){
   const d=dogs.find(x=>x.id===a.dog_id)||{};
   return {did:a.dog_id,svc:a.service_base||'Basic Grooming',svcs:parseSvcBase(a.service_base),
    customDur:a.duration_mins||null,note:a.appt_note||'',discType:a.appt_disc_type||'',discValue:a.appt_disc_value||0,
+   discByCategory:a.appt_disc_by_category||null,
    apptId:a.id};
  });
  wiz={step:4,custId:firstDog?.customer_id||null,dogSvcs,groomerId:firstA.groomer_id,
@@ -4546,6 +4711,7 @@ async function saveAppt(){
  if(!wiz.groomerId||!wiz.date||wiz.startMins===null||!wiz.dogSvcs.length){
   alert('Incomplete booking details');return;
  }
+ let insertedAppts=null;  // Session E fix: hoisted so post-save local patch can read new appts
  const custNote=document.getElementById('appt-customer-note')?.value.trim()||null;
  const adminNote=document.getElementById('appt-admin-note')?.value.trim()||null;
  const sessionNote=document.getElementById('appt-session-note')?.value.trim()||null;
@@ -4599,8 +4765,22 @@ async function saveAppt(){
    if(hasActiveSubs) sessSrc='subscription';
   }
   const dogNote=document.getElementById('appt-note-'+ds.did)?.value.trim()||'';
-  const dogDiscType=document.getElementById('appt-disc-type-'+ds.did)?.value||null;
-  const dogDiscValue=parseFloat(document.getElementById('appt-disc-value-'+ds.did)?.value)||0;
+  // Read discount — either simple (legacy) or per-category
+  let dogDiscType=null, dogDiscValue=0, discByCategory=null;
+  if(ds.discByCategory){
+   // Per-category mode: read all 3 category inputs
+   discByCategory={};
+   ['basic','styling','others'].forEach(cat=>{
+    const t=document.getElementById(`appt-disc-${cat}-type-${ds.did}`)?.value||'';
+    const v=parseFloat(document.getElementById(`appt-disc-${cat}-value-${ds.did}`)?.value)||0;
+    discByCategory[cat] = t?{type:t, value:v}:null;
+   });
+   // If no category has a discount, drop the JSONB (keep legacy null)
+   if(!discByCategory.basic && !discByCategory.styling && !discByCategory.others) discByCategory=null;
+  } else {
+   dogDiscType=document.getElementById('appt-disc-type-'+ds.did)?.value||null;
+   dogDiscValue=parseFloat(document.getElementById('appt-disc-value-'+ds.did)?.value)||0;
+  }
   inserts.push({
    dog_id:ds.did,groomer_id:wiz.groomerId,appt_date:wiz.date,
    appt_time:m2t(cursor)+':00',service_base:ds.svc,duration_mins:dur,
@@ -4610,6 +4790,7 @@ async function saveAppt(){
    session_note:sessionNote,
    appt_disc_type:dogDiscType,
    appt_disc_value:dogDiscValue,
+   appt_disc_by_category:discByCategory,
    token_id:wiz.tokenId||null,token_used:false,session_source:sessSrc,
    ...editStamp()
   });
@@ -4674,11 +4855,24 @@ async function saveAppt(){
     const ds=wiz.dogSvcs[i];
     if(!ds) continue;
     const dogNote=document.getElementById('appt-note-'+ds.did)?.value.trim()||null;
-    const dogDiscType=document.getElementById('appt-disc-type-'+ds.did)?.value||null;
-    const dogDiscValue=parseFloat(document.getElementById('appt-disc-value-'+ds.did)?.value)||0;
+    // Read discount from either simple or per-category UI
+    let dogDiscType=null, dogDiscValue=0, discByCategory=null;
+    if(ds.discByCategory){
+     discByCategory={};
+     ['basic','styling','others'].forEach(cat=>{
+      const t=document.getElementById(`appt-disc-${cat}-type-${ds.did}`)?.value||'';
+      const v=parseFloat(document.getElementById(`appt-disc-${cat}-value-${ds.did}`)?.value)||0;
+      discByCategory[cat] = t?{type:t, value:v}:null;
+     });
+     if(!discByCategory.basic && !discByCategory.styling && !discByCategory.others) discByCategory=null;
+    } else {
+     dogDiscType=document.getElementById('appt-disc-type-'+ds.did)?.value||null;
+     dogDiscValue=parseFloat(document.getElementById('appt-disc-value-'+ds.did)?.value)||0;
+    }
     const upd={
      service_base:ds.svc,duration_mins:getWizDogDur(ds),
      appt_note:dogNote,appt_disc_type:dogDiscType||null,appt_disc_value:dogDiscValue,
+     appt_disc_by_category:discByCategory,
      customer_note:custNote,admin_note:adminNote,session_note:sessionNote,...editStamp()
     };
     // Only rescheduled dogs move in time
@@ -4696,8 +4890,9 @@ async function saveAppt(){
    await logAudit('appointment',wiz.editId,'update',{old:oldRec,new:updatePayload,label:dogName+' '+updatePayload.appt_date});
   }
  } else {
-  const {data:insertedAppts,error}=await db.from('appointments').insert(inserts).select();
+  const {data,error}=await db.from('appointments').insert(inserts).select();
   if(error){alert('Error: '+error.message);return}
+  insertedAppts=data;
   for(const a of (insertedAppts||[])){
    const dogName=dogs.find(d=>d.id===a.dog_id)?.name||'?';
    await logAudit('appointment',a.id,'create',{new:a,label:dogName+' '+a.appt_date});
@@ -4730,7 +4925,7 @@ async function saveAppt(){
    const idx=appts.findIndex(a=>a.id===wiz.editId);
    if(idx>=0) Object.assign(appts[idx],{appt_date:wiz.date,appt_time:m2t(wiz.startMins)+':00',groomer_id:wiz.groomerId,service_base:wiz.dogSvcs[0]?.svc,duration_mins:getWizDogDur(wiz.dogSvcs[0])});
   }
- } else if(typeof insertedAppts!=='undefined'&&insertedAppts?.length){
+ } else if(insertedAppts?.length){
   insertedAppts.forEach(a=>appts.push(a));
  }
  cm('ov-appt');
@@ -6082,7 +6277,15 @@ function toggleInvDog(id,el){
    // Per-dog discount from appointment (only for non-free normal sessions)
    const discType=(!isFreeAppt&&appt?.appt_disc_type)||null;
    const discValue=(!isFreeAppt&&appt?.appt_disc_value)||0;
-   invDogServices[id]={services,disc_type:discType,disc_value:discValue};
+   // Session E — propagate per-category discount from appointment JSONB to invoice
+   const catDisc=(!isFreeAppt&&appt?.appt_disc_by_category)||null;
+   invDogServices[id]={
+    services,
+    disc_type:discType, disc_value:discValue,
+    disc_basic_type:catDisc?.basic?.type||null, disc_basic_value:catDisc?.basic?.value||0,
+    disc_styling_type:catDisc?.styling?.type||null, disc_styling_value:catDisc?.styling?.value||0,
+    disc_others_type:catDisc?.others?.type||null, disc_others_value:catDisc?.others?.value||0,
+   };
   }
   if(!invAdvanceDogs[id]) invAdvanceDogs[id]={sessions:1,service_type:'Basic Grooming',disc_type:'percent',disc_value:0,price_per_session:priceFor('Basic Grooming',d?.size)};
  } else {
@@ -10610,6 +10813,7 @@ function renderCust360Header(c){
  <div class="c360-actions">
   ${waLinkUrl?`<a href="${waLinkUrl}" target="_blank">WhatsApp</a>`:''}
   ${gmaps?`<a href="${gmaps}" target="_blank">Open in Maps</a>`:''}
+  ${(c.latitude==null||c.longitude==null)&&c.wa?`<a href="${buildLocationRequestWALink(c)}" target="_blank" style="background:#fef3c7;border-color:#fbbf24;color:#7c2d12;font-weight:600">📍 Minta lokasi via WA</a>`:''}
   <button onclick="closeCust360();openEditCust('${c.id}')">Edit profile</button>
  </div>`;
  document.getElementById('c360-header').innerHTML=html;
