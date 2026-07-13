@@ -649,7 +649,6 @@ tbody tr:hover{background:var(--subtle)}
  </div>
 
  <div class="subsec active" id="ssec-cust">
- <div id="coord-fix-banner" style="display:none;background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:8px;padding:14px 18px;margin-bottom:14px;box-shadow:0 2px 6px rgba(0,0,0,.08)"></div>
  <div class="filter-bar">
  <input id="cs" placeholder="Search customer / area / WA…" oninput="renderCusts()" style="min-width:220px;flex:1"/>
  <select id="cs-source" onchange="renderCusts()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:13px">
@@ -753,6 +752,8 @@ tbody tr:hover{background:var(--subtle)}
   <span class="cal-title" id="cal-title"></span>
   <button class="btn btn-g btn-sm" onclick="calNext()">Next &#8594;</button>
   <button class="btn btn-g btn-sm" onclick="goToday()">Today</button>
+  <button class="btn btn-g btn-sm" onclick="manualRefreshCal()" title="Reload dari database" id="cal-refresh-btn">🔄</button>
+  <span id="cal-refresh-status" style="font-size:10px;color:var(--muted);min-width:70px"></span>
   <div class="cal-view-toggle" id="cal-view-toggle">
    <button onclick="setCalView('day')" id="cv-day">Day</button>
    <button onclick="setCalView('3day')" id="cv-3day">3 days</button>
@@ -1327,7 +1328,6 @@ tbody tr:hover{background:var(--subtle)}
   <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
    <input id="cf-lat" placeholder="Latitude (-6.2xxx)" style="flex:1;min-width:120px" inputmode="decimal"/>
    <input id="cf-lng" placeholder="Longitude (106.8xxx)" style="flex:1;min-width:120px" inputmode="decimal"/>
-   <button type="button" class="btn btn-p btn-sm" onclick="autoLookupCoords()">🌐 Auto-cari dari alamat</button>
    <button type="button" class="btn btn-g btn-sm" onclick="parseCoordsFromGmapsLink()">Parse dari gmaps</button>
   </div>
   <div id="cf-coords-hint" style="font-size:10px;color:var(--muted);margin-top:3px"></div>
@@ -2405,6 +2405,8 @@ function sw(tab) {
  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
  document.getElementById('tab-'+tab).classList.add('active');
  document.getElementById('sec-'+tab).classList.add('active');
+ // Auto-refresh only on calendar tab
+ if(tab==='calendar'){ startCalAutoRefresh(); } else { stopCalAutoRefresh(); }
  if(tab==='dashboard') renderDashboard();
  if(tab==='database') renderCusts();
  if(tab==='calendar'){
@@ -2581,26 +2583,6 @@ function renderCusts(){
  if(sumEl){
   const pct=total>0?Math.round(withCoords/total*100):0;
   sumEl.innerHTML=`Koord: <strong style="color:${pct>=80?'#16a34a':pct>=50?'#ca8a04':'#dc2626'}">${withCoords}/${total} (${pct}%)</strong> · ${missing} customer belum ada koord`;
- }
- // Prominent action banner
- const banner=document.getElementById('coord-fix-banner');
- if(banner){
-  if(missing>0){
-   const withAddr=custs.filter(c=>(c.latitude==null||c.longitude==null)&&(c.address||'').trim()).length;
-   const noAddr=missing-withAddr;
-   banner.style.display='';
-   banner.innerHTML=`<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-    <div style="font-size:24px">⚠️</div>
-    <div style="flex:1;min-width:200px">
-     <div style="font-size:15px;font-weight:700;color:#7c2d12">${missing} customer belum ada koordinat</div>
-     <div style="font-size:12px;color:#7c2d12;margin-top:3px">${withAddr} punya alamat (bisa auto-lookup) · ${noAddr} tanpa alamat sama sekali (perlu diisi manual)</div>
-    </div>
-    ${withAddr>0?`<button class="btn btn-p" onclick="bulkAutoLookupCoords()" style="padding:10px 18px;font-size:14px;font-weight:600">🌐 Auto-lookup ${withAddr} customer</button>`:''}
-    <button class="btn btn-g btn-sm" onclick="document.getElementById('cs-nocoord').checked=true;renderCusts()">Lihat list</button>
-   </div>`;
-  } else {
-   banner.style.display='none';
-  }
  }
  if(s) rows=rows.filter(c=>(c.owner||'').toLowerCase().includes(s)||(c.area||'').toLowerCase().includes(s)||(c.wa||'').toLowerCase().includes(s)||(c.address||'').toLowerCase().includes(s));
  if(srcFilter){
@@ -3035,6 +3017,58 @@ function goToday(){
  calDay=iso(today);
  renderCal();
 }
+
+/* Manual + auto refresh for calendar to catch changes made elsewhere
+   (groomer app, other admin session, background jobs) */
+let _calRefreshTimer=null;
+let _calLastRefreshAt=Date.now();
+
+async function manualRefreshCal(){
+ const btn=document.getElementById('cal-refresh-btn');
+ const status=document.getElementById('cal-refresh-status');
+ if(btn) btn.disabled=true;
+ if(status) status.textContent='⏳ Sync...';
+ try {
+  await loadAll();
+  _calLastRefreshAt=Date.now();
+  if(status) status.textContent='✓ Just synced';
+  setTimeout(()=>{ if(status && Date.now()-_calLastRefreshAt<3000) status.textContent=''; },2500);
+ } catch(err){
+  if(status) status.textContent='❌ '+err.message;
+ } finally {
+  if(btn) btn.disabled=false;
+ }
+}
+
+function startCalAutoRefresh(){
+ stopCalAutoRefresh();
+ // Poll every 60s while on calendar tab; only fires if tab is visible
+ _calRefreshTimer=setInterval(async ()=>{
+  if(document.hidden) return;
+  if(document.querySelector('#sec-calendar')?.classList.contains('active')){
+   const status=document.getElementById('cal-refresh-status');
+   try {
+    await loadAll();
+    _calLastRefreshAt=Date.now();
+    if(status){
+     status.textContent='✓ Auto-sync';
+     setTimeout(()=>{ if(status) status.textContent=''; },2000);
+    }
+   } catch(e){ /* silent */ }
+  }
+ },60000);
+}
+function stopCalAutoRefresh(){
+ if(_calRefreshTimer){ clearInterval(_calRefreshTimer); _calRefreshTimer=null; }
+}
+
+// Refresh calendar when user returns to tab (focus / visibility change)
+document.addEventListener('visibilitychange',()=>{
+ if(!document.hidden && document.querySelector('#sec-calendar')?.classList.contains('active')){
+  // Only refresh if it's been >30s since last refresh
+  if(Date.now()-_calLastRefreshAt>30000) manualRefreshCal();
+ }
+});
 
 function toggleGroomerFilter(gid){
  if(gid==null){ calGroomerFilter.clear(); }
@@ -3858,215 +3892,10 @@ function parseCoordsFromGmapsLink(){
  const m2=url.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
  if(m2){
   latEl.value=m2[1]; lngEl.value=m2[2];
-  if(hint) hint.textContent='✓ Berhasil parse dari link (!3d/!4d pattern)';
-  return;
- }
- // Try ?q=lat,lng format (share URLs, WhatsApp location shares)
- // Exclude auto-generated URLs (those have exact "/maps/?q=lat,lng" pattern)
- const m3=url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
- if(m3){
-  latEl.value=m3[1]; lngEl.value=m3[2];
-  if(hint) hint.textContent='✓ Berhasil parse dari link (?q= pattern)';
+  if(hint) hint.textContent='✓ Berhasil parse dari link';
   return;
  }
  if(hint) hint.textContent='❌ Tidak bisa parse (short link maps.app.goo.gl). Buka link di browser, klik kanan di titik lokasi, copy koordinat pertama sebagai lat, kedua sebagai lng.';
-}
-
-/* Auto-lookup coordinates from address using OpenStreetMap-based geocoders.
-   Primary: Photon (photon.komoot.io) — actively CORS-friendly, ~10 req/sec allowed.
-   Fallback: Nominatim (rate-limited harder, often 429s from browser). */
-async function _photonSearch(q){
- // Bias toward Jakarta area for better local results
- const url=`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=5&lat=-6.2&lon=106.85&lang=en`;
- const res=await fetch(url);
- if(!res.ok) throw new Error(`Photon HTTP ${res.status}`);
- const data=await res.json();
- // Convert GeoJSON to Nominatim-like format
- return (data.features||[])
-  .filter(f=>{
-   // Filter to Indonesia only (Photon doesn't have strict countrycodes param)
-   const country=(f.properties?.country||'').toLowerCase();
-   return country==='indonesia'||country==='id';
-  })
-  .map(f=>({
-   lat: String(f.geometry.coordinates[1]),
-   lon: String(f.geometry.coordinates[0]),
-   display_name: [
-    f.properties.name, f.properties.street, f.properties.housenumber,
-    f.properties.district, f.properties.city, f.properties.state, f.properties.country
-   ].filter(Boolean).join(', '),
-   type: f.properties.osm_key||'place'
-  }));
-}
-async function _nominatimSearch(q){
- const url=`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&countrycodes=id`;
- const res=await fetch(url);
- if(!res.ok) throw new Error(`Nominatim HTTP ${res.status}`);
- return await res.json();
-}
-// Combined geocoder: try Photon first, fall back to Nominatim if needed
-async function _geocode(q){
- try {
-  const r=await _photonSearch(q);
-  if(r.length) return {results:r, source:'photon'};
- } catch(e){
-  console.warn(`  Photon error for "${q}": ${e.message}`);
- }
- // Only try Nominatim if Photon returned zero, not on error (avoid double-error)
- try {
-  const r=await _nominatimSearch(q);
-  if(r.length) return {results:r, source:'nominatim'};
- } catch(e){
-  console.warn(`  Nominatim error for "${q}": ${e.message}`);
- }
- return {results:[], source:'none'};
-}
-
-async function autoLookupCoords(){
- const rawAddr=(document.getElementById('cf-addr')?.value||'').trim();
- const kec=(document.getElementById('cf-kec')?.value||'').trim();
- const kota=(document.getElementById('cf-kota')?.value||'').trim();
- const latEl=document.getElementById('cf-lat');
- const lngEl=document.getElementById('cf-lng');
- const gmapsEl=document.getElementById('cf-gmaps');
- const hint=document.getElementById('cf-coords-hint');
-
- if(!rawAddr&&!kec&&!kota){
-  alert('❌ Alamat kosong di database.\n\nIsi minimal field "Address" atau "Kecamatan" + "Kota" dulu, baru bisa auto-lookup koordinat.');
-  document.getElementById('cf-addr')?.focus();
-  return;
- }
- const cleanAddr=_cleanAddressForGeocoding(rawAddr);
- const fullAddr=[cleanAddr,kec,kota,'Indonesia'].filter(Boolean).join(', ');
- if(!confirm(`Auto-cari koordinat untuk alamat berikut?\n\nInput asli: ${rawAddr||'(kosong)'}\n${cleanAddr!==rawAddr?`Dibersihkan: ${cleanAddr}\n`:''}Query: ${fullAddr}\n\n(OpenStreetMap Nominatim — free, no API key)`)) return;
- if(hint) hint.textContent='⏳ Sedang cari koordinat...';
- try {
-  const g=await _geocode(fullAddr);
-  const data=g.results;
-  const source=g.source;
-  if(!data.length){
-   if(hint) hint.innerHTML=`❌ Tidak ada hasil street-level. <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddr)}" target="_blank" style="color:var(--primary-dk)">Cari manual di Google Maps →</a>`;
-   alert(`Tidak ditemukan koordinat untuk:\n${fullAddr}\n\nSaran:\n1. Cari manual di Google Maps → klik kanan di titik → copy koordinat → paste ke lat/lng\n2. Atau minta customer share location via WhatsApp (📎 → Location), copy dari message → paste ke gmaps link → klik Parse`);
-   return;
-  }
-  let picked=data[0];
-  if(data.length>1){
-   const options=data.map((r,i)=>`${i+1}. ${r.display_name} (${r.type||'?'})`).join('\n');
-   const choice=prompt(`Ditemukan ${data.length} hasil. Pilih nomor:\n\n${options}\n\nInput nomor 1-${data.length}:`,'1');
-   if(!choice){if(hint)hint.textContent='Cancelled';return;}
-   const idx=parseInt(choice)-1;
-   if(isNaN(idx)||idx<0||idx>=data.length){alert('Nomor tidak valid');if(hint)hint.textContent='';return;}
-   picked=data[idx];
-  }
-  const lat=parseFloat(picked.lat).toFixed(7);
-  const lng=parseFloat(picked.lon).toFixed(7);
-  latEl.value=lat; lngEl.value=lng;
-  if(gmapsEl && !gmapsEl.value.trim()){
-   gmapsEl.value=`https://www.google.com/maps/?q=${lat},${lng}`;
-  }
-  if(hint) hint.innerHTML=`✓ Ditemukan via ${source}: <strong>${esc(picked.display_name.slice(0,100))}</strong>. <span style="color:#dc2626;font-weight:600">⚠ HARAP VERIFIKASI</span> — buka <a href="https://www.google.com/maps/?q=${lat},${lng}" target="_blank" style="color:var(--primary-dk)">di Google Maps →</a> untuk cek pin di rumah yg benar. Kalau salah, hapus lat/lng.`;
- } catch(err){
-  if(hint) hint.textContent='❌ Error: '+err.message;
-  alert('Geocoder error: '+err.message+'\n\nBisa masalah network atau rate limit. Coba lagi.');
- }
-}
-
-/* Clean noise from Indonesian addresses that confuses Nominatim */
-function _cleanAddressForGeocoding(rawAddr){
- return (rawAddr||'')
-  .replace(/\bRT\.?\s*\d+\s*\/?\s*RW?\.?\s*\d+/gi,'')  // "RT 03/RW 05"
-  .replace(/\bRT\.?\s*\d+/gi,'')                        // "RT 03"
-  .replace(/\bRW\.?\s*\d+/gi,'')                        // "RW 05"
-  .replace(/\bBlok\s+\S+/gi,'')                         // "Blok A2"
-  .replace(/\bKel\.?\s+\S+/gi,'')                       // "Kel. Kemang"
-  .replace(/\bKec\.?\s+\S+/gi,'')                       // "Kec. Mampang"
-  .replace(/\(.*?\)/g,'')                               // "(belakang X)"
-  .replace(/[,;]{2,}/g,',')
-  .replace(/\s+/g,' ')
-  .replace(/[,\s]+$/,'')
-  .replace(/^[,\s]+/,'')
-  .trim();
-}
-
-/* Try multiple geocoding strategies per customer. Returns {result, method, precise, query} or null. */
-async function _geocodeCustomer(c){
- const cleanAddr=_cleanAddressForGeocoding(c.address);
- const kec=(c.kecamatan||'').trim();
- const kota=(c.kota||'').trim();
- if(!cleanAddr) return null;  // No street address → no precise geocoding possible; do NOT fall back to centroid
- const attempts=[
-  {q:[cleanAddr,kec,kota,'Indonesia'].filter(Boolean).join(', '), method:'street-level', precise:true},
-  {q:[cleanAddr,kota,'Indonesia'].filter(Boolean).join(', '),      method:'street-simplified', precise:true},
- ];
- for(let i=0;i<attempts.length;i++){
-  const att=attempts[i];
-  const g=await _geocode(att.q);
-  if(g.results.length){
-   // Only accept precise (street-level) results. Photon may return a district if no street match — reject that.
-   const r=g.results[0];
-   const displayName=(r.display_name||'').toLowerCase();
-   const streetHint=(cleanAddr.split(',')[0]||'').toLowerCase();
-   // Cheap sanity check: at least one word of the street name should appear in the geocoded display_name
-   const streetWords=streetHint.split(/\s+/).filter(w=>w.length>3);
-   const hasStreetMatch=streetWords.length===0 || streetWords.some(w=>displayName.includes(w));
-   if(hasStreetMatch){
-    return {result:r, method:att.method, precise:true, query:att.q, attemptIdx:i, source:g.source};
-   }
-   // else: geocoder returned a broader match (district/city) — reject silently, try next strategy
-  }
-  await new Promise(r=>setTimeout(r,700));
- }
- return null;
-}
-
-/* Bulk version: iterate all customers with address but no coords.
-   Rate-limited to 1.2s per request per Nominatim usage policy. */
-async function bulkAutoLookupCoords(){
- console.log('[bulkAutoLookupCoords] fired at', new Date().toISOString());
- const targets=custs.filter(c=>(c.latitude==null||c.longitude==null) && ((c.address||'').trim()||(c.kecamatan||'').trim()||(c.kota||'').trim()));
- const missing=custs.filter(c=>(c.latitude==null||c.longitude==null) && !((c.address||'').trim()||(c.kecamatan||'').trim()||(c.kota||'').trim()));
- console.log(`[bulkAutoLookupCoords] targets: ${targets.length}, missing all location fields: ${missing.length}`);
- if(!targets.length){
-  const msg=missing.length
-   ?`Tidak ada customer yang bisa di-lookup.\n\n${missing.length} customer tanpa alamat/kecamatan/kota sama sekali — perlu diisi manual dulu.`
-   :'Semua customer sudah ada koordinat. ✓';
-  alert(msg); return;
- }
- const est=Math.ceil(targets.length*0.7*2);  // 700ms delay × ~2 attempts avg (no centroid fallback)
- if(!confirm(`Auto-lookup ${targets.length} customer via OpenStreetMap (street-level only, tanpa kecamatan-centroid fallback)?\n\nHasil yang tidak akurat dulu bikin banyak titik salah — sekarang hanya menerima street-level match. Yang tidak ketemu bakal ditandai "not found" — perlu diisi manual (WA customer, minta share location).\n\nEstimasi ${est} detik. Hasil disimpan otomatis. Detail per-customer di F12 → Console.\n\n${missing.length?`(${missing.length} customer tanpa alamat sama sekali akan di-skip)`:''}\n\n⚠️ WAJIB tetap verifikasi visual — buka Customer 360 setelah, cek pin di Google Maps benar atau tidak.`)) return;
-
- const summary=document.getElementById('cs-coord-summary');
- let ok=0, notFound=0, err=0;
- const failures=[];
- for(let i=0;i<targets.length;i++){
-  const c=targets[i];
-  if(summary) summary.innerHTML=`⏳ Auto-lookup <strong>${i+1}/${targets.length}</strong>: ${esc(c.owner)}...`;
-  try {
-   const geo=await _geocodeCustomer(c);
-   if(geo){
-    const lat=parseFloat(geo.result.lat), lng=parseFloat(geo.result.lon);
-    const update={latitude:lat, longitude:lng};
-    if(!(c.gmaps_link||'').trim()){
-     update.gmaps_link=`https://www.google.com/maps/?q=${lat.toFixed(7)},${lng.toFixed(7)}`;
-    }
-    await db.from('customers').update(update).eq('id',c.id);
-    Object.assign(c, update);
-    ok++;
-    console.log(`✓ [${i+1}/${targets.length}] ${c.owner} — ${geo.method} via ${geo.source}: "${geo.query}" → ${geo.result.display_name}`);
-   } else {
-    notFound++;
-    failures.push({owner:c.owner, addr:c.address, kec:c.kecamatan, kota:c.kota});
-    console.warn(`✗ [${i+1}/${targets.length}] ${c.owner}: no street-level match. addr="${c.address}" kec="${c.kecamatan}" kota="${c.kota}"`);
-   }
-  } catch(e){
-   err++;
-   console.error(`✗ [${i+1}/${targets.length}] ${c.owner}: ${e.message}`);
-  }
- }
- renderCusts();
- const skipMsg=missing.length?`\n\n(${missing.length} customer di-skip karena tanpa alamat/kec/kota)`:'';
- const failPreview=failures.length?`\n\nContoh yang gagal (cek F12 Console untuk semua):\n${failures.slice(0,5).map(f=>`• ${f.owner}: "${f.addr||'(no addr)'}" @ ${f.kec||'?'}/${f.kota||'?'}`).join('\n')}`:'';
- alert(`Selesai auto-lookup ${targets.length} customer:\n\n✓ Street-level match: ${ok}\n✗ Tidak ditemukan: ${notFound}\n⚠️ Error: ${err}${skipMsg}${failPreview}\n\n⚠️ WAJIB verifikasi visual setiap hasil — buka Customer 360, klik "Open in Maps", cek pin di rumah yang benar. Kalau salah, hapus lat/lng di edit customer.`);
 }
 
 /* Classifies a customer's location data completeness so admin sees at a glance
@@ -4089,28 +3918,7 @@ function locationBadgeHTML(c){
  const bg=st.severity==='red'?'#fee2e2':'#fef3c7';
  const fg=st.severity==='red'?'#991b1b':'#92400e';
  const icon=st.severity==='red'?'⚠️':'📍';
- const reqBtn=c.wa?` <a href="${buildLocationRequestWALink(c)}" target="_blank" style="text-decoration:none;font-size:10px;padding:1px 6px;border-radius:8px;background:#16a34a;color:#fff;font-weight:600;margin-left:2px" onclick="event.stopPropagation()" title="Minta lokasi via WA">📱 Minta</a>`:'';
- return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 6px;border-radius:10px;background:${bg};color:${fg};font-weight:600;white-space:nowrap" title="${esc(st.msg)}">${icon} No coord</span>${reqBtn}`;
-}
-
-/* Build a wa.me link that opens WhatsApp with a pre-filled location-request message.
-   Personalized with customer's first name for friendlier tone. */
-function buildLocationRequestWALink(c){
- if(!c||!c.wa) return '#';
- const firstName=(c.owner||'').trim().split(/\s+/)[0]||'Bapak/Ibu';
- const msg=`Hi ${firstName}! 🐾
-
-Untuk memudahkan groomer HomePaw datang ke lokasi Anda tepat waktu, mohon share lokasi ya:
-
-1. Klik icon 📎 (attachment) di chat ini
-2. Pilih "Location" / "Lokasi"
-3. Pilih "Send your current location" (jika sedang di rumah) atau cari alamat rumah
-4. Send ke chat ini
-
-Terima kasih! 🙏
-— HomePaw Grooming`;
- const phone=normalizeWA(c.wa).replace(/^\+/,'').replace(/\D/g,'');
- return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+ return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 6px;border-radius:10px;background:${bg};color:${fg};font-weight:600;white-space:nowrap" title="${esc(st.msg)}">${icon} No coord</span>`;
 }
 
 /* ---------- Travel time from previous appt (wizard step 3) ---------- */
@@ -5132,7 +4940,9 @@ function renderGroomers(){ const tb=document.getElementById('groomer-body');
  <td><span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:${g.color||'#16a34a'};vertical-align:middle"></span></td>
  <td><strong>${esc(g.name)}</strong></td>
  <td>${g.phone?`<a class="wa-lnk" href="${waLink(g.phone)}" target="_blank">${esc(g.phone)}</a>`:'—'}</td>
- <td>${g.active?'<span class="badge bs">Active</span>':'<span class="badge bm">Inactive</span>'}</td>
+ <td>${g.active
+   ?`<button onclick="toggleGroomerActive('${g.id}',false)" class="icon-btn" style="padding:2px 8px;background:#dcfce7;color:#15803d;border:1px solid #16a34a;font-weight:600;cursor:pointer" title="Klik untuk deactivate — groomer tidak akan muncul di kalender">✓ Active</button>`
+   :`<button onclick="toggleGroomerActive('${g.id}',true)" class="icon-btn" style="padding:2px 8px;background:#fee2e2;color:#991b1b;border:1px solid #dc2626;font-weight:600;cursor:pointer" title="Klik untuk activate — groomer akan muncul di kalender lagi">⛔ Inactive</button>`}</td>
  <td>${ac}</td>
  <td>${late>0?`<span class="badge bm" title="Terlambat upload absen (2 bulan terakhir)">${late}x terlambat</span>`:`<span style="font-size:11px;color:var(--muted)">0</span>`}</td>
  <td><div class="row-actions">
@@ -5584,6 +5394,31 @@ async function delGroomer(id,name){
  if(!confirm(msg)) return;
  await db.from('groomers').delete().eq('id',id);
  await loadAll(); renderGroomers();
+}
+
+/* Quick toggle groomer active/inactive from list row.
+   When inactive: excluded from calendar columns, wizard dropdown, leaderboard. */
+async function toggleGroomerActive(id,newActive){
+ const g=groomers.find(x=>x.id===id);
+ if(!g) return;
+ const action=newActive?'activate':'deactivate';
+ // If deactivating, warn about future appointments
+ if(!newActive){
+  const now=new Date(); now.setHours(0,0,0,0);
+  const futureAppts=appts.filter(a=>a.groomer_id===id && new Date(a.appt_date)>=now && a.status!=='cancelled');
+  const msg=futureAppts.length
+   ?`Deactivate "${g.name}"?\n\n⚠️ Ada ${futureAppts.length} appointment ke depan untuk groomer ini. Setelah deactivate, appointment tersebut TETAP ada di database tapi kolom groomer tidak muncul di kalender. Reschedule dulu jika perlu.\n\nLanjutkan?`
+   :`Deactivate "${g.name}"?\n\nGroomer tidak akan muncul di kalender, wizard, atau leaderboard. Bisa di-activate kembali kapan saja.`;
+  if(!confirm(msg)) return;
+ } else {
+  if(!confirm(`Activate "${g.name}"?\n\nGroomer akan muncul kembali di kalender + bisa di-assign appointment baru.`)) return;
+ }
+ const {error}=await db.from('groomers').update({active:newActive}).eq('id',id);
+ if(error){alert('Error: '+error.message);return;}
+ g.active=newActive;  // local patch
+ renderGroomers();
+ // Refresh other views that depend on groomer list
+ if(document.querySelector('#sec-calendar')?.classList.contains('active')) renderCal();
 }
 
 /* GROOMER SCHEDULE (kota per day) */
@@ -6076,7 +5911,11 @@ function openInvoiceForEdit(id){
    if(chip&&!chip.classList.contains('on')){toggleInvDog(did,chip);}
    // Restore services
    if(d.services&&d.services.length){
-    invDogServices[did]={services:{},disc_type:d.disc_type||null,disc_value:d.disc_value||0,disc_base_only:!!d.disc_base_only};
+    invDogServices[did]={services:{},
+     disc_type:d.disc_type||null,disc_value:d.disc_value||0,disc_base_only:!!d.disc_base_only,
+     disc_basic_type:d.disc_basic_type||null,disc_basic_value:d.disc_basic_value||0,
+     disc_styling_type:d.disc_styling_type||null,disc_styling_value:d.disc_styling_value||0,
+     disc_others_type:d.disc_others_type||null,disc_others_value:d.disc_others_value||0};
     d.services.forEach(s=>{invDogServices[did].services[s.name]={checked:true,price:s.price||0};});
    }
    // Restore advance config
@@ -6288,10 +6127,15 @@ function renderInvDogServices(){
   </div>`;
  }
  return `<div class="card" style="padding:1rem;margin-bottom:1rem">
- <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
+ <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;flex-wrap:wrap;gap:6px">
  <div><strong>${esc(d.name)}</strong> <span style="font-size:11px;color:var(--muted)">${esc(d.dog_code||'')} \u00B7 ${esc(d.size||'?')}</span></div>
- <div style="display:flex;align-items:center;gap:5px;font-size:11px;flex-wrap:wrap">
-  <span style="color:var(--muted)">Diskon anjing ini:</span>
+ <button type="button" onclick="toggleDogDiscAdvanced('${did}')" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--muted);cursor:pointer" title="Diskon per kategori (Basic / Styling / Others)">
+  ${_dogUsesNewDisc(ds)?'▼ Diskon per kategori':'▶ Diskon lanjutan'}
+ </button>
+ </div>
+ <!-- Legacy simple discount row (hidden when using per-category mode) -->
+ <div id="dog-disc-simple-${did}" style="display:${_dogUsesNewDisc(ds)?'none':'flex'};align-items:center;gap:5px;font-size:11px;flex-wrap:wrap;margin-bottom:.6rem;padding:6px 8px;background:var(--subtle);border-radius:5px">
+  <span style="color:var(--muted)">Diskon:</span>
   <select style="padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px" onchange="onDogDiscType('${did}',this.value)">
    <option value="">-</option>
    <option value="percent" ${ds.disc_type==='percent'?'selected':''}>%</option>
@@ -6303,6 +6147,24 @@ function renderInvDogServices(){
    Basic only
   </label>
  </div>
+ <!-- Per-category discount (advanced) -->
+ <div id="dog-disc-adv-${did}" style="display:${_dogUsesNewDisc(ds)?'block':'none'};margin-bottom:.6rem;padding:8px;background:#fef3c7;border:1px solid #fbbf24;border-radius:5px">
+  <div style="font-size:11px;color:#78350f;font-weight:600;margin-bottom:5px">📊 Diskon per kategori:</div>
+  ${['basic','styling','others'].map(cat=>{
+   const catLabel=cat==='basic'?'Basic Grooming':(cat==='styling'?'Styling':'Others (Botak, Dematting, Add-ons)');
+   const t=ds[`disc_${cat}_type`]||'';
+   const v=ds[`disc_${cat}_value`]||0;
+   return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:3px">
+    <span style="width:150px;color:#78350f">${catLabel}:</span>
+    <select style="padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px" onchange="onDogDiscCatType('${did}','${cat}',this.value)">
+     <option value="">-</option>
+     <option value="percent" ${t==='percent'?'selected':''}>%</option>
+     <option value="fixed" ${t==='fixed'?'selected':''}>Rp</option>
+    </select>
+    <input type="number" value="${v}" min="0" style="width:75px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px" onchange="onDogDiscCatValue('${did}','${cat}',this.value)"/>
+   </div>`;
+  }).join('')}
+  <div style="font-size:10px;color:#78350f;margin-top:4px;font-style:italic">Kosongkan type untuk skip kategori itu. Fixed=cap at category total.</div>
  </div>
  ${coverageBanner}
  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
@@ -6481,6 +6343,96 @@ function onDogDiscBaseOnly(did,checked){
  if(!invDogServices[did]) invDogServices[did]={services:{}};
  invDogServices[did].disc_base_only=!!checked;
  recalcInvoice();
+}
+
+/* Per-category discount handlers (session E — customizable per basic/styling/others).
+   Coexist with legacy disc_type/disc_value/disc_base_only for backward compat. */
+function onDogDiscCatType(did,cat,val){
+ if(!invDogServices[did]) invDogServices[did]={services:{}};
+ invDogServices[did][`disc_${cat}_type`]=val||null;
+ recalcInvoice();
+}
+function onDogDiscCatValue(did,cat,val){
+ if(!invDogServices[did]) invDogServices[did]={services:{}};
+ invDogServices[did][`disc_${cat}_value`]=parseFloat(val)||0;
+ recalcInvoice();
+}
+
+/* Classify a service into a discount category */
+function _serviceCategory(name){
+ if(name==='Basic Grooming') return 'basic';
+ if(name==='Styling') return 'styling';
+ return 'others';  // Botak, Dematting, Deshedding, Anti Fungal, Anti Kutu, Whitening, Parfume
+}
+
+/* Resolve the discount rule for a specific category for a dog.
+   Priority: new per-category fields → legacy disc_type/value + disc_base_only fallback. */
+function _dogDiscForCategory(ds,category){
+ // New model: per-category fields set
+ const newType=ds[`disc_${category}_type`];
+ const newVal=ds[`disc_${category}_value`];
+ if(newType||newVal){
+  return {type:newType||null, value:parseFloat(newVal)||0};
+ }
+ // Legacy fallback
+ if(!ds.disc_type) return {type:null, value:0};
+ if(ds.disc_base_only){
+  // Legacy "base only" = applies only to basic
+  return category==='basic'
+   ? {type:ds.disc_type, value:parseFloat(ds.disc_value)||0}
+   : {type:null, value:0};
+ }
+ // Legacy without base_only = applies to all categories at same rate
+ return {type:ds.disc_type, value:parseFloat(ds.disc_value)||0};
+}
+
+/* True if the dog uses the NEW per-category discount model (any per-cat field is set).
+   Used to hide legacy "Basic only" toggle when new model is active. */
+function _dogUsesNewDisc(ds){
+ if(ds._disc_advanced_opened) return true;
+ return !!(ds.disc_basic_type || ds.disc_basic_value ||
+           ds.disc_styling_type || ds.disc_styling_value ||
+           ds.disc_others_type || ds.disc_others_value);
+}
+
+/* Toggle between simple (legacy) and per-category (advanced) discount UI */
+function toggleDogDiscAdvanced(did){
+ if(!invDogServices[did]) invDogServices[did]={services:{}};
+ const ds=invDogServices[did];
+ const currentlyAdvanced=_dogUsesNewDisc(ds);
+ if(currentlyAdvanced){
+  // Switching back to simple: clear all per-category fields
+  ['basic','styling','others'].forEach(cat=>{
+   delete ds[`disc_${cat}_type`];
+   delete ds[`disc_${cat}_value`];
+  });
+ } else {
+  // Switching to advanced: migrate legacy to per-category
+  if(ds.disc_type){
+   if(ds.disc_base_only){
+    ds.disc_basic_type=ds.disc_type;
+    ds.disc_basic_value=parseFloat(ds.disc_value)||0;
+   } else {
+    ['basic','styling','others'].forEach(cat=>{
+     ds[`disc_${cat}_type`]=ds.disc_type;
+     ds[`disc_${cat}_value`]=parseFloat(ds.disc_value)||0;
+    });
+   }
+  } else {
+   // Ensure at least one field is set so _dogUsesNewDisc returns true
+   ds.disc_basic_type=null;
+   ds.disc_basic_value=0;
+   // Add a marker so we know user opened the advanced mode
+   ds._disc_advanced_opened=true;
+  }
+  // Clear legacy fields to avoid double-counting
+  ds.disc_type=null;
+  ds.disc_value=0;
+  ds.disc_base_only=false;
+ }
+ // Re-render just this dog's controls
+ recalcInvoice();
+ renderInvDogServices();
 }
 function onIntervalChange(){
  const v=document.getElementById('inv-interval')?.value;
@@ -6779,18 +6731,28 @@ function calcInvoiceTotals(){
   const ds=invDogServices[did]||{services:{}};
   let dogTotal=0;
   let dogBaseOnly=0;
+  // Sum prices per category for per-category discount computation
+  const byCategory={basic:0, styling:0, others:0};
   Object.entries(ds.services||{}).forEach(([name,s])=>{
    if(!s.checked) return;
    const p=s.price||0;
    dogTotal+=p;
    if(name==='Basic Grooming') dogBaseOnly+=p;
+   byCategory[_serviceCategory(name)]+=p;
   });
   perSession+=dogTotal;
   perSessionBaseOnly+=dogBaseOnly;
-  const dt=ds.disc_type, dv=ds.disc_value||0;
-  const discBase=ds.disc_base_only?dogBaseOnly:dogTotal;
-  if(dt==='percent') dogDiscAmount+=Math.round(discBase*dv/100);
-  else if(dt==='fixed') dogDiscAmount+=Math.round(dv);
+  // Apply discount per category via unified resolver (handles new + legacy models)
+  ['basic','styling','others'].forEach(cat=>{
+   const disc=_dogDiscForCategory(ds,cat);
+   if(!disc.type) return;
+   if(disc.type==='percent'){
+    dogDiscAmount+=Math.round(byCategory[cat]*disc.value/100);
+   } else if(disc.type==='fixed'){
+    // Fixed applies once per category, capped at category subtotal
+    dogDiscAmount+=Math.min(byCategory[cat], Math.round(disc.value));
+   }
+  });
  });
  const sessions=1; // base invoice is always 1 session; advance is separate
  const subtotal=perSession;
@@ -6852,6 +6814,10 @@ function buildInvoiceRecord(){
   const ad=invAdvanceDogs[did]||null;
   return {dog_id:did, dog_code:d?.dog_code, name:d?.name, breed:d?.breed, size:d?.size, services,
    disc_type:ds.disc_type||null, disc_value:ds.disc_value||0, disc_base_only:!!ds.disc_base_only,
+   // Session E — per-category discount (basic / styling / others). Coexists with legacy fields for BC.
+   disc_basic_type:ds.disc_basic_type||null, disc_basic_value:ds.disc_basic_value||0,
+   disc_styling_type:ds.disc_styling_type||null, disc_styling_value:ds.disc_styling_value||0,
+   disc_others_type:ds.disc_others_type||null, disc_others_value:ds.disc_others_value||0,
    groomer_notes:invDogNotes[did]||'',
    advance:ad&&isAdvanceActive()?{
     sessions:ad.sessions,service_type:ad.service_type,
@@ -7098,11 +7064,17 @@ function buildServiceRows(dogsData,counter){
  const docMode=inv._docMode||detectInvoiceMode(inv);
  dogsData.forEach(d=>{
   const dogSubtotal=d.services.reduce((a,s)=>a+s.price,0);
-  let dogDisc=0;
   const dogBase=d.services.filter(s=>s.name==='Basic Grooming').reduce((a,s)=>a+s.price,0);
-  const discBase=d.disc_base_only?dogBase:dogSubtotal;
-  if(d.disc_type==='percent') dogDisc=Math.round(discBase*(d.disc_value||0)/100);
-  else if(d.disc_type==='fixed') dogDisc=Math.round(d.disc_value||0);
+  // Per-category discount computation (matches calcInvoiceTotals logic)
+  const byCategory={basic:0, styling:0, others:0};
+  d.services.forEach(s=>{ byCategory[_serviceCategory(s.name)] += s.price; });
+  let dogDisc=0;
+  ['basic','styling','others'].forEach(cat=>{
+   const disc=_dogDiscForCategory(d,cat);
+   if(!disc.type) return;
+   if(disc.type==='percent') dogDisc+=Math.round(byCategory[cat]*disc.value/100);
+   else if(disc.type==='fixed') dogDisc+=Math.min(byCategory[cat], Math.round(disc.value));
+  });
   const isFree=dogSubtotal===0;
   if(!d.services||!d.services.length) return;
   const mainSvc=d.services.find(s=>s.name==='Basic Grooming')||d.services[0];
@@ -7172,9 +7144,24 @@ function buildServiceRows(dogsData,counter){
    });
   }
   if(dogDisc>0){
-   const discLabel=d.disc_type==='percent'&&d.disc_value
-    ? `Diskon ${d.disc_value}%${d.disc_base_only?' (Basic only)':''}`
-    : `Diskon${d.disc_base_only?' (Basic only)':''}`;
+   // Build a descriptive label that reflects per-category discounts if active
+   let discLabel='Diskon';
+   const usesNewModel=_dogUsesNewDisc(d);
+   if(usesNewModel){
+    const parts=[];
+    ['basic','styling','others'].forEach(cat=>{
+     const disc=_dogDiscForCategory(d,cat);
+     if(!disc.type) return;
+     const catShort=cat==='basic'?'Basic':(cat==='styling'?'Styling':'Others');
+     if(disc.type==='percent') parts.push(`${catShort} ${disc.value}%`);
+     else if(disc.type==='fixed') parts.push(`${catShort} ${fmtRp(disc.value)}`);
+    });
+    discLabel='Diskon '+parts.join(' + ');
+   } else {
+    discLabel=d.disc_type==='percent'&&d.disc_value
+     ? `Diskon ${d.disc_value}%${d.disc_base_only?' (Basic only)':''}`
+     : `Diskon${d.disc_base_only?' (Basic only)':''}`;
+   }
    rows+=`<tr class="svc-disc-row">
     <td></td>
     <td class="svc-disc-label">${discLabel}</td>
@@ -10623,7 +10610,6 @@ function renderCust360Header(c){
  <div class="c360-actions">
   ${waLinkUrl?`<a href="${waLinkUrl}" target="_blank">WhatsApp</a>`:''}
   ${gmaps?`<a href="${gmaps}" target="_blank">Open in Maps</a>`:''}
-  ${(c.latitude==null||c.longitude==null)&&c.wa?`<a href="${buildLocationRequestWALink(c)}" target="_blank" style="background:#fef3c7;border-color:#fbbf24;color:#7c2d12;font-weight:600">📍 Minta lokasi via WA</a>`:''}
   <button onclick="closeCust360();openEditCust('${c.id}')">Edit profile</button>
  </div>`;
  document.getElementById('c360-header').innerHTML=html;
