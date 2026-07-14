@@ -6,6 +6,7 @@
 <title>Dog Groomer CRM</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <style>
 :root {
  --green:#16a34a;--green-lt:#dcfce7;--green-md:#4ade80;--green-dk:#15803d;
@@ -963,7 +964,7 @@ tbody tr:hover{background:var(--subtle)}
  <button class="btn btn-p" onclick="saveInvoice()">Simpan invoice</button>
  <button class="btn btn-b" onclick="saveInvoiceAndAppts()">Simpan invoice + kalender</button>
  <button class="btn btn-g" onclick="downloadInvoicePDF()">Download PDF</button>
- <button class="btn btn-g" style="background:#25d366;color:#fff;border-color:#25d366" onclick="sendCurrentInvoiceToWA()">Kirim ke WhatsApp</button>
+ <button class="btn btn-g" style="background:#25d366;color:#fff;border-color:#25d366" onclick="sendCurrentInvoiceToWA(event)">Kirim ke WhatsApp</button>
  </div>
  </div>
 
@@ -7744,105 +7745,164 @@ function downloadInvoicePDF(){
  const rec=buildInvoiceRecord(); if(!rec) return;
  const cust=custs.find(c=>c.id===rec.customer_id)||{};
  const body=buildInvoiceHTML(rec,cust,bankSettings,true);
- const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${rec.invoice_number}</title></head><body>${body}</body></html>`;
+ // Session E — filename includes first 3 letters of owner name for easier file management
+ // e.g., "INV-0182_Can.pdf" instead of "INV-0182.pdf"
+ const ownerPrefix=(cust.owner||'').replace(/[^A-Za-z]/g,'').slice(0,3);
+ const title=ownerPrefix?`${rec.invoice_number}_${ownerPrefix}`:rec.invoice_number;
+ const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title></head><body>${body}</body></html>`;
  const w=window.open('','_blank');
  w.document.write(html); w.document.close();
  setTimeout(()=>w.print(),300);
 }
 
-// Batch O.19 — Send invoice summary to customer WhatsApp
+// Session E — Session E: simplified WA message per owner spec.
+// Just 4 sections: greeting/thanks, groomer notes, total + bank, "detail in image".
 function buildInvoiceWAMessage(rec, custObj){
  const docMode=detectInvoiceMode(rec);
  const isReport=docMode==='report';
  const firstName=(custObj.owner||'').split(' ')[0]||'kak';
- const dogNames=(rec.dogs||[]).map(d=>d.name).filter(Boolean).join(' & ');
- const svcSummary=(rec.dogs||[]).map(d=>{
-  const svcs=(d.services||[]).map(s=>s.name).join('+');
-  return d.name+(svcs?' ('+svcs+')':'');
- }).join(', ');
+ const dogNames=(rec.dogs||[]).map(d=>d.name).filter(Boolean).join(' & ')||'anjing kesayangan';
  const totalStr=rec.total===0?'Rp 0 (sudah dibayar via subscription)':'Rp '+rec.total.toLocaleString('id-ID');
+
+ if(isReport&&rec.total===0){
+  return applyTpl(WA_TPL_DONE,{nama:firstName,dogs:dogNames,layanan:'',biz:BIZ_NAME});
+ }
+
+ // Pull groomer field notes from linked appointments (auto-input from groomer.html)
+ const dogIds=(rec.dogs||[]).map(d=>d.dog_id);
+ const linkedAppts=appts.filter(a=>dogIds.includes(a.dog_id)&&a.appt_date===rec.invoice_date);
+ const groomerNotes=linkedAppts
+  .map(a=>{
+   const dog=(rec.dogs||[]).find(d=>d.dog_id===a.dog_id);
+   const dogName=dog?.name||'?';
+   const note=(a.groomer_field_note||'').trim();
+   return note?(linkedAppts.length>1?`${dogName}: ${note}`:note):null;
+  })
+  .filter(Boolean)
+  .join('\n') || '-';
+
  const bank=bankSettings.bank_name||'BCA';
  const acc=bankSettings.bank_account||'';
  const holder=bankSettings.bank_holder||'';
- const dueStr=rec.due_date?new Date(rec.due_date+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'}):'';
- // Extra charges
- const extras=(rec.extra_charges||[]).filter(c=>c.amount>0);
- const extraLines=extras.length?'\n'+extras.map(c=>'\u2022 '+c.label+': Rp '+c.amount.toLocaleString('id-ID')).join('\n'):'';
 
- if(isReport&&rec.total===0){
-  // Service report — no payment needed
-  return applyTpl(WA_TPL_DONE,{nama:firstName,dogs:dogNames,layanan:svcSummary,biz:BIZ_NAME});
+ let msg=`Halo kak ${firstName},\n\n`;
+ msg+=`Terima kasih sudah pakai HomePaw Grooming untuk ${dogNames} hari ini! 🐾\n\n`;
+ msg+=`📝 *Catatan groomer:*\n${groomerNotes}\n\n`;
+ msg+=`💰 *Total: ${totalStr}*\n`;
+ if(rec.total>0 && acc){
+  msg+=`💳 Transfer ${bank}:\n`;
+  msg+=`   No. Rek: *${acc}*\n`;
+  msg+=`   a/n: ${holder}\n\n`;
+ } else {
+  msg+=`\n`;
  }
-
- let msg=`Halo kak ${firstName},\n\nBerikut detail grooming ${dogNames}:\n\n`;
- msg+=`\uD83D\uDCCB *${rec.invoice_number}*\n`;
- msg+=`Tanggal: ${rec.invoice_date?new Date(rec.invoice_date+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'}):'-'}\n`;
- msg+=`Layanan: ${svcSummary}\n`;
- if(extraLines) msg+=`Biaya lain:${extraLines}\n`;
- // Batch O.20 — show discount in WA message
- if(rec.discount_amount>0){
-  const dtype=rec.discount_type, dval=rec.discount_value||0;
-  let discLabel='Diskon';
-  if(dtype==='percent'&&dval>0) discLabel='Diskon '+dval+'%'+(rec.discount_base_only?' (Basic Grooming)':' (semua layanan)');
-  else if(dtype==='fixed'&&dval>0) discLabel='Diskon Rp '+dval.toLocaleString('id-ID');
-  msg+=`${discLabel}: \u2014 Rp ${rec.discount_amount.toLocaleString('id-ID')}\n`;
- }
- msg+=`*Total: ${totalStr}*\n`;
- if(dueStr&&rec.total>0) msg+=`\u23F0 Mohon transfer sebelum ${dueStr}\n`;
- if(rec.total>0){
-  msg+=`\nCara bayar:\n${bank} a/n ${holder}\nNo. Rek: *${acc}*\n`;
-  msg+=`\nSetelah transfer, mohon kirim bukti bayar ya kak \uD83D\uDE4F`;
- }
- msg+=`\n\n\uD83D\uDCCE Detail lengkap (foto & catatan groomer) terlampir di invoice PDF.`;
- msg+=`\n\n${waClosing()}`;
+ msg+=`📎 Detail lengkap + foto before/after terlampir di gambar.\n\n`;
+ msg+=`${waClosing()}`;
  return msg;
 }
 
-// From invoice form (current unsaved or just-built record)
-function sendCurrentInvoiceToWA(){
- const rec=buildInvoiceRecord(); if(!rec) return;
- const cust=custs.find(c=>c.id===rec.customer_id)||{};
+/* ==== Session E — Rich invoice image generation for WhatsApp ====
+   Uses html2canvas to render the invoice HTML → PNG image.
+   On mobile: shares via Web Share API (image attached natively).
+   On desktop: uploads to Supabase Storage, includes URL in WA text (auto-preview). */
+async function _generateInvoiceImage(rec, cust){
+ // Wait for html2canvas library (should be loaded via CDN at page top)
+ if(typeof html2canvas==='undefined'){
+  throw new Error('html2canvas belum siap. Coba refresh halaman.');
+ }
+ // Build a hidden container with the full invoice HTML
+ const container=document.createElement('div');
+ container.style.cssText='position:fixed;top:-99999px;left:0;width:800px;background:#fff;padding:20px';
+ container.innerHTML=buildInvoiceHTML(rec, cust, bankSettings, true);
+ document.body.appendChild(container);
+ try {
+  // Wait for all images inside to fully load (photos from Supabase URLs)
+  const imgs=Array.from(container.querySelectorAll('img'));
+  await Promise.all(imgs.map(img=>{
+   if(img.complete && img.naturalWidth>0) return Promise.resolve();
+   return new Promise(resolve=>{
+    const done=()=>resolve();
+    img.onload=done;
+    img.onerror=done;  // resolve anyway to not block on broken images
+    setTimeout(done, 5000);  // 5s timeout per image
+   });
+  }));
+  // Extra layout settle time
+  await new Promise(r=>setTimeout(r, 300));
+  // Render to canvas
+  const canvas=await html2canvas(container, {
+   useCORS: true,
+   allowTaint: false,
+   backgroundColor: '#ffffff',
+   scale: 1.5,  // Higher DPI for readability on phone screens
+   logging: false,
+   imageTimeout: 8000
+  });
+  // Convert to Blob (JPEG for smaller file size)
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve, 'image/jpeg', 0.85));
+  return blob;
+ } finally {
+  document.body.removeChild(container);
+ }
+}
+
+/* Main entry: generate image + send via WhatsApp (image attached on mobile, URL on desktop) */
+async function sendInvoiceViaWA(rec, cust, sourceButton){
  if(!cust.wa){
   alert('Customer ini tidak memiliki nomor WhatsApp yang tersimpan.\n\nTambahkan nomor WA di profil customer terlebih dahulu.');
   return;
  }
- // Batch O.20 — open PDF print dialog first, then WA
- const body=buildInvoiceHTML(rec,cust,bankSettings,true);
- const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${rec.invoice_number}</title></head><body>${body}</body></html>`;
- const w=window.open('','_blank');
- w.document.write(html); w.document.close();
- setTimeout(()=>{
-  w.print();
-  // Open WA after brief delay so user sees the PDF dialog first
-  setTimeout(()=>{
-   const msg=buildInvoiceWAMessage(rec,cust);
-   const url=waLink(cust.wa)+'?text='+encodeURIComponent(msg);
-   window.open(url,'_blank');
-  },800);
- },300);
+ const origText=sourceButton?sourceButton.textContent:null;
+ if(sourceButton){ sourceButton.textContent='⏳ Menyiapkan gambar...'; sourceButton.disabled=true; }
+ try {
+  const blob=await _generateInvoiceImage(rec, cust);
+  const ownerPrefix=(cust.owner||'').replace(/[^A-Za-z]/g,'').slice(0,3);
+  const filename=`${rec.invoice_number}${ownerPrefix?'_'+ownerPrefix:''}.jpg`;
+  const message=buildInvoiceWAMessage(rec, cust);
+  // Try Web Share API first (mobile — native attachment, best UX)
+  const file=new File([blob], filename, {type:'image/jpeg'});
+  if(navigator.canShare && navigator.canShare({files:[file]}) && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)){
+   try {
+    await navigator.share({files:[file], text:message});
+    // User picks WA from share sheet — image attached natively
+    return;
+   } catch(shareErr){
+    // User cancelled or share failed — fall through to desktop flow
+    if(shareErr.name==='AbortError') return;  // user cancelled
+    console.warn('Web Share failed, falling back to URL:', shareErr);
+   }
+  }
+  // Desktop fallback: upload to Supabase Storage, share URL in WA message
+  if(sourceButton) sourceButton.textContent='⏳ Upload gambar...';
+  const path=`invoices/${filename}`;
+  const {error:upErr}=await db.storage.from('grooming-photos').upload(path, blob, {upsert:true, contentType:'image/jpeg'});
+  if(upErr) throw new Error('Upload error: '+upErr.message);
+  const {data:urlData}=db.storage.from('grooming-photos').getPublicUrl(path);
+  const imageUrl=urlData.publicUrl;
+  // Include image URL in WA message so recipient sees preview
+  const fullMsg=message+'\n\n📎 '+imageUrl;
+  const waUrl=waLink(cust.wa)+'?text='+encodeURIComponent(fullMsg);
+  window.open(waUrl, '_blank');
+ } catch(e){
+  console.error('sendInvoiceViaWA failed:', e);
+  alert('Gagal generate/kirim invoice: '+e.message+'\n\nCoba: refresh halaman, atau pakai tombol "Cetak PDF" sebagai alternatif.');
+ } finally {
+  if(sourceButton){ sourceButton.textContent=origText; sourceButton.disabled=false; }
+ }
+}
+
+// From invoice form (current unsaved or just-built record)
+function sendCurrentInvoiceToWA(ev){
+ const rec=buildInvoiceRecord(); if(!rec) return;
+ const cust=custs.find(c=>c.id===rec.customer_id)||{};
+ sendInvoiceViaWA(rec, cust, ev?.target);
 }
 
 // From Financial tab invoice list (saved invoice)
-function sendSavedInvoiceToWA(invId){
+function sendSavedInvoiceToWA(invId, ev){
  const inv=invoices.find(i=>i.id===invId); if(!inv){alert('Invoice tidak ditemukan');return}
  const cust=custs.find(c=>c.id===inv.customer_id)||{owner:inv.owner_name};
- if(!cust.wa){
-  alert('Customer '+esc(inv.owner_name)+' tidak memiliki nomor WhatsApp.\n\nUpdate profil customer untuk menambahkan nomor WA.');
-  return;
- }
- // Batch O.20 — open PDF print dialog first, then WA
- const body=buildInvoiceHTML(inv,cust,bankSettings,true);
- const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${inv.invoice_number}</title></head><body>${body}</body></html>`;
- const w=window.open('','_blank');
- w.document.write(html); w.document.close();
- setTimeout(()=>{
-  w.print();
-  setTimeout(()=>{
-   const msg=buildInvoiceWAMessage(inv,cust);
-   const url=waLink(cust.wa)+'?text='+encodeURIComponent(msg);
-   window.open(url,'_blank');
-  },800);
- },300);
+ sendInvoiceViaWA(inv, cust, ev?.target);
 }
 
 /* ============ FINANCIAL TAB ============ */
@@ -7888,7 +7948,7 @@ function renderFinancial(){
  <td><span class="badge ${isPaid?'bs':'bm'}">${i.status}</span></td>
  <td><div class="row-actions">
  <button class="icon-btn ${isPaid?'':'view'}" onclick="toggleInvStatus('${i.id}','${isPaid?'unpaid':'paid'}')">${isPaid?'Mark unpaid':'Mark paid'}</button>
- <button class="icon-btn" onclick="sendSavedInvoiceToWA('${i.id}')" style="background:#25d366;color:#fff;border-color:#25d366" title="Kirim ke WhatsApp customer">WA</button>
+ <button class="icon-btn" onclick="sendSavedInvoiceToWA('${i.id}',event)" style="background:#25d366;color:#fff;border-color:#25d366" title="Kirim ke WhatsApp customer">WA</button>
  ${!isPaid?`<button class="icon-btn" onclick="openInvoiceForEdit('${i.id}')">Edit</button>`:''}
  ${!isPaid?`<button class="icon-btn del" onclick="delInvoice('${i.id}','${esc(i.invoice_number)}')">Del</button>`:''}
  </div></td>
