@@ -1169,6 +1169,8 @@ tbody tr:hover{background:var(--subtle)}
    <option value="all">All status</option>
   </select>
  </div>
+ <!-- Session E — Renewal urgency banner (populated by renderMembership) -->
+ <div id="memb-renewal-banner" style="display:none;background:#fef3c7;border:1px solid #fde68a;border-left:4px solid #d97706;padding:12px 16px;border-radius:8px;margin-top:1rem;font-size:13px;color:#78350f"></div>
  <div class="card" style="padding:0;margin-top:1rem">
   <div class="tbl-wrap">
    <table><thead><tr>
@@ -6880,7 +6882,8 @@ function onAdvanceToggle(on){
 
 /* Session E — Big invoice mode toggle. Two modes:
    'visit'   = default. Standard after-grooming invoice. Uses coverage detection (subs/token/one-off).
-   'package' = auto-enables advance-booking. Customer paying upfront for future sessions. */
+   'package' = auto-enables advance-booking. Customer paying upfront for future sessions.
+               No per-visit service lines (Basic Grooming etc). Just the package price. */
 let INV_MODE='visit';
 function setInvMode(mode){
  INV_MODE=mode;
@@ -6898,15 +6901,20 @@ function setInvMode(mode){
   advCb.checked=isPackage;
   onAdvanceToggle(isPackage);
  }
+ // Hide the per-visit services section entirely in Package mode
+ const svcSection=document.getElementById('inv-dogs-services');
+ if(svcSection) svcSection.style.display=isPackage?'none':'';
  // Show mode-specific hint
  if(hint){
   if(isPackage){
    hint.style.display='';
-   hint.innerHTML='\u{1F4E6} <strong>Mode Jual Paket aktif.</strong> Isi paket + sesi + harga di bagian "Advance booking". Setelah invoice ditandai <strong>Paid</strong>, subs/token otomatis dibuat.';
+   hint.innerHTML='\u{1F4E6} <strong>Mode Jual Paket aktif.</strong> Invoice ini <strong>hanya paket</strong> \u2014 tidak ada Basic Grooming line item. Isi paket + sesi + harga di bawah. Setelah invoice ditandai <strong>Paid</strong>, subs/token otomatis dibuat + old subs (kalau ada) auto-superseded.';
   } else {
    hint.style.display='none';
   }
  }
+ // Refresh totals to reflect the mode change
+ if(typeof recalcInvoice==='function') recalcInvoice();
 }
 
 function renderAdvanceDogs(){
@@ -7017,36 +7025,40 @@ function isAdvanceActive(){
 }
 
 function calcInvoiceTotals(){
+ // Session E — In Package mode, services subtotal is 0 (invoice is package-only, no grooming line items)
+ const isPackageMode=(typeof INV_MODE!=='undefined' && INV_MODE==='package');
  let perSession=0;
  let perSessionBaseOnly=0; // Batch O.4 — sum of Basic Grooming lines only
  let dogDiscAmount=0;
- invSelectedDogs.forEach(did=>{
-  const ds=invDogServices[did]||{services:{}};
-  let dogTotal=0;
-  let dogBaseOnly=0;
-  // Sum prices per category for per-category discount computation
-  const byCategory={basic:0, styling:0, others:0};
-  Object.entries(ds.services||{}).forEach(([name,s])=>{
-   if(!s.checked) return;
-   const p=s.price||0;
-   dogTotal+=p;
-   if(name==='Basic Grooming') dogBaseOnly+=p;
-   byCategory[_serviceCategory(name)]+=p;
+ if(!isPackageMode){
+  invSelectedDogs.forEach(did=>{
+   const ds=invDogServices[did]||{services:{}};
+   let dogTotal=0;
+   let dogBaseOnly=0;
+   // Sum prices per category for per-category discount computation
+   const byCategory={basic:0, styling:0, others:0};
+   Object.entries(ds.services||{}).forEach(([name,s])=>{
+    if(!s.checked) return;
+    const p=s.price||0;
+    dogTotal+=p;
+    if(name==='Basic Grooming') dogBaseOnly+=p;
+    byCategory[_serviceCategory(name)]+=p;
+   });
+   perSession+=dogTotal;
+   perSessionBaseOnly+=dogBaseOnly;
+   // Apply discount per category via unified resolver (handles new + legacy models)
+   ['basic','styling','others'].forEach(cat=>{
+    const disc=_dogDiscForCategory(ds,cat);
+    if(!disc.type) return;
+    if(disc.type==='percent'){
+     dogDiscAmount+=Math.round(byCategory[cat]*disc.value/100);
+    } else if(disc.type==='fixed'){
+     // Fixed applies once per category, capped at category subtotal
+     dogDiscAmount+=Math.min(byCategory[cat], Math.round(disc.value));
+    }
+   });
   });
-  perSession+=dogTotal;
-  perSessionBaseOnly+=dogBaseOnly;
-  // Apply discount per category via unified resolver (handles new + legacy models)
-  ['basic','styling','others'].forEach(cat=>{
-   const disc=_dogDiscForCategory(ds,cat);
-   if(!disc.type) return;
-   if(disc.type==='percent'){
-    dogDiscAmount+=Math.round(byCategory[cat]*disc.value/100);
-   } else if(disc.type==='fixed'){
-    // Fixed applies once per category, capped at category subtotal
-    dogDiscAmount+=Math.min(byCategory[cat], Math.round(disc.value));
-   }
-  });
- });
+ }
  const sessions=1; // base invoice is always 1 session; advance is separate
  const subtotal=perSession;
 
@@ -7094,6 +7106,8 @@ function recalcInvoice(){
 function buildInvoiceRecord(){
  if(!invSelectedCust){alert('Pilih customer dulu');return null}
  if(!invSelectedDogs.length){alert('Pilih minimal 1 dog');return null}
+ // Session E — Package mode: strip services (no basic-grooming line items on package invoices)
+ const isPackageMode=(typeof INV_MODE!=='undefined' && INV_MODE==='package');
  const t=calcInvoiceTotals();
  const grId=document.getElementById('inv-groomer').value;
  const grManual=document.getElementById('inv-groomer-manual').value.trim();
@@ -7101,7 +7115,7 @@ function buildInvoiceRecord(){
  const dogsData=invSelectedDogs.map(did=>{
   const d=dogs.find(x=>x.id===did);
   const ds=invDogServices[did]||{services:{}};
-  const services=Object.entries(ds.services||{})
+  const services=isPackageMode ? [] : Object.entries(ds.services||{})
    .filter(([_,s])=>s.checked)
    .map(([name,s])=>({name,price:s.price||0}));
   const ad=invAdvanceDogs[did]||null;
@@ -8151,6 +8165,67 @@ async function toggleInvStatus(id,newSt){
  await loadAll(); renderFinancial();
 }
 
+/* Session E — Compute renewal urgency for a subs row.
+   Returns {level, text} or null if healthy. Levels: 'exhausted' | 'expiring' | 'low' */
+function computeRenewalUrgency(sub){
+ if(!sub || sub._kind!=='subscription' || sub.status!=='active') return null;
+ const today=iso(new Date());
+ const remaining=(sub.sessions_total||0)-(sub.sessions_used||0);
+ const daysToExpiry=sub.expires_at
+  ? Math.floor((new Date(sub.expires_at+'T23:59:59')-new Date(today+'T00:00:00'))/86400000)
+  : null;
+ if(remaining<=0) return {level:'exhausted', text:'Sesi habis', color:'#dc2626', bg:'#fee2e2'};
+ if(daysToExpiry!==null && daysToExpiry<0) return {level:'exhausted', text:'Expired', color:'#dc2626', bg:'#fee2e2'};
+ if(daysToExpiry!==null && daysToExpiry<=3) return {level:'expiring', text:`Expire ${daysToExpiry}d`, color:'#c2410c', bg:'#ffedd5'};
+ if(remaining===1) return {level:'low', text:'1 sesi tersisa', color:'#c2410c', bg:'#ffedd5'};
+ if(daysToExpiry!==null && daysToExpiry<=7) return {level:'expiring', text:`Expire ${daysToExpiry}d`, color:'#ca8a04', bg:'#fef9c3'};
+ return null;
+}
+
+/* Session E — Start renewal invoice from a subs row.
+   Switches to Invoice tab, resets, enables Package mode, pre-fills customer+dog+subs_type. */
+function startRenewalFromSubs(subId){
+ const sub=subscriptions.find(s=>s.id===subId);
+ if(!sub){ alert('Subs tidak ditemukan'); return; }
+ const cust=custs.find(c=>c.id===sub.customer_id);
+ const dog=dogs.find(d=>d.id===sub.dog_id);
+ if(!cust||!dog){ alert('Customer atau dog tidak ditemukan'); return; }
+ sw('invoice');
+ resetInvoice();
+ initInvoiceTab();
+ // Preselect customer
+ const custSel=document.getElementById('inv-customer');
+ if(custSel) custSel.value=sub.customer_id;
+ invSelectedCust=cust;
+ const si=document.getElementById('inv-customer-search');
+ if(si) si.value=`${cust.owner} (${cust.customer_code||'?'})`;
+ if(typeof onInvCustomerChange==='function') onInvCustomerChange();
+ // Add the dog to selection
+ setTimeout(()=>{
+  if(!invSelectedDogs.includes(sub.dog_id)){
+   invSelectedDogs.push(sub.dog_id);
+   if(typeof renderInvDogServices==='function') renderInvDogServices();
+  }
+  // Flip to Package Sale mode
+  setInvMode('package');
+  // Pre-fill advance section with same subs config
+  setTimeout(()=>{
+   const pricePerSession=Math.round((tierMonthlyPrice(sub.type,dog.size)||priceFor('Basic Grooming',dog.size))/(sub.sessions_total||2));
+   invAdvanceDogs[sub.dog_id]={
+    sessions:sub.sessions_total||2,
+    service_type:'Basic Grooming',
+    disc_type:'',
+    disc_value:0,
+    price_per_session:pricePerSession,
+    subs_type:sub.type||'monthly'
+   };
+   if(typeof renderAdvanceDogs==='function') renderAdvanceDogs();
+   if(typeof recalcInvoice==='function') recalcInvoice();
+   showToast(`Renewal untuk ${cust.owner} \u2014 ${dog.name}. Cek detail paket & simpan.`);
+  },120);
+ },80);
+}
+
 function renderMembership(){
  const stFilter=document.getElementById('memb-filter')?.value||'active';
  const kindFilter=document.getElementById('memb-kind')?.value||'all';
@@ -8199,6 +8274,24 @@ function renderMembership(){
   tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--muted)">Belum ada membership/token. Dibuat otomatis saat invoice advance booking di-save (token) atau di-paid (subscription).</td></tr>';
   return;
  }
+ // Session E — Renewal-urgency banner at top of Membership tab
+ const urgentRows=rows.filter(r=>r._kind==='subscription' && computeRenewalUrgency(r));
+ const bannerEl=document.getElementById('memb-renewal-banner');
+ if(bannerEl){
+  if(urgentRows.length){
+   const exhausted=urgentRows.filter(r=>computeRenewalUrgency(r).level==='exhausted').length;
+   const expiring=urgentRows.filter(r=>computeRenewalUrgency(r).level==='expiring').length;
+   const low=urgentRows.filter(r=>computeRenewalUrgency(r).level==='low').length;
+   const parts=[];
+   if(exhausted) parts.push(`<span style="color:#dc2626;font-weight:600">${exhausted} sesi habis / expired</span>`);
+   if(low) parts.push(`<span style="color:#c2410c;font-weight:600">${low} tinggal 1 sesi</span>`);
+   if(expiring) parts.push(`<span style="color:#ca8a04;font-weight:600">${expiring} expire soon</span>`);
+   bannerEl.innerHTML=`\u26A0 <strong>${urgentRows.length} subs perlu perhatian:</strong> ${parts.join(' \u00B7 ')}. Klik <strong>Renew</strong> di baris bawah untuk buat invoice paket baru.`;
+   bannerEl.style.display='';
+  } else {
+   bannerEl.style.display='none';
+  }
+ }
  tb.innerHTML=rows.map(r=>{
   const c=custs.find(x=>x.id===r.customer_id);
   const owner=c?c.owner:'(deleted customer)';
@@ -8220,13 +8313,14 @@ function renderMembership(){
    <td>${c?`<strong class="c360-clickable" onclick="openCust360('${c.id}')">${esc(owner)}</strong>`:`<strong>${esc(owner)}</strong>`} ${code?`<span class="id-pill">${esc(code)}</span>`:''}</td>
    <td>${dogLabel}</td>
    <td>${kindPill}</td>
-   <td><span class="badge bs">${r._kind==='subscription'?esc(tierLabel(r.type)):esc((r.type||'').toUpperCase())}</span>${r._kind==='subscription'&&r.renewal_number>1?` <span style="font-size:10px;color:#7c3aed;background:#f3e8ff;padding:2px 5px;border-radius:3px;font-weight:600">Renewal #${r.renewal_number}</span>`:''}</td>
+   <td><span class="badge bs">${r._kind==='subscription'?esc(tierLabel(r.type)):esc((r.type||'').toUpperCase())}</span>${r._kind==='subscription'&&r.renewal_number>1?` <span style="font-size:10px;color:#7c3aed;background:#f3e8ff;padding:2px 5px;border-radius:3px;font-weight:600">Renewal #${r.renewal_number}</span>`:''}${(()=>{ const u=computeRenewalUrgency(r); return u?` <span style="font-size:10px;color:${u.color};background:${u.bg};padding:2px 5px;border-radius:3px;font-weight:600">\u26A0 ${esc(u.text)}</span>`:''; })()}</td>
    <td>${sessText}</td>
    <td>${r.started_at?fmtD(r.started_at):'-'}</td>
    <td>${r.expires_at?fmtD(r.expires_at):'<span style="color:var(--muted)">no expiry</span>'}</td>
    <td><span class="subs-badge ${stClass}">${esc((r.status||'').toUpperCase())}</span></td>
    <td style="font-size:11px;color:var(--muted)">${esc(r.source_invoice||'-')}</td>
    <td><div class="row-actions">
+    ${r._kind==='subscription'&&computeRenewalUrgency(r)?`<button class="icon-btn" style="background:#dcfce7;color:#15803d;border-color:#86efac;font-weight:600" onclick="startRenewalFromSubs('${r.id}')" title="Buat invoice renewal">🔄 Renew</button>`:''}
     ${r._kind==='subscription'&&r.status==='active'?`<button class="icon-btn" onclick="openSubsPaymentModal('${r.customer_id}','${iso(new Date()).slice(0,7)}',${tierMonthlyPrice(r.type,dogs.find(d=>d.id===r.dog_id)?.size||'Medium')})">Bayar</button>`:''}
     ${r._kind==='subscription'?`<button class="icon-btn view" onclick="openSubsSessions('${r.id}')">Sessions</button>`:''}
     <button class="icon-btn" onclick="openMembEdit('${r._kind}','${r.id}')">Edit</button>
