@@ -7840,25 +7840,92 @@ async function _generateInvoicePDF(rec, cust){
   const pageH=pdf.internal.pageSize.getHeight();  // 297mm
   const margin=8;  // 8mm margin
   const usableW=pageW - margin*2;
-  // Scale canvas to fit A4 width
-  const imgW=usableW;
-  const imgH=(canvas.height * imgW) / canvas.width;
-  const imgData=canvas.toDataURL('image/jpeg', 0.95);
-  // Paginate: draw same image at shifting y-position, PDF clips at page boundary
-  let heightLeft=imgH;
-  let position=margin;
-  pdf.addImage(imgData, 'JPEG', margin, position, imgW, imgH);
-  heightLeft -= (pageH - margin*2);
-  while(heightLeft > 0){
-   pdf.addPage();
-   position=margin - (imgH - heightLeft);  // shift image up
-   pdf.addImage(imgData, 'JPEG', margin, position, imgW, imgH);
-   heightLeft -= (pageH - margin*2);
+  const usableH=pageH - margin*2;
+  // Session E — smart pagination: find whitespace bands to break at, avoiding mid-content splits
+  const pxPerMm=canvas.width / usableW;                    // canvas pixels per printed mm
+  const pageUsablePx=Math.floor(usableH * pxPerMm);        // canvas pixels per full page
+  const searchWindowPx=Math.floor(pageUsablePx * 0.3);     // search up to 30% back for a break
+  // Compute break points snapped to whitespace bands
+  const breakPoints=[];
+  let cursorPx=0;
+  while(cursorPx + pageUsablePx < canvas.height){
+   const proposed=cursorPx + pageUsablePx;
+   const adjusted=_findBestPageBreak(canvas, proposed, searchWindowPx, cursorPx);
+   breakPoints.push(adjusted);
+   cursorPx=adjusted;
+  }
+  // Render each segment as its own tightly-cropped image (no boundary clipping)
+  let prev=0;
+  for(let i=0;i<=breakPoints.length;i++){
+   const breakY=i<breakPoints.length ? breakPoints[i] : canvas.height;
+   if(i>0) pdf.addPage();
+   // Extract canvas segment [prev..breakY] onto a fresh canvas
+   const segCanvas=document.createElement('canvas');
+   segCanvas.width=canvas.width;
+   segCanvas.height=breakY - prev;
+   const segCtx=segCanvas.getContext('2d');
+   segCtx.fillStyle='#ffffff';
+   segCtx.fillRect(0, 0, segCanvas.width, segCanvas.height);
+   segCtx.drawImage(canvas, 0, prev, canvas.width, breakY-prev, 0, 0, canvas.width, breakY-prev);
+   const segData=segCanvas.toDataURL('image/jpeg', 0.95);
+   const segHeightMm=(breakY - prev) / pxPerMm;
+   pdf.addImage(segData, 'JPEG', margin, margin, usableW, segHeightMm);
+   prev=breakY;
   }
   return pdf.output('blob');
  } finally {
   document.body.removeChild(container);
  }
+}
+
+/* Find the best page-break Y coordinate (canvas px) near `targetY`.
+   Scans up to `maxSearchUp` pixels backwards looking for whitespace bands (rows >97% white pixels).
+   Returns the center of the tallest whitespace band found, or `targetY` if none. */
+function _findBestPageBreak(canvas, targetY, maxSearchUp, minAllowedY){
+ const w=canvas.width;
+ const ctx=canvas.getContext('2d');
+ const minY=Math.max(minAllowedY + 100, targetY - maxSearchUp);  // ensure page has ≥100px content
+ if(minY >= targetY) return targetY;
+ const searchHeight=targetY - minY;
+ let regionData;
+ try {
+  regionData=ctx.getImageData(0, minY, w, searchHeight);
+ } catch(e){
+  return targetY;  // canvas might be tainted (shouldn't happen with useCORS, but safety)
+ }
+ const data=regionData.data;
+ const sampleStep=5;  // sample every 5px horizontally for speed
+ const samplesPerRow=Math.ceil(w / sampleStep);
+ // Walk rows, tracking white-band spans
+ let bandStart=-1;
+ let bestStart=-1, bestEnd=-1, bestHeight=0;
+ for(let localY=0; localY<searchHeight; localY++){
+  let whiteCount=0;
+  const rowOffset=localY * w * 4;
+  for(let x=0; x<w; x+=sampleStep){
+   const i=rowOffset + x*4;
+   if(data[i]>235 && data[i+1]>235 && data[i+2]>235) whiteCount++;
+  }
+  const isWhite=(whiteCount / samplesPerRow) > 0.97;
+  const actualY=minY + localY;
+  if(isWhite){
+   if(bandStart===-1) bandStart=actualY;
+  } else {
+   if(bandStart!==-1){
+    const h=actualY - bandStart;
+    if(h > bestHeight){ bestHeight=h; bestStart=bandStart; bestEnd=actualY; }
+    bandStart=-1;
+   }
+  }
+ }
+ // Band extending to targetY
+ if(bandStart!==-1){
+  const h=targetY - bandStart;
+  if(h > bestHeight){ bestHeight=h; bestStart=bandStart; bestEnd=targetY; }
+ }
+ // Require at least 8px band to be considered a good break; else fall back to targetY
+ if(bestHeight >= 8) return Math.floor((bestStart + bestEnd) / 2);
+ return targetY;
 }
 
 /* Main entry: generate PDF + send via WhatsApp */
