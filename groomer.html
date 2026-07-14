@@ -123,7 +123,9 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .photo-retake{position:absolute;bottom:3px;right:3px;background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:5px;font-size:9px;padding:3px 7px;cursor:pointer;font-weight:600;min-height:24px}
 .photo-uploading{width:100%;aspect-ratio:4/3;border:2px solid var(--primary);border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--subtle)}
 .photo-uploading .spin{width:14px;height:14px}
-.photo-meta{font-size:9px;color:var(--muted);text-align:center;margin-top:2px;line-height:1.3}
+.photo-meta{font-size:11px;color:#374151;background:#f3f4f6;text-align:center;margin-top:4px;line-height:1.4;padding:3px 5px;border-radius:4px;font-weight:500}
+.photo-meta .ts-fresh{color:#16a34a;font-weight:700}
+.photo-meta .ts-old{color:#6b7280}
 .photo-section-label{grid-column:1/-1;font-size:10px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:.5px;padding:6px 0 2px;border-top:1px solid var(--border);margin-top:4px}
 .photo-multi{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
 .photo-multi .photo-slot{width:calc(50% - 3px);flex:none}
@@ -131,6 +133,13 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 </style>
 </head>
 <body>
+
+<!-- Lightbox overlay for photo enlargement (click any photo to open) -->
+<div id="lightbox" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out;flex-direction:column;padding:20px;box-sizing:border-box" onclick="closeLightbox()">
+ <img id="lightbox-img" src="" alt="Photo preview" style="max-width:100%;max-height:calc(100vh - 90px);object-fit:contain;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.5)"/>
+ <button onclick="event.stopPropagation();closeLightbox()" style="position:absolute;top:20px;right:20px;width:44px;height:44px;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:24px;border-radius:50%;cursor:pointer;font-weight:700;line-height:1">&times;</button>
+ <div style="color:#e5e7eb;font-size:12px;margin-top:12px;background:rgba(0,0,0,.5);padding:6px 12px;border-radius:6px">Tap di mana saja untuk tutup</div>
+</div>
 
 <div id="app-wrap" class="app" style="display:none">
  <div class="hdr">
@@ -193,6 +202,56 @@ function parseURL(){
 }
 
 function esc(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+/* Session E — Lightbox for enlarging any photo. Click photo → open full-screen.
+   Click anywhere or Escape → close. */
+function openLightbox(url,imgEl){
+ const lb=document.getElementById('lightbox');
+ const img=document.getElementById('lightbox-img');
+ if(!lb||!img) return;
+ img.src=url;
+ lb.style.display='flex';
+ document.body.style.overflow='hidden';  // prevent scroll behind lightbox
+}
+function closeLightbox(){
+ const lb=document.getElementById('lightbox');
+ if(!lb) return;
+ lb.style.display='none';
+ document.body.style.overflow='';
+}
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape') closeLightbox();
+});
+
+/* Format a photo upload timestamp — relative for recent, absolute for old */
+function fmtPhotoTS(iso){
+ if(!iso) return '';
+ const then=new Date(iso).getTime();
+ if(isNaN(then)) return '';
+ const now=Date.now();
+ const diffMs=now-then;
+ const diffMin=Math.floor(diffMs/60000);
+ const diffHr=Math.floor(diffMin/60);
+ const isToday=new Date(then).toDateString()===new Date().toDateString();
+ const yesterday=new Date(); yesterday.setDate(yesterday.getDate()-1);
+ const isYesterday=new Date(then).toDateString()===yesterday.toDateString();
+ // Absolute time (always shown after label)
+ const dt=new Date(then);
+ const HH=String(dt.getHours()).padStart(2,'0');
+ const MM=String(dt.getMinutes()).padStart(2,'0');
+ let label='';
+ let fresh=false;
+ if(diffMin<1) {label='baru saja'; fresh=true;}
+ else if(diffMin<60) {label=diffMin+' menit lalu'; fresh=true;}
+ else if(isToday) {label=diffHr+' jam lalu'; fresh=diffHr<3;}
+ else if(isYesterday) label='kemarin '+HH+':'+MM;
+ else {
+  const day=String(dt.getDate()).padStart(2,'0');
+  const months=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  label=day+' '+months[dt.getMonth()]+' '+HH+':'+MM;
+ }
+ return `📸 <span class="${fresh?'ts-fresh':'ts-old'}">${label}</span>`;
+}
 function iso(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${dd}`}
 function fmtTime(t){return (t||'').slice(0,5)}
 function fmtDateLong(d){return new Date(d+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'})}
@@ -497,7 +556,7 @@ function renderGroupedAppt(group, isFirstGroup, isToday){
  }
  // Absency section (once, tied to firstA)
  const absencyPhoto=renderSingleSlot(firstA.id,(firstA.photos?.absency?.url||firstA.photos?.absency),'absency',true);
- const absencyMeta=firstA.photos?.absency?.timestamp?`<div class="photo-meta">${new Date(firstA.photos.absency.timestamp).toLocaleString('id-ID')}${firstA.photos.absency.lat?` · <a href="https://maps.google.com/?q=${firstA.photos.absency.lat},${firstA.photos.absency.lng}" target="_blank" style="color:var(--primary)">Lokasi</a>`:''}</div>`:'';
+ const absencyMeta=firstA.photos?.absency?.timestamp?`<div class="photo-meta">${fmtPhotoTS(firstA.photos.absency.timestamp)}${firstA.photos.absency.lat?` · <a href="https://maps.google.com/?q=${firstA.photos.absency.lat},${firstA.photos.absency.lng}" target="_blank" style="color:var(--primary)">📍 Lokasi</a>`:''}</div>`:'';
  // Per-dog sections (before/after/ears/conditions + groomer notes)
  const dogSections=group.map(a=>{
   const dog=dataCache.dogs.find(d=>d.id===a.dog_id)||{};
@@ -516,7 +575,7 @@ function renderGroupedAppt(group, isFirstGroup, isToday){
    else{
     const val=(a.photos||{})[pt.key];
     const url=typeof val==='object'?val?.url:val;
-    const metaHtml=typeof val==='object'&&val?.timestamp?`<div class="photo-meta">${new Date(val.timestamp).toLocaleString('id-ID')}${val.lat?` · <a href="https://maps.google.com/?q=${val.lat},${val.lng}" target="_blank" style="color:var(--primary)">Lokasi</a>`:''}</div>`:'';
+    const metaHtml=typeof val==='object'&&val?.timestamp?`<div class="photo-meta">${fmtPhotoTS(val.timestamp)}${val.lat?` · <a href="https://maps.google.com/?q=${val.lat},${val.lng}" target="_blank" style="color:var(--primary)">📍 Lokasi</a>`:''}</div>`:'';
     photosHTML+=`<div class="photo-slot${pt.full?' full':''}"><div class="photo-slot-label">${pt.label}</div>${renderSingleSlot(a.id,url,pt.key,pt.hasGeo)}${metaHtml}</div>`;
    }
   });
@@ -671,7 +730,7 @@ function renderPhotoGrid(a){
    html+=`<div class="photo-slot${pt.full?' full':''}">
     <div class="photo-slot-label">${pt.label}</div>
     ${renderSingleSlot(a.id,url,pt.key,pt.hasGeo)}
-    ${typeof val==='object'&&val?.timestamp?`<div class="photo-meta">${new Date(val.timestamp).toLocaleString('id-ID')}${val.lat?` · <a href="https://maps.google.com/?q=${val.lat},${val.lng}" target="_blank" style="color:var(--primary)">Lokasi</a>`:''}</div>`:''}
+    ${typeof val==='object'&&val?.timestamp?`<div class="photo-meta">${fmtPhotoTS(val.timestamp)}${val.lat?` · <a href="https://maps.google.com/?q=${val.lat},${val.lng}" target="_blank" style="color:var(--primary)">📍 Lokasi</a>`:''}</div>`:''}
    </div>`;
   }
  });
@@ -682,7 +741,7 @@ function renderPhotoGrid(a){
 function renderSingleSlot(apptId,url,type,hasGeo){
  if(url){
   return `<div class="photo-preview" id="ps-${type}-${apptId}">
-   <img src="${esc(url)}" alt="${type}"/>
+   <img src="${esc(url)}" alt="${type}" onclick="openLightbox('${esc(url).replace(/'/g,"\\'")}',this)" style="cursor:zoom-in"/>
    <button class="photo-del" onclick="event.stopPropagation();deletePhoto('${apptId}','${type}')" title="Hapus">&times;</button>
    <div style="position:absolute;bottom:3px;right:3px;display:flex;gap:3px">
     <button class="photo-retake" onclick="event.stopPropagation();capturePhoto('${apptId}','${type}',${!!hasGeo})">Retake</button>
@@ -708,7 +767,7 @@ function renderMultiSlot(apptId,photos,pt){
  arr.forEach((url,i)=>{
   html+=`<div class="photo-slot">
    <div class="photo-preview">
-    <img src="${esc(url)}" alt="${pt.key} ${i+1}"/>
+    <img src="${esc(url)}" alt="${pt.key} ${i+1}" onclick="openLightbox('${esc(url).replace(/'/g,"\\'")}',this)" style="cursor:zoom-in"/>
     <button class="photo-del" onclick="event.stopPropagation();deleteMultiPhoto('${apptId}','${pt.key}',${i})" title="Hapus">&times;</button>
    </div>
   </div>`;
