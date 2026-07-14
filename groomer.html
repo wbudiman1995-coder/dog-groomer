@@ -226,31 +226,15 @@ document.addEventListener('keydown',e=>{
 /* Format a photo upload timestamp — relative for recent, absolute for old */
 function fmtPhotoTS(iso){
  if(!iso) return '';
- const then=new Date(iso).getTime();
- if(isNaN(then)) return '';
- const now=Date.now();
- const diffMs=now-then;
- const diffMin=Math.floor(diffMs/60000);
- const diffHr=Math.floor(diffMin/60);
- const isToday=new Date(then).toDateString()===new Date().toDateString();
- const yesterday=new Date(); yesterday.setDate(yesterday.getDate()-1);
- const isYesterday=new Date(then).toDateString()===yesterday.toDateString();
- // Absolute time (always shown after label)
- const dt=new Date(then);
+ const dt=new Date(iso);
+ if(isNaN(dt.getTime())) return '';
+ // Session E — always absolute timestamp per owner spec (no more "5 menit lalu")
+ const day=String(dt.getDate()).padStart(2,'0');
+ const months=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
  const HH=String(dt.getHours()).padStart(2,'0');
  const MM=String(dt.getMinutes()).padStart(2,'0');
- let label='';
- let fresh=false;
- if(diffMin<1) {label='baru saja'; fresh=true;}
- else if(diffMin<60) {label=diffMin+' menit lalu'; fresh=true;}
- else if(isToday) {label=diffHr+' jam lalu'; fresh=diffHr<3;}
- else if(isYesterday) label='kemarin '+HH+':'+MM;
- else {
-  const day=String(dt.getDate()).padStart(2,'0');
-  const months=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-  label=day+' '+months[dt.getMonth()]+' '+HH+':'+MM;
- }
- return `📸 <span class="${fresh?'ts-fresh':'ts-old'}">${label}</span>`;
+ const label=`${day} ${months[dt.getMonth()]} ${dt.getFullYear()}, ${HH}:${MM}`;
+ return `📸 <span class="ts-old">${label}</span>`;
 }
 function iso(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${dd}`}
 function fmtTime(t){return (t||'').slice(0,5)}
