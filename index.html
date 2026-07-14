@@ -7,6 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <style>
 :root {
  --green:#16a34a;--green-lt:#dcfce7;--green-md:#4ade80;--green-dk:#15803d;
@@ -7796,96 +7797,114 @@ function buildInvoiceWAMessage(rec, custObj){
  } else {
   msg+=`\n`;
  }
- msg+=`📎 Detail lengkap + foto before/after terlampir di gambar.\n\n`;
+ msg+=`📎 Detail lengkap + foto before/after terlampir di PDF.\n\n`;
  msg+=`${waClosing()}`;
  return msg;
 }
 
-/* ==== Session E — Rich invoice image generation for WhatsApp ====
-   Uses html2canvas to render the invoice HTML → PNG image.
-   On mobile: shares via Web Share API (image attached natively).
-   On desktop: uploads to Supabase Storage, includes URL in WA text (auto-preview). */
-async function _generateInvoiceImage(rec, cust){
- // Wait for html2canvas library (should be loaded via CDN at page top)
+/* ==== Session E — Rich invoice PDF generation for WhatsApp ====
+   Renders invoice HTML at high DPI (2.5x) → wraps in A4 PDF via jsPDF (multi-page if needed).
+   PDF stays sharp on WhatsApp (no image compression applied to document attachments).
+   On mobile: Web Share API attaches PDF natively.
+   On desktop: uploads to Supabase Storage, includes URL in WA text (customer taps → PDF viewer). */
+async function _generateInvoicePDF(rec, cust){
  if(typeof html2canvas==='undefined'){
   throw new Error('html2canvas belum siap. Coba refresh halaman.');
  }
- // Build a hidden container with the full invoice HTML
+ if(typeof window.jspdf==='undefined'){
+  throw new Error('jsPDF belum siap. Coba refresh halaman.');
+ }
+ // Build hidden container with full invoice HTML
  const container=document.createElement('div');
- container.style.cssText='position:fixed;top:-99999px;left:0;width:800px;background:#fff;padding:20px';
+ container.style.cssText='position:fixed;top:-99999px;left:0;width:800px;background:#fff;padding:24px;box-sizing:border-box';
  container.innerHTML=buildInvoiceHTML(rec, cust, bankSettings, true);
  document.body.appendChild(container);
  try {
-  // Wait for all images inside to fully load (photos from Supabase URLs)
+  // Wait for photos to load
   const imgs=Array.from(container.querySelectorAll('img'));
   await Promise.all(imgs.map(img=>{
    if(img.complete && img.naturalWidth>0) return Promise.resolve();
    return new Promise(resolve=>{
     const done=()=>resolve();
-    img.onload=done;
-    img.onerror=done;  // resolve anyway to not block on broken images
-    setTimeout(done, 5000);  // 5s timeout per image
+    img.onload=done; img.onerror=done;
+    setTimeout(done, 5000);
    });
   }));
-  // Extra layout settle time
   await new Promise(r=>setTimeout(r, 300));
-  // Render to canvas
+  // Render at high DPI for sharp text
   const canvas=await html2canvas(container, {
    useCORS: true,
    allowTaint: false,
    backgroundColor: '#ffffff',
-   scale: 1.5,  // Higher DPI for readability on phone screens
+   scale: 2.5,  // Higher DPI (was 1.5) — sharper text after PDF wrapping
    logging: false,
    imageTimeout: 8000
   });
-  // Convert to Blob (JPEG for smaller file size)
-  const blob=await new Promise(resolve=>canvas.toBlob(resolve, 'image/jpeg', 0.85));
-  return blob;
+  // Create A4 PDF and paginate the canvas into it
+  const {jsPDF}=window.jspdf;
+  const pdf=new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+  const pageW=pdf.internal.pageSize.getWidth();   // 210mm
+  const pageH=pdf.internal.pageSize.getHeight();  // 297mm
+  const margin=8;  // 8mm margin
+  const usableW=pageW - margin*2;
+  // Scale canvas to fit A4 width
+  const imgW=usableW;
+  const imgH=(canvas.height * imgW) / canvas.width;
+  const imgData=canvas.toDataURL('image/jpeg', 0.95);
+  // Paginate: draw same image at shifting y-position, PDF clips at page boundary
+  let heightLeft=imgH;
+  let position=margin;
+  pdf.addImage(imgData, 'JPEG', margin, position, imgW, imgH);
+  heightLeft -= (pageH - margin*2);
+  while(heightLeft > 0){
+   pdf.addPage();
+   position=margin - (imgH - heightLeft);  // shift image up
+   pdf.addImage(imgData, 'JPEG', margin, position, imgW, imgH);
+   heightLeft -= (pageH - margin*2);
+  }
+  return pdf.output('blob');
  } finally {
   document.body.removeChild(container);
  }
 }
 
-/* Main entry: generate image + send via WhatsApp (image attached on mobile, URL on desktop) */
+/* Main entry: generate PDF + send via WhatsApp */
 async function sendInvoiceViaWA(rec, cust, sourceButton){
  if(!cust.wa){
   alert('Customer ini tidak memiliki nomor WhatsApp yang tersimpan.\n\nTambahkan nomor WA di profil customer terlebih dahulu.');
   return;
  }
  const origText=sourceButton?sourceButton.textContent:null;
- if(sourceButton){ sourceButton.textContent='⏳ Menyiapkan gambar...'; sourceButton.disabled=true; }
+ if(sourceButton){ sourceButton.textContent='⏳ Menyiapkan PDF...'; sourceButton.disabled=true; }
  try {
-  const blob=await _generateInvoiceImage(rec, cust);
+  const blob=await _generateInvoicePDF(rec, cust);
   const ownerPrefix=(cust.owner||'').replace(/[^A-Za-z]/g,'').slice(0,3);
-  const filename=`${rec.invoice_number}${ownerPrefix?'_'+ownerPrefix:''}.jpg`;
+  const filename=`${rec.invoice_number}${ownerPrefix?'_'+ownerPrefix:''}.pdf`;
   const message=buildInvoiceWAMessage(rec, cust);
-  // Try Web Share API first (mobile — native attachment, best UX)
-  const file=new File([blob], filename, {type:'image/jpeg'});
+  // Try Web Share API first (mobile — native PDF attachment)
+  const file=new File([blob], filename, {type:'application/pdf'});
   if(navigator.canShare && navigator.canShare({files:[file]}) && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)){
    try {
     await navigator.share({files:[file], text:message});
-    // User picks WA from share sheet — image attached natively
     return;
    } catch(shareErr){
-    // User cancelled or share failed — fall through to desktop flow
-    if(shareErr.name==='AbortError') return;  // user cancelled
+    if(shareErr.name==='AbortError') return;
     console.warn('Web Share failed, falling back to URL:', shareErr);
    }
   }
-  // Desktop fallback: upload to Supabase Storage, share URL in WA message
-  if(sourceButton) sourceButton.textContent='⏳ Upload gambar...';
+  // Desktop fallback: upload PDF to Supabase Storage, share URL in WA message
+  if(sourceButton) sourceButton.textContent='⏳ Upload PDF...';
   const path=`invoices/${filename}`;
-  const {error:upErr}=await db.storage.from('grooming-photos').upload(path, blob, {upsert:true, contentType:'image/jpeg'});
+  const {error:upErr}=await db.storage.from('grooming-photos').upload(path, blob, {upsert:true, contentType:'application/pdf'});
   if(upErr) throw new Error('Upload error: '+upErr.message);
   const {data:urlData}=db.storage.from('grooming-photos').getPublicUrl(path);
-  const imageUrl=urlData.publicUrl;
-  // Include image URL in WA message so recipient sees preview
-  const fullMsg=message+'\n\n📎 '+imageUrl;
+  const pdfUrl=urlData.publicUrl;
+  const fullMsg=message+'\n\n📎 Invoice PDF: '+pdfUrl;
   const waUrl=waLink(cust.wa)+'?text='+encodeURIComponent(fullMsg);
   window.open(waUrl, '_blank');
  } catch(e){
   console.error('sendInvoiceViaWA failed:', e);
-  alert('Gagal generate/kirim invoice: '+e.message+'\n\nCoba: refresh halaman, atau pakai tombol "Cetak PDF" sebagai alternatif.');
+  alert('Gagal generate/kirim invoice: '+e.message+'\n\nCoba refresh halaman.');
  } finally {
   if(sourceButton){ sourceButton.textContent=origText; sourceButton.disabled=false; }
  }
