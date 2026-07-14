@@ -654,7 +654,6 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   </div>
   <div id="dash-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:1.5rem"></div>
   <div id="dash-actions" style="margin-bottom:1.2rem"></div>
-  <div id="dash-subs-billing" style="margin-bottom:1.2rem"></div>
   <div id="dash-followups" style="margin-bottom:1.2rem"></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px">
    <div class="card" style="padding:14px">
@@ -1813,32 +1812,6 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 </div>
 
 <!-- SUBSCRIPTION PAYMENT MODAL -->
-<div class="overlay" id="ov-subs-payment">
- <div class="modal" style="max-width:400px">
-  <button class="modal-close" onclick="cm('ov-subs-payment')" title="Close">&#x2715;</button>
-  <div class="modal-title">Catat pembayaran subscription</div>
-  <input type="hidden" id="sp-cust-id"/>
-  <input type="hidden" id="sp-month-key"/>
-  <div class="form-grid">
-   <div class="fg">
-    <label>Tanggal bayar</label>
-    <input type="date" id="sp-date"/>
-   </div>
-   <div class="fg">
-    <label>Jumlah (Rp)</label>
-    <input type="number" id="sp-amount" min="0" placeholder="0"/>
-   </div>
-   <div class="fg full">
-    <label>Catatan</label>
-    <input id="sp-notes" placeholder="e.g. Transfer BCA, lunas"/>
-   </div>
-  </div>
-  <div class="form-actions">
-   <button class="btn btn-p" onclick="saveSubsPayment()">Simpan</button>
-  </div>
- </div>
-</div>
-
 <!-- CAPITAL INJECTION MODAL -->
 <div class="overlay" id="ov-capital">
  <div class="modal" style="max-width:400px">
@@ -1921,7 +1894,6 @@ let auditEntries=[], groomerBlocks=[];
 let complaints=[];
 let custSort={key:'owner',dir:1};
 let dogSort={key:'name',dir:1};
-let subsPayments=[];
 let expenses=[];
 // Batch H — auth state
 let adminUsers=[], currentUser=null, currentAdminRow=null, _authReady=false;
@@ -2522,7 +2494,7 @@ function swSub(sub){
 }
 
 async function loadAll() {
- const [cr,dr,vr,ar,gr,ir,br,tr,sr,aur,psr,gpr,alr,gbr,cmr,cir,spr,expr] = await Promise.all([
+ const [cr,dr,vr,ar,gr,ir,br,tr,sr,aur,psr,gpr,alr,gbr,cmr,cir,expr] = await Promise.all([
  db.from('customers').select('*').order('created_at',{ascending:false}),
  db.from('dogs').select('*').order('created_at',{ascending:false}),
  db.from('visits').select('*,dogs(name,size)').order('visited_at',{ascending:false}),
@@ -2539,14 +2511,12 @@ async function loadAll() {
  db.from('groomer_blocks').select('*').order('block_date',{ascending:false}),
  db.from('complaints').select('*').order('complaint_date',{ascending:false}),
  isOwner()?db.from('capital_injections').select('*').order('injection_date',{ascending:false}):Promise.resolve({data:[]}),
- db.from('subscription_payments').select('*').order('payment_date',{ascending:false}),
  isOwner()?db.from('expenses').select('*').order('expense_date',{ascending:false}):Promise.resolve({data:[]})
  ]);
  custs=cr.data||[]; dogs=dr.data||[]; visits=vr.data||[]; appts=ar.data||[]; groomers=gr.data||[]; invoices=ir.data||[]; bankSettings=br.data||{}; tokens=tr.data||[]; subscriptions=sr.data||[]; adminUsers=aur.data||[];
  auditEntries=alr.data||[]; groomerBlocks=gbr.data||[];
  complaints=cmr.data||[];
  capitalInjections=cir.data||[];
- subsPayments=spr.data||[];
  expenses=expr.data||[];
  // Batch O.6 — admin email lookup cache for edit-history display
  window._adminEmails={};
@@ -7285,7 +7255,7 @@ async function createSubscriptionsFromInvoice(rec){
  const todayISO=iso(new Date());
  const startISO=rec.invoice_date||todayISO;
  // Session E — expires at END OF MONTH of start date (per owner spec)
- // Old behavior: 1 month from start. Admin can manually extend via Bayar modal.
+ // Old behavior: 1 month from start. Admin can manually extend via Membership edit.
  const startDate=new Date(startISO+'T00:00:00');
  const eom=new Date(startDate.getFullYear(), startDate.getMonth()+1, 0); // last day of start month
  const expISO=iso(eom);
@@ -8356,7 +8326,6 @@ function renderMembership(){
    <td style="font-size:11px;color:var(--muted)">${esc(r.source_invoice||'-')}</td>
    <td><div class="row-actions">
     ${r._kind==='subscription'&&computeRenewalUrgency(r)?`<button class="icon-btn" style="background:#dcfce7;color:#15803d;border-color:#86efac;font-weight:600" onclick="startRenewalFromSubs('${r.id}')" title="Buat invoice renewal">🔄 Renew</button>`:''}
-    ${r._kind==='subscription'&&r.status==='active'?`<button class="icon-btn" onclick="openSubsPaymentModal('${r.customer_id}','${iso(new Date()).slice(0,7)}',${tierMonthlyPrice(r.type,dogs.find(d=>d.id===r.dog_id)?.size||'Medium')})">Bayar</button>`:''}
     ${r._kind==='subscription'?`<button class="icon-btn view" onclick="openSubsSessions('${r.id}')">Sessions</button>`:''}
     <button class="icon-btn" onclick="openMembEdit('${r._kind}','${r.id}')">Edit</button>
     <button class="icon-btn del" onclick="delMemb('${r._kind}','${r.id}','${esc(owner).replace(/'/g,"\\'")}')">Del</button>
@@ -10622,7 +10591,6 @@ async function deleteCapital(id){
 }
 
 /* ----- Subscription payments ----- */
-let _spSubIds=[];
 
 function openSubsSessions(subId){
  const sub=subscriptions.find(s=>s.id===subId); if(!sub){alert('Subscription tidak ditemukan');return}
@@ -10680,40 +10648,6 @@ async function delSubsSession(apptId,subId){
  const i=appts.findIndex(x=>x.id===apptId); if(i>=0) appts.splice(i,1);
  openSubsSessions(subId);
  renderCal(); renderMembership(); loadAll();
-}
-
-function openSubsPaymentModal(custId,monthKey,defaultAmount){
- document.getElementById('sp-cust-id').value=custId;
- document.getElementById('sp-month-key').value=monthKey;
- document.getElementById('sp-date').value=iso(new Date());
- document.getElementById('sp-amount').value=defaultAmount||0;
- document.getElementById('sp-notes').value='';
- // Find active subscription IDs for this customer
- _spSubIds=subscriptions.filter(s=>s.customer_id===custId&&s.status==='active').map(s=>s.id);
- om('ov-subs-payment');
-}
-
-async function saveSubsPayment(){
- const custId=document.getElementById('sp-cust-id').value;
- const monthKey=document.getElementById('sp-month-key').value;
- const amount=parseInt(document.getElementById('sp-amount').value)||0;
- const dt=document.getElementById('sp-date').value;
- const notes=document.getElementById('sp-notes').value.trim();
- if(!amount||!dt){alert('Isi jumlah dan tanggal.');return}
- if(!_spSubIds.length){alert('Tidak ada subscription aktif.');return}
- // Insert one payment record per subscription
- const rows=_spSubIds.map(sid=>({
-  subscription_id:sid,
-  customer_id:custId,
-  amount:Math.round(amount/_spSubIds.length),
-  payment_date:dt,
-  month_covered:monthKey,
-  notes:notes||null
- }));
- const {error}=await db.from('subscription_payments').insert(rows);
- if(error){alert('Error: '+error.message);return}
- cm('ov-subs-payment');
- await loadAll();
 }
 
 /* ----- Payroll cycle logic ----- */
@@ -11992,8 +11926,6 @@ function renderDashboard(){
    </tbody></table>`;
  }
 
- // Batch O.4 — Monthly subscription billing
- renderSubsBilling();
  // Batch O.6 — 14+ day no-grooming followups
  renderFollowups();
 }
@@ -12052,72 +11984,6 @@ function renderFollowups(){
       <div style="font-size:11px;color:var(--muted)">${esc(dogLines)}</div>
      </div>
      ${waLink?`<a class="btn btn-g btn-sm" href="${waLink}" target="_blank">WA</a>`:'<span style="font-size:11px;color:var(--muted)">No WA</span>'}
-    </div>`;
-   }).join('')}
-  </div>
- </div>`;
-}
-
-// Batch O.4 — Render subscription billing UI on dashboard
-function renderSubsBilling(){
- const el=document.getElementById('dash-subs-billing'); if(!el) return;
- const today=new Date();
- const todayISO=iso(today);
- const activeSubs=subscriptions.filter(s=>s.status==='active'&&(!s.expires_at||s.expires_at>=todayISO));
- if(!activeSubs.length){el.innerHTML='';return}
-
- const monthStart=new Date(today.getFullYear(),today.getMonth(),1);
- const monthEnd=new Date(today.getFullYear(),today.getMonth()+1,0);
- const msISO=iso(monthStart),meISO=iso(monthEnd);
- const monthName=monthStart.toLocaleDateString('id-ID',{month:'long',year:'numeric'});
- const monthKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-
- const byCust={};
- activeSubs.forEach(s=>{
-  if(!byCust[s.customer_id]) byCust[s.customer_id]={cust:custs.find(c=>c.id===s.customer_id),subs:[]};
-  byCust[s.customer_id].subs.push(s);
- });
-
- const rows=Object.values(byCust).filter(g=>g.cust).map(group=>{
-  const c=group.cust;
-  const subs=group.subs;
-  let totalAmount=0;
-  const lineItems=subs.map(s=>{
-   const dog=dogs.find(d=>d.id===s.dog_id);
-   const amt=tierMonthlyPrice(s.type,dog?.size||'Medium');
-   totalAmount+=amt;
-   return {dog,sub:s,amount:amt};
-  });
-  const paidThisMonth=subsPayments.some(p=>
-   subs.some(s=>s.id===p.subscription_id)
-   &&p.month_covered===monthKey
-  );
-  return {c,subs,lineItems,totalAmount,paidThisMonth};
- });
-
- const pendingCount=rows.filter(r=>!r.paidThisMonth).length;
- if(!rows.length){el.innerHTML='';return}
-
- el.innerHTML=`<div class="card" style="padding:14px">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-   <div>
-    <div style="font-size:13px;font-weight:600">Subscription billing — ${esc(monthName)}</div>
-    <div style="font-size:11px;color:var(--muted)">${pendingCount} dari ${rows.length} subscriber belum bayar</div>
-   </div>
-  </div>
-  <div style="display:flex;flex-direction:column;gap:8px">
-   ${rows.map(r=>{
-    const dogNames=r.lineItems.map(li=>li.dog?.name||'?').join(', ');
-    const tierSummary=r.lineItems.map(li=>`${tierLabel(li.sub.type)}`).join(' + ');
-    const status=r.paidThisMonth
-     ?`<span class="badge bs">Sudah bayar</span>`
-     :`<button class="btn btn-p btn-sm" onclick="openSubsPaymentModal('${r.c.id}','${monthKey}',${r.totalAmount})">Catat bayar</button>`;
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:${r.paidThisMonth?'#dcfce7':'#fef3c7'};border-radius:5px;flex-wrap:wrap;gap:8px">
-     <div style="flex:1;min-width:0">
-      <div style="font-weight:600;font-size:13px"><span class="c360-clickable" onclick="openCust360('${r.c.id}')">${esc(r.c.owner)}</span> <span style="font-size:11px;color:var(--muted);font-weight:400">${esc(r.c.customer_code||'')}</span></div>
-      <div style="font-size:11px;color:var(--muted)">${esc(dogNames)} — ${esc(tierSummary)} — ${fmtRp(r.totalAmount)}</div>
-     </div>
-     <div>${status}</div>
     </div>`;
    }).join('')}
   </div>
