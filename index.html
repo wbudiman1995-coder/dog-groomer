@@ -814,6 +814,20 @@ tbody tr:hover{background:var(--subtle)}
  <span class="toolbar-title">Buat invoice</span>
  <button class="btn btn-g btn-sm" onclick="resetInvoice()">Reset</button>
  </div>
+
+ <!-- Session E — Big mode toggle: after-visit vs package sale -->
+ <div style="display:flex;background:#f3f4f6;border-radius:12px;padding:5px;margin-bottom:1rem;gap:5px">
+  <button id="inv-mode-visit" onclick="setInvMode('visit')" style="flex:1;padding:14px 18px;border-radius:9px;border:0;background:#fff;font-weight:600;font-size:15px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.08);text-align:left;transition:all .15s">
+   <div style="font-size:18px">💰 Setelah grooming</div>
+   <div style="font-size:11px;color:var(--muted);font-weight:400;margin-top:3px">Tagihan sesi yang sudah selesai (via subs/token/one-off)</div>
+  </button>
+  <button id="inv-mode-package" onclick="setInvMode('package')" style="flex:1;padding:14px 18px;border-radius:9px;border:0;background:transparent;font-weight:600;font-size:15px;cursor:pointer;color:var(--muted);text-align:left;transition:all .15s">
+   <div style="font-size:18px">📦 Jual paket / renewal</div>
+   <div style="font-size:11px;font-weight:400;margin-top:3px">Bayar upfront untuk sesi ke depan (subscription atau prepaid token)</div>
+  </button>
+ </div>
+ <div id="inv-mode-hint" style="font-size:12px;color:#0369a1;background:#f0f9ff;border-left:3px solid #0284c7;padding:8px 12px;border-radius:5px;margin-bottom:1rem;display:none"></div>
+
  <div data-inv-mode-banner style="display:none;background:#fef3c7;border:1px solid #fde68a;color:#92400e;padding:8px 12px;border-radius:8px;margin-bottom:1rem;font-size:13px"></div>
  <div id="inv-admin-notes-banner" style="display:none;background:#fef3c7;border-left:4px solid #f59e0b;padding:10px 14px;border-radius:6px;margin-bottom:1rem">
   <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Catatan internal (admin only)</div>
@@ -5965,21 +5979,24 @@ function onDocModeChange(){
 // Returns {current, total, subsType} or null
 function getSubscriptionSessionInfo(dogId,apptDate){
  if(!dogId) return null;
- const sub=subscriptions.find(s=>s.dog_id===dogId&&s.status==='active');
- if(!sub) return null;
- // Count past subs-source completed appts for this dog (already deducted), +1 for current
- const past=appts.filter(a=>
-  a.dog_id===dogId
-  && a.session_source==='subscription'
-  && a.subs_deducted
-  && a.status!=='cancelled'
-  && (apptDate?a.appt_date<apptDate:true)
- ).length;
+ // Session E — Bug fix (Chloe scenario): pick LATEST valid subs (not first), skip exhausted/expired.
+ // Old bug: .find() returned first active subs even if exhausted, and counter used appt-count so
+ // it kept incrementing past sessions_total (e.g. showed "Sesi 3/2").
+ const checkDate=apptDate||iso(new Date());
+ const valid=subscriptions
+  .filter(s=>s.dog_id===dogId
+   && s.status==='active'
+   && (s.sessions_used||0) < (s.sessions_total||0)
+   && (!s.expires_at || s.expires_at >= checkDate))
+  .sort((a,b)=>(b.started_at||'').localeCompare(a.started_at||''));
+ if(!valid.length) return null;
+ const sub=valid[0];
  return {
-  current:past+1,
+  current:(sub.sessions_used||0)+1,
   total:sub.sessions_total||0,
   subsType:sub.type||'Subscription',
-  subsId:sub.id
+  subsId:sub.id,
+  renewalNumber:sub.renewal_number||1
  };
 }
 
@@ -6051,6 +6068,8 @@ function resetInvoice(){
  const bnr=document.getElementById('inv-admin-notes-banner'); if(bnr) bnr.style.display='none';
  const sched=document.getElementById('inv-subs-schedule-card'); if(sched) sched.style.display='none';
  invSelectedCust=null; invSelectedDogs=[]; invDogServices={}; invDogNotes={}; invPhotos={}; invAdvanceDogs={}; invEditId=null;
+ // Session E — reset mode toggle to 'visit'
+ if(typeof setInvMode==='function') setInvMode('visit');
  const g=id=>document.getElementById(id); // helper
  if(g('inv-customer-search')) g('inv-customer-search').value='';
  if(g('inv-customer')) g('inv-customer').value='';
@@ -6171,6 +6190,8 @@ function openInvoiceForEdit(id){
   const hasAdv=(inv.dogs||[]).some(d=>d.advance);
   const advCb=document.getElementById('inv-is-advance');
   if(advCb){advCb.checked=hasAdv;onAdvanceToggle(hasAdv);}
+  // Session E — sync big mode toggle with detected advance state
+  if(typeof setInvMode==='function') setInvMode(hasAdv?'package':'visit');
   renderInvDogServices();
   recalcInvoice();
   updateInvoiceModeBanner();
@@ -6356,6 +6377,16 @@ function renderInvDogServices(){
    <div style="font-size:11px;margin-top:3px">Tidak ada subscription/token aktif di sistem. Basic Grooming auto-set ke Rp 0 \u2014 pastikan customer sudah bayar via metode lain (cash, transfer manual, dll).</div>
    <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Klik harga Basic Grooming untuk ubah jadi non-zero kalau perlu.</div>
   </div>`;
+ } else {
+  // Session E — if there's a subs record for this dog but it's exhausted/expired, warn admin
+  const staleSubs=subscriptions.find(s=>s.dog_id===did && s.status==='active' && ((s.sessions_used||0)>=(s.sessions_total||0) || (s.expires_at&&s.expires_at<iso(new Date()))));
+  if(staleSubs){
+   const reason=(staleSubs.sessions_used||0)>=(staleSubs.sessions_total||0)?'sudah habis':'sudah expired';
+   coverageBanner=`<div style="background:#fee2e2;border-left:3px solid #dc2626;padding:8px 10px;border-radius:5px;margin-bottom:.6rem;font-size:12px;color:#991b1b">
+    <strong>\u26A0 Subs ${esc((staleSubs.type||'').toUpperCase())} ${reason}</strong> \u00B7 ${staleSubs.sessions_used||0}/${staleSubs.sessions_total||0} sesi (started ${fmtD(staleSubs.started_at)})
+    <div style="font-size:11px;margin-top:3px">Sesi ini akan ditagih sebagai grooming normal (bukan subs). Kalau customer sudah bayar renewal, buat invoice paket baru dulu \u2014 subs baru otomatis aktif saat invoice ditandai <strong>Paid</strong>.</div>
+   </div>`;
+  }
  }
  return `<div class="card" style="padding:1rem;margin-bottom:1rem">
  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;flex-wrap:wrap;gap:6px">
@@ -6847,6 +6878,37 @@ function onAdvanceToggle(on){
  recalcInvoice();
 }
 
+/* Session E — Big invoice mode toggle. Two modes:
+   'visit'   = default. Standard after-grooming invoice. Uses coverage detection (subs/token/one-off).
+   'package' = auto-enables advance-booking. Customer paying upfront for future sessions. */
+let INV_MODE='visit';
+function setInvMode(mode){
+ INV_MODE=mode;
+ const isPackage=mode==='package';
+ const visitBtn=document.getElementById('inv-mode-visit');
+ const packageBtn=document.getElementById('inv-mode-package');
+ const hint=document.getElementById('inv-mode-hint');
+ const activeStyle='background:#fff;color:var(--dark);box-shadow:0 1px 3px rgba(0,0,0,.08)';
+ const inactiveStyle='background:transparent;color:var(--muted);box-shadow:none';
+ if(visitBtn) visitBtn.style.cssText=`flex:1;padding:14px 18px;border-radius:9px;border:0;font-weight:600;font-size:15px;cursor:pointer;text-align:left;transition:all .15s;${isPackage?inactiveStyle:activeStyle}`;
+ if(packageBtn) packageBtn.style.cssText=`flex:1;padding:14px 18px;border-radius:9px;border:0;font-weight:600;font-size:15px;cursor:pointer;text-align:left;transition:all .15s;${isPackage?activeStyle:inactiveStyle}`;
+ // Auto-enable/disable advance mode
+ const advCb=document.getElementById('inv-is-advance');
+ if(advCb){
+  advCb.checked=isPackage;
+  onAdvanceToggle(isPackage);
+ }
+ // Show mode-specific hint
+ if(hint){
+  if(isPackage){
+   hint.style.display='';
+   hint.innerHTML='\u{1F4E6} <strong>Mode Jual Paket aktif.</strong> Isi paket + sesi + harga di bagian "Advance booking". Setelah invoice ditandai <strong>Paid</strong>, subs/token otomatis dibuat.';
+  } else {
+   hint.style.display='none';
+  }
+ }
+}
+
 function renderAdvanceDogs(){
  const wrap=document.getElementById('inv-advance-dogs');
  if(!wrap||!invSelectedDogs.length){
@@ -7171,28 +7233,43 @@ async function createSubscriptionsFromInvoice(rec){
  if(!rec.is_advance||!rec.dogs) return;
  const subsDogs=rec.dogs.filter(d=>d.advance&&['weekly','biweekly','monthly'].includes(d.advance.subs_type)&&d.advance.sessions>0);
  if(!subsDogs.length) return;
- // Use today as started_at if invoice_date is in the future or missing; else use invoice_date.
  const todayISO=iso(new Date());
  const startISO=rec.invoice_date||todayISO;
- // Expires 1 month from start
+ // Session E — expires at END OF MONTH of start date (per owner spec)
+ // Old behavior: 1 month from start. Admin can manually extend via Bayar modal.
  const startDate=new Date(startISO+'T00:00:00');
- const expDate=new Date(startDate); expDate.setMonth(expDate.getMonth()+1);
- const expISO=iso(expDate);
- const rows=subsDogs.map(d=>({
-  customer_id:rec.customer_id,
-  dog_id:d.dog_id,
-  type:d.advance.subs_type,
-  sessions_total:d.advance.sessions,
-  sessions_used:0,
-  status:'active',
-  started_at:startISO,
-  expires_at:expISO,
-  source_invoice:rec.invoice_number,
-  notes:`${d.name} – ${d.advance.sessions} sesi ${d.advance.subs_type}`
- }));
+ const eom=new Date(startDate.getFullYear(), startDate.getMonth()+1, 0); // last day of start month
+ const expISO=iso(eom);
+ // Supersede old active subs for each dog (mark as 'renewed' so it hides from active view)
+ const dogIdsInSale=subsDogs.map(d=>d.dog_id);
+ const oldToSupersede=subscriptions
+  .filter(s=>dogIdsInSale.includes(s.dog_id) && s.status==='active')
+  .map(s=>s.id);
+ if(oldToSupersede.length){
+  const {error:eSup}=await db.from('subscriptions').update({status:'renewed'}).in('id',oldToSupersede);
+  if(eSup) console.error('Old subs supersede error:',eSup.message);
+  else console.log(`Superseded ${oldToSupersede.length} old subs (marked as renewed)`);
+ }
+ // Compute renewal_number for each new subs = existing subs for that dog + 1
+ const rows=subsDogs.map(d=>{
+  const priorCount=subscriptions.filter(s=>s.dog_id===d.dog_id).length;
+  return {
+   customer_id:rec.customer_id,
+   dog_id:d.dog_id,
+   type:d.advance.subs_type,
+   sessions_total:d.advance.sessions,
+   sessions_used:0,
+   status:'active',
+   started_at:startISO,
+   expires_at:expISO,
+   source_invoice:rec.invoice_number,
+   renewal_number:priorCount+1,
+   notes:`${d.name} \u2013 ${d.advance.sessions} sesi ${d.advance.subs_type} (renewal #${priorCount+1})`
+  };
+ });
  const {error}=await db.from('subscriptions').insert(rows);
  if(error) console.error('Subscription create error:',error.message);
- else console.log(`Created ${rows.length} subscription row(s)`);
+ else console.log(`Created ${rows.length} subscription row(s) with renewal_number set`);
 }
 
 // Item 11 reversal: if paid→unpaid, delete subs only if untouched (sessions_used=0).
@@ -8101,7 +8178,12 @@ function renderMembership(){
    notes:t.notes||''
   };
  });
- const subsRows=subscriptions.map(s=>({...s,_kind:'subscription'}));
+ // Session E — surface 'renewed' status as 'expired' so old subs don't clutter active view
+ const subsRows=subscriptions.map(s=>({
+  ...s,
+  _kind:'subscription',
+  status:s.status==='renewed'?'expired':s.status
+ }));
  let rows=[];
  if(kindFilter==='all'||kindFilter==='subscription') rows=rows.concat(subsRows);
  if(kindFilter==='all'||kindFilter==='token') rows=rows.concat(tokenRows);
@@ -8138,7 +8220,7 @@ function renderMembership(){
    <td>${c?`<strong class="c360-clickable" onclick="openCust360('${c.id}')">${esc(owner)}</strong>`:`<strong>${esc(owner)}</strong>`} ${code?`<span class="id-pill">${esc(code)}</span>`:''}</td>
    <td>${dogLabel}</td>
    <td>${kindPill}</td>
-   <td><span class="badge bs">${r._kind==='subscription'?esc(tierLabel(r.type)):esc((r.type||'').toUpperCase())}</span></td>
+   <td><span class="badge bs">${r._kind==='subscription'?esc(tierLabel(r.type)):esc((r.type||'').toUpperCase())}</span>${r._kind==='subscription'&&r.renewal_number>1?` <span style="font-size:10px;color:#7c3aed;background:#f3e8ff;padding:2px 5px;border-radius:3px;font-weight:600">Renewal #${r.renewal_number}</span>`:''}</td>
    <td>${sessText}</td>
    <td>${r.started_at?fmtD(r.started_at):'-'}</td>
    <td>${r.expires_at?fmtD(r.expires_at):'<span style="color:var(--muted)">no expiry</span>'}</td>
