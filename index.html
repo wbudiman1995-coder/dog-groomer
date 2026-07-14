@@ -2315,6 +2315,39 @@ function applyPrefsOnBoot(role){
  sw(landing);
 }
 function esc(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+/* Session E — Photo helpers. Groomer stores photos as {url,timestamp,lat,lng} objects.
+   Legacy photos may be plain string URLs. These accessors handle both forms uniformly. */
+function photoUrl(v){ return v&&typeof v==='object'?(v.url||null):(v||null); }
+function photoTS(v){ return v&&typeof v==='object'?(v.timestamp||null):null; }
+
+/* Session E — Format a photo upload timestamp: relative for recent, absolute for old.
+   Same as groomer.html version for consistency. */
+function fmtPhotoTS(iso){
+ if(!iso) return '';
+ const then=new Date(iso).getTime();
+ if(isNaN(then)) return '';
+ const diffMs=Date.now()-then;
+ const diffMin=Math.floor(diffMs/60000);
+ const diffHr=Math.floor(diffMin/60);
+ const isToday=new Date(then).toDateString()===new Date().toDateString();
+ const y=new Date(); y.setDate(y.getDate()-1);
+ const isYesterday=new Date(then).toDateString()===y.toDateString();
+ const dt=new Date(then);
+ const HH=String(dt.getHours()).padStart(2,'0');
+ const MM=String(dt.getMinutes()).padStart(2,'0');
+ let label='', fresh=false;
+ if(diffMin<1) {label='baru saja'; fresh=true;}
+ else if(diffMin<60) {label=diffMin+' menit lalu'; fresh=true;}
+ else if(isToday) {label=diffHr+' jam lalu'; fresh=diffHr<3;}
+ else if(isYesterday) label='kemarin '+HH+':'+MM;
+ else {
+  const day=String(dt.getDate()).padStart(2,'0');
+  const months=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  label=day+' '+months[dt.getMonth()]+' '+HH+':'+MM;
+ }
+ return `📸 <span style="color:${fresh?'#16a34a':'#6b7280'};font-weight:${fresh?'700':'500'}">${label}</span>`;
+}
 function gmapsUrl(addr,manual){
  if(manual) return manual;
  if(!addr) return '';
@@ -4591,9 +4624,9 @@ function openApptEdit(id){
    photoSec.style.display='block';
    photoGrid.style.gridTemplateColumns='repeat(auto-fill,minmax(100px,1fr))';
    photoGrid.innerHTML=items.map(it=>{
-    const meta=it.meta?`<div style="font-size:8px;color:var(--muted);margin-top:2px;text-align:center">${it.meta.timestamp?new Date(it.meta.timestamp).toLocaleString('id-ID'):''}${it.meta.lat?` <a href="https://maps.google.com/?q=${it.meta.lat},${it.meta.lng}" target="_blank" style="color:var(--primary)">Map</a>`:''}</div>`:'';
+    const meta=it.meta?`<div style="font-size:10px;color:#374151;background:#f3f4f6;margin-top:3px;padding:3px 4px;border-radius:3px;text-align:center;font-weight:500">${it.meta.timestamp?fmtPhotoTS(it.meta.timestamp):''}${it.meta.lat?` · <a href="https://maps.google.com/?q=${it.meta.lat},${it.meta.lng}" target="_blank" style="color:var(--primary)">📍 Map</a>`:''}</div>`:'';
     return `<div style="text-align:center">
-     <div style="font-size:8px;font-weight:700;color:var(--muted);margin-bottom:2px;text-transform:uppercase">${it.label}</div>
+     <div style="font-size:9px;font-weight:700;color:var(--muted);margin-bottom:2px;text-transform:uppercase">${it.label}</div>
      <a href="${esc(it.url)}" target="_blank"><img src="${esc(it.url)}" style="width:100%;border-radius:5px;border:1px solid var(--border);aspect-ratio:4/3;object-fit:cover"/></a>
      ${meta}
     </div>`;
@@ -9288,8 +9321,16 @@ function buildPhotoHTML(did){
    const p=linkedAppt.photos||{};
    const hasManualBefore=photos.some(x=>x.zone==='before');
    const hasManualAfter=photos.some(x=>x.zone==='after');
-   if(!hasManualBefore&&typeof p.before==='string') photos.push({data:p.before,zone:'before'});
-   if(!hasManualAfter&&typeof p.after==='string') photos.push({data:p.after,zone:'after'});
+   const hasManualEar=photos.some(x=>x.zone==='ear');
+   // Session E — accept both legacy string form AND new {url,timestamp} object form
+   const beforeUrl=photoUrl(p.before), beforeTS=photoTS(p.before);
+   const afterUrl=photoUrl(p.after), afterTS=photoTS(p.after);
+   const earLUrl=photoUrl(p.ear_left), earLTS=photoTS(p.ear_left);
+   const earRUrl=photoUrl(p.ear_right), earRTS=photoTS(p.ear_right);
+   if(!hasManualBefore&&beforeUrl) photos.push({data:beforeUrl,zone:'before',ts:beforeTS});
+   if(!hasManualAfter&&afterUrl) photos.push({data:afterUrl,zone:'after',ts:afterTS});
+   if(!hasManualEar&&earLUrl) photos.push({data:earLUrl,zone:'ear',label:'Kiri',ts:earLTS});
+   if(!hasManualEar&&earRUrl) photos.push({data:earRUrl,zone:'ear',label:'Kanan',ts:earRTS});
    [{key:'dematting',label:'Bulu Gimbal'},{key:'fungal',label:'Bekas Jamur'},{key:'injury',label:'Luka'},{key:'other',label:'Lainnya'}].forEach(mt=>{
     const arr=Array.isArray(p[mt.key])?p[mt.key]:[];
     arr.forEach(url=>photos.push({data:url,zone:'issue',label:mt.label}));
@@ -9297,17 +9338,22 @@ function buildPhotoHTML(did){
   }
  }
  if(!photos.length) return '';
- const byZone={before:[],after:[],issue:[]};
+ const byZone={before:[],after:[],ear:[],issue:[]};
  photos.forEach(p=>{
   const z=p.zone||'before';
   if(byZone[z]) byZone[z].push(p);
   else byZone.before.push(p);
  });
- // Batch O.6 — skip empty zones entirely (no placeholders). Solo zone takes full width.
+ // Session E — standardized photo card: 1:1 square, object-fit cover, consistent border, timestamp badge
+ const photoCard=(p,extraLabel)=>{
+  const tsHtml=p.ts?`<div style="font-size:9px;color:#374151;background:#f3f4f6;padding:3px 5px;border-radius:0 0 6px 6px;text-align:center;font-weight:500;border-top:1px solid #e5e7eb">${fmtPhotoTS(p.ts)}</div>`:'';
+  const labelHtml=extraLabel?`<div style="font-size:9px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;font-weight:600;text-align:center">${esc(extraLabel)}</div>`:'';
+  return `<div style="flex:1;min-width:0">${labelHtml}<div style="border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;background:#fff"><img src="${p.data}" style="width:100%;aspect-ratio:1/1;object-fit:cover;display:block"/>${tsHtml}</div></div>`;
+ };
  const buildCol=(label,arr,color)=>{
-  const imgs=arr.map(p=>`<img src="${p.data}" style="width:100%;height:auto;border-radius:6px;display:block;margin-bottom:6px"/>`).join('');
+  const imgs=arr.map(p=>photoCard(p)).join('');
   return `<div style="flex:1;min-width:0">
-   <div style="font-size:10px;color:${color};letter-spacing:1.5px;font-weight:700;margin-bottom:6px">${label}</div>
+   <div style="font-size:10px;color:${color};letter-spacing:1.5px;font-weight:700;margin-bottom:6px;text-align:center">${label}</div>
    ${imgs}
   </div>`;
  };
@@ -9321,19 +9367,33 @@ function buildPhotoHTML(did){
  } else if(hasAfter){
   baRow=`<div style="margin:8px 0">${buildCol('AFTER',byZone.after,'#888')}</div>`;
  }
+ // Ear photos row (side-by-side kiri + kanan)
+ let earRow='';
+ if(byZone.ear.length){
+  const imgs=byZone.ear.map(p=>photoCard(p, p.label||'Ear')).join('');
+  earRow=`<div style="margin:8px 0">
+   <div style="font-size:10px;color:#0369a1;letter-spacing:1.5px;font-weight:700;margin-bottom:4px">TELINGA</div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap">${imgs}</div>
+  </div>`;
+ }
  // Issues row stays full-width with each photo in a flex line
  let issueRow='';
  if(byZone.issue.length){
-  const imgs=byZone.issue.map(p=>`<div style="flex:1;min-width:100px;max-width:180px">
-   ${p.label?`<div style="font-size:9px;color:#92400e;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;font-weight:600">${esc(p.label)}</div>`:''}
-   <img src="${p.data}" style="width:100%;height:auto;border-radius:6px;display:block"/>
-  </div>`).join('');
+  const imgs=byZone.issue.map(p=>{
+   const tsHtml=p.ts?`<div style="font-size:9px;color:#374151;background:#f3f4f6;padding:2px 4px;border-radius:0 0 6px 6px;text-align:center">${fmtPhotoTS(p.ts)}</div>`:'';
+   return `<div style="flex:0 0 auto;width:140px">
+    ${p.label?`<div style="font-size:9px;color:#92400e;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;font-weight:600;text-align:center">${esc(p.label)}</div>`:''}
+    <div style="border:1px solid #fde68a;border-radius:6px;overflow:hidden;background:#fff">
+     <img src="${p.data}" style="width:100%;aspect-ratio:1/1;object-fit:cover;display:block"/>${tsHtml}
+    </div>
+   </div>`;
+  }).join('');
   issueRow=`<div style="margin:8px 0">
    <div style="font-size:10px;color:#92400e;letter-spacing:1.5px;font-weight:700;margin-bottom:4px">ISSUES DITEMUKAN</div>
    <div style="display:flex;flex-wrap:wrap;gap:10px">${imgs}</div>
   </div>`;
  }
- return baRow+issueRow;
+ return baRow+earRow+issueRow;
 }
 
 // Legacy compat (old onPhotoUpload calls)
@@ -9415,14 +9475,22 @@ async function loadInvFromAppointment(apptId){
   } else if(src==='advance'&&a.token_id){
    if(ntEl&&!ntEl.value.trim()) ntEl.value='Menggunakan token prepaid';
   }
-  // Photos from groomer
+  // Session E — Photos from groomer (handle both legacy string and new {url,timestamp} object)
   custAppts.forEach(ap=>{
    const p=ap.photos||{};
    if(!Object.keys(p).length) return;
    const did=ap.dog_id;
    if(!invPhotos[did]) invPhotos[did]=[];
-   if(typeof p.before==='string') invPhotos[did].push({data:p.before,zone:'before'});
-   if(typeof p.after==='string') invPhotos[did].push({data:p.after,zone:'after'});
+   // Single-photo zones: before, after, ear_left, ear_right
+   const b_url=photoUrl(p.before), b_ts=photoTS(p.before);
+   if(b_url) invPhotos[did].push({data:b_url, zone:'before', ts:b_ts});
+   const a_url=photoUrl(p.after), a_ts=photoTS(p.after);
+   if(a_url) invPhotos[did].push({data:a_url, zone:'after', ts:a_ts});
+   const el_url=photoUrl(p.ear_left), el_ts=photoTS(p.ear_left);
+   if(el_url) invPhotos[did].push({data:el_url, zone:'ear', label:'Telinga Kiri', ts:el_ts});
+   const er_url=photoUrl(p.ear_right), er_ts=photoTS(p.ear_right);
+   if(er_url) invPhotos[did].push({data:er_url, zone:'ear', label:'Telinga Kanan', ts:er_ts});
+   // Multi-photo issue zones (arrays)
    [{key:'dematting',label:'Bulu Gimbal'},{key:'fungal',label:'Bekas Jamur'},{key:'injury',label:'Luka'},{key:'other',label:'Lainnya'}].forEach(mt=>{
     const arr=Array.isArray(p[mt.key])?p[mt.key]:[];
     arr.forEach(url=>invPhotos[did].push({data:url,zone:'issue',label:mt.label}));
