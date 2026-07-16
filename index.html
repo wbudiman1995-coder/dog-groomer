@@ -2441,8 +2441,17 @@ let AREAS = {
  'Kabupaten Tangerang': ['Balaraja','Cikupa','Cisauk','Curug','Kelapa Dua','Kosambi','Legok','Pagedangan','Panongan','Rajeg','Sepatan','Tigaraksa'],
  'Depok': ['Beji','Bojongsari','Cilodong','Cimanggis','Cinere','Cipayung','Limo','Pancoran Mas','Sawangan','Sukmajaya','Tapos'],
  'Kota Bekasi': ['Bantargebang','Bekasi Barat','Bekasi Selatan','Bekasi Timur','Bekasi Utara','Jatiasih','Jatisampurna','Medan Satria','Mustikajaya','Pondok Gede','Pondok Melati','Rawalumbu'],
- 'Kabupaten Bekasi': ['Babelan','Bojongmangu','Cabangbungin','Cibarusah','Cibitung','Cikarang Barat','Cikarang Pusat','Cikarang Selatan','Cikarang Timur','Cikarang Utara','Karangbahagia','Kedungwaringin','Muaragembong','Pebayuran','Serang Baru','Setu','Sukakarya','Sukatani','Sukawangi','Tambelang','Tambun Selatan','Tambun Utara','Tarumajaya']
+ 'Kabupaten Bekasi': ['Babelan','Bojongmangu','Cabangbungin','Cibarusah','Cibitung','Cikarang Barat','Cikarang Pusat','Cikarang Selatan','Cikarang Timur','Cikarang Utara','Karangbahagia','Kedungwaringin','Muaragembong','Pebayuran','Serang Baru','Setu','Sukakarya','Sukatani','Sukawangi','Tambelang','Tambun Selatan','Tambun Utara','Tarumajaya'],
+ 'Kota Bogor': ['Bogor Barat','Bogor Selatan','Bogor Tengah','Bogor Timur','Bogor Utara','Tanah Sareal'],
+ 'Kabupaten Bogor': ['Babakan Madang','Bojonggede','Caringin','Cariu','Ciampea','Ciawi','Cibinong','Cibungbulang','Cigombong','Cigudeg','Cijeruk','Cileungsi','Ciomas','Cisarua','Ciseeng','Citeureup','Dramaga','Gunung Putri','Gunung Sindur','Jasinga','Jonggol','Kemang','Klapanunggal','Leuwiliang','Leuwisadeng','Megamendung','Nanggung','Pamijahan','Parung','Parung Panjang','Rancabungur','Rumpin','Sukajaya','Sukamakmur','Sukaraja','Tajurhalang','Tamansari','Tanjungsari','Tenjo','Tenjolaya']
 };
+// Built-in areas snapshot — always merged under saved config so new built-ins (e.g. Bogor) appear even for existing saved configs.
+const AREAS_DEFAULT = JSON.parse(JSON.stringify(AREAS));
+// Outside-Jakarta surcharge (preset, editable in Settings > Konfigurasi). Auto-added to invoices for customers whose kota is not a DKI Jakarta kota.
+let OUTSIDE_JKT_FEE = 10000;
+const JKT_KOTA = ['Jakarta Pusat','Jakarta Utara','Jakarta Selatan','Jakarta Barat','Jakarta Timur'];
+const OUTSIDE_JKT_LABEL = 'Biaya luar Jakarta';
+function isOutsideJkt(cust){ const k=((cust&&cust.kota)||'').trim(); return !!k && !JKT_KOTA.includes(k); }
 function populateKotaSelect(sel){
  sel.innerHTML='<option value="">Pilih kota…</option>'+Object.keys(AREAS).map(k=>`<option value="${k}">${k}</option>`).join('');
 }
@@ -4436,6 +4445,7 @@ function renderWizSummary(){
    <div><strong>Date:</strong> ${new Date(wiz.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</div>
    <div><strong>Time:</strong> ${m2t(wiz.startMins)} – ${m2t(wiz.startMins+totalDur)}</div>
    ${tokLine}
+   ${isOutsideJkt(c)?`<div style="font-size:12px;background:#fef3c7;border-radius:4px;padding:3px 8px;margin-top:4px">📍 Luar Jakarta — biaya <strong>+${fmtRp(OUTSIDE_JKT_FEE)}</strong> otomatis masuk invoice (bisa diubah/hapus di tab Invoice)</div>`:''}
   `;
  }
  renderWizStep4Dogs();
@@ -6040,7 +6050,8 @@ function applyCfg(){
  DUE_DAY_DEFAULT=(CFG.dueDayDefault!=null)?CFG.dueDayDefault:5;
  if(CFG.hours&&CFG.hours.open&&CFG.hours.close){const o=t2m(CFG.hours.open),c=t2m(CFG.hours.close);if(o<c){SSTART=o;SEND=c;}}
  if(Array.isArray(CFG.tnc)&&CFG.tnc.length) MEMBERSHIP_TNC=CFG.tnc;
- if(CFG.areas&&Object.keys(CFG.areas).length) AREAS=CFG.areas;
+ AREAS = {...AREAS_DEFAULT, ...(CFG.areas||{})};
+ if(CFG.outsideJktFee!=null) OUTSIDE_JKT_FEE=CFG.outsideJktFee;
  if(CFG.styleRefTtlDays>0) STYLE_REFS_TTL_DAYS=CFG.styleRefTtlDays;
  if(CFG.followupDays>0) STALE_DAYS=CFG.followupDays;
  if(CFG.branding){if(CFG.branding.bizName)BIZ_NAME=CFG.branding.bizName;if(CFG.branding.tagline)BIZ_TAGLINE=CFG.branding.tagline;if(CFG.branding.logo)HP_LOGO=CFG.branding.logo;}
@@ -6434,6 +6445,10 @@ function onInvCustomerChange(cb){
  if(!invSelectedCust){sm.style.display='none';pk.innerHTML='<span style="font-size:12px;color:var(--muted)">Pilih customer dulu</span>';renderInvDogServices();return}
  sm.style.display='block';
  sm.innerHTML=`<strong>${esc(invSelectedCust.owner)}</strong> · ${esc(invSelectedCust.kota||invSelectedCust.area||'-')}${invSelectedCust.kecamatan?', '+esc(invSelectedCust.kecamatan):''} · ${esc(invSelectedCust.wa||'no WA')}`;
+ // Outside-Jakarta surcharge: auto-add one editable line (per invoice, not per dog). Removed if customer is inside JKT.
+ invExtraCharges=invExtraCharges.filter(c=>c.label!==OUTSIDE_JKT_LABEL);
+ if(isOutsideJkt(invSelectedCust)&&OUTSIDE_JKT_FEE>0) invExtraCharges.push({label:OUTSIDE_JKT_LABEL,amount:OUTSIDE_JKT_FEE});
+ renderExtraCharges();
  const cdogs=dogs.filter(d=>d.customer_id===invSelectedCust.id);
  if(!cdogs.length){pk.innerHTML='<span style="font-size:12px;color:var(--muted)">Customer belum punya dog</span>';return}
  pk.innerHTML=cdogs.map(d=>`<button class="chip" data-id="${d.id}" onclick="toggleInvDog('${d.id}',this)">${esc(d.name)} (${esc(d.size||'?')})</button>`).join('');
@@ -7431,10 +7446,10 @@ async function deleteSubscriptionsForInvoice(invoiceNumber){
  return {deleted:deletable.length,kept};
 }
 
-async function saveInvoice(){
+async function saveInvoice(silent){
  const rec=buildInvoiceRecord(); if(!rec) return;
  const isEdit=!!invEditId;
- if(!confirm(`${isEdit?'Update':'Simpan'} invoice ${rec.invoice_number} untuk ${rec.owner_name}?\nTotal: ${fmtRp(rec.total)}`)) return;
+ if(!silent && !confirm(`${isEdit?'Update':'Simpan'} invoice ${rec.invoice_number} untuk ${rec.owner_name}?\nTotal: ${fmtRp(rec.total)}`)) return;
  if(isEdit){
   const oldRec=invoices.find(i=>i.id===invEditId);
   const {error}=await db.from('invoices').update(stripRecForDB(rec)).eq('id',invEditId);
@@ -7453,16 +7468,16 @@ async function saveInvoice(){
   await createTokensFromInvoice(rec);
   let msg='Invoice diupdate: '+rec.invoice_number;
   if(kept>0) msg+=`\n(${kept} token sudah dipakai, tidak diganti — cek manual kalau perlu)`;
-  alert(msg);
-  invEditId=null;
-  updateInvoiceModeBanner();
+  if(silent) showToast('Invoice diupdate: '+rec.invoice_number,'success'); else { alert(msg); invEditId=null; updateInvoiceModeBanner(); }
  } else {
   const {data:inserted,error}=await db.from('invoices').insert(stripRecForDB(rec)).select().single();
   if(error){alert('Error: '+error.message);return}
   if(inserted) await logAudit('invoice',inserted.id,'create',{new:rec,label:rec.invoice_number+' — '+rec.owner_name});
   await saveVisitsFromInvoice(rec);
   await createTokensFromInvoice(rec);
-  alert('Invoice tersimpan: '+rec.invoice_number);
+  // When auto-saved (e.g. from WA send), keep editing the same row so a re-send doesn't create a duplicate.
+  if(silent){ if(inserted){invEditId=inserted.id;updateInvoiceModeBanner();} showToast('Invoice tersimpan: '+rec.invoice_number,'success'); }
+  else alert('Invoice tersimpan: '+rec.invoice_number);
  }
  await reloadTables('invoices','visits','tokens','subscriptions');
 }
@@ -8194,9 +8209,12 @@ async function sendInvoiceViaWA(rec, cust, sourceButton){
 }
 
 // From invoice form (current unsaved or just-built record)
-function sendCurrentInvoiceToWA(ev){
+async function sendCurrentInvoiceToWA(ev){
  const rec=buildInvoiceRecord(); if(!rec) return;
  const cust=custs.find(c=>c.id===rec.customer_id)||{};
+ // Item 1 — auto-save so the invoice is always recorded when sent (skips if already saved).
+ const already=!!invEditId||invoices.some(i=>i.invoice_number===rec.invoice_number);
+ if(!already) await saveInvoice(true);
  sendInvoiceViaWA(rec, cust, ev?.target);
 }
 
@@ -10314,7 +10332,7 @@ function renderConfig(){
   ${sec('Membership tiers',tierTbl)}
   ${sec('Durasi default',`<div style="display:flex;gap:32px;flex-wrap:wrap"><div><div style="font-size:11px;color:var(--muted);margin-bottom:6px">Base per ukuran</div><div style="display:flex;flex-direction:column;gap:5px">${durBaseRows}</div></div><div><div style="font-size:11px;color:var(--muted);margin-bottom:6px">Tambahan per layanan</div><div style="display:flex;flex-direction:column;gap:5px">${durAddRows}</div></div></div>`)}
   ${sec('Sumber customer (label)',`<div style="display:flex;flex-direction:column;gap:6px">${srcRows}</div>`)}
-  ${sec('Invoice',`<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px">Tanggal jatuh tempo default</span>${fld('cfg-dueday',DUE_DAY_DEFAULT,50)}</div>`)}
+  ${sec('Invoice',`<div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px">Tanggal jatuh tempo default</span>${fld('cfg-dueday',DUE_DAY_DEFAULT,50)}</div><div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px">Biaya luar Jakarta (Rp)</span>${fld('cfg-outside-fee',OUTSIDE_JKT_FEE,80)}<span style="font-size:11px;color:var(--muted)">otomatis ditambahkan untuk customer di luar DKI Jakarta</span></div></div>`)}
   ${sec('Jam operasional',`<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><label style="font-size:12px;display:flex;align-items:center;gap:6px">Buka <input id="cfg-hours-open" type="time" value="${m2t(SSTART)}" style="padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label><label style="font-size:12px;display:flex;align-items:center;gap:6px">Tutup <input id="cfg-hours-close" type="time" value="${m2t(SEND)}" style="padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label><span style="font-size:11px;color:var(--muted)">Slot tetap 30 menit.</span></div>`)}
   ${sec('Threshold',`<div style="display:flex;gap:24px;flex-wrap:wrap"><label style="font-size:12px;display:flex;align-items:center;gap:6px">Follow-up "belum grooming" setelah ${fld('cfg-followup-days',STALE_DAYS,50)} hari</label><label style="font-size:12px;display:flex;align-items:center;gap:6px">Foto styling ref kedaluwarsa ${fld('cfg-styleref-ttl',STYLE_REFS_TTL_DAYS,50)} hari</label></div>`)}
   ${sec('Syarat & ketentuan membership',`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Satu baris = satu poin.</div><textarea id="cfg-tnc" rows="7" style="width:100%;max-width:640px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(MEMBERSHIP_TNC.join('\n'))}</textarea>`)}
@@ -10360,6 +10378,7 @@ async function saveConfig(){
  const sourceLabels={};
  Object.keys(SOURCE_LABELS).forEach(k=>{sourceLabels[k]=gv(`cfg-src-${k}`)?.value.trim()||k});
  const dueDayDefault=Math.min(28,Math.max(1,parseInt(gv('cfg-dueday')?.value)||5));
+ const outsideJktFee=Math.max(0,parseInt(gv('cfg-outside-fee')?.value)||0);
  const hours={open:gv('cfg-hours-open')?.value||'08:30',close:gv('cfg-hours-close')?.value||'18:00'};
  const followupDays=Math.max(1,parseInt(gv('cfg-followup-days')?.value)||14);
  const styleRefTtlDays=Math.max(1,parseInt(gv('cfg-styleref-ttl')?.value)||60);
@@ -10380,7 +10399,7 @@ async function saveConfig(){
   unpaid:gv('cfg-dashcard-unpaid')?.checked!==false,
   payroll:gv('cfg-dashcard-payroll')?.checked!==false
  };
- const config={pricing,tiers,durBase,durAdd,sourceLabels,dueDayDefault,hours,followupDays,styleRefTtlDays,tnc,areas,toastMs,autoLog,dashCards,
+ const config={pricing,tiers,durBase,durAdd,sourceLabels,dueDayDefault,outsideJktFee,hours,followupDays,styleRefTtlDays,tnc,areas,toastMs,autoLog,dashCards,
   branding:{bizName:gv('cfg-biz-name')?.value.trim()||'HomePaw',tagline:gv('cfg-biz-tagline')?.value.trim()||'',logo:_cfgLogoData||HP_LOGO},
   waClosing:gv('cfg-wa-closing')?.value.trim()||WA_CLOSING_TPL,
   customFields:_cfgCustomFields||{customers:[],pets:[]},
