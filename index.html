@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <title>Dog Groomer CRM</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
@@ -43,6 +43,7 @@ a{color:var(--primary-dk);text-decoration:none}
 a:hover{color:var(--primary-darker);text-decoration:underline}
 ::selection{background:var(--primary-lt);color:var(--primary-darker)}
 :focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+html{-webkit-text-size-adjust:100%}
 body.auth-loading .nav,body.auth-loading .page,body.auth-loading .overlay{display:none!important}
 body.auth-blocked .nav,body.auth-blocked .page,body.auth-blocked .overlay{display:none!important}
 .auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1.25rem;background:radial-gradient(1200px 600px at 50% -10%,var(--primary-tint),var(--bg) 60%)}
@@ -131,7 +132,7 @@ body.auth-blocked .nav,body.auth-blocked .page,body.auth-blocked .overlay{displa
 .maps-mini:hover{text-decoration:underline}
 .overlay{display:none;position:fixed;inset:0;background:rgba(46,33,22,.42);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);z-index:300;align-items:center;justify-content:center;padding:1.25rem}
 .overlay.open{display:flex}
-.modal{background:var(--surface);border-radius:var(--rxl);padding:1.75rem;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;box-shadow:var(--sh-lg);animation:modalIn .18s ease-out}
+.modal{background:var(--surface);border-radius:var(--rxl);padding:1.75rem;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch;box-shadow:var(--sh-lg);animation:modalIn .18s ease-out}
 @keyframes modalIn{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:none}}
 .modal-title{font-size:var(--fs-h2);font-weight:700;letter-spacing:-.01em;margin-bottom:1.4rem;color:var(--text);padding-right:2rem}
 .modal-close{position:absolute;top:1.25rem;right:1.25rem;width:32px;height:32px;border:none;background:var(--subtle);border-radius:50%;cursor:pointer;font-size:17px;display:flex;align-items:center;justify-content:center;color:var(--muted);line-height:1;transition:background .15s,color .15s}
@@ -228,7 +229,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 .photo-zone-tag{font-size:9px;text-align:center;color:#92400e;font-weight:600;margin-top:3px;max-width:82px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .c360-backdrop{position:fixed;inset:0;background:rgba(46,33,22,.38);z-index:200;opacity:0;transition:opacity .2s;pointer-events:none}
 .c360-backdrop.open{opacity:1;pointer-events:auto}
-.c360-panel{position:fixed;top:0;right:0;height:100vh;width:540px;max-width:100vw;background:var(--surface);box-shadow:var(--sh-lg);z-index:201;transform:translateX(100%);transition:transform .25s ease-out;display:flex;flex-direction:column;overflow:hidden}
+.c360-panel{position:fixed;top:0;right:0;height:100vh;height:100dvh;width:540px;max-width:100vw;background:var(--surface);box-shadow:var(--sh-lg);z-index:201;transform:translateX(100%);transition:transform .25s ease-out;display:flex;flex-direction:column;overflow:hidden}
 .c360-panel.open{transform:translateX(0)}
 @media (max-width: 600px){.c360-panel{width:100vw}}
 .c360-header{padding:18px 20px;border-bottom:1px solid var(--border-subtle);background:var(--subtle);flex-shrink:0}
@@ -370,13 +371,15 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  .toolbar{padding:8px 0;flex-wrap:wrap}
  .toolbar-title{font-size:15px}
  /* Modal full-width on phone */
- .overlay .modal{max-width:100vw;width:100%;border-radius:0;min-height:100vh;margin:0}
+ .overlay .modal{max-width:100vw;width:100%;border-radius:0;min-height:100vh;min-height:100dvh;margin:0;padding-bottom:calc(1rem + env(safe-area-inset-bottom,0px))}
  .overlay{padding:0}
  .modal-title{font-size:16px}
  .form-grid{grid-template-columns:1fr!important}
  .fg.full,.fg{grid-column:auto!important}
  .form-actions{flex-direction:column;gap:8px}
  .form-actions button{width:100%;min-height:44px}
+ /* Save button always reachable: sticky at bottom of phone modals */
+ .modal .form-actions{position:sticky;bottom:0;background:var(--surface);padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px));margin-top:10px;border-top:1px solid var(--border-subtle);z-index:2}
  /* Buttons */
  .btn{min-height:44px;font-size:14px}
  .btn-sm{min-height:36px}
@@ -1374,14 +1377,13 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="fg full"><label>Address</label><input id="cf-addr" placeholder="Jl. Kemang Raya No.10"/></div>
  <div class="fg"><label>Kota / Kabupaten</label><select id="cf-kota" onchange="onKotaChange()"><option value="">Pilih kota…</option></select></div>
  <div class="fg"><label>Kecamatan</label><select id="cf-kec"><option value="">Pilih kota dulu…</option></select></div>
- <div class="fg full"><label>Google Maps link</label><input id="cf-gmaps" placeholder="https://maps.app.goo.gl/..."/></div>
  <div class="fg full" style="grid-column:1/-1">
-  <label>Koordinat lokasi <span style="font-size:10px;color:var(--muted);font-weight:400">— untuk estimasi jarak &amp; travel time. Klik "Parse dari gmaps link" atau isi manual.</span></label>
-  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-   <input id="cf-lat" placeholder="Latitude (-6.2xxx)" style="flex:1;min-width:120px" inputmode="decimal"/>
-   <input id="cf-lng" placeholder="Longitude (106.8xxx)" style="flex:1;min-width:120px" inputmode="decimal"/>
-   <button type="button" class="btn btn-g btn-sm" onclick="parseCoordsFromGmapsLink()">Parse dari gmaps</button>
-   <button type="button" class="btn btn-g btn-sm" onclick="expandShortLinkAndParse()" style="background:#dbeafe;color:#1e40af;border-color:#3b82f6" title="Untuk short link (maps.app.goo.gl / share.google) — expand via server">🔗 Expand short link</button>
+  <label>Lokasi (Google Maps) <span style="font-size:10px;color:var(--muted);font-weight:400">— paste link Maps apa saja (short link OK) atau koordinat "lat, lng". Otomatis di-parse.</span></label>
+  <input id="cf-gmaps" placeholder="Paste link Google Maps / koordinat di sini…" oninput="onGmapsInput()"/>
+  <div id="cf-coords-chip" style="display:none;margin-top:7px;font-size:12px;align-items:center;gap:8px;flex-wrap:wrap;line-height:1.6"></div>
+  <div id="cf-coords-manual" style="display:none;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px">
+   <input id="cf-lat" placeholder="Latitude (-6.2xxx)" style="flex:1;min-width:120px" inputmode="decimal" oninput="refreshCoordsChip()"/>
+   <input id="cf-lng" placeholder="Longitude (106.8xxx)" style="flex:1;min-width:120px" inputmode="decimal" oninput="refreshCoordsChip()"/>
   </div>
   <div id="cf-coords-hint" style="font-size:10px;color:var(--muted);margin-top:3px"></div>
  </div>
@@ -1884,6 +1886,8 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 <script>
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
+// Cross-browser: AbortSignal.timeout polyfill (Safari <15.4, older Chrome/WebView)
+if(typeof AbortSignal!=='undefined'&&!AbortSignal.timeout){AbortSignal.timeout=function(ms){const c=new AbortController();setTimeout(function(){try{c.abort(new DOMException('Timeout','TimeoutError'))}catch(e){c.abort()}},ms);return c.signal}}
 let dogs=[], visits=[], appts=[], custs=[], groomers=[], invoices=[], tokens=[], subscriptions=[], bankSettings={}, custEditId=null, dogEditId=null, currentCustId=null, apptDate=null, apptEditId=null, groomerEditId=null, membEditState=null;
 let STALE_DAYS=14;
 let TOAST_MS=3500;
@@ -2010,12 +2014,13 @@ async function logAudit(entity_type, entity_id, action, opts){
   fields.forEach(f=>{if(opts?.old?.[f]!==undefined&&opts.old[f]!==null) changes[f]={old:opts.old[f],new:null}});
  }
  try{
-  await db.from('audit_log').insert({
+  // Non-blocking: audit writes must never delay the UI
+  db.from('audit_log').insert({
    entity_type, entity_id, action, changes,
    entity_label,
    user_id:u?.id||null,
    user_email:email
-  });
+  }).then(function(r){if(r.error)console.warn('audit log failed:',r.error.message)});
  }catch(e){console.warn('audit log failed:',e)}
 }
 
@@ -2525,7 +2530,11 @@ async function loadAll() {
  groomerPayouts=gpr.data||[];
  applyCfg();
  refreshAccessBadge();
- // Rebuild dropdowns
+ rebuildDropdowns();
+ refreshActiveView();
+}
+
+function rebuildDropdowns(){
  const opts=dogs.map(d=>`<option value="${d.id}">${esc(d.name)} (${esc(getOwnerName(d.customer_id))})</option>`).join('');
  const hdEl=document.getElementById('hd'); if(hdEl) hdEl.innerHTML='<option value="">All dogs</option>'+opts;
  // History customer dropdown (Batch G — item 9)
@@ -2540,8 +2549,36 @@ async function loadAll() {
  const apptDogEl=document.getElementById('appt-dog'); if(apptDogEl) apptDogEl.innerHTML='<option value="">Select dog…</option>'+opts;
  const gopts=groomers.filter(g=>g.active).map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
  const apptGrEl=document.getElementById('appt-groomer'); if(apptGrEl) apptGrEl.innerHTML='<option value="">Select groomer…</option>'+gopts;
- // Re-render whatever is currently on screen
+}
+
+// ===== Perf: targeted refetch — only the tables a save touched (was: full 17-table loadAll) =====
+const TABLE_FETCHERS={
+ customers:async function(){const r=await db.from('customers').select('*').order('created_at',{ascending:false});custs=r.data||[];},
+ dogs:async function(){const r=await db.from('dogs').select('*').order('created_at',{ascending:false});dogs=r.data||[];},
+ visits:async function(){const r=await db.from('visits').select('*,dogs(name,size)').order('visited_at',{ascending:false});visits=r.data||[];},
+ appointments:async function(){const r=await db.from('appointments').select('*,dogs(name,breed,size,prefs)').order('appt_date').order('appt_time');appts=r.data||[];},
+ groomers:async function(){const r=await db.from('groomers').select('*').order('created_at');groomers=r.data||[];},
+ invoices:async function(){const r=await db.from('invoices').select('*').order('created_at',{ascending:false});invoices=r.data||[];},
+ business_settings:async function(){const r=await db.from('business_settings').select('*').eq('id',1).single();bankSettings=r.data||{};applyCfg();},
+ tokens:async function(){const r=await db.from('tokens').select('*').order('created_at',{ascending:false});tokens=r.data||[];},
+ subscriptions:async function(){const r=await db.from('subscriptions').select('*').order('created_at',{ascending:false});subscriptions=r.data||[];},
+ admin_users:async function(){const r=await db.from('admin_users').select('*').order('created_at',{ascending:false});adminUsers=r.data||[];window._adminEmails={};adminUsers.forEach(function(a){window._adminEmails[a.id]=a.email||a.name||'admin'});},
+ audit_log:async function(){const r=await db.from('audit_log').select('*').order('created_at',{ascending:false}).limit(500);auditEntries=r.data||[];},
+ groomer_blocks:async function(){const r=await db.from('groomer_blocks').select('*').order('block_date',{ascending:false});groomerBlocks=r.data||[];},
+ complaints:async function(){const r=await db.from('complaints').select('*').order('complaint_date',{ascending:false});complaints=r.data||[];},
+ capital_injections:async function(){const r=await db.from('capital_injections').select('*').order('injection_date',{ascending:false});capitalInjections=r.data||[];},
+ expenses:async function(){const r=await db.from('expenses').select('*').order('expense_date',{ascending:false});expenses=r.data||[];},
+ groomer_payouts:async function(){if(!isOwner())return;const r=await db.from('groomer_payouts').select('*').order('cycle_start',{ascending:false});groomerPayouts=r.data||[];}
+};
+async function reloadTables(){
+ const names=Array.prototype.slice.call(arguments);
+ try{
+  await Promise.all(names.map(function(n){return TABLE_FETCHERS[n]?TABLE_FETCHERS[n]():Promise.resolve()}));
+ }catch(e){console.error('reloadTables:',e);}
+ if(names.indexOf('customers')>=0||names.indexOf('dogs')>=0||names.indexOf('groomers')>=0) rebuildDropdowns();
  refreshActiveView();
+ // Audit list refreshes in background (inserts are fire-and-forget)
+ if(names.indexOf('audit_log')<0) setTimeout(function(){TABLE_FETCHERS.audit_log().catch(function(){})},1200);
 }
 
 // Single source of truth for refreshing the visible view after any data change.
@@ -2736,6 +2773,8 @@ function openAddCust(){
  document.getElementById('cust-save-btn').textContent='Save customer';
  ['cf-owner','cf-wa','cf-addr','cf-gmaps','cf-prefs','cf-lat','cf-lng'].forEach(id=>document.getElementById(id)&&(document.getElementById(id).value=''));
  const hintEl0=document.getElementById('cf-coords-hint'); if(hintEl0) hintEl0.textContent='';
+ const manual0=document.getElementById('cf-coords-manual'); if(manual0) manual0.style.display='none';
+ refreshCoordsChip();
  const srcEl=document.getElementById('cf-source'); if(srcEl) srcEl.value='';
  populateKotaSelect(document.getElementById('cf-kota'));
  populateKecSelect(document.getElementById('cf-kec'),'');
@@ -2755,8 +2794,9 @@ function openEditCust(id){
  document.getElementById('cf-gmaps').value=c.gmaps_link||'';
  document.getElementById('cf-lat').value=c.latitude!=null?c.latitude:'';
  document.getElementById('cf-lng').value=c.longitude!=null?c.longitude:'';
- const hintEl=document.getElementById('cf-coords-hint');
- if(hintEl) hintEl.textContent=(c.latitude!=null&&c.longitude!=null)?'✓ Koordinat tersimpan':'Belum ada koordinat — jarak tidak bisa dihitung.';
+ const hintEl=document.getElementById('cf-coords-hint'); if(hintEl) hintEl.textContent='';
+ const manualE=document.getElementById('cf-coords-manual'); if(manualE) manualE.style.display='none';
+ refreshCoordsChip();
  document.getElementById('cf-prefs').value=c.prefs||'';
  const srcEl=document.getElementById('cf-source'); if(srcEl) srcEl.value=c.source||'';
  populateKotaSelect(document.getElementById('cf-kota'));
@@ -2795,21 +2835,32 @@ async function saveCust(){
  ...editStamp()
  };
  if(!(CUSTOM_FIELDS.customers||[]).length) delete p.custom;
- if(custEditId){
-  const oldRec=custs.find(c=>c.id===custEditId);
-  await db.from('customers').update(p).eq('id',custEditId);
-  await logAudit('customer',custEditId,'update',{old:oldRec,new:p,label:owner});
- } else {
-  let maxN=0;
-  custs.forEach(c=>{
-   const m=(c.customer_code||'').match(/^CUST-(\d+)$/);
-   if(m){const n=parseInt(m[1]);if(n>maxN)maxN=n}
-  });
-  p.customer_code=`CUST-${String(maxN+1).padStart(3,'0')}`;
-  const {data:inserted}=await db.from('customers').insert(p).select().single();
-  if(inserted) await logAudit('customer',inserted.id,'create',{new:p,label:owner});
+ const btn=document.getElementById('cust-save-btn');
+ if(btn&&btn.disabled) return; // double-click guard
+ const btnLbl=btn?btn.textContent:'';
+ if(btn){btn.disabled=true;btn.textContent='Menyimpan\u2026'}
+ try{
+  if(custEditId){
+   const oldRec=custs.find(c=>c.id===custEditId);
+   const {error}=await db.from('customers').update(p).eq('id',custEditId);
+   if(error){alert('Gagal menyimpan: '+error.message);return}
+   logAudit('customer',custEditId,'update',{old:oldRec,new:p,label:owner});
+  } else {
+   let maxN=0;
+   custs.forEach(c=>{
+    const m=(c.customer_code||'').match(/^CUST-(\d+)$/);
+    if(m){const n=parseInt(m[1]);if(n>maxN)maxN=n}
+   });
+   p.customer_code=`CUST-${String(maxN+1).padStart(3,'0')}`;
+   const {data:inserted,error}=await db.from('customers').insert(p).select().single();
+   if(error){alert('Gagal menyimpan: '+error.message);return}
+   if(inserted) logAudit('customer',inserted.id,'create',{new:p,label:owner});
+  }
+  cm('ov-cust');
+  await reloadTables('customers');
+ }finally{
+  if(btn){btn.disabled=false;btn.textContent=btnLbl}
  }
- cm('ov-cust'); await loadAll();
 }
 
 async function delCust(id,name){
@@ -2817,12 +2868,12 @@ async function delCust(id,name){
  const oldRec=custs.find(c=>c.id===id);
  // Also delete linked dogs from audit POV
  const linkedDogs=dogs.filter(d=>d.customer_id===id);
- for(const d of linkedDogs) await logAudit('dog',d.id,'delete',{old:d,label:d.name});
+ linkedDogs.forEach(d=>logAudit('dog',d.id,'delete',{old:d,label:d.name}));
  await db.from('dogs').delete().eq('customer_id',id);
  await db.from('customers').delete().eq('id',id);
  await logAudit('customer',id,'delete',{old:oldRec,label:name});
  if(currentCustId===id) currentCustId=null;
- await loadAll();
+ await reloadTables('customers','dogs','visits','appointments');
 }
 
 /* DOG MODAL */
@@ -2904,23 +2955,35 @@ async function saveDog(){
  ...editStamp()
  };
  if(!(CUSTOM_FIELDS.pets||[]).length) delete p.custom;
- if(dogEditId){
-  const oldRec=dogs.find(d=>d.id===dogEditId);
-  await db.from('dogs').update(p).eq('id',dogEditId);
-  await logAudit('dog',dogEditId,'update',{old:oldRec,new:p,label:p.name});
- } else {
-  const cust=custs.find(x=>x.id===currentCustId);
-  const existing=dogsOf(currentCustId);
-  let maxN=0;
-  existing.forEach(d=>{
-   const m=(d.dog_code||'').match(/-D(\d+)$/);
-   if(m){const n=parseInt(m[1]);if(n>maxN)maxN=n}
-  });
-  p.dog_code=`${cust?.customer_code||'CUST-???'}-D${maxN+1}`;
-  const {data:inserted}=await db.from('dogs').insert(p).select().single();
-  if(inserted) await logAudit('dog',inserted.id,'create',{new:p,label:p.name});
+ const btn=document.getElementById('dog-save-btn');
+ if(btn&&btn.disabled) return; // double-click guard
+ const btnLbl=btn?btn.textContent:'';
+ if(btn){btn.disabled=true;btn.textContent='Menyimpan\u2026'}
+ try{
+  if(dogEditId){
+   const oldRec=dogs.find(d=>d.id===dogEditId);
+   const {error}=await db.from('dogs').update(p).eq('id',dogEditId);
+   if(error){alert('Gagal menyimpan: '+error.message);return}
+   logAudit('dog',dogEditId,'update',{old:oldRec,new:p,label:p.name});
+  } else {
+   const cust=custs.find(x=>x.id===currentCustId);
+   const existing=dogsOf(currentCustId);
+   let maxN=0;
+   existing.forEach(d=>{
+    const m=(d.dog_code||'').match(/-D(\d+)$/);
+    if(m){const n=parseInt(m[1]);if(n>maxN)maxN=n}
+   });
+   p.dog_code=`${cust?.customer_code||'CUST-???'}-D${maxN+1}`;
+   const {data:inserted,error}=await db.from('dogs').insert(p).select().single();
+   if(error){alert('Gagal menyimpan: '+error.message);return}
+   if(inserted) logAudit('dog',inserted.id,'create',{new:p,label:p.name});
+  }
+  cm('ov-dog');
+  await reloadTables('dogs');
+  renderDogsTable();
+ }finally{
+  if(btn){btn.disabled=false;btn.textContent=btnLbl}
  }
- cm('ov-dog'); await loadAll(); renderDogsTable();
 }
 
 async function delDog(id,name){
@@ -2928,14 +2991,14 @@ async function delDog(id,name){
  const oldRec=dogs.find(d=>d.id===id);
  await db.from('dogs').delete().eq('id',id);
  await logAudit('dog',id,'delete',{old:oldRec,label:name});
- await loadAll(); renderDogsTable();
+ await reloadTables('dogs','visits','appointments'); renderDogsTable();
 }
 
 async function addVisit(dogId){
  const inp=document.getElementById('vn-'+dogId);
  const note=inp.value.trim(); if(!note) return;
  await db.from('visits').insert({dog_id:dogId,note,visited_at:iso(new Date())});
- inp.value=''; await loadAll();
+ inp.value=''; await reloadTables('visits');
 }
 
 /* HISTORY */
@@ -3960,9 +4023,9 @@ function customerLocationStatus(c){
  const link=(c.gmaps_link||'').trim();
  if(!link) return {ok:false,code:'nolink',msg:'Belum ada gmaps link',severity:'red'};
  if(/^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs)/i.test(link))
-  return {ok:false,code:'shortlink',msg:'Short link — butuh URL lengkap dari google.com/maps',severity:'red'};
+  return {ok:false,code:'shortlink',msg:'Short link — buka Edit, link akan di-expand otomatis',severity:'red'};
  if(/@(-?\d+\.\d+),(-?\d+\.\d+)/.test(link)||/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/.test(link))
-  return {ok:false,code:'unparsed',msg:'Full link OK, tapi coord belum di-parse — Edit → Parse',severity:'orange'};
+  return {ok:false,code:'unparsed',msg:'Full link OK — buka Edit, koordinat terisi otomatis',severity:'orange'};
  return {ok:false,code:'invalid',msg:'Format link tidak dikenali',severity:'orange'};
 }
 
@@ -3995,7 +4058,71 @@ async function _expandShortLinkViaServer(shortUrl){
  return await res.json();  // {expanded, coords: {lat,lng}|null, source}
 }
 
-/* Single-customer expand (called from edit modal button) */
+/* ---------- Smart paste (Option A): auto-parse anything dropped in the Maps field ---------- */
+let _gmapsDebounce=null,_gmapsSeq=0;
+function onGmapsInput(){clearTimeout(_gmapsDebounce);_gmapsDebounce=setTimeout(smartParseGmaps,350)}
+function _tryParseCoordsFromText(txt){
+ let m=txt.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+ if(m) return {lat:m[1],lng:m[2]};
+ m=txt.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+ if(m) return {lat:m[1],lng:m[2]};
+ m=txt.match(/[?&](?:q|ll|query|destination)=(-?\d+\.\d+)(?:,|%2C)(-?\d+\.\d+)/i);
+ if(m) return {lat:m[1],lng:m[2]};
+ m=txt.match(/^\s*(-?\d{1,2}\.\d+)\s*[,\s]\s*(-?\d{1,3}\.\d+)\s*$/);
+ if(m) return {lat:m[1],lng:m[2]};
+ return null;
+}
+function _isShortMapsLink(url){return /^https?:\/\/(maps\.app\.goo\.gl|share\.google|goo\.gl\/maps|g\.co)\//i.test(url)}
+async function smartParseGmaps(){
+ const gEl=document.getElementById('cf-gmaps'),latEl=document.getElementById('cf-lat'),lngEl=document.getElementById('cf-lng');
+ if(!gEl||!latEl||!lngEl) return;
+ const val=gEl.value.trim();
+ const seq=++_gmapsSeq;
+ if(!val){refreshCoordsChip();return}
+ const c=_tryParseCoordsFromText(val);
+ if(c){latEl.value=c.lat;lngEl.value=c.lng;refreshCoordsChip('ok');return}
+ if(_isShortMapsLink(val)){
+  refreshCoordsChip('loading');
+  try{
+   const r=await _expandShortLinkViaServer(val);
+   if(seq!==_gmapsSeq) return;
+   if(r.coords){
+    latEl.value=r.coords.lat.toFixed(7);lngEl.value=r.coords.lng.toFixed(7);
+    if(r.expanded&&r.expanded!==val) gEl.value=r.expanded;
+    refreshCoordsChip('ok');
+   } else {
+    refreshCoordsChip('fail','Link ter-expand tapi koordinat tidak ketemu. Buka di Maps \u2192 tekan lama titik lokasi \u2192 copy koordinat \u2192 paste di field ini.');
+   }
+  }catch(e){
+   if(seq!==_gmapsSeq) return;
+   refreshCoordsChip('fail','Gagal expand ('+e.message+'). Buka link di Maps, copy koordinat, lalu paste di field ini.');
+  }
+  return;
+ }
+ if(/^https?:\/\//i.test(val)) refreshCoordsChip('fail','Format link tidak dikenali. Copy ulang dari Google Maps, atau paste koordinat "lat, lng".');
+ else refreshCoordsChip();
+}
+function toggleManualCoords(){
+ const row=document.getElementById('cf-coords-manual');
+ if(row) row.style.display=(row.style.display==='flex')?'none':'flex';
+}
+function refreshCoordsChip(state,msg){
+ const chip=document.getElementById('cf-coords-chip');
+ const latEl=document.getElementById('cf-lat'),lngEl=document.getElementById('cf-lng');
+ if(!chip||!latEl||!lngEl) return;
+ const lat=latEl.value.trim(),lng=lngEl.value.trim();
+ const editLink='<a href="javascript:void(0)" onclick="toggleManualCoords()" style="color:var(--primary-dk);font-weight:600">edit manual</a>';
+ chip.style.display='flex';
+ if(state==='loading'){chip.innerHTML='<span style="color:var(--muted)">\u23F3 Expand short link\u2026</span>';return}
+ if(state==='fail'){chip.innerHTML='<span style="color:#b45309">\u26A0 '+esc(msg||'Tidak bisa parse')+'</span><span style="color:var(--muted)">\u00B7</span> '+editLink;return}
+ if(lat&&lng){
+  chip.innerHTML='<span style="display:inline-flex;align-items:center;gap:5px;background:#e6f4ea;color:#1e7a3c;padding:3px 10px;border-radius:99px;font-weight:600">\uD83D\uDCCD '+esc(lat)+', '+esc(lng)+' \u2713</span> <a href="https://www.google.com/maps?q='+encodeURIComponent(lat+','+lng)+'" target="_blank" style="color:var(--primary-dk)">cek di Maps</a> <span style="color:var(--muted)">\u00B7</span> '+editLink;
+ } else {
+  chip.innerHTML='<span style="color:var(--muted)">Koordinat belum ada \u2014 paste link Maps di atas</span> <span style="color:var(--muted)">\u00B7</span> '+editLink;
+ }
+}
+
+/* Single-customer expand (legacy — kept for compatibility, UI now uses smartParseGmaps) */
 async function expandShortLinkAndParse(){
  const gmapsEl=document.getElementById('cf-gmaps');
  const latEl=document.getElementById('cf-lat');
@@ -4478,7 +4605,7 @@ async function deleteApptFromGroup(did){
  // Remove from wiz state
  wiz.editIds=wiz.editIds.filter(id=>id!==apptId);
  wiz.dogSvcs=wiz.dogSvcs.filter(ds=>ds.did!==did);
- await loadAll();
+ await reloadTables('appointments');
  if(wiz.editIds.length===0){cm('ov-appt');renderCal();return}
  // Update title
  const titleEl=document.getElementById('appt-title');
@@ -5626,7 +5753,7 @@ async function saveGroomer(){
   p.access_token=Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,10);
   await db.from('groomers').insert(p);
  }
- cm('ov-groomer'); await loadAll(); renderGroomers();
+ cm('ov-groomer'); await reloadTables('groomers'); renderGroomers();
 }
 
 async function delGroomer(id,name){
@@ -5635,7 +5762,7 @@ async function delGroomer(id,name){
  if(ac) msg+=` ${ac} appointment(s) will be unassigned.`;
  if(!confirm(msg)) return;
  await db.from('groomers').delete().eq('id',id);
- await loadAll(); renderGroomers();
+ await reloadTables('groomers','appointments'); renderGroomers();
 }
 
 /* Quick toggle groomer active/inactive from list row.
@@ -6801,7 +6928,7 @@ async function createSubsScheduleAppointments(){
  const {error}=await db.from('appointments').insert(toCreate);
  if(error){alert('Error: '+error.message);return}
  showToast(`${toCreate.length} jadwal berhasil dibuat di kalender!`,'success');
- await loadAll();
+ await reloadTables('appointments');
 }
 
 // Batch O.9 — invoice date changed → auto-update due_date field per current rules
@@ -7337,7 +7464,7 @@ async function saveInvoice(){
   await createTokensFromInvoice(rec);
   alert('Invoice tersimpan: '+rec.invoice_number);
  }
- await loadAll();
+ await reloadTables('invoices','visits','tokens','subscriptions');
 }
 
 async function saveInvoiceAndAppts(){
@@ -7380,7 +7507,7 @@ async function saveInvoiceAndAppts(){
   if(e2){alert('Appt save error: '+e2.message);return}
  }
  alert(`Invoice ${rec.invoice_number}${rec.is_advance?` + ${totalSessions} sesi ke kalender`:''} tersimpan`);
- await loadAll();
+ await reloadTables('invoices','visits','tokens','appointments','subscriptions');
 }
 
 function buildServiceRows(dogsData,counter){
@@ -8167,7 +8294,7 @@ async function toggleInvStatus(id,newSt){
    }
   }
  }
- await loadAll(); renderFinancial();
+ await reloadTables('invoices','tokens','subscriptions','visits'); renderFinancial();
 }
 
 /* Session E — Compute renewal urgency for a subs row.
@@ -8375,7 +8502,7 @@ async function saveMembEdit(){
  if(error){alert('Error: '+error.message);return}
  membEditState=null;
  cm('ov-memb-edit');
- await loadAll();
+ await reloadTables('tokens','subscriptions');
  renderMembership();
 }
 
@@ -8385,7 +8512,7 @@ async function delMemb(kind,id,owner){
  const tbl=kind==='subscription'?'subscriptions':'tokens';
  const {error}=await db.from(tbl).delete().eq('id',id);
  if(error){alert('Error: '+error.message);return}
- await loadAll();
+ await reloadTables('tokens','subscriptions');
  renderMembership();
 }
 
@@ -8399,7 +8526,7 @@ async function delInvoice(id,num){
  const oldRec=invoices.find(i=>i.id===id);
  await db.from('invoices').delete().eq('id',id);
  await logAudit('invoice',id,'delete',{old:oldRec,label:num+' — '+(oldRec?.owner_name||'')});
- await loadAll(); renderFinancial();
+ await reloadTables('invoices','tokens','subscriptions','visits'); renderFinancial();
 }
 
 // Batch O.18 — Export to Excel using SheetJS
@@ -8791,7 +8918,7 @@ async function saveComplaint(){
   if(inserted) await logAudit('complaint',inserted.id,'create',{new:payload,label:payload.complaint_date+' \u00B7 '+payload.severity});
  }
  cm('ov-complaint');
- await loadAll();
+ await reloadTables('complaints');
  // If groomer report open, refresh
  if(typeof renderGroomerReport==='function'&&_grptCurrentId) renderGroomerReport();
  showToast('Komplain tersimpan','success');
@@ -8805,7 +8932,7 @@ async function delComplaint(){
  await db.from('complaints').delete().eq('id',id);
  if(oldRec) await logAudit('complaint',id,'delete',{old:oldRec,label:oldRec.complaint_date+' \u00B7 '+oldRec.severity});
  cm('ov-complaint');
- await loadAll();
+ await reloadTables('complaints');
  if(typeof renderGroomerReport==='function'&&_grptCurrentId) renderGroomerReport();
 }
 
@@ -8880,7 +9007,7 @@ async function saveBlockDay(){
   const gName=groomerId?(groomers.find(g=>g.id===groomerId)?.name||'?'):'All groomers';
   await logAudit('groomer_block',inserted.id,'create',{new:payload,label:`${date} \u00B7 ${gName} \u00B7 ${reason}`});
  }
- await loadAll();
+ await reloadTables('groomer_blocks');
  cm('ov-block');
  renderCal();
  showToast('Block day disimpan','success');
@@ -8895,7 +9022,7 @@ async function delBlockDay(id){
   const gName=oldRec.groomer_id?(groomers.find(g=>g.id===oldRec.groomer_id)?.name||'?'):'All groomers';
   await logAudit('groomer_block',id,'delete',{old:oldRec,label:`${oldRec.block_date} \u00B7 ${gName}`});
  }
- await loadAll();
+ await reloadTables('groomer_blocks');
  // Refresh modal list + calendar
  if(document.getElementById('ov-block')?.classList.contains('open')||document.getElementById('ov-block')?.style.display==='flex') openBlockDayModal();
  renderCal();
@@ -8932,7 +9059,7 @@ async function saveBankSettings(){
  updated_at:new Date().toISOString()
  };
  await db.from('business_settings').upsert(p);
- cm('ov-bank'); await loadAll();
+ cm('ov-bank'); await reloadTables('business_settings');
 }
 
 /* ============ REMINDERS ============ */
@@ -9438,7 +9565,7 @@ async function autoLogPastAppointments(){
   await db.from('appointments').update({subs_deducted:true}).eq('id',a.id);
   console.log(`Deducted 1 session from sub ${sub.id} (${sub.type}), now ${newUsed}/${sub.sessions_total} used`);
  }
- if(toLog.length||apptWithTokens.length||subsAppts.length) await loadAll();
+ if(toLog.length||apptWithTokens.length||subsAppts.length) await reloadTables('appointments','visits','tokens','subscriptions');
 }
 
 /* ========== PHOTOS — zones: before / after / issue (Batch L3) ========== */
@@ -10046,7 +10173,7 @@ async function setRole(id,newRole){
  if(!confirm(`${label} untuk ${u.email}?`)) return;
  const {error}=await db.from('admin_users').update({role:newRole}).eq('id',id);
  if(error){alert('Error: '+error.message);return}
- await loadAll();
+ await reloadTables('admin_users');
  renderAccess();
 }
 
@@ -10061,7 +10188,7 @@ async function setAccess(id,newStatus){
  }
  const {error}=await db.from('admin_users').update(patch).eq('id',id);
  if(error){alert('Error: '+error.message);return}
- await loadAll();
+ await reloadTables('admin_users');
  renderAccess();
 }
 
@@ -10069,7 +10196,7 @@ async function delAccess(id,email){
  if(!confirm(`Delete akses ${email}?\n\nIni hanya menghapus record akses CRM. Akun auth tetap ada di Supabase (hapus manual lewat dashboard kalau perlu).`)) return;
  const {error}=await db.from('admin_users').delete().eq('id',id);
  if(error){alert('Error: '+error.message);return}
- await loadAll();
+ await reloadTables('admin_users');
  renderAccess();
 }
 
@@ -10263,7 +10390,7 @@ async function saveConfig(){
   remClosing:gv('cfg-rem-closing')?.value??REM_CLOSING};
  const {error}=await db.from('business_settings').upsert({id:1,config,updated_at:new Date().toISOString()});
  if(error){alert('Gagal simpan: '+error.message);return}
- await loadAll();
+ await reloadTables('business_settings');
  renderConfig();
  showToast('Konfigurasi tersimpan','success');
 }
@@ -10272,7 +10399,7 @@ async function resetConfig(){
  if(!confirm('Reset semua konfigurasi ke default bawaan?')) return;
  const {error}=await db.from('business_settings').upsert({id:1,config:{},updated_at:new Date().toISOString()});
  if(error){alert('Gagal reset: '+error.message);return}
- await loadAll();
+ await reloadTables('business_settings');
  renderConfig();
  showToast('Konfigurasi direset ke default','success');
 }
@@ -10517,14 +10644,14 @@ async function saveExpense(){
  if(!item||!amount||!dt){alert('Isi item, jumlah, dan tanggal.');return}
  const {error}=await db.from('expenses').insert({item,amount,expense_date:dt,notes:notes||null});
  if(error){alert('Error: '+error.message);return}
- cm('ov-expense'); await loadAll(); renderExpenses();
+ cm('ov-expense'); await reloadTables('expenses'); renderExpenses();
 }
 
 async function deleteExpense(id){
  if(!confirm('Hapus pengeluaran ini?')) return;
  const {error}=await db.from('expenses').delete().eq('id',id);
  if(error){alert('Error: '+error.message);return}
- await loadAll(); renderExpenses();
+ await reloadTables('expenses'); renderExpenses();
 }
 
 /* ----- Capital injection tracker ----- */
@@ -10580,14 +10707,14 @@ async function saveCapital(){
  if(!amount||!dt){alert('Isi jumlah dan tanggal.');return}
  const {error}=await db.from('capital_injections').insert({injected_by:by,amount,injection_date:dt,notes:notes||null});
  if(error){alert('Error: '+error.message);return}
- cm('ov-capital'); await loadAll();
+ cm('ov-capital'); await reloadTables('capital_injections');
 }
 
 async function deleteCapital(id){
  if(!confirm('Hapus injeksi ini?')) return;
  const {error}=await db.from('capital_injections').delete().eq('id',id);
  if(error){alert('Error: '+error.message);return}
- await loadAll();
+ await reloadTables('capital_injections');
 }
 
 /* ----- Subscription payments ----- */
@@ -10868,7 +10995,7 @@ async function markGroomerPaid(groomerId,cycleStart,cycleEnd){
  const existing=groomerPayouts.find(p=>p.groomer_id===groomerId&&p.cycle_start===cycleStart&&(p.payout_type||'salary')==='salary');
  const resp=existing?await db.from('groomer_payouts').update(row).eq('id',existing.id):await db.from('groomer_payouts').insert(row);
  if(resp.error){alert('Error: '+resp.error.message);return}
- await loadAll();
+ await reloadTables('groomer_payouts');
  renderPayroll();
 }
 async function payGroomerRetention(groomerId,cycleStart,cycleEnd,balance){
@@ -10877,7 +11004,7 @@ async function payGroomerRetention(groomerId,cycleStart,cycleEnd,balance){
  const row={ groomer_id:groomerId,cycle_start:cycleStart,cycle_end:cycleEnd,amount:balance,breakdown:{retention:balance},payout_type:'retention',status:'paid',paid_at:new Date().toISOString() };
  const {error}=await db.from('groomer_payouts').insert(row);
  if(error){alert('Error: '+error.message);return}
- await loadAll();
+ await reloadTables('groomer_payouts');
  renderPayroll();
 }
 
@@ -10887,7 +11014,7 @@ async function unmarkGroomerPaid(groomerId,cycleStart){
  if(!confirm(`Undo payment for this cycle?\n\nDelete the paid record? Numbers will recalculate live.`)) return;
  const {error}=await db.from('groomer_payouts').delete().eq('id',existing.id);
  if(error){alert('Error: '+error.message);return}
- await loadAll();
+ await reloadTables('groomer_payouts');
  renderPayroll();
 }
 
@@ -11062,7 +11189,7 @@ async function markVisitManualBilled(visitId){
  if(error){alert('Error: '+error.message);return}
  const dogName=dogs.find(d=>d.id===v.dog_id)?.name||'?';
  await logAudit('visit',visitId,'update',{old:v,new:{...v,...newRec},label:dogName+' ('+v.visited_at+')'});
- await loadAll(); renderVisits();
+ await reloadTables('visits'); renderVisits();
  showToast('Visit ditandai sebagai manual billed','success');
 }
 
@@ -11076,7 +11203,7 @@ async function unmarkVisitBilled(visitId){
   const dogName=dogs.find(d=>d.id===v.dog_id)?.name||'?';
   await logAudit('visit',visitId,'update',{old:v,new:{...v,...newRec},label:dogName+' ('+v.visited_at+')'});
  }
- await loadAll(); renderVisits();
+ await reloadTables('visits'); renderVisits();
 }
 
 // Batch O.10 — delete a visit (admin tool for orphaned visits, e.g. groomer sick)
@@ -11088,7 +11215,7 @@ async function delVisit(visitId){
  const {error}=await db.from('visits').delete().eq('id',visitId);
  if(error){alert('Error: '+error.message);return}
  await logAudit('visit',visitId,'delete',{old:v,label});
- await loadAll();
+ await reloadTables('visits');
  if(typeof renderVisits==='function') renderVisits();
  if(typeof renderCust360==='function') renderCust360();
  showToast('Visit dihapus','success');
