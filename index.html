@@ -897,7 +897,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="det-lbl">3. Groomer & tanggal</div>
  <div class="form-grid">
  <div class="fg"><label>Groomer</label>
- <select id="inv-groomer" onchange="renderInvoicePreview()"><option value="">Pilih groomer…</option></select>
+ <select id="inv-groomer" onchange="renderInvoicePreview();updateSubsSchedGroomerHint()"><option value="">Pilih groomer…</option></select>
  </div>
  <div class="fg"><label>Or type manually</label><input id="inv-groomer-manual" placeholder="Nama groomer" oninput="renderInvoicePreview()"/></div>
  <div class="fg"><label>Tanggal invoice</label><input type="date" id="inv-date" onchange="onInvDateChange()"/></div>
@@ -991,7 +991,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   <div id="inv-subs-schedule-dogs" style="padding:0 1rem"></div>
   <div style="padding:1rem;padding-top:8px;border-top:1px solid var(--border);margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
    <button class="btn btn-p btn-sm" onclick="createSubsScheduleAppointments()">Buat jadwal di kalender</button>
-   <span style="font-size:11px;color:var(--muted)">Groomer belum ditentukan — isi nanti via kalender</span>
+   <span id="inv-subs-sched-ghint" style="font-size:11px;color:var(--muted)">Pilih groomer di bagian 3 dulu</span>
   </div>
  </div>
 
@@ -6894,9 +6894,19 @@ function renderSubsSchedulePicker(){
    </div>
   </div>`;
  }).join('');
+ updateSubsSchedGroomerHint();
+}
+function updateSubsSchedGroomerHint(){
+ const el=document.getElementById('inv-subs-sched-ghint'); if(!el) return;
+ const grId=document.getElementById('inv-groomer')?.value||'';
+ const g=groomers.find(x=>x.id===grId);
+ if(g){ el.textContent='Groomer: '+g.name; el.style.color='var(--green-dk)'; }
+ else { el.textContent='Pilih groomer di bagian 3 dulu'; el.style.color='var(--muted)'; }
 }
 
 async function createSubsScheduleAppointments(){
+ const grId=document.getElementById('inv-groomer')?.value||'';
+ if(!grId){alert('Pilih groomer di bagian 3 (dropdown "Groomer") dulu sebelum buat jadwal.');return}
  const toCreate=[];
  const conflicts=[];
  const DAY_VALS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -6926,7 +6936,7 @@ async function createSubsScheduleAppointments(){
    if(existing){
     conflicts.push({dogName:dog.name,date:dateISO,existingTime:existing.appt_time?.slice(0,5)||'?'});
    } else {
-    toCreate.push({dog_id:did,customer_id:dog.customer_id,appt_date:dateISO,appt_time:time+':00',service_base:svcBase,duration_mins:dur,session_source:'subscription',status:'pending',token_used:false,subs_deducted:false});
+    toCreate.push({dog_id:did,groomer_id:grId,customer_id:dog.customer_id,appt_date:dateISO,appt_time:time+':00',service_base:svcBase,duration_mins:dur,session_source:'subscription',status:'pending',token_used:false,subs_deducted:false});
    }
    d.setDate(d.getDate()+freqDays);
   }
@@ -7987,9 +7997,10 @@ function downloadInvoicePDF(){
  setTimeout(()=>w.print(),300);
 }
 
-// Session E — Session E: simplified WA message per owner spec.
-// Just 4 sections: greeting/thanks, groomer notes, total + bank, "detail in image".
-// Session E — now uses editable WA_TPL_INVOICE template with placeholder substitution.
+// WA message: template chosen strictly by doc type.
+//   Laporan Grooming (report) → WA_TPL_DONE (after-service)
+//   Invoice → WA_TPL_INVOICE (billing)
+// Both templates receive the same token set so either can include payment info when needed.
 function buildInvoiceWAMessage(rec, custObj){
  const docMode=detectInvoiceMode(rec);
  const isReport=docMode==='report';
@@ -7997,11 +8008,13 @@ function buildInvoiceWAMessage(rec, custObj){
  const dogNames=(rec.dogs||[]).map(d=>d.name).filter(Boolean).join(' & ')||'anjing kesayangan';
  const totalStr=rec.total===0?'Rp 0 (sudah dibayar via subscription)':'Rp '+rec.total.toLocaleString('id-ID');
 
- if(isReport&&rec.total===0){
-  return applyTpl(WA_TPL_DONE,{nama:firstName,dogs:dogNames,layanan:'',biz:BIZ_NAME});
- }
+ // Service list per dog for {layanan}
+ const layanan=(rec.dogs||[]).map(d=>{
+  const svc=(d.services||[]).map(s=>s.name).filter(Boolean).join(', ');
+  return svc?`${d.name}: ${svc}`:d.name;
+ }).filter(Boolean).join('\n') || '-';
 
- // Session E — pull groomer field notes; use "N/A" if all empty (per owner spec)
+ // Groomer field notes; "N/A" if all empty
  const dogIds=(rec.dogs||[]).map(d=>d.dog_id);
  const linkedAppts=appts.filter(a=>dogIds.includes(a.dog_id)&&a.appt_date===rec.invoice_date);
  const groomerNotes=linkedAppts
@@ -8014,23 +8027,17 @@ function buildInvoiceWAMessage(rec, custObj){
   .filter(Boolean)
   .join('\n') || 'N/A';
 
- const bank=bankSettings.bank_name||'BCA';
- const acc=bankSettings.bank_account||'';
- const holder=bankSettings.bank_holder||'';
-
- // Session E — apply template with placeholders. Fallback to hardcoded default if template missing.
- const tpl=WA_TPL_INVOICE||'Halo kak {nama},\n\n{biz} — {dogs}\n\n📝 Catatan groomer:\n{groomer_notes}\n\n💰 Total: {total}\n💳 {bank} • {acc} • {holder}\n\n📎 Detail di PDF.\n\n{closing}';
- return applyTpl(tpl, {
-  nama:firstName,
-  biz:BIZ_NAME,
-  dogs:dogNames,
-  groomer_notes:groomerNotes,
-  total:totalStr,
-  bank:bank,
-  acc:acc,
-  holder:holder,
+ const vars={
+  nama:firstName, biz:BIZ_NAME, dogs:dogNames, layanan,
+  groomer_notes:groomerNotes, total:totalStr,
+  bank:bankSettings.bank_name||'BCA', acc:bankSettings.bank_account||'', holder:bankSettings.bank_holder||'',
   closing:waClosing()
- });
+ };
+
+ if(isReport){
+  return applyTpl(WA_TPL_DONE||'Halo kak {nama},\n\nGrooming {dogs} sudah selesai!\n\n{layanan}\n\n📎 Detail di PDF.\n\n{closing}', vars);
+ }
+ return applyTpl(WA_TPL_INVOICE||'Halo kak {nama},\n\n{biz} — {dogs}\n\n📝 Catatan groomer:\n{groomer_notes}\n\n💰 Total: {total}\n💳 {bank} • {acc} • {holder}\n\n📎 Detail di PDF.\n\n{closing}', vars);
 }
 
 /* ==== Session E — Rich invoice PDF generation for WhatsApp ====
@@ -10347,7 +10354,7 @@ function renderConfig(){
   ${sec('Custom fields',`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Tambah info sendiri ke Customer / Pet. Muncul di form & Customer 360.</div><div id="cfg-customfields-body"></div>`)}
   ${sec('Pesan WhatsApp',`
    <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
-    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan "grooming selesai" (sudah dibayar) <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{layanan}</code> <code>{biz}</code></span><textarea id="cfg-wa-done" rows="9" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_DONE)}</textarea></label>
+    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan "grooming selesai" (Laporan Grooming) <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{layanan}</code> <code>{groomer_notes}</code> <code>{total}</code> <code>{bank}</code> <code>{acc}</code> <code>{holder}</code> <code>{biz}</code> <code>{closing}</code></span><textarea id="cfg-wa-done" rows="9" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_DONE)}</textarea></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan invoice (grooming + tagihan) <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{biz}</code> <code>{dogs}</code> <code>{groomer_notes}</code> <code>{total}</code> <code>{bank}</code> <code>{acc}</code> <code>{holder}</code> <code>{closing}</code></span><textarea id="cfg-wa-invoice" rows="12" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_INVOICE)}</textarea></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Salam reminder customer <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code></span><input id="cfg-rem-greeting" type="text" value="${esc(REM_GREETING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Penutup reminder customer<input id="cfg-rem-closing" type="text" value="${esc(REM_CLOSING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
