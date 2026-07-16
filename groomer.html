@@ -2,10 +2,11 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#3d1f0d">
 <title>HomePaw — Jadwal Groomer</title>
 <style>
+html{-webkit-text-size-adjust:100%}
 :root{
  --bg:#fdf8f0;
  --surface:#fff;
@@ -135,8 +136,8 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 <body>
 
 <!-- Lightbox overlay for photo enlargement (click any photo to open) -->
-<div id="lightbox" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out;flex-direction:column;padding:20px;box-sizing:border-box" onclick="closeLightbox()">
- <img id="lightbox-img" src="" alt="Photo preview" style="max-width:100%;max-height:calc(100vh - 90px);object-fit:contain;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.5)"/>
+<div id="lightbox" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out;flex-direction:column;padding:20px;box-sizing:border-box" onclick="closeLightbox()">
+ <img id="lightbox-img" src="" alt="Photo preview" style="max-width:100%;max-height:calc(100vh - 90px);max-height:calc(100dvh - 90px);object-fit:contain;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.5)"/>
  <button onclick="event.stopPropagation();closeLightbox()" style="position:absolute;top:20px;right:20px;width:44px;height:44px;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:24px;border-radius:50%;cursor:pointer;font-weight:700;line-height:1">&times;</button>
  <div style="color:#e5e7eb;font-size:12px;margin-top:12px;background:rgba(0,0,0,.5);padding:6px 12px;border-radius:6px">Tap di mana saja untuk tutup</div>
 </div>
