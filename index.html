@@ -12129,7 +12129,13 @@ function renderFollowups(){
     const waPhone=c.wa?normalizeWA(c.wa):null;
     const firstName=(c.owner||'').split(' ')[0];
     const dogList=grp.dogs.map(x=>x.dog.name).join(' dan ');
-    const msg=`Halo kak ${firstName}, sudah lama nggak kelihatan! ${dogList} terakhir grooming ${maxDays} hari lalu. Boleh aku bantu booking jadwal berikutnya?`;
+    const inactivePeriod = maxDays > 30 ? '1 bulan' : '2 minggu';
+
+const msg = `Hai Kak ${firstName}, sudah lebih dari ${inactivePeriod} nih kami belum bertemu sama ${dogList} 🐶
+
+Kalau sudah waktunya grooming lagi, HomePaw siap meluncur langsung ke rumah Kakak!
+
+Mau booking sekarang atau ada pertanyaan dulu? Boleh banget chat di sini ya 😊`;
     const waLink=waPhone?`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`:null;
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:${bg};border-radius:5px;flex-wrap:wrap;gap:8px">
      <div style="flex:1;min-width:0">
