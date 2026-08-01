@@ -657,7 +657,6 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   </div>
   <div id="dash-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:1.5rem"></div>
   <div id="dash-actions" style="margin-bottom:1.2rem"></div>
-  <div id="dash-followups" style="margin-bottom:1.2rem"></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px">
    <div class="card" style="padding:14px">
     <div style="font-size:11px;font-weight:600;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Source ROI</div>
@@ -1143,6 +1142,8 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="subtabs">
   <button class="subtab active" id="rstab-groomer" onclick="swRem('groomer')">Groomer reminders</button>
   <button class="subtab" id="rstab-customer" onclick="swRem('customer')">Customer reminders</button>
+  <button class="subtab" id="rstab-followup" onclick="swRem('followup')">Followup (belum grooming)</button>
+  <button class="subtab" id="rstab-renewal" onclick="swRem('renewal')">Renewal subs</button>
  </div>
 
  <div class="subsec active" id="rsec-groomer">
@@ -1189,6 +1190,20 @@ thead th[onclick]:hover{color:var(--primary-darker)}
    </div>
   </div>
   <div id="cust-rem-cards"></div>
+ </div>
+
+ <div class="subsec" id="rsec-followup">
+  <div class="card" style="padding:1rem;margin-bottom:1rem;font-size:12px;color:var(--muted)">
+   Dog yang belum grooming ≥ <strong id="followup-threshold-label"></strong> hari (atur di Settings → Konfigurasi). Template pesan bisa diedit di Settings → Pesan WhatsApp.
+  </div>
+  <div id="followup-cards"></div>
+ </div>
+
+ <div class="subsec" id="rsec-renewal">
+  <div class="card" style="padding:1rem;margin-bottom:1rem;font-size:12px;color:var(--muted)">
+   Semua subscription aktif (weekly / biweekly / monthly) untuk diperpanjang bulan depan. Template pesan bisa diedit di Settings → Pesan WhatsApp.
+  </div>
+  <div id="renewal-cards"></div>
  </div>
  </div>
 
@@ -1928,6 +1943,8 @@ let WA_TPL_INVOICE='Halo kak {nama},\n\nTerima kasih sudah pakai {biz} untuk {do
 let _cfgLogoData=null;
 function waClosing(){return WA_CLOSING_TPL.replace(/\{biz\}/g,BIZ_NAME)}
 let REM_GREETING='Halo kak {nama}', REM_CLOSING='Sampai jumpa besok ya kak!';
+let WA_TPL_FOLLOWUP='Halo kak {nama}, sudah lama nggak kelihatan! {dogs} terakhir grooming {days} hari lalu. Boleh aku bantu booking jadwal berikutnya? \uD83D\uDC3E';
+let WA_TPL_RENEWAL='Halo kak {nama}, \uD83D\uDC3E\n\nSubscription {tier} untuk {dogs} sudah waktunya diperpanjang untuk bulan depan.\n\nBiaya: {amount}\nMohon konfirmasi & pembayaran sebelum tanggal {due_day} ya kak supaya jadwal grooming tetap lancar.\n\nTerima kasih! {biz}';
 function applyTpl(tpl,vars){return String(tpl||'').replace(/\{(\w+)\}/g,(m,k)=>vars[k]!=null?vars[k]:'')}
 
 // ===== i18n (translation layer) =====
@@ -6040,6 +6057,8 @@ const CFG_DEFAULTS={
  waTplInvoice:WA_TPL_INVOICE,
  remGreeting:REM_GREETING,
  remClosing:REM_CLOSING,
+ waTplFollowup:WA_TPL_FOLLOWUP,
+ waTplRenewal:WA_TPL_RENEWAL,
  toastMs:3500,
  autoLog:true,
  dashCards:{invoiced:true,paid:true,unpaid:true,payroll:true}
@@ -6064,6 +6083,8 @@ function applyCfg(){
  if(CFG.waTplInvoice) WA_TPL_INVOICE=CFG.waTplInvoice;
  if(CFG.remGreeting!=null) REM_GREETING=CFG.remGreeting;
  if(CFG.remClosing!=null) REM_CLOSING=CFG.remClosing;
+ if(CFG.waTplFollowup) WA_TPL_FOLLOWUP=CFG.waTplFollowup;
+ if(CFG.waTplRenewal) WA_TPL_RENEWAL=CFG.waTplRenewal;
  TOAST_MS=CFG.toastMs>0?CFG.toastMs:3500;
  SERVICE_LIST=Object.keys(PRICING);
 }
@@ -9185,6 +9206,8 @@ function swRem(sub){
  const sec=document.getElementById('rsec-'+sub); if(sec) sec.classList.add('active');
  if(sub==='groomer') generateReminders();
  else if(sub==='customer') generateCustomerReminders();
+ else if(sub==='followup') renderFollowups();
+ else if(sub==='renewal') renderRenewalReminders();
 }
 
 function generateCustomerReminders(){
@@ -10472,6 +10495,8 @@ function renderConfig(){
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan invoice (grooming + tagihan) <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{biz}</code> <code>{dogs}</code> <code>{groomer_notes}</code> <code>{total}</code> <code>{bank}</code> <code>{acc}</code> <code>{holder}</code> <code>{closing}</code></span><textarea id="cfg-wa-invoice" rows="12" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_INVOICE)}</textarea></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Salam reminder customer <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code></span><input id="cfg-rem-greeting" type="text" value="${esc(REM_GREETING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Penutup reminder customer<input id="cfg-rem-closing" type="text" value="${esc(REM_CLOSING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
+    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan followup "belum grooming" <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{days}</code> <code>{biz}</code></span><textarea id="cfg-wa-followup" rows="4" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_FOLLOWUP)}</textarea></label>
+    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan renewal subscription bulanan <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{tier}</code> <code>{amount}</code> <code>{due_day}</code> <code>{biz}</code></span><textarea id="cfg-wa-renewal" rows="8" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_RENEWAL)}</textarea></label>
     <div style="font-size:11px;color:var(--muted)">Pesan invoice (belum bayar) tetap dihitung otomatis oleh sistem karena ada logika diskon, biaya tambahan, dan rekening bank.</div>
    </div>`)}
   ${sec('Tampilan',`
@@ -10526,7 +10551,9 @@ async function saveConfig(){
   waTplDone:gv('cfg-wa-done')?.value||WA_TPL_DONE,
   waTplInvoice:gv('cfg-wa-invoice')?.value||WA_TPL_INVOICE,
   remGreeting:gv('cfg-rem-greeting')?.value??REM_GREETING,
-  remClosing:gv('cfg-rem-closing')?.value??REM_CLOSING};
+  remClosing:gv('cfg-rem-closing')?.value??REM_CLOSING,
+  waTplFollowup:gv('cfg-wa-followup')?.value||WA_TPL_FOLLOWUP,
+  waTplRenewal:gv('cfg-wa-renewal')?.value||WA_TPL_RENEWAL};
  const {error}=await db.from('business_settings').upsert({id:1,config,updated_at:new Date().toISOString()});
  if(error){alert('Gagal simpan: '+error.message);return}
  await reloadTables('business_settings');
@@ -12191,21 +12218,17 @@ function renderDashboard(){
     <tr><td style="padding:6px">New customers</td><td style="padding:6px;text-align:right">${m.newCust}</td><td style="padding:6px;text-align:right;color:var(--muted)">${mPrev.newCust}</td><td style="padding:6px;text-align:right">${delta(m.newCust,mPrev.newCust)}</td></tr>
    </tbody></table>`;
  }
-
- // Batch O.6 — 14+ day no-grooming followups
- renderFollowups();
 }
 
-// Batch O.6 — Dogs not groomed for 14+ days. WA reminder per customer.
+// Dogs not groomed for STALE_DAYS+ days. WA reminder per customer. (Reminders tab)
 function renderFollowups(){
- const el=document.getElementById('dash-followups'); if(!el) return;
- const today=new Date();
+ const el=document.getElementById('followup-cards'); if(!el) return;
+ const lbl=document.getElementById('followup-threshold-label'); if(lbl) lbl.textContent=STALE_DAYS;
  const threshold=STALE_DAYS;
  // For each dog: compute days since last_groomed_at (or fall back to most recent visit date)
  const overdue=dogs.map(d=>{
   let lastDate=d.last_groomed_at;
   if(!lastDate){
-   // Fallback: most recent visit
    const dogVisits=visits.filter(v=>v.dog_id===d.id).map(v=>v.visited_at).filter(Boolean).sort();
    if(dogVisits.length) lastDate=dogVisits[dogVisits.length-1];
   }
@@ -12217,7 +12240,7 @@ function renderFollowups(){
   return {dog:d,cust,days,lastDate};
  }).filter(Boolean).sort((a,b)=>b.days-a.days);
 
- if(!overdue.length){el.innerHTML='';return}
+ if(!overdue.length){el.innerHTML='<div class="card" style="padding:1.5rem;text-align:center;color:var(--muted)">Tidak ada dog yang overdue. \uD83D\uDC3E</div>';return}
 
  // Group by customer
  const byCust={};
@@ -12227,12 +12250,7 @@ function renderFollowups(){
  });
 
  el.innerHTML=`<div class="card" style="padding:14px">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-   <div>
-    <div style="font-size:13px;font-weight:600">Followup — dogs not groomed 14+ days</div>
-    <div style="font-size:11px;color:var(--muted)">${overdue.length} dog${overdue.length!==1?'s':''} across ${Object.keys(byCust).length} customer${Object.keys(byCust).length!==1?'s':''}</div>
-   </div>
-  </div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${overdue.length} dog${overdue.length!==1?'s':''} across ${Object.keys(byCust).length} customer${Object.keys(byCust).length!==1?'s':''}</div>
   <div style="display:flex;flex-direction:column;gap:8px">
    ${Object.values(byCust).map(grp=>{
     const c=grp.cust;
@@ -12242,12 +12260,51 @@ function renderFollowups(){
     const waPhone=c.wa?normalizeWA(c.wa):null;
     const firstName=(c.owner||'').split(' ')[0];
     const dogList=grp.dogs.map(x=>x.dog.name).join(' dan ');
-    const msg=`Halo kak ${firstName}, sudah lama nggak kelihatan! ${dogList} terakhir grooming ${maxDays} hari lalu. Boleh aku bantu booking jadwal berikutnya?`;
+    const msg=applyTpl(WA_TPL_FOLLOWUP,{nama:firstName,dogs:dogList,days:maxDays,biz:BIZ_NAME});
     const waLink=waPhone?`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`:null;
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:${bg};border-radius:5px;flex-wrap:wrap;gap:8px">
      <div style="flex:1;min-width:0">
       <div style="font-weight:600;font-size:13px"><span class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner)}</span> <span style="font-size:11px;color:var(--muted);font-weight:400">${esc(c.customer_code||'')}</span></div>
       <div style="font-size:11px;color:var(--muted)">${esc(dogLines)}</div>
+     </div>
+     ${waLink?`<a class="btn btn-g btn-sm" href="${waLink}" target="_blank">WA</a>`:'<span style="font-size:11px;color:var(--muted)">No WA</span>'}
+    </div>`;
+   }).join('')}
+  </div>
+ </div>`;
+}
+
+// Active recurring subscriptions (weekly/biweekly/monthly) due for next-month renewal. (Reminders tab)
+function renderRenewalReminders(){
+ const el=document.getElementById('renewal-cards'); if(!el) return;
+ const recurring=['weekly','biweekly','monthly'];
+ const active=subscriptions.filter(s=>s.status==='active'&&recurring.includes(s.type));
+ if(!active.length){el.innerHTML='<div class="card" style="padding:1.5rem;text-align:center;color:var(--muted)">Tidak ada subscription aktif untuk renewal.</div>';return}
+ // Group by customer
+ const byCust={};
+ active.forEach(s=>{
+  const c=custs.find(x=>x.id===s.customer_id); if(!c) return;
+  if(!byCust[c.id]) byCust[c.id]={cust:c,subs:[]};
+  byCust[c.id].subs.push(s);
+ });
+ const dueDay=DUE_DAY_DEFAULT;
+ el.innerHTML=`<div class="card" style="padding:14px">
+  <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${active.length} subscription aktif across ${Object.keys(byCust).length} customer</div>
+  <div style="display:flex;flex-direction:column;gap:8px">
+   ${Object.values(byCust).map(grp=>{
+    const c=grp.cust;
+    const firstName=(c.owner||'').split(' ')[0];
+    const waPhone=c.wa?normalizeWA(c.wa):null;
+    const dogNames=grp.subs.map(s=>{const d=dogs.find(x=>x.id===s.dog_id);return d?d.name:'?'}).join(' dan ');
+    const tierNames=[...new Set(grp.subs.map(s=>tierLabel(s.type)))].join(', ');
+    const totalAmount=grp.subs.reduce((sum,s)=>{const d=dogs.find(x=>x.id===s.dog_id);return sum+tierMonthlyPrice(s.type,d?.size)},0);
+    const detail=grp.subs.map(s=>{const d=dogs.find(x=>x.id===s.dog_id);return `${d?d.name:'?'} · ${tierLabel(s.type)}`}).join(', ');
+    const msg=applyTpl(WA_TPL_RENEWAL,{nama:firstName,dogs:dogNames,tier:tierNames,amount:fmtRp(totalAmount),due_day:dueDay,biz:BIZ_NAME});
+    const waLink=waPhone?`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`:null;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--subtle);border-radius:5px;flex-wrap:wrap;gap:8px">
+     <div style="flex:1;min-width:0">
+      <div style="font-weight:600;font-size:13px"><span class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner)}</span> <span style="font-size:11px;color:var(--muted);font-weight:400">${esc(c.customer_code||'')}</span></div>
+      <div style="font-size:11px;color:var(--muted)">${esc(detail)} · <strong>${fmtRp(totalAmount)}</strong></div>
      </div>
      ${waLink?`<a class="btn btn-g btn-sm" href="${waLink}" target="_blank">WA</a>`:'<span style="font-size:11px;color:var(--muted)">No WA</span>'}
     </div>`;
