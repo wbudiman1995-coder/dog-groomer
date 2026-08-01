@@ -7104,10 +7104,48 @@ function renderSubsSchedulePicker(){
      <label style="font-size:11px;color:var(--muted)">Mulai dari</label><br>
      <input type="date" id="sched-start-${did}" value="${document.getElementById('inv-date')?.value||iso(new Date())}" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
     </div>
+    <div>
+     <label style="font-size:11px;color:var(--muted)">Groomer</label><br>
+     <select id="sched-groomer-${did}" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px">
+      <option value="">Auto-assign</option>
+      ${groomers.filter(g=>g.active).map(g=>`<option value="${g.id}" ${(document.getElementById('inv-groomer')?.value===g.id)?'selected':''}>${esc(g.name)}</option>`).join('')}
+     </select>
+    </div>
    </div>
   </div>`;
  }).join('');
 }
+
+// Pick a groomer for a given date/time slot: fewest appts that day, not blocked,
+// not on a day off, no time overlap. Returns groomer_id or null if none free.
+function autoAssignGroomer(dateISO,timeHHMM,durMins){
+ const dayMap=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+ const dow=dayMap[new Date(dateISO+'T00:00:00').getDay()];
+ const start=_toMin(timeHHMM);
+ const end=start+(durMins||60);
+ const candidates=groomers.filter(g=>g.active).filter(g=>{
+  // day off?
+  const wd=(g.working_days||'Mon,Tue,Wed,Thu,Fri,Sat').split(',');
+  if(!wd.includes(dow)) return false;
+  // blocked (this groomer or all)?
+  if(groomerBlocks.some(b=>b.block_date===dateISO&&(!b.groomer_id||b.groomer_id===g.id))) return false;
+  // time overlap with an existing appt?
+  const clash=appts.some(a=>a.groomer_id===g.id&&a.appt_date===dateISO&&a.status!=='cancelled'&&(()=>{
+   const s=_toMin((a.appt_time||'').slice(0,5));const e=s+(a.duration_mins||60);
+   return start<e&&s<end;
+  })());
+  return !clash;
+ });
+ if(!candidates.length) return null;
+ // fewest appts that day → load balance
+ candidates.sort((a,b)=>{
+  const ca=appts.filter(x=>x.groomer_id===a.id&&x.appt_date===dateISO&&x.status!=='cancelled').length;
+  const cb=appts.filter(x=>x.groomer_id===b.id&&x.appt_date===dateISO&&x.status!=='cancelled').length;
+  return ca-cb;
+ });
+ return candidates[0].id;
+}
+function _toMin(hhmm){const [h,m]=String(hhmm||'0:0').split(':').map(Number);return (h||0)*60+(m||0)}
 
 async function createSubsScheduleAppointments(){
  const toCreate=[];
@@ -7124,6 +7162,7 @@ async function createSubsScheduleAppointments(){
   const dayName=document.getElementById('sched-day-'+did)?.value||'Monday';
   const time=document.getElementById('sched-time-'+did)?.value||'09:00';
   const startStr=document.getElementById('sched-start-'+did)?.value||iso(new Date());
+  const chosenGroomer=document.getElementById('sched-groomer-'+did)?.value||''; // '' = auto-assign
   const svcBase=Object.keys(ds?.services||{}).filter(s=>ds.services[s].checked).join(', ')||'Basic Grooming';
   const dur=dogDur(svcBase,dog.size);
 
@@ -7134,21 +7173,40 @@ async function createSubsScheduleAppointments(){
 
   for(let i=0;i<sessions;i++){
    const dateISO=iso(d);
-   // Check if dog already has appointment on this date
+   // Dog already booked that day?
    const existing=appts.find(a=>a.dog_id===did&&a.appt_date===dateISO&&a.status!=='cancelled');
    if(existing){
-    conflicts.push({dogName:dog.name,date:dateISO,existingTime:existing.appt_time?.slice(0,5)||'?'});
-   } else {
-    toCreate.push({dog_id:did,customer_id:dog.customer_id,appt_date:dateISO,appt_time:time+':00',service_base:svcBase,duration_mins:dur,session_source:'subscription',status:'pending',token_used:false,subs_deducted:false});
+    conflicts.push({dogName:dog.name,date:dateISO,reason:`sudah ada appt jam ${existing.appt_time?.slice(0,5)||'?'}`});
+    d.setDate(d.getDate()+freqDays); continue;
    }
+   // Resolve groomer: manual pick (with time-clash check) or auto-assign
+   let gid=null;
+   if(chosenGroomer){
+    const clash=appts.some(a=>a.groomer_id===chosenGroomer&&a.appt_date===dateISO&&a.status!=='cancelled'&&(()=>{
+     const s=_toMin((a.appt_time||'').slice(0,5));const e=s+(a.duration_mins||60);
+     const st=_toMin(time);return st<e&&s<(st+dur);
+    })());
+    if(clash){
+     conflicts.push({dogName:dog.name,date:dateISO,reason:'groomer bentrok jam segitu — slot dilewati'});
+     d.setDate(d.getDate()+freqDays); continue;
+    }
+    gid=chosenGroomer;
+   } else {
+    gid=autoAssignGroomer(dateISO,time,dur);
+    if(!gid){
+     conflicts.push({dogName:dog.name,date:dateISO,reason:'tidak ada groomer available — slot dilewati'});
+     d.setDate(d.getDate()+freqDays); continue;
+    }
+   }
+   toCreate.push({dog_id:did,customer_id:dog.customer_id,groomer_id:gid,appt_date:dateISO,appt_time:time+':00',service_base:svcBase,duration_mins:dur,session_source:'subscription',status:'pending',token_used:false,subs_deducted:false});
    d.setDate(d.getDate()+freqDays);
   }
  }
 
  // Show conflict summary and confirm
  if(conflicts.length){
-  const lines=conflicts.map(c=>`• ${c.dogName} — ${c.date} (ada appt jam ${c.existingTime})`).join('\n');
-  const proceed=confirm(`${conflicts.length} slot sudah ada appointment:\n\n${lines}\n\nSlot konflik akan dilewati.\nBuat ${toCreate.length} appointment baru?`);
+  const lines=conflicts.map(c=>`• ${c.dogName} — ${c.date} (${c.reason})`).join('\n');
+  const proceed=confirm(`${conflicts.length} slot dilewati:\n\n${lines}\n\nBuat ${toCreate.length} appointment baru?`);
   if(!proceed) return;
  }
 
