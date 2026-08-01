@@ -876,10 +876,13 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <button class="cal-load-btn" onclick="loadInvFromToday()" style="margin-bottom:0">Load today's schedule</button>
  <button class="cal-load-btn" onclick="openInvApptPicker()" style="margin-bottom:0;background:var(--blue-lt);border-color:#bfdbfe;color:var(--blue-t)">Load from appointment</button>
  </div>
- <input id="inv-customer-search" list="inv-customer-list" placeholder="Type to search customer…"
-  oninput="onInvSearchChange(this.value)"
-  style="width:100%;height:44px;padding:0 14px;border:1px solid var(--border);border-radius:var(--r);font-size:var(--fs-body);background:var(--subtle);margin-bottom:.9rem"/>
- <datalist id="inv-customer-list"></datalist>
+ <div style="position:relative;margin-bottom:.9rem">
+ <input id="inv-customer-search" placeholder="Ketik nama, kode, alamat, atau nama anjing…" autocomplete="off"
+  oninput="onInvCustSearch(this.value)" onfocus="onInvCustSearch(this.value)"
+  onblur="setTimeout(()=>{const dd=document.getElementById('inv-cust-dd');if(dd)dd.style.display='none'},200)"
+  style="width:100%;height:44px;padding:0 14px;border:1px solid var(--border);border-radius:var(--r);font-size:var(--fs-body);background:var(--subtle)"/>
+ <div id="inv-cust-dd" style="display:none;position:absolute;top:46px;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh-lg);z-index:50;max-height:320px;overflow-y:auto"></div>
+ </div>
  <select id="inv-customer" style="display:none"></select>
 
  <div id="inv-cust-summary" style="display:none;background:var(--green-lt);border:1px solid var(--green-md);border-radius:var(--r);padding:10px 12px;margin-bottom:.9rem;font-size:var(--fs-label);color:var(--green-dk)"></div>
@@ -1261,6 +1264,11 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   <div class="toolbar">
    <span class="toolbar-title">History</span>
    <span style="font-size:11px;color:var(--muted)">Audit log — all changes across system</span>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+   <button class="btn btn-g btn-sm" id="hist-del-quick" onclick="histQuickDeletions()" title="Lihat semua yang dihapus (30 hari terakhir)">🗑️ Deletions (30 hari)</button>
+   <button class="btn btn-g btn-sm" onclick="histClearQuick()">Reset filter</button>
+   <span id="hist-del-summary" style="font-size:12px;color:var(--muted)"></span>
   </div>
   <div class="card" style="padding:12px;margin-bottom:1rem">
    <div class="form-grid">
@@ -2369,8 +2377,11 @@ function runGlobalSearch(){
  const r=document.getElementById('gsearch-results'); if(!r) return;
  if(q.length<2){r.innerHTML='<div style="color:var(--muted);font-size:13px;padding:8px">Ketik minimal 2 huruf…</div>';return}
  const row=(onclickAttr,main,sub)=>`<div onclick="${onclickAttr}" style="padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px" onmouseover="this.style.background='var(--subtle)'" onmouseout="this.style.background=''">${main} <span style="color:var(--muted);font-size:11px">${sub}</span></div>`;
- const custHits=custs.filter(c=>((c.owner||'').toLowerCase().includes(q)||(c.wa||'').toLowerCase().includes(q))).slice(0,12);
- const dogHits=dogs.filter(d=>(d.name||'').toLowerCase().includes(q)).slice(0,12);
+ const custHits=custs.filter(c=>{
+  const myDogs=dogs.filter(d=>d.customer_id===c.id).map(d=>d.name).filter(Boolean).join(' ');
+  return `${c.owner||''} ${c.wa||''} ${c.customer_code||''} ${c.address||''} ${c.kecamatan||''} ${c.kota||''} ${myDogs}`.toLowerCase().includes(q);
+ }).slice(0,12);
+ const dogHits=dogs.filter(d=>(`${d.name||''} ${d.breed||''} ${d.dog_code||''}`).toLowerCase().includes(q)).slice(0,12);
  let html='';
  if(custHits.length){
   html+='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:6px 0 3px">Customer</div>';
@@ -6364,8 +6375,6 @@ function detectInvoiceMode(rec){
 function initInvoiceTab(){
  const cs=document.getElementById('inv-customer');
  cs.innerHTML='<option value="">Pilih customer…</option>'+custs.map(c=>`<option value="${c.id}">${esc(c.customer_code||'?')} - ${esc(c.owner)}</option>`).join('');
- const dl=document.getElementById('inv-customer-list');
- if(dl) dl.innerHTML=custs.map(c=>`<option value="${esc(c.owner)} (${esc(c.customer_code||'?')})">${c.id}</option>`).join('');
  const gs=document.getElementById('inv-groomer');
  gs.innerHTML='<option value="">Pilih groomer…</option>'+groomers.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
  const t=iso(new Date());
@@ -6380,21 +6389,40 @@ function initInvoiceTab(){
  if(si&&!invSelectedCust) si.value='';
 }
 
-function onInvSearchChange(val){
- // Match typed value to customer name or code
- const match=custs.find(c=>
-  `${c.owner} (${c.customer_code||'?'})`.toLowerCase()===val.toLowerCase()||
-  (c.owner||'').toLowerCase()===val.toLowerCase()||
-  (c.customer_code||'').toLowerCase()===val.toLowerCase()
- );
- const cs=document.getElementById('inv-customer');
- if(match){
-  cs.value=match.id;
-  onInvCustomerChange();
- } else {
-  cs.value='';
-  // If partially typed, don't reset — wait for full match
+function onInvCustSearch(val){
+ const q=(val||'').toLowerCase().trim();
+ const dd=document.getElementById('inv-cust-dd');
+ if(!dd) return;
+ const matches=custs.map(c=>{
+  const myDogs=dogs.filter(d=>d.customer_id===c.id);
+  const dogNames=myDogs.map(d=>d.name).filter(Boolean).join(' ');
+  const blob=`${c.owner||''} ${c.customer_code||''} ${c.kota||''} ${c.kecamatan||''} ${c.address||''} ${c.area||''} ${c.wa||''} ${dogNames}`.toLowerCase();
+  return {c,myDogs,score:q?(blob.includes(q)?1:0):1};
+ }).filter(m=>m.score>0)
+  .sort((a,b)=>(a.c.owner||'').localeCompare(b.c.owner||''))
+  .slice(0,20);
+ if(!matches.length){
+  dd.innerHTML=`<div style="padding:10px 14px;font-size:12px;color:var(--muted);font-style:italic">Tidak ada customer cocok "${esc(val)}".</div>`;
+  dd.style.display='block';
+  return;
  }
+ dd.innerHTML=matches.map(({c,myDogs})=>{
+  const addr=[c.address,c.kecamatan,c.kota].filter(Boolean).join(', ')||'(no address)';
+  const dogNames=myDogs.map(d=>d.name).filter(Boolean).join(', ')||'(no dogs)';
+  return `<div onclick="pickInvCust('${c.id}')" style="padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px" onmouseover="this.style.background='var(--subtle)'" onmouseout="this.style.background=''">
+   <div style="font-weight:700">${esc(c.owner||'?')} <span style="font-size:11px;color:var(--muted);font-weight:400">${esc(c.customer_code||'')}</span></div>
+   <div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(addr)}</div>
+   <div style="font-size:11px;color:var(--green-dk);margin-top:1px">\uD83D\uDC15 ${esc(dogNames)}</div>
+  </div>`;
+ }).join('');
+ dd.style.display='block';
+}
+function pickInvCust(id){
+ const c=custs.find(x=>x.id===id); if(!c) return;
+ const dd=document.getElementById('inv-cust-dd'); if(dd) dd.style.display='none';
+ document.getElementById('inv-customer-search').value=`${c.owner} (${c.customer_code||'?'})`;
+ const cs=document.getElementById('inv-customer'); if(cs) cs.value=id;
+ onInvCustomerChange();
 }
 
 function resetInvoice(){
@@ -11827,8 +11855,34 @@ function c360RenderHistory(c){
 }
 
 // Batch O.10 — Global History tab: full system audit feed with filters
+// Quick view: only deletions, newest first. Also computes a 30-day deletion summary.
+function histQuickDeletions(){
+ const ef=document.getElementById('hist-entity-filter'); if(ef) ef.value='';
+ const af=document.getElementById('hist-action-filter'); if(af) af.value='delete';
+ const s=document.getElementById('hist-search'); if(s) s.value='';
+ renderHistoryTab();
+}
+function histClearQuick(){
+ const ef=document.getElementById('hist-entity-filter'); if(ef) ef.value='';
+ const af=document.getElementById('hist-action-filter'); if(af) af.value='';
+ const s=document.getElementById('hist-search'); if(s) s.value='';
+ renderHistoryTab();
+}
+function renderHistDelSummary(){
+ const el=document.getElementById('hist-del-summary'); if(!el) return;
+ const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-30);
+ const cutISO=iso(cutoff);
+ const dels=auditEntries.filter(e=>e.action==='delete'&&(e.created_at||'').slice(0,10)>=cutISO);
+ if(!dels.length){el.innerHTML='Tidak ada penghapusan dalam 30 hari terakhir.';return}
+ const byType={};
+ dels.forEach(e=>{byType[e.entity_type]=(byType[e.entity_type]||0)+1});
+ const parts=Object.entries(byType).map(([t,n])=>`${n} ${t}`).join(', ');
+ el.innerHTML=`<strong style="color:#b42318">${dels.length} penghapusan</strong> dalam 30 hari terakhir (${esc(parts)}).`;
+}
+
 function renderHistoryTab(){
  const feed=document.getElementById('hist-feed'); if(!feed) return;
+ renderHistDelSummary();
  const entityFilter=document.getElementById('hist-entity-filter')?.value||'';
  const actionFilter=document.getElementById('hist-action-filter')?.value||'';
  const search=(document.getElementById('hist-search')?.value||'').toLowerCase().trim();
@@ -12063,6 +12117,23 @@ function tallyToggle(id){
  renderTally();
 }
 
+// Plain-language explainer for each tally check: what it means, why it happens, how to make it tally.
+const TALLY_HELP={
+ c1:{what:'Appointment sudah ditandai <strong>done</strong> tapi belum ada invoice di tanggal itu.',why:'Biasanya karena lupa bikin invoice setelah grooming selesai.',fix:'Buka appointment-nya, lalu buat invoice untuk tanggal tsb (invoice subscription boleh Rp 0). Setelah invoice tersimpan, baris ini hilang.'},
+ c2:{what:'Ada invoice tapi tidak ada appointment <strong>done</strong> yang cocok di tanggal itu.',why:'Invoice dibuat untuk tanggal yang salah, atau appointment-nya belum di-set "done" / ke-hapus.',fix:'Cek tanggal invoice. Kalau appointment ada tapi belum done, tandai done. Kalau tanggal invoice salah, edit tanggalnya.'},
+ c3:{what:'Grooming done oleh groomer tapi tidak masuk hitungan payroll (tidak ada invoice dengan groomer itu di tanggal tsb).',why:'Invoice dibuat tanpa memilih groomer, atau groomer di invoice beda dengan yang di appointment.',fix:'Buka appointment, pastikan invoice untuk tanggal itu memakai groomer yang benar.'},
+ c4a:{what:'Ada catatan kunjungan (visit) tanpa appointment yang cocok.',why:'Visit ke-log manual/otomatis tapi appointment-nya dihapus atau tak pernah ada.',fix:'Kalau visit-nya salah, hapus visit. Kalau memang ada grooming, buat appointment-nya.'},
+ c4b:{what:'Appointment done tapi tidak ada catatan kunjungan (visit).',why:'Auto-log visit gagal atau visit terhapus.',fix:'Buka appointment; sistem biasanya auto-log saat invoice dibuat. Buat invoice atau tambah visit manual.'},
+ c5:{what:'Jumlah anjing di invoice ≠ jumlah anjing done per groomer (dalam cycle ini).',why:'Sebagian grooming belum di-invoice, atau ada invoice dobel.',fix:'Bandingkan daftar done vs invoice untuk groomer itu; lengkapi invoice yang kurang atau hapus yang dobel.'}
+};
+function tallyHelpBlock(id){
+ const h=TALLY_HELP[id]; if(!h) return '';
+ return `<div style="padding:10px 14px;background:#eff6ff;border-bottom:1px solid var(--border);font-size:12px;line-height:1.6">
+  <div><strong>Apa ini?</strong> ${h.what}</div>
+  <div style="margin-top:4px"><strong>Kenapa muncul?</strong> ${h.why}</div>
+  <div style="margin-top:4px"><strong>Cara supaya tally (hilang):</strong> ${h.fix}</div>
+ </div>`;
+}
 function renderTallyCard(id,title,count,rowsHtml){
  const color=count===0?'#16a34a':'#dc2626';
  const bg=count===0?'#dcfce7':'#fee2e2';
@@ -12074,6 +12145,7 @@ function renderTallyCard(id,title,count,rowsHtml){
    </div>
    <span style="color:${color};font-size:14px">${arrow}</span>
   </div>
+  ${tallyExpanded[id]?tallyHelpBlock(id):''}
   ${tallyExpanded[id]&&count>0?`<div style="max-height:340px;overflow-y:auto;background:var(--surface)">${rowsHtml}</div>`:''}
  </div>`;
 }
@@ -12154,6 +12226,9 @@ function renderTally(){
     <button class="btn btn-g btn-sm" onclick="tallyNextCycle()">Next \u2192</button>
     <button class="btn btn-g btn-sm" onclick="tallyResetCycle()">Current cycle</button>
    </div>
+  </div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:10px;padding:10px 14px;background:var(--subtle);border-radius:6px;line-height:1.6">
+   <strong>Apa itu Tally?</strong> Halaman ini mencocokkan appointment, invoice, visit, dan payroll dalam satu cycle gaji (26 s/d 25). Kalau semua cocok → \u2713 hijau. Kalau ada yang tidak cocok → \u26A0 merah, dan muncul di card di bawah. Klik card untuk lihat penjelasan + cara memperbaikinya. Perbaiki sumbernya (invoice/appointment), lalu angka mismatch akan turun sendiri.
   </div>
   <div style="font-size:13px;color:${total?'#dc2626':'#15803d'};margin-bottom:12px;padding:10px 14px;background:${total?'#fee2e2':'#dcfce7'};border-radius:6px">
    <strong>${total===0?'\u2713 No mismatches in this cycle':`\u26A0 ${total} mismatch${total!==1?'es':''} found`}</strong>
