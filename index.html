@@ -897,7 +897,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="det-lbl">3. Groomer & tanggal</div>
  <div class="form-grid">
  <div class="fg"><label>Groomer</label>
- <select id="inv-groomer" onchange="renderInvoicePreview();updateSubsSchedGroomerHint()"><option value="">Pilih groomer…</option></select>
+ <select id="inv-groomer" onchange="renderInvoicePreview()"><option value="">Pilih groomer…</option></select>
  </div>
  <div class="fg"><label>Or type manually</label><input id="inv-groomer-manual" placeholder="Nama groomer" oninput="renderInvoicePreview()"/></div>
  <div class="fg"><label>Tanggal invoice</label><input type="date" id="inv-date" onchange="onInvDateChange()"/></div>
@@ -991,7 +991,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   <div id="inv-subs-schedule-dogs" style="padding:0 1rem"></div>
   <div style="padding:1rem;padding-top:8px;border-top:1px solid var(--border);margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
    <button class="btn btn-p btn-sm" onclick="createSubsScheduleAppointments()">Buat jadwal di kalender</button>
-   <span id="inv-subs-sched-ghint" style="font-size:11px;color:var(--muted)">Pilih groomer di bagian 3 dulu</span>
+   <span style="font-size:11px;color:var(--muted)">Groomer belum ditentukan — isi nanti via kalender</span>
   </div>
  </div>
 
@@ -1205,6 +1205,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
    <option value="expired">Expired only</option>
    <option value="all">All status</option>
   </select>
+  <button class="btn ghost" style="margin-left:6px" onclick="openSubsReconcile()" title="Cek ulang jumlah sesi terpakai vs data appointment/invoice">🔍 Reconcile</button>
  </div>
  <!-- Session E — Renewal urgency banner (populated by renderMembership) -->
  <div id="memb-renewal-banner" style="display:none;background:#fef3c7;border:1px solid #fde68a;border-left:4px solid #d97706;padding:12px 16px;border-radius:8px;margin-top:1rem;font-size:13px;color:#78350f"></div>
@@ -1784,6 +1785,18 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  </div>
 </div>
 
+<!-- SUBSCRIPTION RECONCILE MODAL (review-then-apply, never auto-writes) -->
+<div class="overlay" id="ov-subs-reconcile">
+ <div class="modal" style="max-width:720px">
+  <button class="modal-close" onclick="cm('ov-subs-reconcile')" title="Close">&#x2715;</button>
+  <div class="modal-title">🔍 Reconcile sesi terpakai</div>
+  <div style="font-size:12px;color:var(--muted);background:#fef3c7;padding:10px 12px;border-radius:6px;line-height:1.5;margin-bottom:1rem">
+   <strong>Ini cuma cek — tidak mengubah apa pun otomatis.</strong> Kolom <em>Recomputed</em> = jumlah sesi yang punya invoice tersimpan (appt sudah lewat & sudah di-invoice). Bandingkan dengan <em>Current</em>, lalu klik <strong>Apply</strong> per baris kalau memang mau dikoreksi. Data pembayaran orang — review satu-satu.
+  </div>
+  <div id="subs-reconcile-list" style="max-height:55vh;overflow-y:auto"></div>
+ </div>
+</div>
+
 <!-- EXPENSE MODAL -->
 <div class="overlay" id="ov-expense">
  <div class="modal" style="max-width:400px">
@@ -1866,7 +1879,8 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   <div class="modal-title" id="memb-edit-title">Edit</div>
   <div class="form-grid">
    <div class="fg"><label>Sessions total</label><input type="number" id="memb-ef-sessions-total" min="0"/></div>
-   <div class="fg"><label>Sessions used</label><input type="number" id="memb-ef-sessions-used" min="0"/></div>
+   <div class="fg"><label>Sessions used <span style="font-size:10px;color:var(--muted);font-weight:400">(override manual)</span></label><input type="number" id="memb-ef-sessions-used" min="0"/></div>
+   <div class="fg" id="memb-ef-started-row"><label>Started</label><input type="date" id="memb-ef-started"/></div>
    <div class="fg"><label>Expires</label><input type="date" id="memb-ef-expires"/></div>
    <div class="fg" id="memb-ef-status-row">
     <label>Status</label>
@@ -2441,17 +2455,8 @@ let AREAS = {
  'Kabupaten Tangerang': ['Balaraja','Cikupa','Cisauk','Curug','Kelapa Dua','Kosambi','Legok','Pagedangan','Panongan','Rajeg','Sepatan','Tigaraksa'],
  'Depok': ['Beji','Bojongsari','Cilodong','Cimanggis','Cinere','Cipayung','Limo','Pancoran Mas','Sawangan','Sukmajaya','Tapos'],
  'Kota Bekasi': ['Bantargebang','Bekasi Barat','Bekasi Selatan','Bekasi Timur','Bekasi Utara','Jatiasih','Jatisampurna','Medan Satria','Mustikajaya','Pondok Gede','Pondok Melati','Rawalumbu'],
- 'Kabupaten Bekasi': ['Babelan','Bojongmangu','Cabangbungin','Cibarusah','Cibitung','Cikarang Barat','Cikarang Pusat','Cikarang Selatan','Cikarang Timur','Cikarang Utara','Karangbahagia','Kedungwaringin','Muaragembong','Pebayuran','Serang Baru','Setu','Sukakarya','Sukatani','Sukawangi','Tambelang','Tambun Selatan','Tambun Utara','Tarumajaya'],
- 'Kota Bogor': ['Bogor Barat','Bogor Selatan','Bogor Tengah','Bogor Timur','Bogor Utara','Tanah Sareal'],
- 'Kabupaten Bogor': ['Babakan Madang','Bojonggede','Caringin','Cariu','Ciampea','Ciawi','Cibinong','Cibungbulang','Cigombong','Cigudeg','Cijeruk','Cileungsi','Ciomas','Cisarua','Ciseeng','Citeureup','Dramaga','Gunung Putri','Gunung Sindur','Jasinga','Jonggol','Kemang','Klapanunggal','Leuwiliang','Leuwisadeng','Megamendung','Nanggung','Pamijahan','Parung','Parung Panjang','Rancabungur','Rumpin','Sukajaya','Sukamakmur','Sukaraja','Tajurhalang','Tamansari','Tanjungsari','Tenjo','Tenjolaya']
+ 'Kabupaten Bekasi': ['Babelan','Bojongmangu','Cabangbungin','Cibarusah','Cibitung','Cikarang Barat','Cikarang Pusat','Cikarang Selatan','Cikarang Timur','Cikarang Utara','Karangbahagia','Kedungwaringin','Muaragembong','Pebayuran','Serang Baru','Setu','Sukakarya','Sukatani','Sukawangi','Tambelang','Tambun Selatan','Tambun Utara','Tarumajaya']
 };
-// Built-in areas snapshot — always merged under saved config so new built-ins (e.g. Bogor) appear even for existing saved configs.
-const AREAS_DEFAULT = JSON.parse(JSON.stringify(AREAS));
-// Outside-Jakarta surcharge (preset, editable in Settings > Konfigurasi). Auto-added to invoices for customers whose kota is not a DKI Jakarta kota.
-let OUTSIDE_JKT_FEE = 10000;
-const JKT_KOTA = ['Jakarta Pusat','Jakarta Utara','Jakarta Selatan','Jakarta Barat','Jakarta Timur'];
-const OUTSIDE_JKT_LABEL = 'Biaya luar Jakarta';
-function isOutsideJkt(cust){ const k=((cust&&cust.kota)||'').trim(); return !!k && !JKT_KOTA.includes(k); }
 function populateKotaSelect(sel){
  sel.innerHTML='<option value="">Pilih kota…</option>'+Object.keys(AREAS).map(k=>`<option value="${k}">${k}</option>`).join('');
 }
@@ -4445,7 +4450,6 @@ function renderWizSummary(){
    <div><strong>Date:</strong> ${new Date(wiz.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</div>
    <div><strong>Time:</strong> ${m2t(wiz.startMins)} – ${m2t(wiz.startMins+totalDur)}</div>
    ${tokLine}
-   ${isOutsideJkt(c)?`<div style="font-size:12px;background:#fef3c7;border-radius:4px;padding:3px 8px;margin-top:4px">📍 Luar Jakarta — biaya <strong>+${fmtRp(OUTSIDE_JKT_FEE)}</strong> otomatis masuk invoice (bisa diubah/hapus di tab Invoice)</div>`:''}
   `;
  }
  renderWizStep4Dogs();
@@ -6050,8 +6054,7 @@ function applyCfg(){
  DUE_DAY_DEFAULT=(CFG.dueDayDefault!=null)?CFG.dueDayDefault:5;
  if(CFG.hours&&CFG.hours.open&&CFG.hours.close){const o=t2m(CFG.hours.open),c=t2m(CFG.hours.close);if(o<c){SSTART=o;SEND=c;}}
  if(Array.isArray(CFG.tnc)&&CFG.tnc.length) MEMBERSHIP_TNC=CFG.tnc;
- AREAS = {...AREAS_DEFAULT, ...(CFG.areas||{})};
- if(CFG.outsideJktFee!=null) OUTSIDE_JKT_FEE=CFG.outsideJktFee;
+ if(CFG.areas&&Object.keys(CFG.areas).length) AREAS=CFG.areas;
  if(CFG.styleRefTtlDays>0) STYLE_REFS_TTL_DAYS=CFG.styleRefTtlDays;
  if(CFG.followupDays>0) STALE_DAYS=CFG.followupDays;
  if(CFG.branding){if(CFG.branding.bizName)BIZ_NAME=CFG.branding.bizName;if(CFG.branding.tagline)BIZ_TAGLINE=CFG.branding.tagline;if(CFG.branding.logo)HP_LOGO=CFG.branding.logo;}
@@ -6445,10 +6448,6 @@ function onInvCustomerChange(cb){
  if(!invSelectedCust){sm.style.display='none';pk.innerHTML='<span style="font-size:12px;color:var(--muted)">Pilih customer dulu</span>';renderInvDogServices();return}
  sm.style.display='block';
  sm.innerHTML=`<strong>${esc(invSelectedCust.owner)}</strong> · ${esc(invSelectedCust.kota||invSelectedCust.area||'-')}${invSelectedCust.kecamatan?', '+esc(invSelectedCust.kecamatan):''} · ${esc(invSelectedCust.wa||'no WA')}`;
- // Outside-Jakarta surcharge: auto-add one editable line (per invoice, not per dog). Removed if customer is inside JKT.
- invExtraCharges=invExtraCharges.filter(c=>c.label!==OUTSIDE_JKT_LABEL);
- if(isOutsideJkt(invSelectedCust)&&OUTSIDE_JKT_FEE>0) invExtraCharges.push({label:OUTSIDE_JKT_LABEL,amount:OUTSIDE_JKT_FEE});
- renderExtraCharges();
  const cdogs=dogs.filter(d=>d.customer_id===invSelectedCust.id);
  if(!cdogs.length){pk.innerHTML='<span style="font-size:12px;color:var(--muted)">Customer belum punya dog</span>';return}
  pk.innerHTML=cdogs.map(d=>`<button class="chip" data-id="${d.id}" onclick="toggleInvDog('${d.id}',this)">${esc(d.name)} (${esc(d.size||'?')})</button>`).join('');
@@ -6894,19 +6893,9 @@ function renderSubsSchedulePicker(){
    </div>
   </div>`;
  }).join('');
- updateSubsSchedGroomerHint();
-}
-function updateSubsSchedGroomerHint(){
- const el=document.getElementById('inv-subs-sched-ghint'); if(!el) return;
- const grId=document.getElementById('inv-groomer')?.value||'';
- const g=groomers.find(x=>x.id===grId);
- if(g){ el.textContent='Groomer: '+g.name; el.style.color='var(--green-dk)'; }
- else { el.textContent='Pilih groomer di bagian 3 dulu'; el.style.color='var(--muted)'; }
 }
 
 async function createSubsScheduleAppointments(){
- const grId=document.getElementById('inv-groomer')?.value||'';
- if(!grId){alert('Pilih groomer di bagian 3 (dropdown "Groomer") dulu sebelum buat jadwal.');return}
  const toCreate=[];
  const conflicts=[];
  const DAY_VALS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -6936,7 +6925,7 @@ async function createSubsScheduleAppointments(){
    if(existing){
     conflicts.push({dogName:dog.name,date:dateISO,existingTime:existing.appt_time?.slice(0,5)||'?'});
    } else {
-    toCreate.push({dog_id:did,groomer_id:grId,customer_id:dog.customer_id,appt_date:dateISO,appt_time:time+':00',service_base:svcBase,duration_mins:dur,session_source:'subscription',status:'pending',token_used:false,subs_deducted:false});
+    toCreate.push({dog_id:did,customer_id:dog.customer_id,appt_date:dateISO,appt_time:time+':00',service_base:svcBase,duration_mins:dur,session_source:'subscription',status:'pending',token_used:false,subs_deducted:false});
    }
    d.setDate(d.getDate()+freqDays);
   }
@@ -7456,10 +7445,10 @@ async function deleteSubscriptionsForInvoice(invoiceNumber){
  return {deleted:deletable.length,kept};
 }
 
-async function saveInvoice(silent){
+async function saveInvoice(){
  const rec=buildInvoiceRecord(); if(!rec) return;
  const isEdit=!!invEditId;
- if(!silent && !confirm(`${isEdit?'Update':'Simpan'} invoice ${rec.invoice_number} untuk ${rec.owner_name}?\nTotal: ${fmtRp(rec.total)}`)) return;
+ if(!confirm(`${isEdit?'Update':'Simpan'} invoice ${rec.invoice_number} untuk ${rec.owner_name}?\nTotal: ${fmtRp(rec.total)}`)) return;
  if(isEdit){
   const oldRec=invoices.find(i=>i.id===invEditId);
   const {error}=await db.from('invoices').update(stripRecForDB(rec)).eq('id',invEditId);
@@ -7476,18 +7465,20 @@ async function saveInvoice(silent){
   }
   // Recreate tokens for current prepaid dogs (handles add + change cases)
   await createTokensFromInvoice(rec);
+  await deductSubsOnInvoice(rec);
   let msg='Invoice diupdate: '+rec.invoice_number;
   if(kept>0) msg+=`\n(${kept} token sudah dipakai, tidak diganti — cek manual kalau perlu)`;
-  if(silent) showToast('Invoice diupdate: '+rec.invoice_number,'success'); else { alert(msg); invEditId=null; updateInvoiceModeBanner(); }
+  alert(msg);
+  invEditId=null;
+  updateInvoiceModeBanner();
  } else {
   const {data:inserted,error}=await db.from('invoices').insert(stripRecForDB(rec)).select().single();
   if(error){alert('Error: '+error.message);return}
   if(inserted) await logAudit('invoice',inserted.id,'create',{new:rec,label:rec.invoice_number+' — '+rec.owner_name});
   await saveVisitsFromInvoice(rec);
   await createTokensFromInvoice(rec);
-  // When auto-saved (e.g. from WA send), keep editing the same row so a re-send doesn't create a duplicate.
-  if(silent){ if(inserted){invEditId=inserted.id;updateInvoiceModeBanner();} showToast('Invoice tersimpan: '+rec.invoice_number,'success'); }
-  else alert('Invoice tersimpan: '+rec.invoice_number);
+  await deductSubsOnInvoice(rec);
+  alert('Invoice tersimpan: '+rec.invoice_number);
  }
  await reloadTables('invoices','visits','tokens','subscriptions');
 }
@@ -7509,6 +7500,7 @@ async function saveInvoiceAndAppts(){
  if(e1){alert('Invoice error: '+e1.message);return}
  await saveVisitsFromInvoice(rec);
  await createTokensFromInvoice(rec);
+ await deductSubsOnInvoice(rec);
  if(rec.is_advance&&interval!=='none'&&firstDate){
   const apptsToInsert=[];
   for(let s=0;s<rec.sessions;s++){
@@ -7997,10 +7989,9 @@ function downloadInvoicePDF(){
  setTimeout(()=>w.print(),300);
 }
 
-// WA message: template chosen strictly by doc type.
-//   Laporan Grooming (report) → WA_TPL_DONE (after-service)
-//   Invoice → WA_TPL_INVOICE (billing)
-// Both templates receive the same token set so either can include payment info when needed.
+// Session E — Session E: simplified WA message per owner spec.
+// Just 4 sections: greeting/thanks, groomer notes, total + bank, "detail in image".
+// Session E — now uses editable WA_TPL_INVOICE template with placeholder substitution.
 function buildInvoiceWAMessage(rec, custObj){
  const docMode=detectInvoiceMode(rec);
  const isReport=docMode==='report';
@@ -8008,13 +7999,11 @@ function buildInvoiceWAMessage(rec, custObj){
  const dogNames=(rec.dogs||[]).map(d=>d.name).filter(Boolean).join(' & ')||'anjing kesayangan';
  const totalStr=rec.total===0?'Rp 0 (sudah dibayar via subscription)':'Rp '+rec.total.toLocaleString('id-ID');
 
- // Service list per dog for {layanan}
- const layanan=(rec.dogs||[]).map(d=>{
-  const svc=(d.services||[]).map(s=>s.name).filter(Boolean).join(', ');
-  return svc?`${d.name}: ${svc}`:d.name;
- }).filter(Boolean).join('\n') || '-';
+ if(isReport&&rec.total===0){
+  return applyTpl(WA_TPL_DONE,{nama:firstName,dogs:dogNames,layanan:'',biz:BIZ_NAME});
+ }
 
- // Groomer field notes; "N/A" if all empty
+ // Session E — pull groomer field notes; use "N/A" if all empty (per owner spec)
  const dogIds=(rec.dogs||[]).map(d=>d.dog_id);
  const linkedAppts=appts.filter(a=>dogIds.includes(a.dog_id)&&a.appt_date===rec.invoice_date);
  const groomerNotes=linkedAppts
@@ -8027,17 +8016,23 @@ function buildInvoiceWAMessage(rec, custObj){
   .filter(Boolean)
   .join('\n') || 'N/A';
 
- const vars={
-  nama:firstName, biz:BIZ_NAME, dogs:dogNames, layanan,
-  groomer_notes:groomerNotes, total:totalStr,
-  bank:bankSettings.bank_name||'BCA', acc:bankSettings.bank_account||'', holder:bankSettings.bank_holder||'',
-  closing:waClosing()
- };
+ const bank=bankSettings.bank_name||'BCA';
+ const acc=bankSettings.bank_account||'';
+ const holder=bankSettings.bank_holder||'';
 
- if(isReport){
-  return applyTpl(WA_TPL_DONE||'Halo kak {nama},\n\nGrooming {dogs} sudah selesai!\n\n{layanan}\n\n📎 Detail di PDF.\n\n{closing}', vars);
- }
- return applyTpl(WA_TPL_INVOICE||'Halo kak {nama},\n\n{biz} — {dogs}\n\n📝 Catatan groomer:\n{groomer_notes}\n\n💰 Total: {total}\n💳 {bank} • {acc} • {holder}\n\n📎 Detail di PDF.\n\n{closing}', vars);
+ // Session E — apply template with placeholders. Fallback to hardcoded default if template missing.
+ const tpl=WA_TPL_INVOICE||'Halo kak {nama},\n\n{biz} — {dogs}\n\n📝 Catatan groomer:\n{groomer_notes}\n\n💰 Total: {total}\n💳 {bank} • {acc} • {holder}\n\n📎 Detail di PDF.\n\n{closing}';
+ return applyTpl(tpl, {
+  nama:firstName,
+  biz:BIZ_NAME,
+  dogs:dogNames,
+  groomer_notes:groomerNotes,
+  total:totalStr,
+  bank:bank,
+  acc:acc,
+  holder:holder,
+  closing:waClosing()
+ });
 }
 
 /* ==== Session E — Rich invoice PDF generation for WhatsApp ====
@@ -8216,12 +8211,9 @@ async function sendInvoiceViaWA(rec, cust, sourceButton){
 }
 
 // From invoice form (current unsaved or just-built record)
-async function sendCurrentInvoiceToWA(ev){
+function sendCurrentInvoiceToWA(ev){
  const rec=buildInvoiceRecord(); if(!rec) return;
  const cust=custs.find(c=>c.id===rec.customer_id)||{};
- // Item 1 — auto-save so the invoice is always recorded when sent (skips if already saved).
- const already=!!invEditId||invoices.some(i=>i.invoice_number===rec.invoice_number);
- if(!already) await saveInvoice(true);
  sendInvoiceViaWA(rec, cust, ev?.target);
 }
 
@@ -8460,8 +8452,19 @@ function renderMembership(){
   } else if(r._kind==='token'&&r.dog_size){
    dogLabel=`<span style="color:var(--muted)">any ${esc(r.dog_size)}</span>`;
   }
-  const left=Math.max(0,(r.sessions_total||0)-(r.sessions_used||0));
-  const sessText=`${r.sessions_used||0} / ${r.sessions_total||0}<span style="color:var(--muted);font-size:11px"> (${left} left)</span>`;
+  let sessText;
+  if(r._kind==='subscription'){
+   const st=subsSessionState(r);
+   sessText=`<div style="display:flex;gap:5px;flex-wrap:wrap;font-size:11px;line-height:1.3">
+    <span title="Total sesi dibeli" style="background:var(--subtle);padding:1px 6px;border-radius:4px"><strong>${st.total}</strong> total</span>
+    <span title="Sudah dipakai (sudah di-invoice)" style="background:#dcfce7;color:#15803d;padding:1px 6px;border-radius:4px"><strong>${st.used}</strong> used</span>
+    <span title="Sudah di-booking di kalender, hari belum lewat / belum di-invoice" style="background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:4px"><strong>${st.scheduled}</strong> sched</span>
+    <span title="Sisa yang belum dijadwalkan" style="background:${st.available>0?'#fef9c3':'#fee2e2'};color:${st.available>0?'#854d0e':'#991b1b'};padding:1px 6px;border-radius:4px"><strong>${st.available}</strong> avail</span>
+   </div>`;
+  } else {
+   const left=Math.max(0,(r.sessions_total||0)-(r.sessions_used||0));
+   sessText=`${r.sessions_used||0} / ${r.sessions_total||0}<span style="color:var(--muted);font-size:11px"> (${left} left)</span>`;
+  }
   const stClass=r.status==='active'?'active':'expired';
   const kindPill=r._kind==='subscription'
    ?'<span class="kind-pill kind-subs">SUBS</span>'
@@ -8486,6 +8489,75 @@ function renderMembership(){
  }).join('');
 }
 
+// ===== Reconciliation (review-then-apply, writes nothing automatically) =====
+// Recomputed "used" for a subscription = its dog's past-or-today subscription
+// appointments that have a matching SAVED INVOICE (dog present on that invoice date).
+// This is the value sessions_used SHOULD be under the invoice-triggered model.
+function recomputeSubsUsed(sub){
+ const today=iso(new Date());
+ const dogAppts=appts.filter(a=>
+  a.dog_id===sub.dog_id
+  && a.session_source==='subscription'
+  && a.status!=='cancelled'
+  && a.appt_date<=today
+ );
+ let used=0;
+ for(const a of dogAppts){
+  const hasInvoice=invoices.some(inv=>
+   (inv.invoice_date||'')===a.appt_date
+   && (inv.dogs||[]).some(d=>d.dog_id===sub.dog_id)
+  );
+  if(hasInvoice) used++;
+ }
+ // Can't exceed what was purchased
+ return Math.min(used,sub.sessions_total||0);
+}
+
+function openSubsReconcile(){
+ const activeSubs=subscriptions.filter(s=>s.status==='active');
+ const rows=activeSubs.map(s=>{
+  const c=custs.find(x=>x.id===s.customer_id);
+  const d=dogs.find(x=>x.id===s.dog_id);
+  const current=s.sessions_used||0;
+  const recomputed=recomputeSubsUsed(s);
+  return {sub:s,owner:c?c.owner:'?',dogName:d?d.name:'?',current,recomputed,diff:recomputed-current};
+ });
+ const mismatches=rows.filter(r=>r.diff!==0);
+ const wrap=document.getElementById('subs-reconcile-list');
+ if(!rows.length){wrap.innerHTML='<div style="padding:1rem;color:var(--muted)">Tidak ada subscription aktif.</div>';om('ov-subs-reconcile');return}
+ const header=`<div style="font-size:12px;margin-bottom:.75rem">${mismatches.length? `<strong style="color:#c2410c">${mismatches.length} baris beda</strong> dari ${rows.length} subs aktif.`:`<strong style="color:#15803d">Semua ${rows.length} subs cocok.</strong> Tidak perlu koreksi.`}</div>`;
+ const body=rows.map(r=>{
+  const same=r.diff===0;
+  const dir=r.diff>0?`+${r.diff}`:`${r.diff}`;
+  const badge=same
+   ? '<span style="background:#dcfce7;color:#15803d;padding:2px 7px;border-radius:4px;font-size:11px">cocok</span>'
+   : `<span style="background:#fee2e2;color:#991b1b;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600">${dir}</span>`;
+  return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border);${same?'opacity:.6':''}">
+   <div style="flex:1;min-width:0">
+    <div style="font-size:13px;font-weight:600">${esc(r.owner)} <span style="font-weight:400;color:var(--muted)">· ${esc(r.dogName)} · ${esc(tierLabel(r.sub.type))}</span></div>
+    <div style="font-size:11px;color:var(--muted)">Current used: <strong>${r.current}</strong> → Recomputed: <strong>${r.recomputed}</strong> / ${r.sub.sessions_total||0}</div>
+   </div>
+   ${badge}
+   ${same?'':`<button class="btn ghost" style="font-size:12px;padding:4px 10px" onclick="applySubsReconcile('${r.sub.id}',${r.recomputed})">Apply</button>`}
+  </div>`;
+ }).join('');
+ wrap.innerHTML=header+body;
+ om('ov-subs-reconcile');
+}
+
+async function applySubsReconcile(subId,newUsed){
+ const s=subscriptions.find(x=>x.id===subId);
+ if(!s) return;
+ const c=custs.find(x=>x.id===s.customer_id);
+ if(!confirm(`Set "sessions used" untuk ${c?c.owner:'subs ini'} dari ${s.sessions_used||0} → ${newUsed}?\n\nIni mengubah data pemakaian subscription.`)) return;
+ const {error}=await db.from('subscriptions').update({sessions_used:newUsed}).eq('id',subId);
+ if(error){alert('Error: '+error.message);return}
+ s.sessions_used=newUsed;
+ await reloadTables('subscriptions');
+ openSubsReconcile();
+ renderMembership();
+}
+
 // Edit a subscription or token row from the Membership tab.
 function openMembEdit(kind,id){
  const row=kind==='subscription'
@@ -8499,6 +8571,11 @@ function openMembEdit(kind,id){
  document.getElementById('memb-ef-sessions-total').value=row.sessions_total||0;
  document.getElementById('memb-ef-sessions-used').value=row.sessions_used||0;
  document.getElementById('memb-ef-expires').value=row.expires_at||'';
+ // Started date editable for subscriptions only (tokens have no started_at column)
+ const startedRow=document.getElementById('memb-ef-started-row');
+ const startedEl=document.getElementById('memb-ef-started');
+ if(startedRow) startedRow.style.display=kind==='subscription'?'':'none';
+ if(startedEl) startedEl.value=(kind==='subscription'?(row.started_at||''):'');
  // Status field only meaningful for subscriptions; tokens use derived status
  const stRow=document.getElementById('memb-ef-status-row');
  if(stRow) stRow.style.display=kind==='subscription'?'':'none';
@@ -8522,6 +8599,7 @@ async function saveMembEdit(){
  const patch={sessions_total:total,sessions_used:used,expires_at:exp,notes};
  if(kind==='subscription'){
   patch.status=document.getElementById('memb-ef-status').value||'active';
+  patch.started_at=document.getElementById('memb-ef-started').value||null;
  }
  const {error}=await db.from(tbl).update(patch).eq('id',id);
  if(error){alert('Error: '+error.message);return}
@@ -9566,31 +9644,67 @@ async function autoLogPastAppointments(){
    await db.from('appointments').update({photos:{}}).eq('id',a.id);
   }
  }
- const subsAppts=appts.filter(a=>
-  a.appt_date<today
+ // NOTE: subscription-credit deduction NO LONGER happens here (was day-based).
+ // A credit is now deducted only when an invoice is saved for a past/today
+ // subscription appointment — see deductSubsOnInvoice(). Booking = "scheduled",
+ // invoicing a past session = "used".
+ if(toLog.length) await reloadTables('appointments','visits');
+}
+
+// ===== Subscription session-state model (Total / Used / Scheduled / Available) =====
+// Used      = sessions_used in DB (deducted when an invoice was saved for a past/today appt)
+// Scheduled = future/undeducted subscription appointments still holding a slot
+// Available = total - used - scheduled
+function subsSessionState(sub){
+ const total=sub.sessions_total||0;
+ const used=sub.sessions_used||0;
+ const scheduled=appts.filter(a=>
+  a.dog_id===sub.dog_id
+  && a.session_source==='subscription'
+  && !a.subs_deducted
+  && a.status!=='cancelled'
+ ).length;
+ const available=Math.max(0,total-used-scheduled);
+ return {total,used,scheduled,available};
+}
+
+// Deduct one credit per past/today subscription appointment covered by this invoice.
+// Idempotent: only appts with subs_deducted=false are touched, and the flag is set
+// after deduction so re-saving the same invoice never double-counts.
+async function deductSubsOnInvoice(rec){
+ if(!rec?.dogs?.length) return;
+ const invDate=rec.invoice_date||iso(new Date());
+ const today=iso(new Date());
+ if(invDate>today) return; // future-dated invoice: nothing to consume yet
+ const dogIds=rec.dogs.map(d=>d.dog_id).filter(Boolean);
+ // Appointments for these dogs, on the invoice date, that are subscription sessions not yet deducted
+ const toDeduct=appts.filter(a=>
+  dogIds.includes(a.dog_id)
+  && a.appt_date===invDate
+  && a.appt_date<=today
   && a.session_source==='subscription'
   && !a.subs_deducted
   && a.status!=='cancelled'
  );
- for(const a of subsAppts){
-  // Find an active subscription for this dog
+ for(const a of toDeduct){
   const sub=subscriptions.find(s=>
    s.dog_id===a.dog_id
    && s.status==='active'
    && (s.sessions_used||0)<(s.sessions_total||0)
   );
   if(!sub){
-   // No matching active sub with sessions left — log warning, mark deducted to avoid retrying
-   console.warn(`No active subscription with sessions left for dog ${a.dog_id} on ${a.appt_date}. Marking as deducted to skip.`);
+   console.warn(`No active subscription with sessions left for dog ${a.dog_id} on ${a.appt_date}. Marking appt deducted to skip.`);
    await db.from('appointments').update({subs_deducted:true}).eq('id',a.id);
+   a.subs_deducted=true;
    continue;
   }
   const newUsed=Math.min(sub.sessions_total,(sub.sessions_used||0)+1);
   await db.from('subscriptions').update({sessions_used:newUsed}).eq('id',sub.id);
   await db.from('appointments').update({subs_deducted:true}).eq('id',a.id);
-  console.log(`Deducted 1 session from sub ${sub.id} (${sub.type}), now ${newUsed}/${sub.sessions_total} used`);
+  sub.sessions_used=newUsed;
+  a.subs_deducted=true;
+  console.log(`Deducted 1 session from sub ${sub.id} (${sub.type}) via invoice ${rec.invoice_number||''}, now ${newUsed}/${sub.sessions_total}`);
  }
- if(toLog.length||apptWithTokens.length||subsAppts.length) await reloadTables('appointments','visits','tokens','subscriptions');
 }
 
 /* ========== PHOTOS — zones: before / after / issue (Batch L3) ========== */
@@ -10339,7 +10453,7 @@ function renderConfig(){
   ${sec('Membership tiers',tierTbl)}
   ${sec('Durasi default',`<div style="display:flex;gap:32px;flex-wrap:wrap"><div><div style="font-size:11px;color:var(--muted);margin-bottom:6px">Base per ukuran</div><div style="display:flex;flex-direction:column;gap:5px">${durBaseRows}</div></div><div><div style="font-size:11px;color:var(--muted);margin-bottom:6px">Tambahan per layanan</div><div style="display:flex;flex-direction:column;gap:5px">${durAddRows}</div></div></div>`)}
   ${sec('Sumber customer (label)',`<div style="display:flex;flex-direction:column;gap:6px">${srcRows}</div>`)}
-  ${sec('Invoice',`<div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px">Tanggal jatuh tempo default</span>${fld('cfg-dueday',DUE_DAY_DEFAULT,50)}</div><div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px">Biaya luar Jakarta (Rp)</span>${fld('cfg-outside-fee',OUTSIDE_JKT_FEE,80)}<span style="font-size:11px;color:var(--muted)">otomatis ditambahkan untuk customer di luar DKI Jakarta</span></div></div>`)}
+  ${sec('Invoice',`<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px">Tanggal jatuh tempo default</span>${fld('cfg-dueday',DUE_DAY_DEFAULT,50)}</div>`)}
   ${sec('Jam operasional',`<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><label style="font-size:12px;display:flex;align-items:center;gap:6px">Buka <input id="cfg-hours-open" type="time" value="${m2t(SSTART)}" style="padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label><label style="font-size:12px;display:flex;align-items:center;gap:6px">Tutup <input id="cfg-hours-close" type="time" value="${m2t(SEND)}" style="padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label><span style="font-size:11px;color:var(--muted)">Slot tetap 30 menit.</span></div>`)}
   ${sec('Threshold',`<div style="display:flex;gap:24px;flex-wrap:wrap"><label style="font-size:12px;display:flex;align-items:center;gap:6px">Follow-up "belum grooming" setelah ${fld('cfg-followup-days',STALE_DAYS,50)} hari</label><label style="font-size:12px;display:flex;align-items:center;gap:6px">Foto styling ref kedaluwarsa ${fld('cfg-styleref-ttl',STYLE_REFS_TTL_DAYS,50)} hari</label></div>`)}
   ${sec('Syarat & ketentuan membership',`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Satu baris = satu poin.</div><textarea id="cfg-tnc" rows="7" style="width:100%;max-width:640px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(MEMBERSHIP_TNC.join('\n'))}</textarea>`)}
@@ -10354,7 +10468,7 @@ function renderConfig(){
   ${sec('Custom fields',`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Tambah info sendiri ke Customer / Pet. Muncul di form & Customer 360.</div><div id="cfg-customfields-body"></div>`)}
   ${sec('Pesan WhatsApp',`
    <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
-    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan "grooming selesai" (Laporan Grooming) <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{layanan}</code> <code>{groomer_notes}</code> <code>{total}</code> <code>{bank}</code> <code>{acc}</code> <code>{holder}</code> <code>{biz}</code> <code>{closing}</code></span><textarea id="cfg-wa-done" rows="9" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_DONE)}</textarea></label>
+    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan "grooming selesai" (sudah dibayar) <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{layanan}</code> <code>{biz}</code></span><textarea id="cfg-wa-done" rows="9" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_DONE)}</textarea></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan invoice (grooming + tagihan) <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{biz}</code> <code>{dogs}</code> <code>{groomer_notes}</code> <code>{total}</code> <code>{bank}</code> <code>{acc}</code> <code>{holder}</code> <code>{closing}</code></span><textarea id="cfg-wa-invoice" rows="12" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_INVOICE)}</textarea></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Salam reminder customer <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code></span><input id="cfg-rem-greeting" type="text" value="${esc(REM_GREETING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Penutup reminder customer<input id="cfg-rem-closing" type="text" value="${esc(REM_CLOSING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
@@ -10385,7 +10499,6 @@ async function saveConfig(){
  const sourceLabels={};
  Object.keys(SOURCE_LABELS).forEach(k=>{sourceLabels[k]=gv(`cfg-src-${k}`)?.value.trim()||k});
  const dueDayDefault=Math.min(28,Math.max(1,parseInt(gv('cfg-dueday')?.value)||5));
- const outsideJktFee=Math.max(0,parseInt(gv('cfg-outside-fee')?.value)||0);
  const hours={open:gv('cfg-hours-open')?.value||'08:30',close:gv('cfg-hours-close')?.value||'18:00'};
  const followupDays=Math.max(1,parseInt(gv('cfg-followup-days')?.value)||14);
  const styleRefTtlDays=Math.max(1,parseInt(gv('cfg-styleref-ttl')?.value)||60);
@@ -10406,7 +10519,7 @@ async function saveConfig(){
   unpaid:gv('cfg-dashcard-unpaid')?.checked!==false,
   payroll:gv('cfg-dashcard-payroll')?.checked!==false
  };
- const config={pricing,tiers,durBase,durAdd,sourceLabels,dueDayDefault,outsideJktFee,hours,followupDays,styleRefTtlDays,tnc,areas,toastMs,autoLog,dashCards,
+ const config={pricing,tiers,durBase,durAdd,sourceLabels,dueDayDefault,hours,followupDays,styleRefTtlDays,tnc,areas,toastMs,autoLog,dashCards,
   branding:{bizName:gv('cfg-biz-name')?.value.trim()||'HomePaw',tagline:gv('cfg-biz-tagline')?.value.trim()||'',logo:_cfgLogoData||HP_LOGO},
   waClosing:gv('cfg-wa-closing')?.value.trim()||WA_CLOSING_TPL,
   customFields:_cfgCustomFields||{customers:[],pets:[]},
@@ -12129,13 +12242,7 @@ function renderFollowups(){
     const waPhone=c.wa?normalizeWA(c.wa):null;
     const firstName=(c.owner||'').split(' ')[0];
     const dogList=grp.dogs.map(x=>x.dog.name).join(' dan ');
-    const inactivePeriod = maxDays > 30 ? '1 bulan' : '2 minggu';
-
-const msg = `Hai Kak ${firstName}, sudah lebih dari ${inactivePeriod} nih kami belum bertemu sama ${dogList} 🐶
-
-Kalau sudah waktunya grooming lagi, HomePaw siap meluncur langsung ke rumah Kakak!
-
-Mau booking sekarang atau ada pertanyaan dulu? Boleh banget chat di sini ya 😊`;
+    const msg=`Halo kak ${firstName}, sudah lama nggak kelihatan! ${dogList} terakhir grooming ${maxDays} hari lalu. Boleh aku bantu booking jadwal berikutnya?`;
     const waLink=waPhone?`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`:null;
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:${bg};border-radius:5px;flex-wrap:wrap;gap:8px">
      <div style="flex:1;min-width:0">
