@@ -1383,6 +1383,14 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="modal">
  <button class="modal-close" onclick="cm('ov-cust')" title="Close">&#x2715;</button>
  <div class="modal-title" id="cust-title">Add customer</div>
+ <div id="cf-paste-wrap" style="margin-bottom:12px;border:1px dashed var(--border);border-radius:8px;padding:10px">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+   <span style="font-size:12px;font-weight:600">📋 Paste template booking</span>
+   <button type="button" class="btn btn-g btn-sm" onclick="parseBookingPaste()">Isi otomatis</button>
+  </div>
+  <textarea id="cf-paste-src" rows="3" placeholder="Paste seluruh chat template customer di sini, lalu klik &quot;Isi otomatis&quot;. Field owner/alamat/gmaps + data anabul akan terisi. Anabul lebih dari 1 (dipisah &quot;dan&quot;) akan dibuat satu per satu." style="width:100%;margin-top:8px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5"></textarea>
+  <div id="cf-paste-hint" style="font-size:11px;color:var(--muted);margin-top:5px"></div>
+ </div>
  <div class="form-grid">
  <div class="fg"><label>Owner name *</label><input id="cf-owner" placeholder="Sarah"/></div>
  <div class="fg">
@@ -1918,6 +1926,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 // Cross-browser: AbortSignal.timeout polyfill (Safari <15.4, older Chrome/WebView)
 if(typeof AbortSignal!=='undefined'&&!AbortSignal.timeout){AbortSignal.timeout=function(ms){const c=new AbortController();setTimeout(function(){try{c.abort(new DOMException('Timeout','TimeoutError'))}catch(e){c.abort()}},ms);return c.signal}}
 let dogs=[], visits=[], appts=[], custs=[], groomers=[], invoices=[], tokens=[], subscriptions=[], bankSettings={}, custEditId=null, dogEditId=null, currentCustId=null, apptDate=null, apptEditId=null, groomerEditId=null, membEditState=null;
+let _pastePetQueue=[]; // pets parsed from a pasted booking template, filled one-by-one after customer save
 let STALE_DAYS=14;
 let TOAST_MS=3500;
 let CFG={}, DUE_DAY_DEFAULT=5, SOURCE_LABELS={ads:'Ads',free_session:'Free session',organic:'Organic',family:'Family',friend:'Friend'};
@@ -1943,7 +1952,7 @@ let WA_TPL_INVOICE='Halo kak {nama},\n\nTerima kasih sudah pakai {biz} untuk {do
 let _cfgLogoData=null;
 function waClosing(){return WA_CLOSING_TPL.replace(/\{biz\}/g,BIZ_NAME)}
 let REM_GREETING='Halo kak {nama}', REM_CLOSING='Sampai jumpa besok ya kak!';
-let WA_TPL_FOLLOWUP='Halo kak {nama}, sudah lama nggak kelihatan! {dogs} terakhir grooming {days} hari lalu. Boleh aku bantu booking jadwal berikutnya? \uD83D\uDC3E';
+let WA_TPL_FOLLOWUP='Hai Kak {nama}, sudah lebih dari {inactive_period} nih kami belum bertemu sama {dogs} \uD83D\uDC36\nKalau sudah waktunya grooming lagi, {biz} siap meluncur langsung ke rumah Kakak!\nMau booking sekarang atau ada pertanyaan dulu? Boleh banget chat di sini ya \uD83D\uDE0A';
 let WA_TPL_RENEWAL='Halo kak {nama}, \uD83D\uDC3E\n\nSubscription {tier} untuk {dogs} sudah waktunya diperpanjang untuk bulan depan.\n\nBiaya: {amount}\nMohon konfirmasi & pembayaran sebelum tanggal {due_day} ya kak supaya jadwal grooming tetap lancar.\n\nTerima kasih! {biz}';
 function applyTpl(tpl,vars){return String(tpl||'').replace(/\{(\w+)\}/g,(m,k)=>vars[k]!=null?vars[k]:'')}
 
@@ -2800,6 +2809,10 @@ function renderDogsTable(){
 /* CUSTOMER MODAL */
 function openAddCust(){
  custEditId=null;
+ _pastePetQueue=[];
+ const pw=document.getElementById('cf-paste-wrap'); if(pw) pw.style.display='';
+ const ps=document.getElementById('cf-paste-src'); if(ps) ps.value='';
+ const ph=document.getElementById('cf-paste-hint'); if(ph) ph.innerHTML='';
  document.getElementById('cust-title').textContent='Add customer';
  document.getElementById('cust-save-btn').textContent='Save customer';
  ['cf-owner','cf-wa','cf-addr','cf-gmaps','cf-prefs','cf-lat','cf-lng'].forEach(id=>document.getElementById(id)&&(document.getElementById(id).value=''));
@@ -2817,6 +2830,8 @@ function openAddCust(){
 function openEditCust(id){
  const c=custs.find(x=>x.id===id); if(!c) return;
  custEditId=id;
+ _pastePetQueue=[];
+ const pw=document.getElementById('cf-paste-wrap'); if(pw) pw.style.display='none';
  document.getElementById('cust-title').textContent='Edit customer';
  document.getElementById('cust-save-btn').textContent='Update';
  document.getElementById('cf-owner').value=c.owner||'';
@@ -2889,6 +2904,11 @@ async function saveCust(){
   }
   cm('ov-cust');
   await reloadTables('customers');
+  // If pets were parsed from a pasted template, start filling them one-by-one
+  if(!custEditId&&_pastePetQueue.length){
+   const inserted2=custs.find(c=>c.owner===owner&&c.customer_code===p.customer_code);
+   if(inserted2){currentCustId=inserted2.id;fillDogFromQueue();}
+  }
  }finally{
   if(btn){btn.disabled=false;btn.textContent=btnLbl}
  }
@@ -2908,6 +2928,118 @@ async function delCust(id,name){
 }
 
 /* DOG MODAL */
+
+// ===== Booking-template paste parser =====
+// Reads a pasted customer booking template, fills the customer form, and queues
+// pets (split on " dan ") to be created one modal at a time after the customer saves.
+function _pbNorm(s){return (s||'').toLowerCase().replace(/[^a-z0-9]/g,'')}
+// Fuzzy-pick a value from a list of options (exact norm match, else substring either way)
+function _pbFuzzy(val,options){
+ if(!val) return '';
+ const nv=_pbNorm(val);
+ let hit=options.find(o=>_pbNorm(o)===nv);
+ if(hit) return hit;
+ hit=options.find(o=>{const no=_pbNorm(o);return no&&(no.includes(nv)||nv.includes(no))});
+ return hit||'';
+}
+// Split a field value across N pets. If the split count matches petCount, distribute
+// positionally; otherwise treat the whole value as shared across all pets.
+function _pbSplit(val,petCount){
+ if(!val) return new Array(petCount).fill('');
+ const parts=val.split(/\s+dan\s+|\s*&\s*|\s*,\s*/i).map(s=>s.trim()).filter(Boolean);
+ if(parts.length===petCount) return parts;
+ return new Array(petCount).fill(val.trim());
+}
+function parseBookingPaste(){
+ const raw=document.getElementById('cf-paste-src')?.value||'';
+ if(!raw.trim()){alert('Paste template dulu di kotak.');return}
+ // Grab "Label: value" lines (value may be empty)
+ const getField=(labels)=>{
+  for(const line of raw.split('\n')){
+   const i=line.indexOf(':'); if(i<0) continue;
+   const key=_pbNorm(line.slice(0,i));
+   const val=line.slice(i+1).trim();
+   if(labels.some(l=>key.includes(_pbNorm(l)))) return val;
+  }
+  return '';
+ };
+ const owner=getField(['Nama Owner','Owner']);
+ const addr=getField(['alamat lengkap','alamat']);
+ const kotaRaw=getField(['Kota','Kabupaten']);
+ const kecRaw=getField(['Kecamatan']);
+ const gmaps=getField(['gmaps link','gmaps','shareloc','share loc','lokasi']);
+ // Pets
+ const petNames=getField(['Nama anabul','Nama anak bulu','Nama anabull']);
+ const breeds=getField(['Breed','Ras']);
+ const ages=getField(['Umur','Usia']);
+ const weights=getField(['Berat']);
+ const colors=getField(['Warna Bulu','Warna']);
+ const notes=getField(['Special note','catatan','note untuk groomer']);
+
+ // Fill customer fields (only overwrite when we found something)
+ const setV=(id,v)=>{const e=document.getElementById(id);if(e&&v)e.value=v;};
+ setV('cf-owner',owner);
+ setV('cf-addr',addr);
+ if(gmaps){const g=document.getElementById('cf-gmaps');if(g){g.value=gmaps;if(typeof onGmapsInput==='function')onGmapsInput();}}
+ // Kota / Kecamatan — fuzzy match against AREAS dropdowns
+ let matchedKota='';
+ if(kotaRaw){
+  matchedKota=_pbFuzzy(kotaRaw,Object.keys(AREAS));
+  if(matchedKota){document.getElementById('cf-kota').value=matchedKota;onKotaChange();}
+ }
+ if(kecRaw&&matchedKota){
+  const kec=_pbFuzzy(kecRaw,AREAS[matchedKota]||[]);
+  if(kec) document.getElementById('cf-kec').value=kec;
+ }
+
+ // Build pet queue
+ const names=petNames?petNames.split(/\s+dan\s+|\s*&\s*|\s*,\s*/i).map(s=>s.trim()).filter(Boolean):[];
+ _pastePetQueue=[];
+ if(names.length){
+  const n=names.length;
+  const brA=_pbSplit(breeds,n), agA=_pbSplit(ages,n), weA=_pbSplit(weights,n), coA=_pbSplit(colors,n), noA=_pbSplit(notes,n);
+  for(let i=0;i<n;i++){
+   _pastePetQueue.push({name:names[i],breed:brA[i]||'',age:agA[i]||'',weight:weA[i]||'',color:coA[i]||'',prefs:noA[i]||''});
+  }
+ }
+
+ // Hint
+ const hints=[];
+ if(kotaRaw&&!matchedKota) hints.push(`Kota "${esc(kotaRaw)}" tidak cocok dropdown — pilih manual.`);
+ hints.push(`${_pastePetQueue.length} anabul terdeteksi${_pastePetQueue.length?': '+_pastePetQueue.map(p=>esc(p.name)).join(', '):''}.`);
+ if(_pastePetQueue.length) hints.push('Klik <strong>Save customer</strong> — form anabul akan muncul satu per satu.');
+ const hEl=document.getElementById('cf-paste-hint'); if(hEl) hEl.innerHTML=hints.join(' ');
+}
+
+// Pre-fill the dog modal from the next queued pet (called after customer/dog save).
+function fillDogFromQueue(){
+ const pet=_pastePetQueue.shift();
+ if(!pet) return false;
+ dogEditId=null;
+ _stylingRefsBuffer=[];
+ renderStylingRefsGrid();
+ const stampEl=document.getElementById('df-edit-stamp'); if(stampEl) stampEl.innerHTML='';
+ const c=custs.find(x=>x.id===currentCustId);
+ const remaining=_pastePetQueue.length;
+ document.getElementById('dog-title').textContent=`Add pet (dari paste)${remaining?` — ${remaining} lagi setelah ini`:''}`;
+ document.getElementById('dog-save-btn').textContent=remaining?'Save & next':'Save';
+ document.getElementById('dog-cust-lbl').textContent=c?c.owner:'—';
+ document.getElementById('df-name').value=pet.name||'';
+ document.getElementById('df-breed').value=pet.breed||'';
+ document.getElementById('df-age').value=(pet.age||'').replace(/[^0-9.]/g,'')||'';
+ document.getElementById('df-weight').value=pet.weight||'';
+ document.getElementById('df-coat-color').value=pet.color||'';
+ document.getElementById('df-prefs').value=pet.prefs||'';
+ document.getElementById('df-size').value='';
+ document.getElementById('df-coat').value='';
+ const shEl=document.getElementById('df-skin-history'); if(shEl) shEl.value='';
+ const ptEl=document.getElementById('df-pet-type'); if(ptEl) ptEl.value='dog';
+ onPetTypeChange();
+ renderCustomFields('pets','df-custom-',{},'df-custom-fields');
+ om('ov-dog');
+ return true;
+}
+
 function openAddDog(){
  if(!currentCustId){alert('Select a customer first.');return}
  dogEditId=null;
@@ -3012,6 +3144,10 @@ async function saveDog(){
   cm('ov-dog');
   await reloadTables('dogs');
   renderDogsTable();
+  // Continue pasted-pet queue if more remain
+  if(!dogEditId&&_pastePetQueue.length){
+   fillDogFromQueue();
+  }
  }finally{
   if(btn){btn.disabled=false;btn.textContent=btnLbl}
  }
@@ -10495,7 +10631,7 @@ function renderConfig(){
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan invoice (grooming + tagihan) <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{biz}</code> <code>{dogs}</code> <code>{groomer_notes}</code> <code>{total}</code> <code>{bank}</code> <code>{acc}</code> <code>{holder}</code> <code>{closing}</code></span><textarea id="cfg-wa-invoice" rows="12" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_INVOICE)}</textarea></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Salam reminder customer <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code></span><input id="cfg-rem-greeting" type="text" value="${esc(REM_GREETING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Penutup reminder customer<input id="cfg-rem-closing" type="text" value="${esc(REM_CLOSING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
-    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan followup "belum grooming" <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{days}</code> <code>{biz}</code></span><textarea id="cfg-wa-followup" rows="4" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_FOLLOWUP)}</textarea></label>
+    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan followup "belum grooming" <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{inactive_period}</code> <code>{days}</code> <code>{biz}</code></span><textarea id="cfg-wa-followup" rows="4" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_FOLLOWUP)}</textarea></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan renewal subscription bulanan <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{tier}</code> <code>{amount}</code> <code>{due_day}</code> <code>{biz}</code></span><textarea id="cfg-wa-renewal" rows="8" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_RENEWAL)}</textarea></label>
     <div style="font-size:11px;color:var(--muted)">Pesan invoice (belum bayar) tetap dihitung otomatis oleh sistem karena ada logika diskon, biaya tambahan, dan rekening bank.</div>
    </div>`)}
@@ -12260,7 +12396,8 @@ function renderFollowups(){
     const waPhone=c.wa?normalizeWA(c.wa):null;
     const firstName=(c.owner||'').split(' ')[0];
     const dogList=grp.dogs.map(x=>x.dog.name).join(' dan ');
-    const msg=applyTpl(WA_TPL_FOLLOWUP,{nama:firstName,dogs:dogList,days:maxDays,biz:BIZ_NAME});
+    const inactivePeriod=maxDays>30?'1 bulan':'2 minggu';
+    const msg=applyTpl(WA_TPL_FOLLOWUP,{nama:firstName,dogs:dogList,days:maxDays,inactive_period:inactivePeriod,biz:BIZ_NAME});
     const waLink=waPhone?`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`:null;
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:${bg};border-radius:5px;flex-wrap:wrap;gap:8px">
      <div style="flex:1;min-width:0">
