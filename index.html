@@ -657,6 +657,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   </div>
   <div id="dash-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:1.5rem"></div>
   <div id="dash-actions" style="margin-bottom:1.2rem"></div>
+  <div id="dash-followups" style="margin-bottom:1.2rem"></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px">
    <div class="card" style="padding:14px">
     <div style="font-size:11px;font-weight:600;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Source ROI</div>
@@ -876,13 +877,10 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <button class="cal-load-btn" onclick="loadInvFromToday()" style="margin-bottom:0">Load today's schedule</button>
  <button class="cal-load-btn" onclick="openInvApptPicker()" style="margin-bottom:0;background:var(--blue-lt);border-color:#bfdbfe;color:var(--blue-t)">Load from appointment</button>
  </div>
- <div style="position:relative;margin-bottom:.9rem">
- <input id="inv-customer-search" placeholder="Ketik nama, kode, alamat, atau nama anjing…" autocomplete="off"
-  oninput="onInvCustSearch(this.value)" onfocus="onInvCustSearch(this.value)"
-  onblur="setTimeout(()=>{const dd=document.getElementById('inv-cust-dd');if(dd)dd.style.display='none'},200)"
-  style="width:100%;height:44px;padding:0 14px;border:1px solid var(--border);border-radius:var(--r);font-size:var(--fs-body);background:var(--subtle)"/>
- <div id="inv-cust-dd" style="display:none;position:absolute;top:46px;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh-lg);z-index:50;max-height:320px;overflow-y:auto"></div>
- </div>
+ <input id="inv-customer-search" list="inv-customer-list" placeholder="Type to search customer…"
+  oninput="onInvSearchChange(this.value)"
+  style="width:100%;height:44px;padding:0 14px;border:1px solid var(--border);border-radius:var(--r);font-size:var(--fs-body);background:var(--subtle);margin-bottom:.9rem"/>
+ <datalist id="inv-customer-list"></datalist>
  <select id="inv-customer" style="display:none"></select>
 
  <div id="inv-cust-summary" style="display:none;background:var(--green-lt);border:1px solid var(--green-md);border-radius:var(--r);padding:10px 12px;margin-bottom:.9rem;font-size:var(--fs-label);color:var(--green-dk)"></div>
@@ -1145,8 +1143,6 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="subtabs">
   <button class="subtab active" id="rstab-groomer" onclick="swRem('groomer')">Groomer reminders</button>
   <button class="subtab" id="rstab-customer" onclick="swRem('customer')">Customer reminders</button>
-  <button class="subtab" id="rstab-followup" onclick="swRem('followup')">Followup (belum grooming)</button>
-  <button class="subtab" id="rstab-renewal" onclick="swRem('renewal')">Renewal subs</button>
  </div>
 
  <div class="subsec active" id="rsec-groomer">
@@ -1194,20 +1190,6 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   </div>
   <div id="cust-rem-cards"></div>
  </div>
-
- <div class="subsec" id="rsec-followup">
-  <div class="card" style="padding:1rem;margin-bottom:1rem;font-size:12px;color:var(--muted)">
-   Dog yang belum grooming ≥ <strong id="followup-threshold-label"></strong> hari (atur di Settings → Konfigurasi). Template pesan bisa diedit di Settings → Pesan WhatsApp.
-  </div>
-  <div id="followup-cards"></div>
- </div>
-
- <div class="subsec" id="rsec-renewal">
-  <div class="card" style="padding:1rem;margin-bottom:1rem;font-size:12px;color:var(--muted)">
-   Semua subscription aktif (weekly / biweekly / monthly) untuk diperpanjang bulan depan. Template pesan bisa diedit di Settings → Pesan WhatsApp.
-  </div>
-  <div id="renewal-cards"></div>
- </div>
  </div>
 
  <div class="sec" id="sec-membership">
@@ -1223,7 +1205,6 @@ thead th[onclick]:hover{color:var(--primary-darker)}
    <option value="expired">Expired only</option>
    <option value="all">All status</option>
   </select>
-  <button class="btn ghost" style="margin-left:6px" onclick="openSubsReconcile()" title="Cek ulang jumlah sesi terpakai vs data appointment/invoice">🔍 Reconcile</button>
  </div>
  <!-- Session E — Renewal urgency banner (populated by renderMembership) -->
  <div id="memb-renewal-banner" style="display:none;background:#fef3c7;border:1px solid #fde68a;border-left:4px solid #d97706;padding:12px 16px;border-radius:8px;margin-top:1rem;font-size:13px;color:#78350f"></div>
@@ -1264,11 +1245,6 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   <div class="toolbar">
    <span class="toolbar-title">History</span>
    <span style="font-size:11px;color:var(--muted)">Audit log — all changes across system</span>
-  </div>
-  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
-   <button class="btn btn-g btn-sm" id="hist-del-quick" onclick="histQuickDeletions()" title="Lihat semua yang dihapus (30 hari terakhir)">🗑️ Deletions (30 hari)</button>
-   <button class="btn btn-g btn-sm" onclick="histClearQuick()">Reset filter</button>
-   <span id="hist-del-summary" style="font-size:12px;color:var(--muted)"></span>
   </div>
   <div class="card" style="padding:12px;margin-bottom:1rem">
    <div class="form-grid">
@@ -1391,14 +1367,6 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="modal">
  <button class="modal-close" onclick="cm('ov-cust')" title="Close">&#x2715;</button>
  <div class="modal-title" id="cust-title">Add customer</div>
- <div id="cf-paste-wrap" style="margin-bottom:12px;border:1px dashed var(--border);border-radius:8px;padding:10px">
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-   <span style="font-size:12px;font-weight:600">📋 Paste template booking</span>
-   <button type="button" class="btn btn-g btn-sm" onclick="parseBookingPaste()">Isi otomatis</button>
-  </div>
-  <textarea id="cf-paste-src" rows="3" placeholder="Paste seluruh chat template customer di sini, lalu klik &quot;Isi otomatis&quot;. Field owner/alamat/gmaps + data anabul akan terisi. Anabul lebih dari 1 (dipisah &quot;dan&quot;) akan dibuat satu per satu." style="width:100%;margin-top:8px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5"></textarea>
-  <div id="cf-paste-hint" style="font-size:11px;color:var(--muted);margin-top:5px"></div>
- </div>
  <div class="form-grid">
  <div class="fg"><label>Owner name *</label><input id="cf-owner" placeholder="Sarah"/></div>
  <div class="fg">
@@ -1451,7 +1419,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="fg"><label>Nama *</label><input id="df-name" placeholder="Buddy"/></div>
  <div class="fg"><label>Breed / Ras</label><input id="df-breed" placeholder="Poodle"/></div>
  <div class="fg"><label>Umur (tahun)</label><input type="number" id="df-age" placeholder="e.g. 3" min="0" step="0.5"/></div>
- <div class="fg"><label>Berat</label><input id="df-weight" placeholder="e.g. 8 kg" oninput="onWeightInput()"/></div>
+ <div class="fg"><label>Berat</label><input id="df-weight" placeholder="e.g. 8 kg"/></div>
  <div class="fg" id="df-size-wrap"><label>Size</label><select id="df-size"><option value="">Select…</option><option>XS</option><option>Small</option><option>Medium</option><option>Large</option><option>XL</option><option>Cat</option></select></div>
  <div class="fg"><label>Coat</label><select id="df-coat"><option value="">Select…</option><option>Short</option><option>Long</option><option>Curly</option><option>Double coat</option></select></div>
  <div class="fg"><label>Warna</label><input id="df-coat-color" placeholder="e.g. White, Black & white, Golden"/></div>
@@ -1771,10 +1739,6 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="fg full"><label>Bank name</label><input id="bf-name" placeholder="Krom Bank"/></div>
  <div class="fg full"><label>Account number</label><input id="bf-account" placeholder="770055777787"/></div>
  <div class="fg full"><label>Account holder</label><input id="bf-holder" placeholder="Xavier Fidelia Ali"/></div>
- <div class="fg full" style="border-top:1px dashed var(--border);padding-top:10px;margin-top:4px"><label style="font-size:11px;color:var(--muted)">Bank kedua (opsional — muncul di invoice kalau diisi)</label></div>
- <div class="fg full"><label>Bank name 2</label><input id="bf-name2" placeholder="(opsional)"/></div>
- <div class="fg full"><label>Account number 2</label><input id="bf-account2" placeholder="(opsional)"/></div>
- <div class="fg full"><label>Account holder 2</label><input id="bf-holder2" placeholder="(opsional)"/></div>
  </div>
  <div class="form-actions">
  <button class="btn btn-p" onclick="saveBankSettings()">Save</button>
@@ -1796,7 +1760,6 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="fg"><label>Cat</label><input type="number" id="pf-cat" min="0" step="500" placeholder="15000"/></div>
  <div class="fg full"><label>Styling (bonus flat, tambahan ke size rate)</label><input type="number" id="pf-styling" min="0" step="500" placeholder="20000"/></div>
  <div class="fg full"><label>Rate default (jika size tidak dikenal)</label><input type="number" id="pf-rate" min="0" step="500" placeholder="20000"/></div>
- <div class="fg full"><label>Tanggal mulai cycle gaji (1–28)</label><input type="number" id="pf-cycle-day" min="1" max="28" step="1" placeholder="26"/></div>
  <div class="fg full" style="font-size:11px;color:var(--muted);background:var(--subtle);padding:8px 10px;border-radius:6px;line-height:1.5">
   Cycle: 26th setiap bulan hingga 25th bulan berikutnya.<br>
   Rate change only affects future cycles. Paid cycles keep their locked rate.
@@ -1818,18 +1781,6 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   <div style="margin-top:1rem;font-size:11px;color:var(--muted);background:#fef3c7;padding:8px 10px;border-radius:5px;line-height:1.5">
    <strong>Tip:</strong> Hapus appointment yang batal/tidak jadi untuk mengurangi count.
   </div>
- </div>
-</div>
-
-<!-- SUBSCRIPTION RECONCILE MODAL (review-then-apply, never auto-writes) -->
-<div class="overlay" id="ov-subs-reconcile">
- <div class="modal" style="max-width:720px">
-  <button class="modal-close" onclick="cm('ov-subs-reconcile')" title="Close">&#x2715;</button>
-  <div class="modal-title">🔍 Reconcile sesi terpakai</div>
-  <div style="font-size:12px;color:var(--muted);background:#fef3c7;padding:10px 12px;border-radius:6px;line-height:1.5;margin-bottom:1rem">
-   <strong>Ini cuma cek — tidak mengubah apa pun otomatis.</strong> Kolom <em>Recomputed</em> = jumlah sesi yang punya invoice tersimpan (appt sudah lewat & sudah di-invoice). Bandingkan dengan <em>Current</em>, lalu klik <strong>Apply</strong> per baris kalau memang mau dikoreksi. Data pembayaran orang — review satu-satu.
-  </div>
-  <div id="subs-reconcile-list" style="max-height:55vh;overflow-y:auto"></div>
  </div>
 </div>
 
@@ -1915,8 +1866,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   <div class="modal-title" id="memb-edit-title">Edit</div>
   <div class="form-grid">
    <div class="fg"><label>Sessions total</label><input type="number" id="memb-ef-sessions-total" min="0"/></div>
-   <div class="fg"><label>Sessions used <span style="font-size:10px;color:var(--muted);font-weight:400">(override manual)</span></label><input type="number" id="memb-ef-sessions-used" min="0"/></div>
-   <div class="fg" id="memb-ef-started-row"><label>Started</label><input type="date" id="memb-ef-started"/></div>
+   <div class="fg"><label>Sessions used</label><input type="number" id="memb-ef-sessions-used" min="0"/></div>
    <div class="fg"><label>Expires</label><input type="date" id="memb-ef-expires"/></div>
    <div class="fg" id="memb-ef-status-row">
     <label>Status</label>
@@ -1939,7 +1889,6 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 // Cross-browser: AbortSignal.timeout polyfill (Safari <15.4, older Chrome/WebView)
 if(typeof AbortSignal!=='undefined'&&!AbortSignal.timeout){AbortSignal.timeout=function(ms){const c=new AbortController();setTimeout(function(){try{c.abort(new DOMException('Timeout','TimeoutError'))}catch(e){c.abort()}},ms);return c.signal}}
 let dogs=[], visits=[], appts=[], custs=[], groomers=[], invoices=[], tokens=[], subscriptions=[], bankSettings={}, custEditId=null, dogEditId=null, currentCustId=null, apptDate=null, apptEditId=null, groomerEditId=null, membEditState=null;
-let _pastePetQueue=[]; // pets parsed from a pasted booking template, filled one-by-one after customer save
 let STALE_DAYS=14;
 let TOAST_MS=3500;
 let CFG={}, DUE_DAY_DEFAULT=5, SOURCE_LABELS={ads:'Ads',free_session:'Free session',organic:'Organic',family:'Family',friend:'Friend'};
@@ -1954,19 +1903,17 @@ let expenses=[];
 let adminUsers=[], currentUser=null, currentAdminRow=null, _authReady=false;
 function isOwner(){return currentAdminRow&&currentAdminRow.role==='owner'}
 // Batch J — payroll
-let payrollSettings={rate_per_dog:20000,cycle_start_day:26}, groomerPayouts=[], payrollCycleAnchor=new Date();
+let payrollSettings={rate_per_dog:20000,cycle_start_day:25}, groomerPayouts=[], payrollCycleAnchor=new Date();
 let HP_LOGO="data:image/png;base64,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";
 let BIZ_NAME='HomePaw', BIZ_TAGLINE='Dog Home Grooming \u00B7 Jakarta', WA_CLOSING_TPL='Terima kasih sudah mempercayai {biz} \uD83D\uDC3E';
 
 let WA_TPL_DONE='Halo kak {nama},\n\nGrooming {dogs} sudah selesai hari ini!\n\nDetail layanan:\n{layanan}\n\nStatus: \u2714 SUDAH DIBAYAR (subscription/prepaid)\nTidak ada tagihan tambahan.\n\n\uD83D\uDCCE Detail lengkap (foto & catatan groomer) terlampir di invoice PDF.\n\nTerima kasih sudah mempercayai {biz} \uD83D\uDC3E\nSampai jumpa grooming berikutnya!';
 
-// Session E — editable invoice WA template. Placeholders: {nama} {biz} {dogs} {groomer_notes} {total} {bank} {acc} {holder} {closing}
-let WA_TPL_INVOICE='Halo kak {nama},\n\nTerima kasih sudah pakai {biz} untuk {dogs} hari ini! \uD83D\uDC3E\n\n\uD83D\uDCDD *Catatan groomer:*\n{groomer_notes}\n\n\uD83D\uDCB0 *Total: {total}*\n\uD83D\uDCB3 Transfer {bank}:\n   No. Rek: *{acc}*\n   a/n: {holder}{bank2_block}\n\n\uD83D\uDCCE Detail lengkap + foto before/after terlampir di PDF.\n\n{closing}';
+// Session E — editable invoice WA template. Placeholders: {nama} {biz} {dogs} {groomer_notes} {total} {bank} {acc} {holder} {bank2} {closing}
+let WA_TPL_INVOICE='Halo kak {nama},\n\nTerima kasih sudah pakai {biz} untuk {dogs} hari ini! \uD83D\uDC3E\n\n\uD83D\uDCDD *Catatan groomer:*\n{groomer_notes}\n\n\uD83D\uDCB0 *Total: {total}*\n\uD83D\uDCB3 Transfer {bank}:\n   No. Rek: *{acc}*\n   a/n: {holder}{bank2}\n\n\uD83D\uDCCE Detail lengkap + foto before/after terlampir di PDF.\n\n{closing}';
 let _cfgLogoData=null;
 function waClosing(){return WA_CLOSING_TPL.replace(/\{biz\}/g,BIZ_NAME)}
 let REM_GREETING='Halo kak {nama}', REM_CLOSING='Sampai jumpa besok ya kak!';
-let WA_TPL_FOLLOWUP='Hai Kak {nama}, sudah lebih dari {inactive_period} nih kami belum bertemu sama {dogs} \uD83D\uDC36\nKalau sudah waktunya grooming lagi, {biz} siap meluncur langsung ke rumah Kakak!\nMau booking sekarang atau ada pertanyaan dulu? Boleh banget chat di sini ya \uD83D\uDE0A';
-let WA_TPL_RENEWAL='Halo kak {nama}, \uD83D\uDC3E\n\nSubscription {tier} untuk {dogs} sudah waktunya diperpanjang untuk bulan depan.\n\nBiaya: {amount}\nMohon konfirmasi & pembayaran sebelum tanggal {due_day} ya kak supaya jadwal grooming tetap lancar.\n\nTerima kasih! {biz}';
 function applyTpl(tpl,vars){return String(tpl||'').replace(/\{(\w+)\}/g,(m,k)=>vars[k]!=null?vars[k]:'')}
 
 // ===== i18n (translation layer) =====
@@ -2378,11 +2325,8 @@ function runGlobalSearch(){
  const r=document.getElementById('gsearch-results'); if(!r) return;
  if(q.length<2){r.innerHTML='<div style="color:var(--muted);font-size:13px;padding:8px">Ketik minimal 2 huruf…</div>';return}
  const row=(onclickAttr,main,sub)=>`<div onclick="${onclickAttr}" style="padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px" onmouseover="this.style.background='var(--subtle)'" onmouseout="this.style.background=''">${main} <span style="color:var(--muted);font-size:11px">${sub}</span></div>`;
- const custHits=custs.filter(c=>{
-  const myDogs=dogs.filter(d=>d.customer_id===c.id).map(d=>d.name).filter(Boolean).join(' ');
-  return `${c.owner||''} ${c.wa||''} ${c.customer_code||''} ${c.address||''} ${c.kecamatan||''} ${c.kota||''} ${myDogs}`.toLowerCase().includes(q);
- }).slice(0,12);
- const dogHits=dogs.filter(d=>(`${d.name||''} ${d.breed||''} ${d.dog_code||''}`).toLowerCase().includes(q)).slice(0,12);
+ const custHits=custs.filter(c=>((c.owner||'').toLowerCase().includes(q)||(c.wa||'').toLowerCase().includes(q))).slice(0,12);
+ const dogHits=dogs.filter(d=>(d.name||'').toLowerCase().includes(q)).slice(0,12);
  let html='';
  if(custHits.length){
   html+='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:6px 0 3px">Customer</div>';
@@ -2825,10 +2769,6 @@ function renderDogsTable(){
 /* CUSTOMER MODAL */
 function openAddCust(){
  custEditId=null;
- _pastePetQueue=[];
- const pw=document.getElementById('cf-paste-wrap'); if(pw) pw.style.display='';
- const ps=document.getElementById('cf-paste-src'); if(ps) ps.value='';
- const ph=document.getElementById('cf-paste-hint'); if(ph) ph.innerHTML='';
  document.getElementById('cust-title').textContent='Add customer';
  document.getElementById('cust-save-btn').textContent='Save customer';
  ['cf-owner','cf-wa','cf-addr','cf-gmaps','cf-prefs','cf-lat','cf-lng'].forEach(id=>document.getElementById(id)&&(document.getElementById(id).value=''));
@@ -2846,8 +2786,6 @@ function openAddCust(){
 function openEditCust(id){
  const c=custs.find(x=>x.id===id); if(!c) return;
  custEditId=id;
- _pastePetQueue=[];
- const pw=document.getElementById('cf-paste-wrap'); if(pw) pw.style.display='none';
  document.getElementById('cust-title').textContent='Edit customer';
  document.getElementById('cust-save-btn').textContent='Update';
  document.getElementById('cf-owner').value=c.owner||'';
@@ -2920,11 +2858,6 @@ async function saveCust(){
   }
   cm('ov-cust');
   await reloadTables('customers');
-  // If pets were parsed from a pasted template, start filling them one-by-one
-  if(!custEditId&&_pastePetQueue.length){
-   const inserted2=custs.find(c=>c.owner===owner&&c.customer_code===p.customer_code);
-   if(inserted2){currentCustId=inserted2.id;fillDogFromQueue();}
-  }
  }finally{
   if(btn){btn.disabled=false;btn.textContent=btnLbl}
  }
@@ -2944,142 +2877,6 @@ async function delCust(id,name){
 }
 
 /* DOG MODAL */
-
-// Map a weight string (e.g. "8 kg", "kurang dr 5kg", "3.5") to a size bucket.
-// Thresholds (kg): XS <5, Small <10, Medium <15, Large <25, XL >=25.
-// Auto-fill size only when empty, so a manual pick is never overwritten.
-function onWeightInput(){
- const sizeEl=document.getElementById('df-size');
- if(!sizeEl||sizeEl.value) return; // respect manual selection
- if(document.getElementById('df-pet-type')?.value==='cat') return;
- const s=sizeFromWeight(document.getElementById('df-weight').value);
- if(s) sizeEl.value=s;
-}
-// Map a weight string (e.g. "8 kg", "kurang dr 5kg", "3.5") to a size bucket.
-// Thresholds (kg): XS <5, Small <10, Medium <15, Large <25, XL >=25.
-function sizeFromWeight(weightStr){
- const m=String(weightStr||'').match(/(\d+(?:[.,]\d+)?)/);
- if(!m) return '';
- const kg=parseFloat(m[1].replace(',','.'));
- if(isNaN(kg)) return '';
- if(kg<5) return 'XS';
- if(kg<10) return 'Small';
- if(kg<15) return 'Medium';
- if(kg<25) return 'Large';
- return 'XL';
-}
-
-// ===== Booking-template paste parser =====
-// Reads a pasted customer booking template, fills the customer form, and queues
-// pets (split on " dan ") to be created one modal at a time after the customer saves.
-function _pbNorm(s){return (s||'').toLowerCase().replace(/[^a-z0-9]/g,'')}
-// Fuzzy-pick a value from a list of options (exact norm match, else substring either way)
-function _pbFuzzy(val,options){
- if(!val) return '';
- const nv=_pbNorm(val);
- let hit=options.find(o=>_pbNorm(o)===nv);
- if(hit) return hit;
- hit=options.find(o=>{const no=_pbNorm(o);return no&&(no.includes(nv)||nv.includes(no))});
- return hit||'';
-}
-// Split a field value across N pets. If the split count matches petCount, distribute
-// positionally; otherwise treat the whole value as shared across all pets.
-function _pbSplit(val,petCount){
- if(!val) return new Array(petCount).fill('');
- const parts=val.split(/\s+dan\s+|\s*&\s*|\s*,\s*/i).map(s=>s.trim()).filter(Boolean);
- if(parts.length===petCount) return parts;
- return new Array(petCount).fill(val.trim());
-}
-function parseBookingPaste(){
- const raw=document.getElementById('cf-paste-src')?.value||'';
- if(!raw.trim()){alert('Paste template dulu di kotak.');return}
- // Grab "Label: value" lines (value may be empty)
- const getField=(labels)=>{
-  for(const line of raw.split('\n')){
-   const i=line.indexOf(':'); if(i<0) continue;
-   const key=_pbNorm(line.slice(0,i));
-   const val=line.slice(i+1).trim();
-   if(labels.some(l=>key.includes(_pbNorm(l)))) return val;
-  }
-  return '';
- };
- const owner=getField(['Nama Owner','Owner']);
- const addr=getField(['alamat lengkap','alamat']);
- const kotaRaw=getField(['Kota','Kabupaten']);
- const kecRaw=getField(['Kecamatan']);
- const gmaps=getField(['gmaps link','gmaps','shareloc','share loc','lokasi']);
- // Pets
- const petNames=getField(['Nama anabul','Nama anak bulu','Nama anabull']);
- const breeds=getField(['Breed','Ras']);
- const ages=getField(['Umur','Usia']);
- const weights=getField(['Berat']);
- const colors=getField(['Warna Bulu','Warna']);
- const notes=getField(['Special note','catatan','note untuk groomer']);
-
- // Fill customer fields (only overwrite when we found something)
- const setV=(id,v)=>{const e=document.getElementById(id);if(e&&v)e.value=v;};
- setV('cf-owner',owner);
- setV('cf-addr',addr);
- if(gmaps){const g=document.getElementById('cf-gmaps');if(g){g.value=gmaps;if(typeof onGmapsInput==='function')onGmapsInput();}}
- // Kota / Kecamatan — fuzzy match against AREAS dropdowns
- let matchedKota='';
- if(kotaRaw){
-  matchedKota=_pbFuzzy(kotaRaw,Object.keys(AREAS));
-  if(matchedKota){document.getElementById('cf-kota').value=matchedKota;onKotaChange();}
- }
- if(kecRaw&&matchedKota){
-  const kec=_pbFuzzy(kecRaw,AREAS[matchedKota]||[]);
-  if(kec) document.getElementById('cf-kec').value=kec;
- }
-
- // Build pet queue
- const names=petNames?petNames.split(/\s+dan\s+|\s*&\s*|\s*,\s*/i).map(s=>s.trim()).filter(Boolean):[];
- _pastePetQueue=[];
- if(names.length){
-  const n=names.length;
-  const brA=_pbSplit(breeds,n), agA=_pbSplit(ages,n), weA=_pbSplit(weights,n), coA=_pbSplit(colors,n), noA=_pbSplit(notes,n);
-  for(let i=0;i<n;i++){
-   _pastePetQueue.push({name:names[i],breed:brA[i]||'',age:agA[i]||'',weight:weA[i]||'',color:coA[i]||'',prefs:noA[i]||''});
-  }
- }
-
- // Hint
- const hints=[];
- if(kotaRaw&&!matchedKota) hints.push(`Kota "${esc(kotaRaw)}" tidak cocok dropdown — pilih manual.`);
- hints.push(`${_pastePetQueue.length} anabul terdeteksi${_pastePetQueue.length?': '+_pastePetQueue.map(p=>esc(p.name)).join(', '):''}.`);
- if(_pastePetQueue.length) hints.push('Klik <strong>Save customer</strong> — form anabul akan muncul satu per satu.');
- const hEl=document.getElementById('cf-paste-hint'); if(hEl) hEl.innerHTML=hints.join(' ');
-}
-
-// Pre-fill the dog modal from the next queued pet (called after customer/dog save).
-function fillDogFromQueue(){
- const pet=_pastePetQueue.shift();
- if(!pet) return false;
- dogEditId=null;
- _stylingRefsBuffer=[];
- renderStylingRefsGrid();
- const stampEl=document.getElementById('df-edit-stamp'); if(stampEl) stampEl.innerHTML='';
- const c=custs.find(x=>x.id===currentCustId);
- const remaining=_pastePetQueue.length;
- document.getElementById('dog-title').textContent=`Add pet (dari paste)${remaining?` — ${remaining} lagi setelah ini`:''}`;
- document.getElementById('dog-save-btn').textContent=remaining?'Save & next':'Save';
- document.getElementById('dog-cust-lbl').textContent=c?c.owner:'—';
- document.getElementById('df-name').value=pet.name||'';
- document.getElementById('df-breed').value=pet.breed||'';
- document.getElementById('df-age').value=(pet.age||'').replace(/[^0-9.]/g,'')||'';
- document.getElementById('df-weight').value=pet.weight||'';
- document.getElementById('df-coat-color').value=pet.color||'';
- document.getElementById('df-prefs').value=pet.prefs||'';
- document.getElementById('df-size').value=sizeFromWeight(pet.weight)||'';
- document.getElementById('df-coat').value='';
- const shEl=document.getElementById('df-skin-history'); if(shEl) shEl.value='';
- const ptEl=document.getElementById('df-pet-type'); if(ptEl) ptEl.value='dog';
- onPetTypeChange();
- renderCustomFields('pets','df-custom-',{},'df-custom-fields');
- om('ov-dog');
- return true;
-}
-
 function openAddDog(){
  if(!currentCustId){alert('Select a customer first.');return}
  dogEditId=null;
@@ -3184,10 +2981,6 @@ async function saveDog(){
   cm('ov-dog');
   await reloadTables('dogs');
   renderDogsTable();
-  // Continue pasted-pet queue if more remain
-  if(!dogEditId&&_pastePetQueue.length){
-   fillDogFromQueue();
-  }
  }finally{
   if(btn){btn.disabled=false;btn.textContent=btnLbl}
  }
@@ -6233,8 +6026,6 @@ const CFG_DEFAULTS={
  waTplInvoice:WA_TPL_INVOICE,
  remGreeting:REM_GREETING,
  remClosing:REM_CLOSING,
- waTplFollowup:WA_TPL_FOLLOWUP,
- waTplRenewal:WA_TPL_RENEWAL,
  toastMs:3500,
  autoLog:true,
  dashCards:{invoiced:true,paid:true,unpaid:true,payroll:true}
@@ -6259,8 +6050,6 @@ function applyCfg(){
  if(CFG.waTplInvoice) WA_TPL_INVOICE=CFG.waTplInvoice;
  if(CFG.remGreeting!=null) REM_GREETING=CFG.remGreeting;
  if(CFG.remClosing!=null) REM_CLOSING=CFG.remClosing;
- if(CFG.waTplFollowup) WA_TPL_FOLLOWUP=CFG.waTplFollowup;
- if(CFG.waTplRenewal) WA_TPL_RENEWAL=CFG.waTplRenewal;
  TOAST_MS=CFG.toastMs>0?CFG.toastMs:3500;
  SERVICE_LIST=Object.keys(PRICING);
 }
@@ -6376,6 +6165,8 @@ function detectInvoiceMode(rec){
 function initInvoiceTab(){
  const cs=document.getElementById('inv-customer');
  cs.innerHTML='<option value="">Pilih customer…</option>'+custs.map(c=>`<option value="${c.id}">${esc(c.customer_code||'?')} - ${esc(c.owner)}</option>`).join('');
+ const dl=document.getElementById('inv-customer-list');
+ if(dl) dl.innerHTML=custs.map(c=>`<option value="${esc(c.owner)} (${esc(c.customer_code||'?')})">${c.id}</option>`).join('');
  const gs=document.getElementById('inv-groomer');
  gs.innerHTML='<option value="">Pilih groomer…</option>'+groomers.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
  const t=iso(new Date());
@@ -6390,40 +6181,21 @@ function initInvoiceTab(){
  if(si&&!invSelectedCust) si.value='';
 }
 
-function onInvCustSearch(val){
- const q=(val||'').toLowerCase().trim();
- const dd=document.getElementById('inv-cust-dd');
- if(!dd) return;
- const matches=custs.map(c=>{
-  const myDogs=dogs.filter(d=>d.customer_id===c.id);
-  const dogNames=myDogs.map(d=>d.name).filter(Boolean).join(' ');
-  const blob=`${c.owner||''} ${c.customer_code||''} ${c.kota||''} ${c.kecamatan||''} ${c.address||''} ${c.area||''} ${c.wa||''} ${dogNames}`.toLowerCase();
-  return {c,myDogs,score:q?(blob.includes(q)?1:0):1};
- }).filter(m=>m.score>0)
-  .sort((a,b)=>(a.c.owner||'').localeCompare(b.c.owner||''))
-  .slice(0,20);
- if(!matches.length){
-  dd.innerHTML=`<div style="padding:10px 14px;font-size:12px;color:var(--muted);font-style:italic">Tidak ada customer cocok "${esc(val)}".</div>`;
-  dd.style.display='block';
-  return;
+function onInvSearchChange(val){
+ // Match typed value to customer name or code
+ const match=custs.find(c=>
+  `${c.owner} (${c.customer_code||'?'})`.toLowerCase()===val.toLowerCase()||
+  (c.owner||'').toLowerCase()===val.toLowerCase()||
+  (c.customer_code||'').toLowerCase()===val.toLowerCase()
+ );
+ const cs=document.getElementById('inv-customer');
+ if(match){
+  cs.value=match.id;
+  onInvCustomerChange();
+ } else {
+  cs.value='';
+  // If partially typed, don't reset — wait for full match
  }
- dd.innerHTML=matches.map(({c,myDogs})=>{
-  const addr=[c.address,c.kecamatan,c.kota].filter(Boolean).join(', ')||'(no address)';
-  const dogNames=myDogs.map(d=>d.name).filter(Boolean).join(', ')||'(no dogs)';
-  return `<div onclick="pickInvCust('${c.id}')" style="padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px" onmouseover="this.style.background='var(--subtle)'" onmouseout="this.style.background=''">
-   <div style="font-weight:700">${esc(c.owner||'?')} <span style="font-size:11px;color:var(--muted);font-weight:400">${esc(c.customer_code||'')}</span></div>
-   <div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(addr)}</div>
-   <div style="font-size:11px;color:var(--green-dk);margin-top:1px">\uD83D\uDC15 ${esc(dogNames)}</div>
-  </div>`;
- }).join('');
- dd.style.display='block';
-}
-function pickInvCust(id){
- const c=custs.find(x=>x.id===id); if(!c) return;
- const dd=document.getElementById('inv-cust-dd'); if(dd) dd.style.display='none';
- document.getElementById('inv-customer-search').value=`${c.owner} (${c.customer_code||'?'})`;
- const cs=document.getElementById('inv-customer'); if(cs) cs.value=id;
- onInvCustomerChange();
 }
 
 function resetInvoice(){
@@ -7104,48 +6876,10 @@ function renderSubsSchedulePicker(){
      <label style="font-size:11px;color:var(--muted)">Mulai dari</label><br>
      <input type="date" id="sched-start-${did}" value="${document.getElementById('inv-date')?.value||iso(new Date())}" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
     </div>
-    <div>
-     <label style="font-size:11px;color:var(--muted)">Groomer</label><br>
-     <select id="sched-groomer-${did}" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px">
-      <option value="">Auto-assign</option>
-      ${groomers.filter(g=>g.active).map(g=>`<option value="${g.id}" ${(document.getElementById('inv-groomer')?.value===g.id)?'selected':''}>${esc(g.name)}</option>`).join('')}
-     </select>
-    </div>
    </div>
   </div>`;
  }).join('');
 }
-
-// Pick a groomer for a given date/time slot: fewest appts that day, not blocked,
-// not on a day off, no time overlap. Returns groomer_id or null if none free.
-function autoAssignGroomer(dateISO,timeHHMM,durMins){
- const dayMap=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
- const dow=dayMap[new Date(dateISO+'T00:00:00').getDay()];
- const start=_toMin(timeHHMM);
- const end=start+(durMins||60);
- const candidates=groomers.filter(g=>g.active).filter(g=>{
-  // day off?
-  const wd=(g.working_days||'Mon,Tue,Wed,Thu,Fri,Sat').split(',');
-  if(!wd.includes(dow)) return false;
-  // blocked (this groomer or all)?
-  if(groomerBlocks.some(b=>b.block_date===dateISO&&(!b.groomer_id||b.groomer_id===g.id))) return false;
-  // time overlap with an existing appt?
-  const clash=appts.some(a=>a.groomer_id===g.id&&a.appt_date===dateISO&&a.status!=='cancelled'&&(()=>{
-   const s=_toMin((a.appt_time||'').slice(0,5));const e=s+(a.duration_mins||60);
-   return start<e&&s<end;
-  })());
-  return !clash;
- });
- if(!candidates.length) return null;
- // fewest appts that day → load balance
- candidates.sort((a,b)=>{
-  const ca=appts.filter(x=>x.groomer_id===a.id&&x.appt_date===dateISO&&x.status!=='cancelled').length;
-  const cb=appts.filter(x=>x.groomer_id===b.id&&x.appt_date===dateISO&&x.status!=='cancelled').length;
-  return ca-cb;
- });
- return candidates[0].id;
-}
-function _toMin(hhmm){const [h,m]=String(hhmm||'0:0').split(':').map(Number);return (h||0)*60+(m||0)}
 
 async function createSubsScheduleAppointments(){
  const toCreate=[];
@@ -7162,7 +6896,6 @@ async function createSubsScheduleAppointments(){
   const dayName=document.getElementById('sched-day-'+did)?.value||'Monday';
   const time=document.getElementById('sched-time-'+did)?.value||'09:00';
   const startStr=document.getElementById('sched-start-'+did)?.value||iso(new Date());
-  const chosenGroomer=document.getElementById('sched-groomer-'+did)?.value||''; // '' = auto-assign
   const svcBase=Object.keys(ds?.services||{}).filter(s=>ds.services[s].checked).join(', ')||'Basic Grooming';
   const dur=dogDur(svcBase,dog.size);
 
@@ -7173,40 +6906,21 @@ async function createSubsScheduleAppointments(){
 
   for(let i=0;i<sessions;i++){
    const dateISO=iso(d);
-   // Dog already booked that day?
+   // Check if dog already has appointment on this date
    const existing=appts.find(a=>a.dog_id===did&&a.appt_date===dateISO&&a.status!=='cancelled');
    if(existing){
-    conflicts.push({dogName:dog.name,date:dateISO,reason:`sudah ada appt jam ${existing.appt_time?.slice(0,5)||'?'}`});
-    d.setDate(d.getDate()+freqDays); continue;
-   }
-   // Resolve groomer: manual pick (with time-clash check) or auto-assign
-   let gid=null;
-   if(chosenGroomer){
-    const clash=appts.some(a=>a.groomer_id===chosenGroomer&&a.appt_date===dateISO&&a.status!=='cancelled'&&(()=>{
-     const s=_toMin((a.appt_time||'').slice(0,5));const e=s+(a.duration_mins||60);
-     const st=_toMin(time);return st<e&&s<(st+dur);
-    })());
-    if(clash){
-     conflicts.push({dogName:dog.name,date:dateISO,reason:'groomer bentrok jam segitu — slot dilewati'});
-     d.setDate(d.getDate()+freqDays); continue;
-    }
-    gid=chosenGroomer;
+    conflicts.push({dogName:dog.name,date:dateISO,existingTime:existing.appt_time?.slice(0,5)||'?'});
    } else {
-    gid=autoAssignGroomer(dateISO,time,dur);
-    if(!gid){
-     conflicts.push({dogName:dog.name,date:dateISO,reason:'tidak ada groomer available — slot dilewati'});
-     d.setDate(d.getDate()+freqDays); continue;
-    }
+    toCreate.push({dog_id:did,customer_id:dog.customer_id,appt_date:dateISO,appt_time:time+':00',service_base:svcBase,duration_mins:dur,session_source:'subscription',status:'pending',token_used:false,subs_deducted:false});
    }
-   toCreate.push({dog_id:did,customer_id:dog.customer_id,groomer_id:gid,appt_date:dateISO,appt_time:time+':00',service_base:svcBase,duration_mins:dur,session_source:'subscription',status:'pending',token_used:false,subs_deducted:false});
    d.setDate(d.getDate()+freqDays);
   }
  }
 
  // Show conflict summary and confirm
  if(conflicts.length){
-  const lines=conflicts.map(c=>`• ${c.dogName} — ${c.date} (${c.reason})`).join('\n');
-  const proceed=confirm(`${conflicts.length} slot dilewati:\n\n${lines}\n\nBuat ${toCreate.length} appointment baru?`);
+  const lines=conflicts.map(c=>`• ${c.dogName} — ${c.date} (ada appt jam ${c.existingTime})`).join('\n');
+  const proceed=confirm(`${conflicts.length} slot sudah ada appointment:\n\n${lines}\n\nSlot konflik akan dilewati.\nBuat ${toCreate.length} appointment baru?`);
   if(!proceed) return;
  }
 
@@ -7737,7 +7451,6 @@ async function saveInvoice(){
   }
   // Recreate tokens for current prepaid dogs (handles add + change cases)
   await createTokensFromInvoice(rec);
-  await deductSubsOnInvoice(rec);
   let msg='Invoice diupdate: '+rec.invoice_number;
   if(kept>0) msg+=`\n(${kept} token sudah dipakai, tidak diganti — cek manual kalau perlu)`;
   alert(msg);
@@ -7749,7 +7462,6 @@ async function saveInvoice(){
   if(inserted) await logAudit('invoice',inserted.id,'create',{new:rec,label:rec.invoice_number+' — '+rec.owner_name});
   await saveVisitsFromInvoice(rec);
   await createTokensFromInvoice(rec);
-  await deductSubsOnInvoice(rec);
   alert('Invoice tersimpan: '+rec.invoice_number);
  }
  await reloadTables('invoices','visits','tokens','subscriptions');
@@ -7772,7 +7484,6 @@ async function saveInvoiceAndAppts(){
  if(e1){alert('Invoice error: '+e1.message);return}
  await saveVisitsFromInvoice(rec);
  await createTokensFromInvoice(rec);
- await deductSubsOnInvoice(rec);
  if(rec.is_advance&&interval!=='none'&&firstDate){
   const apptsToInsert=[];
   for(let s=0;s<rec.sessions;s++){
@@ -7987,10 +7698,6 @@ function buildInvoiceHTML(rec, custObj, bankObj, forPrint){
  // Format account number with spaces every 4 digits (Iris item 5)
  const ba=baRaw.replace(/\s/g,'').replace(/(.{4})/g,'$1 ').trim();
  const bh=bankObj.bank_holder||'Xavier Fidelia Ali';
- // Optional second bank — only rendered when a name is set
- const bn2=(bankObj.bank_name2||'').trim();
- const ba2=bn2?(bankObj.bank_account2||'').replace(/\s/g,'').replace(/(.{4})/g,'$1 ').trim():'';
- const bh2=bn2?(bankObj.bank_holder2||'').trim():'';
  const invDate=new Date(rec.invoice_date+'T00:00:00');
  // Batch O.9 — due_date is now an optional column. If present, use it. If blank, hide entirely.
  // Backward-compat: old invoices without due_date column default to invoice+1.
@@ -8150,9 +7857,7 @@ ${custTokenBalance}
   <div class="pay-bank" style="color:#16a34a">\u2713 SUDAH DIBAYAR (via subscription / prepaid)</div>
   <div class="pay-note">Grooming sudah selesai. Lihat catatan groomer di bawah.</div>`:`<div class="pay-lbl">Cara bayar</div>
   <div class="pay-bank">${bn} \u2014 a/n ${bh}</div>
-  <div class="pay-acc">${ba}</div>${bn2?`
-  <div class="pay-bank" style="margin-top:6px">${bn2} \u2014 a/n ${bh2}</div>
-  <div class="pay-acc">${ba2}</div>`:''}
+  <div class="pay-acc">${ba}</div>
   <div class="pay-note">Transfer sesuai nominal.<br>Kirim bukti via WhatsApp / DM Instagram.</div>`}
  </div>
  <div>
@@ -8297,15 +8002,13 @@ function buildInvoiceWAMessage(rec, custObj){
  const bank=bankSettings.bank_name||'BCA';
  const acc=bankSettings.bank_account||'';
  const holder=bankSettings.bank_holder||'';
- // Optional second bank (blank tokens when unset)
- const bank2=(bankSettings.bank_name2||'').trim();
- const acc2=bank2?(bankSettings.bank_account2||'').trim():'';
- const holder2=bank2?(bankSettings.bank_holder2||'').trim():'';
- // Pre-built block for the 2nd bank so the template stays clean; empty when no 2nd bank.
- const bank2Block=bank2?`\n\uD83D\uDCB3 Atau transfer ${bank2}:\n   No. Rek: *${acc2}*\n   a/n: ${holder2}`:'';
+
+ // 2nd bank — only appears if account number 2 is filled
+ const acc2=(bankSettings.bank_account2||'').trim();
+ const bank2block=acc2?`\n💳 Transfer ${bankSettings.bank_name2||''}:\n   No. Rek: *${acc2}*\n   a/n: ${bankSettings.bank_holder2||''}`:'';
 
  // Session E — apply template with placeholders. Fallback to hardcoded default if template missing.
- const tpl=WA_TPL_INVOICE||'Halo kak {nama},\n\n{biz} — {dogs}\n\n📝 Catatan groomer:\n{groomer_notes}\n\n💰 Total: {total}\n💳 {bank} • {acc} • {holder}\n\n📎 Detail di PDF.\n\n{closing}';
+ const tpl=WA_TPL_INVOICE||'Halo kak {nama},\n\n{biz} — {dogs}\n\n📝 Catatan groomer:\n{groomer_notes}\n\n💰 Total: {total}\n💳 {bank} • {acc} • {holder}{bank2}\n\n📎 Detail di PDF.\n\n{closing}';
  return applyTpl(tpl, {
   nama:firstName,
   biz:BIZ_NAME,
@@ -8315,10 +8018,7 @@ function buildInvoiceWAMessage(rec, custObj){
   bank:bank,
   acc:acc,
   holder:holder,
-  bank2:bank2,
-  acc2:acc2,
-  holder2:holder2,
-  bank2_block:bank2Block,
+  bank2:bank2block,
   closing:waClosing()
  });
 }
@@ -8352,13 +8052,12 @@ async function _generateInvoicePDF(rec, cust){
    });
   }));
   await new Promise(r=>setTimeout(r, 300));
-  // Render DPI: lower on mobile for speed (phones lag hard at 2.5x), high on desktop for sharpness.
-  const _isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+  // Render at high DPI for sharp text
   const canvas=await html2canvas(container, {
    useCORS: true,
    allowTaint: false,
    backgroundColor: '#ffffff',
-   scale: _isMobile ? 1.6 : 2.5,
+   scale: 2.5,  // Higher DPI (was 1.5) — sharper text after PDF wrapping
    logging: false,
    imageTimeout: 8000
   });
@@ -8374,13 +8073,12 @@ async function _generateInvoicePDF(rec, cust){
   const pxPerMm=canvas.width / usableW;                    // canvas pixels per printed mm
   const pageUsablePx=Math.floor(usableH * pxPerMm);        // canvas pixels per full page
   const searchWindowPx=Math.floor(pageUsablePx * 0.3);     // search up to 30% back for a break
-  // Compute break points. On mobile skip the pixel-scan (getImageData per page is slow);
-  // use plain even splits. On desktop keep whitespace-aware breaks for cleaner pages.
+  // Compute break points snapped to whitespace bands
   const breakPoints=[];
   let cursorPx=0;
   while(cursorPx + pageUsablePx < canvas.height){
    const proposed=cursorPx + pageUsablePx;
-   const adjusted=_isMobile ? proposed : _findBestPageBreak(canvas, proposed, searchWindowPx, cursorPx);
+   const adjusted=_findBestPageBreak(canvas, proposed, searchWindowPx, cursorPx);
    breakPoints.push(adjusted);
    cursorPx=adjusted;
   }
@@ -8397,7 +8095,7 @@ async function _generateInvoicePDF(rec, cust){
    segCtx.fillStyle='#ffffff';
    segCtx.fillRect(0, 0, segCanvas.width, segCanvas.height);
    segCtx.drawImage(canvas, 0, prev, canvas.width, breakY-prev, 0, 0, canvas.width, breakY-prev);
-   const segData=segCanvas.toDataURL('image/jpeg', _isMobile ? 0.85 : 0.95);
+   const segData=segCanvas.toDataURL('image/jpeg', 0.95);
    const segHeightMm=(breakY - prev) / pxPerMm;
    pdf.addImage(segData, 'JPEG', margin, margin, usableW, segHeightMm);
    prev=breakY;
@@ -8742,19 +8440,8 @@ function renderMembership(){
   } else if(r._kind==='token'&&r.dog_size){
    dogLabel=`<span style="color:var(--muted)">any ${esc(r.dog_size)}</span>`;
   }
-  let sessText;
-  if(r._kind==='subscription'){
-   const st=subsSessionState(r);
-   sessText=`<div style="display:flex;gap:5px;flex-wrap:wrap;font-size:11px;line-height:1.3">
-    <span title="Total sesi dibeli" style="background:var(--subtle);padding:1px 6px;border-radius:4px"><strong>${st.total}</strong> total</span>
-    <span title="Sudah dipakai (sudah di-invoice)" style="background:#dcfce7;color:#15803d;padding:1px 6px;border-radius:4px"><strong>${st.used}</strong> used</span>
-    <span title="Sudah di-booking di kalender, hari belum lewat / belum di-invoice" style="background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:4px"><strong>${st.scheduled}</strong> sched</span>
-    <span title="Sisa yang belum dijadwalkan" style="background:${st.available>0?'#fef9c3':'#fee2e2'};color:${st.available>0?'#854d0e':'#991b1b'};padding:1px 6px;border-radius:4px"><strong>${st.available}</strong> avail</span>
-   </div>`;
-  } else {
-   const left=Math.max(0,(r.sessions_total||0)-(r.sessions_used||0));
-   sessText=`${r.sessions_used||0} / ${r.sessions_total||0}<span style="color:var(--muted);font-size:11px"> (${left} left)</span>`;
-  }
+  const left=Math.max(0,(r.sessions_total||0)-(r.sessions_used||0));
+  const sessText=`${r.sessions_used||0} / ${r.sessions_total||0}<span style="color:var(--muted);font-size:11px"> (${left} left)</span>`;
   const stClass=r.status==='active'?'active':'expired';
   const kindPill=r._kind==='subscription'
    ?'<span class="kind-pill kind-subs">SUBS</span>'
@@ -8779,75 +8466,6 @@ function renderMembership(){
  }).join('');
 }
 
-// ===== Reconciliation (review-then-apply, writes nothing automatically) =====
-// Recomputed "used" for a subscription = its dog's past-or-today subscription
-// appointments that have a matching SAVED INVOICE (dog present on that invoice date).
-// This is the value sessions_used SHOULD be under the invoice-triggered model.
-function recomputeSubsUsed(sub){
- const today=iso(new Date());
- const dogAppts=appts.filter(a=>
-  a.dog_id===sub.dog_id
-  && a.session_source==='subscription'
-  && a.status!=='cancelled'
-  && a.appt_date<=today
- );
- let used=0;
- for(const a of dogAppts){
-  const hasInvoice=invoices.some(inv=>
-   (inv.invoice_date||'')===a.appt_date
-   && (inv.dogs||[]).some(d=>d.dog_id===sub.dog_id)
-  );
-  if(hasInvoice) used++;
- }
- // Can't exceed what was purchased
- return Math.min(used,sub.sessions_total||0);
-}
-
-function openSubsReconcile(){
- const activeSubs=subscriptions.filter(s=>s.status==='active');
- const rows=activeSubs.map(s=>{
-  const c=custs.find(x=>x.id===s.customer_id);
-  const d=dogs.find(x=>x.id===s.dog_id);
-  const current=s.sessions_used||0;
-  const recomputed=recomputeSubsUsed(s);
-  return {sub:s,owner:c?c.owner:'?',dogName:d?d.name:'?',current,recomputed,diff:recomputed-current};
- });
- const mismatches=rows.filter(r=>r.diff!==0);
- const wrap=document.getElementById('subs-reconcile-list');
- if(!rows.length){wrap.innerHTML='<div style="padding:1rem;color:var(--muted)">Tidak ada subscription aktif.</div>';om('ov-subs-reconcile');return}
- const header=`<div style="font-size:12px;margin-bottom:.75rem">${mismatches.length? `<strong style="color:#c2410c">${mismatches.length} baris beda</strong> dari ${rows.length} subs aktif.`:`<strong style="color:#15803d">Semua ${rows.length} subs cocok.</strong> Tidak perlu koreksi.`}</div>`;
- const body=rows.map(r=>{
-  const same=r.diff===0;
-  const dir=r.diff>0?`+${r.diff}`:`${r.diff}`;
-  const badge=same
-   ? '<span style="background:#dcfce7;color:#15803d;padding:2px 7px;border-radius:4px;font-size:11px">cocok</span>'
-   : `<span style="background:#fee2e2;color:#991b1b;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600">${dir}</span>`;
-  return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border);${same?'opacity:.6':''}">
-   <div style="flex:1;min-width:0">
-    <div style="font-size:13px;font-weight:600">${esc(r.owner)} <span style="font-weight:400;color:var(--muted)">· ${esc(r.dogName)} · ${esc(tierLabel(r.sub.type))}</span></div>
-    <div style="font-size:11px;color:var(--muted)">Current used: <strong>${r.current}</strong> → Recomputed: <strong>${r.recomputed}</strong> / ${r.sub.sessions_total||0}</div>
-   </div>
-   ${badge}
-   ${same?'':`<button class="btn ghost" style="font-size:12px;padding:4px 10px" onclick="applySubsReconcile('${r.sub.id}',${r.recomputed})">Apply</button>`}
-  </div>`;
- }).join('');
- wrap.innerHTML=header+body;
- om('ov-subs-reconcile');
-}
-
-async function applySubsReconcile(subId,newUsed){
- const s=subscriptions.find(x=>x.id===subId);
- if(!s) return;
- const c=custs.find(x=>x.id===s.customer_id);
- if(!confirm(`Set "sessions used" untuk ${c?c.owner:'subs ini'} dari ${s.sessions_used||0} → ${newUsed}?\n\nIni mengubah data pemakaian subscription.`)) return;
- const {error}=await db.from('subscriptions').update({sessions_used:newUsed}).eq('id',subId);
- if(error){alert('Error: '+error.message);return}
- s.sessions_used=newUsed;
- await reloadTables('subscriptions');
- openSubsReconcile();
- renderMembership();
-}
-
 // Edit a subscription or token row from the Membership tab.
 function openMembEdit(kind,id){
  const row=kind==='subscription'
@@ -8861,11 +8479,6 @@ function openMembEdit(kind,id){
  document.getElementById('memb-ef-sessions-total').value=row.sessions_total||0;
  document.getElementById('memb-ef-sessions-used').value=row.sessions_used||0;
  document.getElementById('memb-ef-expires').value=row.expires_at||'';
- // Started date editable for subscriptions only (tokens have no started_at column)
- const startedRow=document.getElementById('memb-ef-started-row');
- const startedEl=document.getElementById('memb-ef-started');
- if(startedRow) startedRow.style.display=kind==='subscription'?'':'none';
- if(startedEl) startedEl.value=(kind==='subscription'?(row.started_at||''):'');
  // Status field only meaningful for subscriptions; tokens use derived status
  const stRow=document.getElementById('memb-ef-status-row');
  if(stRow) stRow.style.display=kind==='subscription'?'':'none';
@@ -8889,7 +8502,6 @@ async function saveMembEdit(){
  const patch={sessions_total:total,sessions_used:used,expires_at:exp,notes};
  if(kind==='subscription'){
   patch.status=document.getElementById('memb-ef-status').value||'active';
-  patch.started_at=document.getElementById('memb-ef-started').value||null;
  }
  const {error}=await db.from(tbl).update(patch).eq('id',id);
  if(error){alert('Error: '+error.message);return}
@@ -9440,9 +9052,6 @@ function openBankSettings(){
  document.getElementById('bf-name').value=bankSettings.bank_name||'';
  document.getElementById('bf-account').value=bankSettings.bank_account||'';
  document.getElementById('bf-holder').value=bankSettings.bank_holder||'';
- document.getElementById('bf-name2').value=bankSettings.bank_name2||'';
- document.getElementById('bf-account2').value=bankSettings.bank_account2||'';
- document.getElementById('bf-holder2').value=bankSettings.bank_holder2||'';
  om('ov-bank');
 }
 
@@ -9452,9 +9061,6 @@ async function saveBankSettings(){
  bank_name:document.getElementById('bf-name').value.trim(),
  bank_account:document.getElementById('bf-account').value.trim(),
  bank_holder:document.getElementById('bf-holder').value.trim(),
- bank_name2:document.getElementById('bf-name2').value.trim()||null,
- bank_account2:document.getElementById('bf-account2').value.trim()||null,
- bank_holder2:document.getElementById('bf-holder2').value.trim()||null,
  updated_at:new Date().toISOString()
  };
  await db.from('business_settings').upsert(p);
@@ -9481,8 +9087,6 @@ function swRem(sub){
  const sec=document.getElementById('rsec-'+sub); if(sec) sec.classList.add('active');
  if(sub==='groomer') generateReminders();
  else if(sub==='customer') generateCustomerReminders();
- else if(sub==='followup') renderFollowups();
- else if(sub==='renewal') renderRenewalReminders();
 }
 
 function generateCustomerReminders(){
@@ -9942,67 +9546,31 @@ async function autoLogPastAppointments(){
    await db.from('appointments').update({photos:{}}).eq('id',a.id);
   }
  }
- // NOTE: subscription-credit deduction NO LONGER happens here (was day-based).
- // A credit is now deducted only when an invoice is saved for a past/today
- // subscription appointment — see deductSubsOnInvoice(). Booking = "scheduled",
- // invoicing a past session = "used".
- if(toLog.length) await reloadTables('appointments','visits');
-}
-
-// ===== Subscription session-state model (Total / Used / Scheduled / Available) =====
-// Used      = sessions_used in DB (deducted when an invoice was saved for a past/today appt)
-// Scheduled = future/undeducted subscription appointments still holding a slot
-// Available = total - used - scheduled
-function subsSessionState(sub){
- const total=sub.sessions_total||0;
- const used=sub.sessions_used||0;
- const scheduled=appts.filter(a=>
-  a.dog_id===sub.dog_id
-  && a.session_source==='subscription'
-  && !a.subs_deducted
-  && a.status!=='cancelled'
- ).length;
- const available=Math.max(0,total-used-scheduled);
- return {total,used,scheduled,available};
-}
-
-// Deduct one credit per past/today subscription appointment covered by this invoice.
-// Idempotent: only appts with subs_deducted=false are touched, and the flag is set
-// after deduction so re-saving the same invoice never double-counts.
-async function deductSubsOnInvoice(rec){
- if(!rec?.dogs?.length) return;
- const invDate=rec.invoice_date||iso(new Date());
- const today=iso(new Date());
- if(invDate>today) return; // future-dated invoice: nothing to consume yet
- const dogIds=rec.dogs.map(d=>d.dog_id).filter(Boolean);
- // Appointments for these dogs, on the invoice date, that are subscription sessions not yet deducted
- const toDeduct=appts.filter(a=>
-  dogIds.includes(a.dog_id)
-  && a.appt_date===invDate
-  && a.appt_date<=today
+ const subsAppts=appts.filter(a=>
+  a.appt_date<today
   && a.session_source==='subscription'
   && !a.subs_deducted
   && a.status!=='cancelled'
  );
- for(const a of toDeduct){
+ for(const a of subsAppts){
+  // Find an active subscription for this dog
   const sub=subscriptions.find(s=>
    s.dog_id===a.dog_id
    && s.status==='active'
    && (s.sessions_used||0)<(s.sessions_total||0)
   );
   if(!sub){
-   console.warn(`No active subscription with sessions left for dog ${a.dog_id} on ${a.appt_date}. Marking appt deducted to skip.`);
+   // No matching active sub with sessions left — log warning, mark deducted to avoid retrying
+   console.warn(`No active subscription with sessions left for dog ${a.dog_id} on ${a.appt_date}. Marking as deducted to skip.`);
    await db.from('appointments').update({subs_deducted:true}).eq('id',a.id);
-   a.subs_deducted=true;
    continue;
   }
   const newUsed=Math.min(sub.sessions_total,(sub.sessions_used||0)+1);
   await db.from('subscriptions').update({sessions_used:newUsed}).eq('id',sub.id);
   await db.from('appointments').update({subs_deducted:true}).eq('id',a.id);
-  sub.sessions_used=newUsed;
-  a.subs_deducted=true;
-  console.log(`Deducted 1 session from sub ${sub.id} (${sub.type}) via invoice ${rec.invoice_number||''}, now ${newUsed}/${sub.sessions_total}`);
+  console.log(`Deducted 1 session from sub ${sub.id} (${sub.type}), now ${newUsed}/${sub.sessions_total} used`);
  }
+ if(toLog.length||apptWithTokens.length||subsAppts.length) await reloadTables('appointments','visits','tokens','subscriptions');
 }
 
 /* ========== PHOTOS — zones: before / after / issue (Batch L3) ========== */
@@ -10767,11 +10335,9 @@ function renderConfig(){
   ${sec('Pesan WhatsApp',`
    <div style="display:flex;flex-direction:column;gap:12px;max-width:640px">
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan "grooming selesai" (sudah dibayar) <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{layanan}</code> <code>{biz}</code></span><textarea id="cfg-wa-done" rows="9" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_DONE)}</textarea></label>
-    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan invoice (grooming + tagihan) <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{biz}</code> <code>{dogs}</code> <code>{groomer_notes}</code> <code>{total}</code> <code>{bank}</code> <code>{acc}</code> <code>{holder}</code> <code>{bank2_block}</code> <code>{bank2}</code> <code>{acc2}</code> <code>{holder2}</code> <code>{closing}</code></span><textarea id="cfg-wa-invoice" rows="12" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_INVOICE)}</textarea></label>
+    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan invoice (grooming + tagihan) <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{biz}</code> <code>{dogs}</code> <code>{groomer_notes}</code> <code>{total}</code> <code>{bank}</code> <code>{acc}</code> <code>{holder}</code> <code>{bank2}</code> <code>{closing}</code></span><textarea id="cfg-wa-invoice" rows="12" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_INVOICE)}</textarea></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Salam reminder customer <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code></span><input id="cfg-rem-greeting" type="text" value="${esc(REM_GREETING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Penutup reminder customer<input id="cfg-rem-closing" type="text" value="${esc(REM_CLOSING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
-    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan followup "belum grooming" <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{inactive_period}</code> <code>{days}</code> <code>{biz}</code></span><textarea id="cfg-wa-followup" rows="4" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_FOLLOWUP)}</textarea></label>
-    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan renewal subscription bulanan <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{tier}</code> <code>{amount}</code> <code>{due_day}</code> <code>{biz}</code></span><textarea id="cfg-wa-renewal" rows="8" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_RENEWAL)}</textarea></label>
     <div style="font-size:11px;color:var(--muted)">Pesan invoice (belum bayar) tetap dihitung otomatis oleh sistem karena ada logika diskon, biaya tambahan, dan rekening bank.</div>
    </div>`)}
   ${sec('Tampilan',`
@@ -10826,9 +10392,7 @@ async function saveConfig(){
   waTplDone:gv('cfg-wa-done')?.value||WA_TPL_DONE,
   waTplInvoice:gv('cfg-wa-invoice')?.value||WA_TPL_INVOICE,
   remGreeting:gv('cfg-rem-greeting')?.value??REM_GREETING,
-  remClosing:gv('cfg-rem-closing')?.value??REM_CLOSING,
-  waTplFollowup:gv('cfg-wa-followup')?.value||WA_TPL_FOLLOWUP,
-  waTplRenewal:gv('cfg-wa-renewal')?.value||WA_TPL_RENEWAL};
+  remClosing:gv('cfg-rem-closing')?.value??REM_CLOSING};
  const {error}=await db.from('business_settings').upsert({id:1,config,updated_at:new Date().toISOString()});
  if(error){alert('Gagal simpan: '+error.message);return}
  await reloadTables('business_settings');
@@ -11221,7 +10785,7 @@ async function delSubsSession(apptId,subId){
 /* ----- Payroll cycle logic ----- */
 function getPayrollCycle(anchor){
  // Returns {start: YYYY-MM-DD, end: YYYY-MM-DD, label: '26 Apr - 25 May 2026'}
- const startDay=payrollSettings.cycle_start_day||26;
+ const startDay=payrollSettings.cycle_start_day||25;
  const a=new Date(anchor.getFullYear(),anchor.getMonth(),anchor.getDate());
  const day=a.getDate();
  let startYear,startMonth;
@@ -11471,13 +11035,11 @@ function openPayrollSettings(){
  document.getElementById('pf-xl').value=rbs.XL??35000;
  document.getElementById('pf-cat').value=rbs.Cat??15000;
  document.getElementById('pf-styling').value=rbs.styling??20000;
- document.getElementById('pf-cycle-day').value=payrollSettings.cycle_start_day??26;
  om('ov-payroll-settings');
 }
 
 async function savePayrollSettings(){
  const rate=parseInt(document.getElementById('pf-rate').value)||20000;
- const cycleDay=Math.min(28,Math.max(1,parseInt(document.getElementById('pf-cycle-day').value)||26));
  const rbs={
   XS:parseInt(document.getElementById('pf-xs').value)||0,
   Small:parseInt(document.getElementById('pf-small').value)||0,
@@ -11487,11 +11049,10 @@ async function savePayrollSettings(){
   Cat:parseInt(document.getElementById('pf-cat').value)||0,
   styling:parseInt(document.getElementById('pf-styling').value)||0
  };
- const {error}=await db.from('payroll_settings').update({rate_per_dog:rate,rate_by_size:rbs,cycle_start_day:cycleDay,updated_at:new Date().toISOString()}).eq('id',1);
+ const {error}=await db.from('payroll_settings').update({rate_per_dog:rate,rate_by_size:rbs,updated_at:new Date().toISOString()}).eq('id',1);
  if(error){alert('Error: '+error.message);return}
  payrollSettings.rate_per_dog=rate;
  payrollSettings.rate_by_size=rbs;
- payrollSettings.cycle_start_day=cycleDay;
  cm('ov-payroll-settings');
  renderPayroll();
 }
@@ -11929,34 +11490,8 @@ function c360RenderHistory(c){
 }
 
 // Batch O.10 — Global History tab: full system audit feed with filters
-// Quick view: only deletions, newest first. Also computes a 30-day deletion summary.
-function histQuickDeletions(){
- const ef=document.getElementById('hist-entity-filter'); if(ef) ef.value='';
- const af=document.getElementById('hist-action-filter'); if(af) af.value='delete';
- const s=document.getElementById('hist-search'); if(s) s.value='';
- renderHistoryTab();
-}
-function histClearQuick(){
- const ef=document.getElementById('hist-entity-filter'); if(ef) ef.value='';
- const af=document.getElementById('hist-action-filter'); if(af) af.value='';
- const s=document.getElementById('hist-search'); if(s) s.value='';
- renderHistoryTab();
-}
-function renderHistDelSummary(){
- const el=document.getElementById('hist-del-summary'); if(!el) return;
- const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-30);
- const cutISO=iso(cutoff);
- const dels=auditEntries.filter(e=>e.action==='delete'&&(e.created_at||'').slice(0,10)>=cutISO);
- if(!dels.length){el.innerHTML='Tidak ada penghapusan dalam 30 hari terakhir.';return}
- const byType={};
- dels.forEach(e=>{byType[e.entity_type]=(byType[e.entity_type]||0)+1});
- const parts=Object.entries(byType).map(([t,n])=>`${n} ${t}`).join(', ');
- el.innerHTML=`<strong style="color:#b42318">${dels.length} penghapusan</strong> dalam 30 hari terakhir (${esc(parts)}).`;
-}
-
 function renderHistoryTab(){
  const feed=document.getElementById('hist-feed'); if(!feed) return;
- renderHistDelSummary();
  const entityFilter=document.getElementById('hist-entity-filter')?.value||'';
  const actionFilter=document.getElementById('hist-action-filter')?.value||'';
  const search=(document.getElementById('hist-search')?.value||'').toLowerCase().trim();
@@ -12191,23 +11726,6 @@ function tallyToggle(id){
  renderTally();
 }
 
-// Plain-language explainer for each tally check: what it means, why it happens, how to make it tally.
-const TALLY_HELP={
- c1:{what:'Appointment sudah ditandai <strong>done</strong> tapi belum ada invoice di tanggal itu.',why:'Biasanya karena lupa bikin invoice setelah grooming selesai.',fix:'Buka appointment-nya, lalu buat invoice untuk tanggal tsb (invoice subscription boleh Rp 0). Setelah invoice tersimpan, baris ini hilang.'},
- c2:{what:'Ada invoice tapi tidak ada appointment <strong>done</strong> yang cocok di tanggal itu.',why:'Invoice dibuat untuk tanggal yang salah, atau appointment-nya belum di-set "done" / ke-hapus.',fix:'Cek tanggal invoice. Kalau appointment ada tapi belum done, tandai done. Kalau tanggal invoice salah, edit tanggalnya.'},
- c3:{what:'Grooming done oleh groomer tapi tidak masuk hitungan payroll (tidak ada invoice dengan groomer itu di tanggal tsb).',why:'Invoice dibuat tanpa memilih groomer, atau groomer di invoice beda dengan yang di appointment.',fix:'Buka appointment, pastikan invoice untuk tanggal itu memakai groomer yang benar.'},
- c4a:{what:'Ada catatan kunjungan (visit) tanpa appointment yang cocok.',why:'Visit ke-log manual/otomatis tapi appointment-nya dihapus atau tak pernah ada.',fix:'Kalau visit-nya salah, hapus visit. Kalau memang ada grooming, buat appointment-nya.'},
- c4b:{what:'Appointment done tapi tidak ada catatan kunjungan (visit).',why:'Auto-log visit gagal atau visit terhapus.',fix:'Buka appointment; sistem biasanya auto-log saat invoice dibuat. Buat invoice atau tambah visit manual.'},
- c5:{what:'Jumlah anjing di invoice ≠ jumlah anjing done per groomer (dalam cycle ini).',why:'Sebagian grooming belum di-invoice, atau ada invoice dobel.',fix:'Bandingkan daftar done vs invoice untuk groomer itu; lengkapi invoice yang kurang atau hapus yang dobel.'}
-};
-function tallyHelpBlock(id){
- const h=TALLY_HELP[id]; if(!h) return '';
- return `<div style="padding:10px 14px;background:#eff6ff;border-bottom:1px solid var(--border);font-size:12px;line-height:1.6">
-  <div><strong>Apa ini?</strong> ${h.what}</div>
-  <div style="margin-top:4px"><strong>Kenapa muncul?</strong> ${h.why}</div>
-  <div style="margin-top:4px"><strong>Cara supaya tally (hilang):</strong> ${h.fix}</div>
- </div>`;
-}
 function renderTallyCard(id,title,count,rowsHtml){
  const color=count===0?'#16a34a':'#dc2626';
  const bg=count===0?'#dcfce7':'#fee2e2';
@@ -12219,7 +11737,6 @@ function renderTallyCard(id,title,count,rowsHtml){
    </div>
    <span style="color:${color};font-size:14px">${arrow}</span>
   </div>
-  ${tallyExpanded[id]?tallyHelpBlock(id):''}
   ${tallyExpanded[id]&&count>0?`<div style="max-height:340px;overflow-y:auto;background:var(--surface)">${rowsHtml}</div>`:''}
  </div>`;
 }
@@ -12300,9 +11817,6 @@ function renderTally(){
     <button class="btn btn-g btn-sm" onclick="tallyNextCycle()">Next \u2192</button>
     <button class="btn btn-g btn-sm" onclick="tallyResetCycle()">Current cycle</button>
    </div>
-  </div>
-  <div style="font-size:12px;color:var(--muted);margin-bottom:10px;padding:10px 14px;background:var(--subtle);border-radius:6px;line-height:1.6">
-   <strong>Apa itu Tally?</strong> Halaman ini mencocokkan appointment, invoice, visit, dan payroll dalam satu cycle gaji (26 s/d 25). Kalau semua cocok → \u2713 hijau. Kalau ada yang tidak cocok → \u26A0 merah, dan muncul di card di bawah. Klik card untuk lihat penjelasan + cara memperbaikinya. Perbaiki sumbernya (invoice/appointment), lalu angka mismatch akan turun sendiri.
   </div>
   <div style="font-size:13px;color:${total?'#dc2626':'#15803d'};margin-bottom:12px;padding:10px 14px;background:${total?'#fee2e2':'#dcfce7'};border-radius:6px">
    <strong>${total===0?'\u2713 No mismatches in this cycle':`\u26A0 ${total} mismatch${total!==1?'es':''} found`}</strong>
@@ -12543,17 +12057,21 @@ function renderDashboard(){
     <tr><td style="padding:6px">New customers</td><td style="padding:6px;text-align:right">${m.newCust}</td><td style="padding:6px;text-align:right;color:var(--muted)">${mPrev.newCust}</td><td style="padding:6px;text-align:right">${delta(m.newCust,mPrev.newCust)}</td></tr>
    </tbody></table>`;
  }
+
+ // Batch O.6 — 14+ day no-grooming followups
+ renderFollowups();
 }
 
-// Dogs not groomed for STALE_DAYS+ days. WA reminder per customer. (Reminders tab)
+// Batch O.6 — Dogs not groomed for 14+ days. WA reminder per customer.
 function renderFollowups(){
- const el=document.getElementById('followup-cards'); if(!el) return;
- const lbl=document.getElementById('followup-threshold-label'); if(lbl) lbl.textContent=STALE_DAYS;
+ const el=document.getElementById('dash-followups'); if(!el) return;
+ const today=new Date();
  const threshold=STALE_DAYS;
  // For each dog: compute days since last_groomed_at (or fall back to most recent visit date)
  const overdue=dogs.map(d=>{
   let lastDate=d.last_groomed_at;
   if(!lastDate){
+   // Fallback: most recent visit
    const dogVisits=visits.filter(v=>v.dog_id===d.id).map(v=>v.visited_at).filter(Boolean).sort();
    if(dogVisits.length) lastDate=dogVisits[dogVisits.length-1];
   }
@@ -12565,7 +12083,7 @@ function renderFollowups(){
   return {dog:d,cust,days,lastDate};
  }).filter(Boolean).sort((a,b)=>b.days-a.days);
 
- if(!overdue.length){el.innerHTML='<div class="card" style="padding:1.5rem;text-align:center;color:var(--muted)">Tidak ada dog yang overdue. \uD83D\uDC3E</div>';return}
+ if(!overdue.length){el.innerHTML='';return}
 
  // Group by customer
  const byCust={};
@@ -12575,7 +12093,12 @@ function renderFollowups(){
  });
 
  el.innerHTML=`<div class="card" style="padding:14px">
-  <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${overdue.length} dog${overdue.length!==1?'s':''} across ${Object.keys(byCust).length} customer${Object.keys(byCust).length!==1?'s':''}</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+   <div>
+    <div style="font-size:13px;font-weight:600">Followup — dogs not groomed 14+ days</div>
+    <div style="font-size:11px;color:var(--muted)">${overdue.length} dog${overdue.length!==1?'s':''} across ${Object.keys(byCust).length} customer${Object.keys(byCust).length!==1?'s':''}</div>
+   </div>
+  </div>
   <div style="display:flex;flex-direction:column;gap:8px">
    ${Object.values(byCust).map(grp=>{
     const c=grp.cust;
@@ -12585,52 +12108,12 @@ function renderFollowups(){
     const waPhone=c.wa?normalizeWA(c.wa):null;
     const firstName=(c.owner||'').split(' ')[0];
     const dogList=grp.dogs.map(x=>x.dog.name).join(' dan ');
-    const inactivePeriod=maxDays>30?'1 bulan':'2 minggu';
-    const msg=applyTpl(WA_TPL_FOLLOWUP,{nama:firstName,dogs:dogList,days:maxDays,inactive_period:inactivePeriod,biz:BIZ_NAME});
+    const msg=`Halo kak ${firstName}, sudah lama nggak kelihatan! ${dogList} terakhir grooming ${maxDays} hari lalu. Boleh aku bantu booking jadwal berikutnya?`;
     const waLink=waPhone?`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`:null;
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:${bg};border-radius:5px;flex-wrap:wrap;gap:8px">
      <div style="flex:1;min-width:0">
       <div style="font-weight:600;font-size:13px"><span class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner)}</span> <span style="font-size:11px;color:var(--muted);font-weight:400">${esc(c.customer_code||'')}</span></div>
       <div style="font-size:11px;color:var(--muted)">${esc(dogLines)}</div>
-     </div>
-     ${waLink?`<a class="btn btn-g btn-sm" href="${waLink}" target="_blank">WA</a>`:'<span style="font-size:11px;color:var(--muted)">No WA</span>'}
-    </div>`;
-   }).join('')}
-  </div>
- </div>`;
-}
-
-// Active recurring subscriptions (weekly/biweekly/monthly) due for next-month renewal. (Reminders tab)
-function renderRenewalReminders(){
- const el=document.getElementById('renewal-cards'); if(!el) return;
- const recurring=['weekly','biweekly','monthly'];
- const active=subscriptions.filter(s=>s.status==='active'&&recurring.includes(s.type));
- if(!active.length){el.innerHTML='<div class="card" style="padding:1.5rem;text-align:center;color:var(--muted)">Tidak ada subscription aktif untuk renewal.</div>';return}
- // Group by customer
- const byCust={};
- active.forEach(s=>{
-  const c=custs.find(x=>x.id===s.customer_id); if(!c) return;
-  if(!byCust[c.id]) byCust[c.id]={cust:c,subs:[]};
-  byCust[c.id].subs.push(s);
- });
- const dueDay=DUE_DAY_DEFAULT;
- el.innerHTML=`<div class="card" style="padding:14px">
-  <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${active.length} subscription aktif across ${Object.keys(byCust).length} customer</div>
-  <div style="display:flex;flex-direction:column;gap:8px">
-   ${Object.values(byCust).map(grp=>{
-    const c=grp.cust;
-    const firstName=(c.owner||'').split(' ')[0];
-    const waPhone=c.wa?normalizeWA(c.wa):null;
-    const dogNames=grp.subs.map(s=>{const d=dogs.find(x=>x.id===s.dog_id);return d?d.name:'?'}).join(' dan ');
-    const tierNames=[...new Set(grp.subs.map(s=>tierLabel(s.type)))].join(', ');
-    const totalAmount=grp.subs.reduce((sum,s)=>{const d=dogs.find(x=>x.id===s.dog_id);return sum+tierMonthlyPrice(s.type,d?.size)},0);
-    const detail=grp.subs.map(s=>{const d=dogs.find(x=>x.id===s.dog_id);return `${d?d.name:'?'} · ${tierLabel(s.type)}`}).join(', ');
-    const msg=applyTpl(WA_TPL_RENEWAL,{nama:firstName,dogs:dogNames,tier:tierNames,amount:fmtRp(totalAmount),due_day:dueDay,biz:BIZ_NAME});
-    const waLink=waPhone?`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`:null;
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--subtle);border-radius:5px;flex-wrap:wrap;gap:8px">
-     <div style="flex:1;min-width:0">
-      <div style="font-weight:600;font-size:13px"><span class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner)}</span> <span style="font-size:11px;color:var(--muted);font-weight:400">${esc(c.customer_code||'')}</span></div>
-      <div style="font-size:11px;color:var(--muted)">${esc(detail)} · <strong>${fmtRp(totalAmount)}</strong></div>
      </div>
      ${waLink?`<a class="btn btn-g btn-sm" href="${waLink}" target="_blank">WA</a>`:'<span style="font-size:11px;color:var(--muted)">No WA</span>'}
     </div>`;
