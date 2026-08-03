@@ -131,6 +131,10 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .photo-multi{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
 .photo-multi .photo-slot{width:calc(50% - 3px);flex:none}
 .photo-multi .photo-add{width:calc(50% - 3px);flex:none}
+.required-badge{display:inline-block;font-size:8px;font-weight:800;padding:1px 6px;border-radius:8px;margin-left:4px;vertical-align:middle;background:#dcfce7;color:#15803d}
+.required-badge.missing{background:#fee2e2;color:#dc2626}
+.photo-btn.required-missing{border-color:#dc2626;border-style:solid;background:#fef2f2}
+.photo-btn.required-missing .photo-btn-text{color:#dc2626;font-weight:700}
 </style>
 </head>
 <body>
@@ -560,8 +564,9 @@ function renderGroupedAppt(group, isFirstGroup, isToday){
    else{
     const val=(a.photos||{})[pt.key];
     const url=typeof val==='object'?val?.url:val;
+    const missingReq=pt.required&&!url;
     const metaHtml=typeof val==='object'&&val?.timestamp?`<div class="photo-meta">${fmtPhotoTS(val.timestamp)}${val.lat?` · <a href="https://maps.google.com/?q=${val.lat},${val.lng}" target="_blank" style="color:var(--primary)">📍 Lokasi</a>`:''}</div>`:'';
-    photosHTML+=`<div class="photo-slot${pt.full?' full':''}"><div class="photo-slot-label">${pt.label}</div>${renderSingleSlot(a.id,url,pt.key,pt.hasGeo)}${metaHtml}</div>`;
+    photosHTML+=`<div class="photo-slot${pt.full?' full':''}"><div class="photo-slot-label">${pt.label}${pt.required?` <span class="required-badge${missingReq?' missing':''}">${missingReq?'WAJIB':'✓'}</span>`:''}</div>${renderSingleSlot(a.id,url,pt.key,pt.hasGeo,missingReq)}${metaHtml}</div>`;
    }
   });
   photosHTML+='</div>';
@@ -690,6 +695,7 @@ const PHOTO_TYPES=[
  {key:'after',label:'After'},
  {key:'ear_left',label:'Telinga Kiri',section:'Telinga'},
  {key:'ear_right',label:'Telinga Kanan'},
+ {key:'clean_area',label:'Area Pantat/Kemaluan',section:'Kebersihan',full:true,required:true},
  {key:'dematting',label:'Bulu Gimbal',section:'Dokumentasi Kondisi',multi:true,conditional:'Dematting'},
  {key:'fungal',label:'Bekas Jamur',multi:true},
  {key:'injury',label:'Luka',multi:true},
@@ -712,9 +718,10 @@ function renderPhotoGrid(a){
   } else {
    const val=photos[pt.key];
    const url=typeof val==='object'?val?.url:val;
+   const missingReq=pt.required&&!url;
    html+=`<div class="photo-slot${pt.full?' full':''}">
-    <div class="photo-slot-label">${pt.label}</div>
-    ${renderSingleSlot(a.id,url,pt.key,pt.hasGeo)}
+    <div class="photo-slot-label">${pt.label}${pt.required?` <span class="required-badge${missingReq?' missing':''}">${missingReq?'WAJIB':'✓'}</span>`:''}</div>
+    ${renderSingleSlot(a.id,url,pt.key,pt.hasGeo,missingReq)}
     ${typeof val==='object'&&val?.timestamp?`<div class="photo-meta">${fmtPhotoTS(val.timestamp)}${val.lat?` · <a href="https://maps.google.com/?q=${val.lat},${val.lng}" target="_blank" style="color:var(--primary)">📍 Lokasi</a>`:''}</div>`:''}
    </div>`;
   }
@@ -723,7 +730,7 @@ function renderPhotoGrid(a){
  return html;
 }
 
-function renderSingleSlot(apptId,url,type,hasGeo){
+function renderSingleSlot(apptId,url,type,hasGeo,requiredMissing){
  if(url){
   return `<div class="photo-preview" id="ps-${type}-${apptId}">
    <img src="${esc(url)}" alt="${type}" onclick="openLightbox('${esc(url).replace(/'/g,"\\'")}',this)" style="cursor:zoom-in"/>
@@ -735,11 +742,11 @@ function renderSingleSlot(apptId,url,type,hasGeo){
   </div>`;
  }
  return `<div id="ps-${type}-${apptId}" style="display:flex;flex-direction:column;gap:4px">
-  <div class="photo-btn" onclick="capturePhoto('${apptId}','${type}',${!!hasGeo})" style="flex:1">
+  <div class="photo-btn${requiredMissing?' required-missing':''}" onclick="capturePhoto('${apptId}','${type}',${!!hasGeo})" style="flex:1">
    <span class="photo-btn-icon">&#128247;</span>
    <span class="photo-btn-text">${hasGeo?'Kamera + Lokasi':'Kamera'}</span>
   </div>
-  <div class="photo-btn" onclick="capturePhoto('${apptId}','${type}',${!!hasGeo},false,true)" style="flex:1;aspect-ratio:auto;min-height:36px;border-style:solid;border-width:1px">
+  <div class="photo-btn${requiredMissing?' required-missing':''}" onclick="capturePhoto('${apptId}','${type}',${!!hasGeo},false,true)" style="flex:1;aspect-ratio:auto;min-height:36px;border-style:solid;border-width:1px">
    <span class="photo-btn-text">Pilih dari galeri</span>
   </div>
  </div>`;
