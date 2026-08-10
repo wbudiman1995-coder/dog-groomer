@@ -131,10 +131,6 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .photo-multi{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
 .photo-multi .photo-slot{width:calc(50% - 3px);flex:none}
 .photo-multi .photo-add{width:calc(50% - 3px);flex:none}
-.required-badge{display:inline-block;font-size:8px;font-weight:800;padding:1px 6px;border-radius:8px;margin-left:4px;vertical-align:middle;background:#dcfce7;color:#15803d}
-.required-badge.missing{background:#fee2e2;color:#dc2626}
-.photo-btn.required-missing{border-color:#dc2626;border-style:solid;background:#fef2f2}
-.photo-btn.required-missing .photo-btn-text{color:#dc2626;font-weight:700}
 </style>
 </head>
 <body>
@@ -161,6 +157,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
   <button class="tab active" id="tab-today" onclick="switchTab('today')">Hari Ini <span class="count" id="cnt-today">0</span></button>
   <button class="tab" id="tab-tomorrow" onclick="switchTab('tomorrow')">Besok <span class="count" id="cnt-tomorrow">0</span></button>
   <button class="tab" id="tab-later" onclick="switchTab('later')">2-3 Hari <span class="count" id="cnt-later">0</span></button>
+  <button class="tab" id="tab-history" onclick="switchTab('history')">Riwayat <span class="count" id="cnt-history">0</span></button>
  </div>
 
  <div class="content" id="content"><div class="loader"><span class="spin"></span>Loading schedule…</div></div>
@@ -207,6 +204,19 @@ function parseURL(){
 }
 
 function esc(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+const APPT_TRANSPORT_FEE_RE=/(?:^|\n)\[\[HP_TRANSPORT_FEE:(\d+)\]\](?=\n|$)/g;
+function getApptTransportFee(apptOrNote){
+ const note=typeof apptOrNote==='string'?apptOrNote:(apptOrNote?.admin_note||'');
+ let fee=0,match;
+ APPT_TRANSPORT_FEE_RE.lastIndex=0;
+ while((match=APPT_TRANSPORT_FEE_RE.exec(note))!==null) fee=Math.max(fee,parseInt(match[1])||0);
+ APPT_TRANSPORT_FEE_RE.lastIndex=0;
+ return fee;
+}
+function fmtRp(n){return 'Rp '+(Number(n)||0).toLocaleString('id-ID')}
+function photoUrl(v){return v&&typeof v==='object'?(v.url||null):(v||null)}
+function photoTS(v){return v&&typeof v==='object'?(v.timestamp||null):null}
 
 /* Session E — Lightbox for enlarging any photo. Click photo → open full-screen.
    Click anywhere or Escape → close. */
@@ -298,8 +308,8 @@ async function loadSchedule(){
  const end=new Date(today); end.setDate(end.getDate()+3); // 4-day window (today+1+2+3)
  const startISO=iso(today), endISO=iso(end);
 
- // Fetch appointments scoped to this groomer + date range
- const {data:appts,error:e1}=await db.from('appointments')
+ // Fetch upcoming appointments and the groomer's latest historical sessions.
+ const {data:upcoming,error:e1}=await db.from('appointments')
   .select('*')
   .eq('groomer_id',currentGroomer.id)
   .gte('appt_date',startISO)
@@ -307,8 +317,18 @@ async function loadSchedule(){
   .order('appt_date')
   .order('appt_time');
  if(e1){content.innerHTML='<div class="empty">Error loading: '+esc(e1.message)+'</div>';return}
+ const {data:history,error:e2}=await db.from('appointments')
+  .select('*')
+  .eq('groomer_id',currentGroomer.id)
+  .lt('appt_date',startISO)
+  .neq('status','cancelled')
+  .order('appt_date',{ascending:false})
+  .order('appt_time',{ascending:false})
+  .limit(100);
+ if(e2){content.innerHTML='<div class="empty">Error loading history: '+esc(e2.message)+'</div>';return}
+ const appts=[...(upcoming||[]),...(history||[])];
 
- if(!appts||!appts.length){
+ if(!appts.length){
   dataCache={appts:[],dogs:[],custs:[]};
   renderActiveTab();
   return;
@@ -335,20 +355,22 @@ function updateCounts(){
  const tmw=new Date();tmw.setDate(tmw.getDate()+1);const tmwISO=iso(tmw);
  const d2=new Date();d2.setDate(d2.getDate()+2);const d2ISO=iso(d2);
  const d3=new Date();d3.setDate(d3.getDate()+3);const d3ISO=iso(d3);
- const c={today:0,tomorrow:0,later:0};
+ const c={today:0,tomorrow:0,later:0,history:0};
  dataCache.appts.forEach(a=>{
   if(a.appt_date===today) c.today++;
   else if(a.appt_date===tmwISO) c.tomorrow++;
   else if(a.appt_date===d2ISO||a.appt_date===d3ISO) c.later++;
+  else if(a.appt_date<today) c.history++;
  });
  document.getElementById('cnt-today').textContent=c.today;
  document.getElementById('cnt-tomorrow').textContent=c.tomorrow;
  document.getElementById('cnt-later').textContent=c.later;
+ document.getElementById('cnt-history').textContent=c.history;
 }
 
 function switchTab(tab){
  currentTab=tab;
- ['today','tomorrow','later'].forEach(t=>{
+ ['today','tomorrow','later','history'].forEach(t=>{
   document.getElementById('tab-'+t).classList.toggle('active',t===tab);
  });
  renderActiveTab();
@@ -441,6 +463,10 @@ function toggleChecklist(btn){
 function renderActiveTab(){
  const content=document.getElementById('content');
  const today=iso(new Date());
+ if(currentTab==='history'){
+  renderHistoryTab(content,today);
+  return;
+ }
  const tmw=new Date();tmw.setDate(tmw.getDate()+1);const tmwISO=iso(tmw);
  const d2=new Date();d2.setDate(d2.getDate()+2);const d2ISO=iso(d2);
  const d3=new Date();d3.setDate(d3.getDate()+3);const d3ISO=iso(d3);
@@ -495,6 +521,71 @@ function renderActiveTab(){
  }).join('');
 }
 
+function getAttendanceResult(a){
+ if(a.absency_late||(a.late_minutes||0)>0) return {label:'Late',color:'#991b1b',bg:'#fee2e2'};
+ const attendance=a.photos?.absency;
+ if(!attendance) return {label:'Belum ada foto absen',color:'#92400e',bg:'#fef3c7'};
+ const uploadedAt=photoTS(attendance);
+ if(uploadedAt){
+  const start=new Date(`${a.appt_date}T${(a.appt_time||'00:00').slice(0,5)}:00`);
+  const uploaded=new Date(uploadedAt);
+  if(!isNaN(start.getTime())&&!isNaN(uploaded.getTime())&&uploaded.getTime()>start.getTime()+5*60*1000){
+   return {label:'Late',color:'#991b1b',bg:'#fee2e2'};
+  }
+ }
+ return {label:'On time',color:'#15803d',bg:'#dcfce7'};
+}
+
+function attendanceBadge(a){
+ const s=getAttendanceResult(a);
+ return `<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:${s.bg};color:${s.color};white-space:nowrap">${s.label}</span>`;
+}
+
+function getHistoryPhotoItems(a){
+ const p=a.photos||{},items=[];
+ [['absency','Kehadiran'],['before','Before'],['after','After'],['ear_left','Telinga kiri'],['ear_right','Telinga kanan'],['clean_area','Area bersih']].forEach(([key,label])=>{
+  const value=p[key],url=photoUrl(value);if(url)items.push({label,url,timestamp:photoTS(value)});
+ });
+ [['dematting','Bulu gimbal'],['fungal','Bekas jamur'],['injury','Luka'],['other','Lainnya']].forEach(([key,label])=>{
+  const arr=Array.isArray(p[key])?p[key]:[];
+  arr.forEach((value,i)=>{const url=photoUrl(value);if(url)items.push({label:label+(arr.length>1?' '+(i+1):''),url,timestamp:photoTS(value)});});
+ });
+ return items;
+}
+
+function renderHistoryTab(content,today){
+ const sessions=dataCache.appts.filter(a=>a.appt_date<today&&a.status!=='cancelled')
+  .sort((a,b)=>b.appt_date.localeCompare(a.appt_date)||(b.appt_time||'').localeCompare(a.appt_time||''));
+ if(!sessions.length){content.innerHTML='<div class="empty">Belum ada riwayat grooming.</div>';return}
+ content.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Menampilkan ${sessions.length} sesi terakhir. Tap sesi untuk melihat foto dan waktu upload.</div>`+sessions.map(a=>{
+  const dog=dataCache.dogs.find(d=>d.id===a.dog_id)||{};
+  const cust=dataCache.custs.find(c=>c.id===dog.customer_id)||{};
+  const photos=getHistoryPhotoItems(a);
+  const transport=getApptTransportFee(a);
+  const photosHTML=photos.length?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px">${photos.map(p=>`
+   <div>
+    <div class="photo-preview"><img src="${esc(p.url)}" alt="${esc(p.label)}" onclick="openLightbox('${esc(p.url).replace(/'/g,"\\'")}',this)" style="cursor:zoom-in"/></div>
+    <div style="font-size:10px;font-weight:700;margin-top:3px">${esc(p.label)}</div>
+    <div class="photo-meta">${p.timestamp?fmtPhotoTS(p.timestamp):'Waktu upload tidak tersedia (foto lama)'}</div>
+   </div>`).join('')}</div>`:'<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:8px">Tidak ada foto.</div>';
+  return `<details class="appt" style="padding:0;overflow:hidden">
+   <summary style="list-style:none;cursor:pointer;padding:12px 14px">
+    <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+     <strong style="font-size:13px">${esc(fmtDateLong(a.appt_date))} · ${esc(fmtTime(a.appt_time))}</strong>
+     ${attendanceBadge(a)}
+    </div>
+    <div style="font-size:15px;font-weight:700;margin-top:5px">${esc(dog.name||'?')} · ${esc(cust.owner||'?')}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(a.service_base||'Basic Grooming')}</div>
+   </summary>
+   <div style="padding:0 14px 14px;border-top:1px solid var(--border)">
+    ${transport?`<div style="margin-top:9px;padding:7px 9px;background:#eff6ff;color:#1e40af;border-radius:6px;font-size:12px;font-weight:600">Transport Fee: ${fmtRp(transport)}</div>`:''}
+    ${a.groomer_field_note?`<div class="appt-note">Catatan: ${esc(a.groomer_field_note)}</div>`:''}
+    ${photosHTML}
+   </div>
+  </details>`;
+ }).join('');
+}
+
 function isStyleRefExpired(ref){
  if(!ref?.uploaded_at) return false;
  const days=Math.floor((Date.now()-new Date(ref.uploaded_at).getTime())/(86400000));
@@ -522,6 +613,7 @@ function groupApptsByCustomer(appts){
 
 function renderGroupedAppt(group, isFirstGroup, isToday){
  const firstA=group[0];
+ const transportFee=Math.max(0,...group.map(getApptTransportFee));
  const cust=dataCache.custs.find(c=>{const d=dataCache.dogs.find(x=>x.id===firstA.dog_id);return c.id===d?.customer_id;})||{};
  const firstDog=dataCache.dogs.find(d=>d.id===firstA.dog_id)||{};
  const addrParts=[cust.address,cust.kecamatan,cust.kota].filter(Boolean);
@@ -564,9 +656,8 @@ function renderGroupedAppt(group, isFirstGroup, isToday){
    else{
     const val=(a.photos||{})[pt.key];
     const url=typeof val==='object'?val?.url:val;
-    const missingReq=pt.required&&!url;
     const metaHtml=typeof val==='object'&&val?.timestamp?`<div class="photo-meta">${fmtPhotoTS(val.timestamp)}${val.lat?` · <a href="https://maps.google.com/?q=${val.lat},${val.lng}" target="_blank" style="color:var(--primary)">📍 Lokasi</a>`:''}</div>`:'';
-    photosHTML+=`<div class="photo-slot${pt.full?' full':''}"><div class="photo-slot-label">${pt.label}${pt.required?` <span class="required-badge${missingReq?' missing':''}">${missingReq?'WAJIB':'✓'}</span>`:''}</div>${renderSingleSlot(a.id,url,pt.key,pt.hasGeo,missingReq)}${metaHtml}</div>`;
+    photosHTML+=`<div class="photo-slot${pt.full?' full':''}"><div class="photo-slot-label">${pt.label}</div>${renderSingleSlot(a.id,url,pt.key,pt.hasGeo)}${metaHtml}</div>`;
    }
   });
   photosHTML+='</div>';
@@ -592,9 +683,11 @@ function renderGroupedAppt(group, isFirstGroup, isToday){
    <span class="appt-time-big">${fmtM(startMin)} – ${fmtM(endMin)}</span>
    <span class="appt-duration">${totalDur} min · ${group.length} anjing</span>
    <span class="appt-status ${status}">${esc(status)}</span>
+   ${attendanceBadge(firstA)}
   </div>
   <div class="appt-cust">${esc(cust.owner||'?')}</div>
   <div class="appt-addr">${esc(addrStr)}<br/><a href="${mapsLink}" target="_blank">Buka di Google Maps →</a></div>
+  ${transportFee?`<div style="margin:8px 0;padding:8px 10px;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;border-radius:6px;font-size:12px;font-weight:700">Transport Fee: ${fmtRp(transportFee)}</div>`:''}
   ${firstA.session_note?`<div style="margin:8px 0;padding:9px 11px;background:#fef9c3;border:1px solid #fde047;border-left:4px solid #ca8a04;border-radius:6px;font-size:13px;color:#713f12"><strong>Instruksi grooming:</strong> ${esc(firstA.session_note)}</div>`:''}
   <div class="appt-photos">
    <div class="photo-section-label">Bukti Kehadiran</div>
@@ -615,6 +708,7 @@ function renderAppt(a, isFirst=false){
  const endTime=String(Math.floor(endMin/60)).padStart(2,'0')+':'+String(endMin%60).padStart(2,'0');
 
  const status=a.status||'pending';
+ const transportFee=getApptTransportFee(a);
 
  // Address: build full string, add Google Maps link
  const addrParts=[cust.address,cust.kecamatan,cust.kota].filter(Boolean);
@@ -664,11 +758,13 @@ function renderAppt(a, isFirst=false){
    <span class="appt-time-big">${esc(time)} – ${esc(endTime)}</span>
    <span class="appt-duration">${dur} min</span>
    <span class="appt-status ${status}">${esc(status)}</span>
+   ${attendanceBadge(a)}
   </div>
   <div class="appt-cust">${esc(cust.owner||'?')}</div>
   <div class="appt-addr">${esc(addrStr)}<br/>
    <a href="${mapsLink}" target="_blank">Buka di Google Maps →</a>
   </div>
+  ${transportFee?`<div style="margin:8px 0;padding:8px 10px;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;border-radius:6px;font-size:12px;font-weight:700">Transport Fee: ${fmtRp(transportFee)}</div>`:''}
   ${a.session_note?`<div style="margin:8px 0;padding:9px 11px;background:#fef9c3;border:1px solid #fde047;border-left:4px solid #ca8a04;border-radius:6px;font-size:13px;color:#713f12"><strong>Instruksi grooming:</strong> ${esc(a.session_note)}</div>`:''}
   <div class="dog-card">
    <div class="dog-name">${esc(dog.name||'?')}</div>
@@ -695,7 +791,6 @@ const PHOTO_TYPES=[
  {key:'after',label:'After'},
  {key:'ear_left',label:'Telinga Kiri',section:'Telinga'},
  {key:'ear_right',label:'Telinga Kanan'},
- {key:'clean_area',label:'Area Pantat/Kemaluan',section:'Kebersihan',full:true,required:true},
  {key:'dematting',label:'Bulu Gimbal',section:'Dokumentasi Kondisi',multi:true,conditional:'Dematting'},
  {key:'fungal',label:'Bekas Jamur',multi:true},
  {key:'injury',label:'Luka',multi:true},
@@ -718,10 +813,9 @@ function renderPhotoGrid(a){
   } else {
    const val=photos[pt.key];
    const url=typeof val==='object'?val?.url:val;
-   const missingReq=pt.required&&!url;
    html+=`<div class="photo-slot${pt.full?' full':''}">
-    <div class="photo-slot-label">${pt.label}${pt.required?` <span class="required-badge${missingReq?' missing':''}">${missingReq?'WAJIB':'✓'}</span>`:''}</div>
-    ${renderSingleSlot(a.id,url,pt.key,pt.hasGeo,missingReq)}
+    <div class="photo-slot-label">${pt.label}</div>
+    ${renderSingleSlot(a.id,url,pt.key,pt.hasGeo)}
     ${typeof val==='object'&&val?.timestamp?`<div class="photo-meta">${fmtPhotoTS(val.timestamp)}${val.lat?` · <a href="https://maps.google.com/?q=${val.lat},${val.lng}" target="_blank" style="color:var(--primary)">📍 Lokasi</a>`:''}</div>`:''}
    </div>`;
   }
@@ -730,7 +824,7 @@ function renderPhotoGrid(a){
  return html;
 }
 
-function renderSingleSlot(apptId,url,type,hasGeo,requiredMissing){
+function renderSingleSlot(apptId,url,type,hasGeo){
  if(url){
   return `<div class="photo-preview" id="ps-${type}-${apptId}">
    <img src="${esc(url)}" alt="${type}" onclick="openLightbox('${esc(url).replace(/'/g,"\\'")}',this)" style="cursor:zoom-in"/>
@@ -742,11 +836,11 @@ function renderSingleSlot(apptId,url,type,hasGeo,requiredMissing){
   </div>`;
  }
  return `<div id="ps-${type}-${apptId}" style="display:flex;flex-direction:column;gap:4px">
-  <div class="photo-btn${requiredMissing?' required-missing':''}" onclick="capturePhoto('${apptId}','${type}',${!!hasGeo})" style="flex:1">
+  <div class="photo-btn" onclick="capturePhoto('${apptId}','${type}',${!!hasGeo})" style="flex:1">
    <span class="photo-btn-icon">&#128247;</span>
    <span class="photo-btn-text">${hasGeo?'Kamera + Lokasi':'Kamera'}</span>
   </div>
-  <div class="photo-btn${requiredMissing?' required-missing':''}" onclick="capturePhoto('${apptId}','${type}',${!!hasGeo},false,true)" style="flex:1;aspect-ratio:auto;min-height:36px;border-style:solid;border-width:1px">
+  <div class="photo-btn" onclick="capturePhoto('${apptId}','${type}',${!!hasGeo},false,true)" style="flex:1;aspect-ratio:auto;min-height:36px;border-style:solid;border-width:1px">
    <span class="photo-btn-text">Pilih dari galeri</span>
   </div>
  </div>`;
@@ -756,12 +850,15 @@ function renderMultiSlot(apptId,photos,pt){
  const arr=Array.isArray(photos[pt.key])?photos[pt.key]:[];
  let html=`<div class="photo-multi">
   <div class="photo-slot-label" style="width:100%">${pt.label}${arr.length?` (${arr.length})`:''}  </div>`;
- arr.forEach((url,i)=>{
+ arr.forEach((value,i)=>{
+  const url=photoUrl(value);
+  if(!url) return;
   html+=`<div class="photo-slot">
    <div class="photo-preview">
     <img src="${esc(url)}" alt="${pt.key} ${i+1}" onclick="openLightbox('${esc(url).replace(/'/g,"\\'")}',this)" style="cursor:zoom-in"/>
     <button class="photo-del" onclick="event.stopPropagation();deleteMultiPhoto('${apptId}','${pt.key}',${i})" title="Hapus">&times;</button>
    </div>
+   ${photoTS(value)?`<div class="photo-meta">${fmtPhotoTS(photoTS(value))}</div>`:''}
   </div>`;
  });
  if(arr.length<10){
@@ -839,7 +936,7 @@ async function onPhotoCapture(input){
    const {error:upErr}=await db.storage.from('grooming-photos').upload(path,blob,{contentType:'image/jpeg',upsert:true});
    if(upErr) throw upErr;
    const {data:urlData}=db.storage.from('grooming-photos').getPublicUrl(path);
-   arr.push(urlData.publicUrl+'?v='+Date.now());
+   arr.push({url:urlData.publicUrl+'?v='+Date.now(),timestamp:new Date().toISOString()});
    photos[type]=arr;
   } else {
    const path=`${apptId}/${type}.jpg`;
