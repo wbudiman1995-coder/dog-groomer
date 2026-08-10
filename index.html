@@ -264,7 +264,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 .slot-btn{padding:9px 4px;font-size:var(--fs-micro);border-radius:8px;border:1px solid var(--border);background:var(--surface);cursor:pointer;transition:all .12s;font-weight:600;text-align:center;min-height:38px}
 .slot-btn:hover:not(:disabled){background:var(--primary-tint);border-color:var(--primary-lt)}
 .slot-btn.sel{background:var(--primary);color:#fff;border-color:var(--primary);font-weight:700}
-.slot-btn.blocked{background:var(--red);color:#cbb;cursor:not-allowed;border-color:#f0c4bf}
+.slot-btn.blocked{background:#fee2e2;color:#991b1b;cursor:pointer;border-color:#fca5a5}
 .route-box{background:var(--surface);border:1px solid var(--border-subtle);border-radius:var(--rl);padding:1.25rem;margin-bottom:1rem;box-shadow:var(--sh)}
 .route-lbl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
 .route-ta{width:100%;padding:11px 13px;border:1px solid var(--border);border-radius:var(--r);font-size:var(--fs-body);min-height:75px;resize:none;font-family:inherit;background:var(--subtle);transition:border-color .15s,box-shadow .15s}
@@ -1641,7 +1641,8 @@ thead th[onclick]:hover{color:var(--primary-darker)}
     <div id="wiz-free-dogs-list"></div>
    </div>
    <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px" id="wiz-dur-info"></div>
-   <div id="wiz-slots" style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;max-height:200px;overflow-y:auto"></div>
+   <div id="wiz-slots" style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;max-height:240px;overflow-y:auto"></div>
+   <div id="wiz-conflict-msg" style="display:none;font-size:12px;color:#991b1b;padding:8px 10px;background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;margin-top:7px"></div>
    <div class="form-actions" style="margin-top:.75rem">
     <button class="btn btn-p" onclick="wizNext(4)">Next: Confirm</button>
     <button class="btn btn-g btn-sm" onclick="wizNext(2)">Back</button>
@@ -3302,7 +3303,7 @@ function dogDur(svc,size){
 }
 function t2m(t){const[h,m]=(t||'09:00').split(':').map(Number);return h*60+m}
 function m2t(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}
-let SSTART=8*60+30,SEND=18*60;const SSTEP=30,SH=44;
+let SSTART=8*60+30,SEND=18*60;const SSTEP=15,SH=22;
 
 function groupConsecutiveAppts(dayAppts){
  const sorted=[...dayAppts].sort((a,b)=>t2m(a.appt_time||'09:00')-t2m(b.appt_time||'09:00'));
@@ -3667,8 +3668,8 @@ async function massMove(){
   }
  }
  if(conflicts.length){
-  alert(`Tidak bisa pindahkan — ${conflicts.length} bentrok:\n\n${conflicts.slice(0,5).join('\n')}${conflicts.length>5?'\n...':''}\n\nPindahkan satu-per-satu atau pilih tanggal lain.`);
-  return;
+  const approved=confirm(`⚠️ ${conflicts.length} jadwal bentrok:\n\n${conflicts.slice(0,5).join('\n')}${conflicts.length>5?'\n...':''}\n\nTetap pindahkan semua jadwal?`);
+  if(!approved) return;
  }
  const {error}=await db.from('appointments').update({appt_date:newDate}).in('id',ids);
  if(error){alert('Error: '+error.message);return}
@@ -3757,7 +3758,7 @@ function _showDropPreview(slotEl,nd,ng,nm){
  const dur=a.duration_mins||60;
  const colEl=slotEl.closest('[style*="position:relative"]');
  if(!colEl) return;
- const ht=Math.max(18,Math.round((dur/30)*SH));
+  const ht=Math.max(18,Math.round((dur/SSTEP)*SH));
  const top=Math.round(((nm-SSTART)/SSTEP)*SH);
  _dropPreviewEl=document.createElement('div');
  Object.assign(_dropPreviewEl.style,{
@@ -3806,9 +3807,7 @@ async function onDrop(e){
  const aDog=dogs.find(d=>d.id===a.dog_id);
  const conflict=checkApptOverlap(a.id,nd,ng,nm,a.duration_mins);
  if(conflict){
-  const otherDog=dogs.find(d=>d.id===conflict.dog_id);
-  showToast(`Bentrok dengan ${otherDog?.name||'appointment lain'} jam ${conflict.appt_time?.slice(0,5)||''}`);
-  return;
+  if(!confirmScheduleConflict(a,conflict,nd,nm)) return;
  }
  await db.from('appointments').update({appt_date:nd,groomer_id:ng,appt_time:newTime}).eq('id',draggedId);
  const idx=appts.findIndex(x=>x.id===draggedId);
@@ -3873,15 +3872,13 @@ function onApptTouchStart(e,apptId){
      const aDog=dogs.find(d=>d.id===a.dog_id);
      const conflict=checkApptOverlap(a.id,nd,ng,nm,a.duration_mins);
      if(conflict){
-      const otherDog=dogs.find(d=>d.id===conflict.dog_id);
-      showToast(`Bentrok dengan ${otherDog?.name||'appt lain'} jam ${conflict.appt_time?.slice(0,5)||''}`);
-     } else {
-      await db.from('appointments').update({appt_date:nd,groomer_id:ng,appt_time:newTime}).eq('id',apptId);
-      const idx=appts.findIndex(x=>x.id===apptId);
-      if(idx>=0){appts[idx].appt_date=nd;appts[idx].groomer_id=ng;appts[idx].appt_time=newTime;}
-      renderCal();
-      showToast('Appointment dipindahkan','success');
+      if(!confirmScheduleConflict(a,conflict,nd,nm)){cleanup();return;}
      }
+     await db.from('appointments').update({appt_date:nd,groomer_id:ng,appt_time:newTime}).eq('id',apptId);
+     const idx=appts.findIndex(x=>x.id===apptId);
+     if(idx>=0){appts[idx].appt_date=nd;appts[idx].groomer_id=ng;appts[idx].appt_time=newTime;}
+     renderCal();
+     showToast('Appointment dipindahkan','success');
     }
    }
   }
@@ -3914,6 +3911,14 @@ function checkApptOverlap(apptId, newDate, newGroomerId, newStartMins, durationM
   return newStartMins<aEnd&&newEnd>aStart;
  });
  return conflict;
+}
+
+function confirmScheduleConflict(movingAppt,conflict,newDate,newStartMins){
+ const movingDog=dogs.find(d=>d.id===movingAppt?.dog_id);
+ const otherDog=dogs.find(d=>d.id===conflict?.dog_id);
+ const movingTime=m2t(newStartMins);
+ const otherTime=conflict?.appt_time?.slice(0,5)||'?';
+ return confirm(`⚠️ JADWAL BENTROK\n\n${movingDog?.name||'Appointment'} — ${newDate} ${movingTime}\nBentrok dengan ${otherDog?.name||'appointment lain'} — ${otherTime}\n\nTetap simpan jadwal yang bentrok?`);
 }
 
 function showToast(msg, kind='error'){
@@ -4131,6 +4136,7 @@ function getWizDogDur(ds){
 function onWizGroomerChange(){
  wiz.groomerId=document.getElementById('wiz-groomer').value;
  wiz.startMins=null;
+ wiz.slotConflict=false;
  renderWizSlots();
 }
 
@@ -4138,7 +4144,7 @@ function renderWizSlots(){
  // Populate groomer dropdown sorted by suggestion rank (top = bold + ★)
  populateWizGroomerOptions();
  const gs=document.getElementById('wiz-groomer');
- if(gs) gs.onchange=()=>{wiz.groomerId=gs.value;wiz.startMins=null;renderWizSlots()};
+ if(gs) gs.onchange=()=>{wiz.groomerId=gs.value;wiz.startMins=null;wiz.slotConflict=false;renderWizSlots()};
 
  // Always sync date: input takes priority over wiz.date
  const di=document.getElementById('wiz-date');
@@ -4147,7 +4153,7 @@ function renderWizSlots(){
   // If wiz.date was pre-set from calendar click, update input too
   if(wiz.date && !di.value) di.value=wiz.date;
   wiz.date=di.value;
-  di.onchange=()=>{wiz.date=di.value;wiz.startMins=null;renderWizSlots()};
+  di.onchange=()=>{wiz.date=di.value;wiz.startMins=null;wiz.slotConflict=false;renderWizSlots()};
  }
 
  const totalDur=wiz.dogSvcs.reduce((s,ds)=>s+getWizDogDur(ds),0);
@@ -4170,13 +4176,22 @@ function renderWizSlots(){
  wrap.innerHTML=slots.filter(m=>m+totalDur<=SEND).map(m=>{
   const blocked=isBlocked(wiz.groomerId,wiz.date,m,totalDur,wiz.editId);
   const sel=m===wiz.startMins;
-  return `<button class="slot-btn${sel?' sel':''}${blocked?' blocked':''}" ${blocked?'disabled':''} onclick="selectWizSlot(${m})">${m2t(m)}</button>`;
+  return `<button class="slot-btn${sel?' sel':''}${blocked?' blocked':''}" title="${blocked?'Bentrok — masih bisa dipilih dengan konfirmasi':'Tersedia'}" onclick="selectWizSlot(${m},${blocked})">${m2t(m)}</button>`;
  }).join('');
  renderGroomerSuggestion();
  renderTravelEstimate();
 }
 
-function selectWizSlot(m){wiz.startMins=m;renderWizSlots()}
+function selectWizSlot(m,isConflict=false){
+ wiz.startMins=m;
+ wiz.slotConflict=!!isConflict;
+ const msg=document.getElementById('wiz-conflict-msg');
+ if(msg){
+  msg.style.display=isConflict?'block':'none';
+  msg.textContent=isConflict?'⚠️ Slot ini bentrok. Kamu masih bisa lanjut, tetapi harus memberikan konfirmasi tambahan saat menyimpan.':'';
+ }
+ renderWizSlots();
+}
 
 /* ========== FEATURE 5: AUTO-SUGGEST GROOMER BY AREA + AVAILABILITY ========== */
 
@@ -4885,6 +4900,7 @@ function openAppt(dateISO,groomerId,startMins){
  const lateMins=document.getElementById('appt-late-mins'); if(lateMins) lateMins.value='';
  const lateReason=document.getElementById('appt-late-reason'); if(lateReason) lateReason.value='';
  const actDur=document.getElementById('appt-actual-dur'); if(actDur) actDur.value='';
+ const wcm=document.getElementById('wiz-conflict-msg'); if(wcm) wcm.style.display='none';
  document.getElementById('appt-cust').value='';
  document.getElementById('appt-cust-search').value='';
  populateWizCustList();
@@ -4993,7 +5009,7 @@ function openApptEdit(id){
    const val=photos[t.key];
    if(!val) return;
    if(t.multi&&Array.isArray(val)){
-    val.forEach((u,i)=>items.push({label:t.label+(val.length>1?` ${i+1}`:''),url:u}));
+    val.forEach((u,i)=>{const url=photoUrl(u);if(url)items.push({label:t.label+(val.length>1?` ${i+1}`:''),url,meta:typeof u==='object'?u:null});});
    } else {
     const url=typeof val==='object'?val?.url:val;
     if(url) items.push({label:t.label,url,meta:typeof val==='object'?val:null});
@@ -5231,10 +5247,7 @@ async function saveAppt(){
     return startMins<aEnd&&incEnd>aStart;
    });
    if(conflict){
-    const otherDog=dogs.find(d=>d.id===conflict.dog_id);
-    const inDog=dogs.find(d=>d.id===inc.dog_id);
-    alert(`Slot bentrok!\n\n${inDog?.name||'?'} jam ${inc.appt_time.slice(0,5)} (${inc.duration_mins}m) overlap dengan ${otherDog?.name||'appt lain'} jam ${conflict.appt_time?.slice(0,5)||''} (${conflict.duration_mins||60}m).\n\nGanti slot waktu atau kurangi durasi service.`);
-    return;
+    if(!confirmScheduleConflict(inc,conflict,inc.appt_date,startMins)) return;
    }
   }
  if(wiz.editId){
@@ -5258,10 +5271,6 @@ async function saveAppt(){
    perfFields.actual_duration_mins=isNaN(ad)?null:Math.max(0,ad);
   }
   const updatePayload={...inserts[0],...perfFields};
-  if(wiz.slotConflict){
-   alert('Slot bentrok! Pilih slot lain (merah = bentrok, hijau = tersedia).');
-   return;
-  }
   if(wiz.editIds?.length>1){
    // Group edit: ALWAYS persist service/note/discount for every dog in the group.
    // Only date/time/groomer (the actual "reschedule") is gated by rescheduleSet.
@@ -5745,6 +5754,75 @@ function calcTeamAverage(periodStr){
  };
 }
 
+function getAppointmentAttendanceResult(a){
+ if(a.absency_late||(a.late_minutes||0)>0) return {key:'late',label:'Late',color:'#991b1b',bg:'#fee2e2'};
+ const attendance=a.photos?.absency;
+ if(!attendance) return {key:'missing',label:'No attendance photo',color:'#92400e',bg:'#fef3c7'};
+ const uploadedAt=photoTS(attendance);
+ if(uploadedAt){
+  const start=new Date(`${a.appt_date}T${(a.appt_time||'00:00').slice(0,5)}:00`);
+  const uploaded=new Date(uploadedAt);
+  if(!isNaN(start.getTime())&&!isNaN(uploaded.getTime())&&uploaded.getTime()>start.getTime()+5*60*1000){
+   return {key:'late',label:'Late',color:'#991b1b',bg:'#fee2e2'};
+  }
+ }
+ return {key:'on_time',label:'On time',color:'#15803d',bg:'#dcfce7'};
+}
+
+function getAppointmentPhotoItems(a){
+ const p=a.photos||{};
+ const items=[];
+ [
+  ['absency','Attendance'],['before','Before'],['after','After'],
+  ['ear_left','Left ear'],['ear_right','Right ear'],['clean_area','Hygiene']
+ ].forEach(([key,label])=>{
+  const value=p[key],url=photoUrl(value);
+  if(url) items.push({label,url,timestamp:photoTS(value)});
+ });
+ [['dematting','Dematting'],['fungal','Fungal'],['injury','Injury'],['other','Other']].forEach(([key,label])=>{
+  (Array.isArray(p[key])?p[key]:[]).forEach((value,i)=>{
+   const url=photoUrl(value);
+   if(url) items.push({label:`${label}${(p[key]||[]).length>1?' '+(i+1):''}`,url,timestamp:photoTS(value)});
+  });
+ });
+ return items;
+}
+
+function renderGroomerSessionHistory(groomerId,periodStr){
+ const today=iso(new Date());
+ let cutoff='0000-01-01';
+ if(periodStr!=='all'){
+  const d=new Date();d.setDate(d.getDate()-parseInt(periodStr));cutoff=iso(d);
+ }
+ const sessions=appts.filter(a=>a.groomer_id===groomerId&&a.appt_date>=cutoff&&a.appt_date<=today&&a.status!=='cancelled')
+  .sort((a,b)=>b.appt_date.localeCompare(a.appt_date)||(b.appt_time||'').localeCompare(a.appt_time||''))
+  .slice(0,30);
+ if(!sessions.length) return '<div style="font-size:12px;color:var(--muted);font-style:italic">No historical sessions in this period.</div>';
+ return sessions.map(a=>{
+  const d=dogs.find(x=>x.id===a.dog_id)||{};
+  const c=custs.find(x=>x.id===d.customer_id)||{};
+  const attendance=getAppointmentAttendanceResult(a);
+  const photos=getAppointmentPhotoItems(a);
+  const photoHTML=photos.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:8px;margin-top:9px">${photos.map(p=>`
+   <a href="${esc(p.url)}" target="_blank" style="text-decoration:none;color:inherit">
+    <img src="${esc(p.url)}" alt="${esc(p.label)}" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;border:1px solid var(--border)"/>
+    <div style="font-size:10px;font-weight:700;margin-top:3px">${esc(p.label)}</div>
+    <div style="font-size:9px;color:var(--muted);line-height:1.3">${p.timestamp?fmtPhotoTS(p.timestamp):'Upload time unavailable (legacy photo)'}</div>
+   </a>`).join('')}</div>`:'<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:8px">No photos uploaded.</div>';
+  return `<details style="background:var(--surface);border:1px solid var(--border);border-radius:7px;margin-bottom:7px;overflow:hidden">
+   <summary style="cursor:pointer;padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <strong style="font-size:12px">${esc(a.appt_date)} · ${esc((a.appt_time||'').slice(0,5))}</strong>
+    <span style="font-size:12px">${esc(d.name||'?')} · ${esc(c.owner||'?')}</span>
+    <span style="margin-left:auto;font-size:10px;font-weight:700;padding:3px 7px;border-radius:10px;background:${attendance.bg};color:${attendance.color}">${attendance.label}</span>
+   </summary>
+   <div style="padding:0 12px 12px;border-top:1px solid var(--border)">
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">${esc(a.service_base||'Basic Grooming')}${a.groomer_field_note?' · Note: '+esc(a.groomer_field_note):''}</div>
+    ${photoHTML}
+   </div>
+  </details>`;
+ }).join('');
+}
+
 function renderGroomerReport(){
  if(!_grptCurrentId) return;
  const period=document.getElementById('grpt-period').value;
@@ -5851,6 +5929,10 @@ function renderGroomerReport(){
 
   <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:14px 0 8px">Service mix</div>
   ${svcMixHTML}
+
+  <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:18px 0 8px">Session history &amp; photos</div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Newest 30 sessions in the selected period. Expand a session to inspect photos and upload times.</div>
+  ${renderGroomerSessionHistory(m.groomerId,period)}
 
   ${lateListHTML}
 
@@ -10264,7 +10346,7 @@ function buildPhotoHTML(did){
    if(!hasManualHygiene&&cleanAreaUrl) photos.push({data:cleanAreaUrl,zone:'hygiene',ts:cleanAreaTS});
    [{key:'dematting',label:'Bulu Gimbal'},{key:'fungal',label:'Bekas Jamur'},{key:'injury',label:'Luka'},{key:'other',label:'Lainnya'}].forEach(mt=>{
     const arr=Array.isArray(p[mt.key])?p[mt.key]:[];
-    arr.forEach(url=>photos.push({data:url,zone:'issue',label:mt.label}));
+    arr.forEach(value=>{const url=photoUrl(value);if(url)photos.push({data:url,zone:'issue',label:mt.label,ts:photoTS(value)});});
    });
   }
  }
@@ -10435,7 +10517,7 @@ async function loadInvFromAppointment(apptId){
    // Multi-photo issue zones (arrays)
    [{key:'dematting',label:'Bulu Gimbal'},{key:'fungal',label:'Bekas Jamur'},{key:'injury',label:'Luka'},{key:'other',label:'Lainnya'}].forEach(mt=>{
     const arr=Array.isArray(p[mt.key])?p[mt.key]:[];
-    arr.forEach(url=>invPhotos[did].push({data:url,zone:'issue',label:mt.label}));
+    arr.forEach(value=>{const url=photoUrl(value);if(url)invPhotos[did].push({data:url,zone:'issue',label:mt.label,ts:photoTS(value)});});
    });
   });
   renderInvoicePreview();
