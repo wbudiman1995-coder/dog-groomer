@@ -216,6 +216,7 @@ function getApptTransportFee(apptOrNote){
 function fmtRp(n){return 'Rp '+(Number(n)||0).toLocaleString('id-ID')}
 function photoUrl(v){return v&&typeof v==='object'?(v.url||null):(v||null)}
 function photoTS(v){return v&&typeof v==='object'?(v.timestamp||null):null}
+const LATE_GRACE_MINUTES=15;
 
 /* Session E — Lightbox for enlarging any photo. Click photo → open full-screen.
    Click anywhere or Escape → close. */
@@ -482,7 +483,7 @@ function renderActiveTab(){
   const firstAppt=todayGroups[0]?.[0];
   if(firstAppt&&!firstAppt.photos?.absency){
    const [ah,am]=(firstAppt.appt_time||'00:00').split(':').map(Number);
-   if(now.getHours()*60+now.getMinutes()>ah*60+am+5){
+   if(now.getHours()*60+now.getMinutes()>=ah*60+am+LATE_GRACE_MINUTES){
     globalLateBanner=`<div id="late-banner" style="background:#dc2626;color:#fff;padding:12px 16px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:10px;border-radius:8px;margin-bottom:12px">
      <span style="font-size:22px">&#9888;</span>
      <div>
@@ -505,17 +506,18 @@ function renderActiveTab(){
 }
 
 function getAttendanceResult(a){
- if(a.absency_late||(a.late_minutes||0)>0) return {label:'Late',color:'#991b1b',bg:'#fee2e2'};
+ if((a.late_minutes||0)>=LATE_GRACE_MINUTES) return {label:'Late',color:'#991b1b',bg:'#fee2e2'};
  const attendance=a.photos?.absency;
  if(!attendance) return {label:'Belum ada foto absen',color:'#92400e',bg:'#fef3c7'};
  const uploadedAt=photoTS(attendance);
  if(uploadedAt){
   const start=new Date(`${a.appt_date}T${(a.appt_time||'00:00').slice(0,5)}:00`);
   const uploaded=new Date(uploadedAt);
-  if(!isNaN(start.getTime())&&!isNaN(uploaded.getTime())&&uploaded.getTime()>start.getTime()+5*60*1000){
+  if(!isNaN(start.getTime())&&!isNaN(uploaded.getTime())&&uploaded.getTime()>=start.getTime()+LATE_GRACE_MINUTES*60*1000){
    return {label:'Late',color:'#991b1b',bg:'#fee2e2'};
   }
  }
+ if(!uploadedAt&&a.absency_late) return {label:'Late',color:'#991b1b',bg:'#fee2e2'};
  return {label:'On time',color:'#15803d',bg:'#dcfce7'};
 }
 
@@ -569,7 +571,7 @@ function renderGroupedAppt(group, isFirstGroup, isToday){
  let lateWarning='';
  if(isFirstGroup&&isToday&&!firstA.photos?.absency){
   const [ah,am]=(firstA.appt_time||'00:00').split(':').map(Number);
-  if(now.getHours()*60+now.getMinutes()>ah*60+am+5){
+  if(now.getHours()*60+now.getMinutes()>=ah*60+am+LATE_GRACE_MINUTES){
    lateWarning=`<div style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px"><span style="font-size:18px">&#9888;</span> Terlambat upload foto absen! Harap upload sekarang.</div>`;
   }
  }
@@ -683,7 +685,7 @@ function renderAppt(a, isFirst=false){
   const [ah,am]=(a.appt_time||'00:00').split(':').map(Number);
   const apptStartMin=ah*60+am;
   const nowMin=now.getHours()*60+now.getMinutes();
-  if(nowMin>apptStartMin+5){
+  if(nowMin>=apptStartMin+LATE_GRACE_MINUTES){
    lateWarning=`<div style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">
     <span style="font-size:18px">&#9888;</span> Terlambat upload foto absen! Harap upload sekarang.
    </div>`;
@@ -898,7 +900,7 @@ async function onPhotoCapture(input){
    if(aRef){
     const [ah,am]=(aRef.appt_time||'00:00').split(':').map(Number);
     const apptStart=new Date(aRef.appt_date+'T'+String(ah).padStart(2,'0')+':'+String(am).padStart(2,'0')+':00');
-    if(new Date().getTime()>apptStart.getTime()+5*60*1000){
+    if(new Date().getTime()>=apptStart.getTime()+LATE_GRACE_MINUTES*60*1000){
      await db.from('appointments').update({absency_late:true}).eq('id',apptId);
      if(aRef) aRef.absency_late=true;
     }
