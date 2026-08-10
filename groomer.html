@@ -157,7 +157,6 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
   <button class="tab active" id="tab-today" onclick="switchTab('today')">Hari Ini <span class="count" id="cnt-today">0</span></button>
   <button class="tab" id="tab-tomorrow" onclick="switchTab('tomorrow')">Besok <span class="count" id="cnt-tomorrow">0</span></button>
   <button class="tab" id="tab-later" onclick="switchTab('later')">2-3 Hari <span class="count" id="cnt-later">0</span></button>
-  <button class="tab" id="tab-history" onclick="switchTab('history')">Riwayat <span class="count" id="cnt-history">0</span></button>
  </div>
 
  <div class="content" id="content"><div class="loader"><span class="spin"></span>Loading schedule…</div></div>
@@ -308,27 +307,17 @@ async function loadSchedule(){
  const end=new Date(today); end.setDate(end.getDate()+3); // 4-day window (today+1+2+3)
  const startISO=iso(today), endISO=iso(end);
 
- // Fetch upcoming appointments and the groomer's latest historical sessions.
- const {data:upcoming,error:e1}=await db.from('appointments')
+ // Groomer app only loads the active four-day work window.
+ const {data:appts,error:e1}=await db.from('appointments')
   .select('*')
   .eq('groomer_id',currentGroomer.id)
   .gte('appt_date',startISO)
   .lte('appt_date',endISO)
-  .order('appt_date')
-  .order('appt_time');
+ .order('appt_date')
+ .order('appt_time');
  if(e1){content.innerHTML='<div class="empty">Error loading: '+esc(e1.message)+'</div>';return}
- const {data:history,error:e2}=await db.from('appointments')
-  .select('*')
-  .eq('groomer_id',currentGroomer.id)
-  .lt('appt_date',startISO)
-  .neq('status','cancelled')
-  .order('appt_date',{ascending:false})
-  .order('appt_time',{ascending:false})
-  .limit(100);
- if(e2){content.innerHTML='<div class="empty">Error loading history: '+esc(e2.message)+'</div>';return}
- const appts=[...(upcoming||[]),...(history||[])];
 
- if(!appts.length){
+ if(!appts||!appts.length){
   dataCache={appts:[],dogs:[],custs:[]};
   renderActiveTab();
   return;
@@ -355,22 +344,20 @@ function updateCounts(){
  const tmw=new Date();tmw.setDate(tmw.getDate()+1);const tmwISO=iso(tmw);
  const d2=new Date();d2.setDate(d2.getDate()+2);const d2ISO=iso(d2);
  const d3=new Date();d3.setDate(d3.getDate()+3);const d3ISO=iso(d3);
- const c={today:0,tomorrow:0,later:0,history:0};
+ const c={today:0,tomorrow:0,later:0};
  dataCache.appts.forEach(a=>{
   if(a.appt_date===today) c.today++;
   else if(a.appt_date===tmwISO) c.tomorrow++;
   else if(a.appt_date===d2ISO||a.appt_date===d3ISO) c.later++;
-  else if(a.appt_date<today) c.history++;
  });
  document.getElementById('cnt-today').textContent=c.today;
  document.getElementById('cnt-tomorrow').textContent=c.tomorrow;
  document.getElementById('cnt-later').textContent=c.later;
- document.getElementById('cnt-history').textContent=c.history;
 }
 
 function switchTab(tab){
  currentTab=tab;
- ['today','tomorrow','later','history'].forEach(t=>{
+ ['today','tomorrow','later'].forEach(t=>{
   document.getElementById('tab-'+t).classList.toggle('active',t===tab);
  });
  renderActiveTab();
@@ -463,10 +450,6 @@ function toggleChecklist(btn){
 function renderActiveTab(){
  const content=document.getElementById('content');
  const today=iso(new Date());
- if(currentTab==='history'){
-  renderHistoryTab(content,today);
-  return;
- }
  const tmw=new Date();tmw.setDate(tmw.getDate()+1);const tmwISO=iso(tmw);
  const d2=new Date();d2.setDate(d2.getDate()+2);const d2ISO=iso(d2);
  const d3=new Date();d3.setDate(d3.getDate()+3);const d3ISO=iso(d3);
@@ -539,51 +522,6 @@ function getAttendanceResult(a){
 function attendanceBadge(a){
  const s=getAttendanceResult(a);
  return `<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:${s.bg};color:${s.color};white-space:nowrap">${s.label}</span>`;
-}
-
-function getHistoryPhotoItems(a){
- const p=a.photos||{},items=[];
- [['absency','Kehadiran'],['before','Before'],['after','After'],['ear_left','Telinga kiri'],['ear_right','Telinga kanan'],['clean_area','Area bersih']].forEach(([key,label])=>{
-  const value=p[key],url=photoUrl(value);if(url)items.push({label,url,timestamp:photoTS(value)});
- });
- [['dematting','Bulu gimbal'],['fungal','Bekas jamur'],['injury','Luka'],['other','Lainnya']].forEach(([key,label])=>{
-  const arr=Array.isArray(p[key])?p[key]:[];
-  arr.forEach((value,i)=>{const url=photoUrl(value);if(url)items.push({label:label+(arr.length>1?' '+(i+1):''),url,timestamp:photoTS(value)});});
- });
- return items;
-}
-
-function renderHistoryTab(content,today){
- const sessions=dataCache.appts.filter(a=>a.appt_date<today&&a.status!=='cancelled')
-  .sort((a,b)=>b.appt_date.localeCompare(a.appt_date)||(b.appt_time||'').localeCompare(a.appt_time||''));
- if(!sessions.length){content.innerHTML='<div class="empty">Belum ada riwayat grooming.</div>';return}
- content.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Menampilkan ${sessions.length} sesi terakhir. Tap sesi untuk melihat foto dan waktu upload.</div>`+sessions.map(a=>{
-  const dog=dataCache.dogs.find(d=>d.id===a.dog_id)||{};
-  const cust=dataCache.custs.find(c=>c.id===dog.customer_id)||{};
-  const photos=getHistoryPhotoItems(a);
-  const transport=getApptTransportFee(a);
-  const photosHTML=photos.length?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px">${photos.map(p=>`
-   <div>
-    <div class="photo-preview"><img src="${esc(p.url)}" alt="${esc(p.label)}" onclick="openLightbox('${esc(p.url).replace(/'/g,"\\'")}',this)" style="cursor:zoom-in"/></div>
-    <div style="font-size:10px;font-weight:700;margin-top:3px">${esc(p.label)}</div>
-    <div class="photo-meta">${p.timestamp?fmtPhotoTS(p.timestamp):'Waktu upload tidak tersedia (foto lama)'}</div>
-   </div>`).join('')}</div>`:'<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:8px">Tidak ada foto.</div>';
-  return `<details class="appt" style="padding:0;overflow:hidden">
-   <summary style="list-style:none;cursor:pointer;padding:12px 14px">
-    <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
-     <strong style="font-size:13px">${esc(fmtDateLong(a.appt_date))} · ${esc(fmtTime(a.appt_time))}</strong>
-     ${attendanceBadge(a)}
-    </div>
-    <div style="font-size:15px;font-weight:700;margin-top:5px">${esc(dog.name||'?')} · ${esc(cust.owner||'?')}</div>
-    <div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(a.service_base||'Basic Grooming')}</div>
-   </summary>
-   <div style="padding:0 14px 14px;border-top:1px solid var(--border)">
-    ${transport?`<div style="margin-top:9px;padding:7px 9px;background:#eff6ff;color:#1e40af;border-radius:6px;font-size:12px;font-weight:600">Transport Fee: ${fmtRp(transport)}</div>`:''}
-    ${a.groomer_field_note?`<div class="appt-note">Catatan: ${esc(a.groomer_field_note)}</div>`:''}
-    ${photosHTML}
-   </div>
-  </details>`;
- }).join('');
 }
 
 function isStyleRefExpired(ref){
