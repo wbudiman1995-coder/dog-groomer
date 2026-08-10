@@ -1662,6 +1662,10 @@ thead th[onclick]:hover{color:var(--primary-darker)}
     <textarea id="appt-session-note" placeholder="e.g. Double wash, tapi pakai anti fungal dulu" style="min-height:56px"></textarea>
    </div>
    <div class="fg" style="margin-bottom:.9rem">
+    <label>Biaya transport <span style="font-size:10px;color:var(--muted);font-weight:400">— opsional, otomatis masuk ke invoice sebagai Transport Fee</span></label>
+    <input type="number" id="appt-transport-fee" min="0" step="1000" inputmode="numeric" placeholder="e.g. 25000"/>
+   </div>
+   <div class="fg" style="margin-bottom:.9rem">
     <label>Catatan admin (internal) <span style="font-size:10px;color:var(--muted);font-weight:400">— hanya terlihat di invoice, tidak ke customer/groomer</span></label>
     <input id="appt-admin-note" placeholder="e.g. Diskon khusus loyal customer, jangan di-charge parkir"/>
    </div>
@@ -3931,6 +3935,30 @@ function showToast(msg, kind='error'){
 /* ---- 4-STEP BOOKING WIZARD ---- */
 let wiz={step:1,custId:null,dogSvcs:[],groomerId:null,date:null,startMins:null,editId:null,tokenId:null};
 
+// Store appointment-level transport fees inside the existing internal note field.
+// This keeps the single-file app compatible with the current appointments table,
+// while hiding the metadata marker from every user-facing note field.
+const APPT_TRANSPORT_FEE_RE=/(?:^|\n)\[\[HP_TRANSPORT_FEE:(\d+)\]\](?=\n|$)/g;
+function getApptTransportFee(apptOrNote){
+ const note=typeof apptOrNote==='string'?apptOrNote:(apptOrNote?.admin_note||'');
+ let fee=0,match;
+ APPT_TRANSPORT_FEE_RE.lastIndex=0;
+ while((match=APPT_TRANSPORT_FEE_RE.exec(note))!==null) fee=Math.max(fee,parseInt(match[1])||0);
+ APPT_TRANSPORT_FEE_RE.lastIndex=0;
+ return fee;
+}
+function cleanApptAdminNote(note){
+ APPT_TRANSPORT_FEE_RE.lastIndex=0;
+ const clean=(note||'').replace(APPT_TRANSPORT_FEE_RE,'\n').replace(/\n{3,}/g,'\n\n').trim();
+ APPT_TRANSPORT_FEE_RE.lastIndex=0;
+ return clean;
+}
+function buildApptAdminNote(note,transportFee){
+ const clean=cleanApptAdminNote(note);
+ const fee=Math.max(0,Math.round(Number(transportFee)||0));
+ return [clean,fee?`[[HP_TRANSPORT_FEE:${fee}]]`:''].filter(Boolean).join('\n')||null;
+}
+
 function wizDots(n){
  const el=document.getElementById('wiz-dots');if(!el)return;
  el.innerHTML=[1,2,3,4].map(i=>
@@ -4844,6 +4872,7 @@ function openAppt(dateISO,groomerId,startMins){
  document.getElementById('appt-note')&&(document.getElementById('appt-note').value=''); // legacy reset
  const cnEl=document.getElementById('appt-customer-note'); if(cnEl) cnEl.value='';
  const anEl=document.getElementById('appt-admin-note'); if(anEl) anEl.value='';
+ const tfEl=document.getElementById('appt-transport-fee'); if(tfEl) tfEl.value='';
  const snEl=document.getElementById('appt-session-note'); if(snEl) snEl.value='';
  const adtEl=document.getElementById('appt-disc-type'); if(adtEl) adtEl.value='';
  const advEl=document.getElementById('appt-disc-value'); if(advEl) advEl.value=0;
@@ -4903,7 +4932,8 @@ function openApptEdit(id){
  }
  document.getElementById('appt-note')&&(document.getElementById('appt-note').value=a.appt_note||''); // legacy compat
  const cnElE=document.getElementById('appt-customer-note'); if(cnElE) cnElE.value=a.customer_note||'';
- const anElE=document.getElementById('appt-admin-note'); if(anElE) anElE.value=a.admin_note||'';
+ const anElE=document.getElementById('appt-admin-note'); if(anElE) anElE.value=cleanApptAdminNote(a.admin_note||'');
+ const tfElE=document.getElementById('appt-transport-fee'); if(tfElE) tfElE.value=getApptTransportFee(a)||'';
  const snElE=document.getElementById('appt-session-note'); if(snElE) snElE.value=a.session_note||'';
  const gfnWrap=document.getElementById('appt-groomer-field-note-wrap');
  const gfnEl=document.getElementById('appt-groomer-field-note');
@@ -5015,7 +5045,9 @@ function openGroupEdit(ids){
  const confirmBtn=document.getElementById('appt-confirm-btn'); if(confirmBtn) confirmBtn.style.display='none';
  const invBtn=document.getElementById('appt-invoice-btn'); if(invBtn) invBtn.style.display='none';
  const cnElE=document.getElementById('appt-customer-note'); if(cnElE) cnElE.value=firstA.customer_note||'';
- const anElE=document.getElementById('appt-admin-note'); if(anElE) anElE.value=firstA.admin_note||'';
+ const anElE=document.getElementById('appt-admin-note'); if(anElE) anElE.value=cleanApptAdminNote(firstA.admin_note||'');
+ const tfElE=document.getElementById('appt-transport-fee');
+ if(tfElE) tfElE.value=Math.max(0,...apptList.map(getApptTransportFee))||'';
  const snElE2=document.getElementById('appt-session-note'); if(snElE2) snElE2.value=firstA.session_note||'';
  const gfnWrap2=document.getElementById('appt-groomer-field-note-wrap');
  const gfnEl2=document.getElementById('appt-groomer-field-note');
@@ -5096,6 +5128,8 @@ async function saveAppt(){
  let insertedAppts=null;  // Session E fix: hoisted so post-save local patch can read new appts
  const custNote=document.getElementById('appt-customer-note')?.value.trim()||null;
  const adminNote=document.getElementById('appt-admin-note')?.value.trim()||null;
+ const transportFee=Math.max(0,Math.round(Number(document.getElementById('appt-transport-fee')?.value)||0));
+ const storedAdminNote=buildApptAdminNote(adminNote,transportFee);
  const sessionNote=document.getElementById('appt-session-note')?.value.trim()||null;
  const inserts=[];
  let cursor=wiz.startMins;
@@ -5168,7 +5202,7 @@ async function saveAppt(){
    appt_time:m2t(cursor)+':00',service_base:ds.svc,duration_mins:dur,
    appt_note:dogNote+(wiz.dogSvcs.length>1?` (${i+1}/${wiz.dogSvcs.length})`:''),
    customer_note:custNote,
-   admin_note:adminNote,
+   admin_note:storedAdminNote,
    session_note:sessionNote,
    appt_disc_type:dogDiscType,
    appt_disc_value:dogDiscValue,
@@ -5255,7 +5289,7 @@ async function saveAppt(){
      service_base:ds.svc,duration_mins:getWizDogDur(ds),
      appt_note:dogNote,appt_disc_type:dogDiscType||null,appt_disc_value:dogDiscValue,
      appt_disc_by_category:discByCategory,
-     customer_note:custNote,admin_note:adminNote,session_note:sessionNote,...editStamp()
+     customer_note:custNote,admin_note:storedAdminNote,session_note:sessionNote,...editStamp()
     };
     // Only rescheduled dogs move in time
     if(!wiz.rescheduleSet||wiz.rescheduleSet.has(eid)){
@@ -5299,13 +5333,13 @@ async function saveAppt(){
     const ds=wiz.dogSvcs[i];
     const idx=appts.findIndex(a=>a.id===eid);
     if(idx>=0&&ds){
-     Object.assign(appts[idx],{service_base:ds.svc,duration_mins:getWizDogDur(ds)});
+     Object.assign(appts[idx],{service_base:ds.svc,duration_mins:getWizDogDur(ds),admin_note:storedAdminNote});
      if(!wiz.rescheduleSet||wiz.rescheduleSet.has(eid)) Object.assign(appts[idx],{appt_date:wiz.date,groomer_id:wiz.groomerId});
     }
    });
   } else {
    const idx=appts.findIndex(a=>a.id===wiz.editId);
-   if(idx>=0) Object.assign(appts[idx],{appt_date:wiz.date,appt_time:m2t(wiz.startMins)+':00',groomer_id:wiz.groomerId,service_base:wiz.dogSvcs[0]?.svc,duration_mins:getWizDogDur(wiz.dogSvcs[0])});
+   if(idx>=0) Object.assign(appts[idx],{appt_date:wiz.date,appt_time:m2t(wiz.startMins)+':00',groomer_id:wiz.groomerId,service_base:wiz.dogSvcs[0]?.svc,duration_mins:getWizDogDur(wiz.dogSvcs[0]),admin_note:storedAdminNote});
   }
  } else if(insertedAppts?.length){
   insertedAppts.forEach(a=>appts.push(a));
@@ -6468,7 +6502,10 @@ function updateInvAdminNotesBanner(){
  const notes=[];
  invSelectedDogs.forEach(did=>{
   const a=appts.find(ap=>ap.dog_id===did&&ap.appt_date===invDate&&ap.admin_note);
-  if(a){const d=dogs.find(x=>x.id===did);notes.push({name:d?.name||'?',note:a.admin_note});}
+  if(a){
+   const visibleNote=cleanApptAdminNote(a.admin_note);
+   if(visibleNote){const d=dogs.find(x=>x.id===did);notes.push({name:d?.name||'?',note:visibleNote});}
+  }
  });
  if(!notes.length){banner.style.display='none';return}
  banner.style.display='block';
@@ -6638,6 +6675,13 @@ function applyInvCustomer(cid,dateStr){
  }).sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
  resetInvoice();
  initInvoiceTab();
+ // Carry the booking's optional transport fee into the invoice once, even
+ // when several pets share the same customer/date and repeat the metadata.
+ const transportFee=Math.max(0,...custAppts.map(getApptTransportFee));
+ if(transportFee>0){
+  invExtraCharges=[{label:'Transport Fee',amount:transportFee}];
+  renderExtraCharges();
+ }
  const custSel=document.getElementById('inv-customer');
  custSel.value=cid;
  const si=document.getElementById('inv-customer-search');
