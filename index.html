@@ -1049,9 +1049,10 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="subsec active" id="fsec-invoices">
  <div class="filter-bar">
  <select id="fin-status" onchange="renderFinancial()">
- <option value="">All status</option>
- <option value="unpaid">Unpaid only</option>
- <option value="paid">Paid only</option>
+ <option value="">All payment stages</option>
+ <option value="awaiting_proof">Awaiting screenshot check</option>
+ <option value="payment_successful">Payment Successful — awaiting validation</option>
+ <option value="validated">Validated</option>
  </select>
  <input type="month" id="fin-month" onchange="renderFinancial()" title="Filter by service month"/>
  <input id="fin-search" placeholder="Search invoice/customer…" oninput="renderFinancial()" style="min-width:180px"/>
@@ -1060,7 +1061,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div id="fin-totals" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:.9rem"></div>
  <div class="tbl-wrap">
  <table><thead><tr>
- <th>Invoice #</th><th>Date</th><th>Customer</th><th>Dogs</th><th>Total</th><th>Status</th><th></th>
+ <th>Invoice #</th><th>Date</th><th>Customer</th><th>Dogs</th><th>Total</th><th>Screenshot check</th><th>Bank account check</th><th></th>
  </tr></thead>
  <tbody id="fin-body"></tbody></table>
  </div>
@@ -6612,6 +6613,44 @@ function pickInvCust(id){
  onInvCustomerChange();
 }
 
+// Payment verification is stored inside invoice notes so this remains compatible
+// with existing databases that only have the legacy paid/unpaid status column.
+const INV_PAYMENT_META_RE=/\[\[HP_PAYMENT_(?:SUCCESSFUL|VALIDATED)(?:_AT)?:[^\]]*\]\]\s*/g;
+function cleanInvoiceNotes(notes){
+ return String(notes||'').replace(INV_PAYMENT_META_RE,'').trim();
+}
+function invoicePaymentMeta(inv){
+ const raw=String(inv?.notes||'');
+ const legacyPaid=inv?.status==='paid';
+ const boolValue=(key,fallback)=>{
+  const m=raw.match(new RegExp(`\\[\\[HP_PAYMENT_${key}:(0|1)\\]\\]`));
+  return m?m[1]==='1':fallback;
+ };
+ const timeValue=key=>{
+  const m=raw.match(new RegExp(`\\[\\[HP_PAYMENT_${key}_AT:([^\\]]*)\\]\\]`));
+  return m?m[1]:'';
+ };
+ let successful=boolValue('SUCCESSFUL',legacyPaid);
+ const validated=boolValue('VALIDATED',legacyPaid);
+ if(validated) successful=true;
+ return {successful,validated,successfulAt:timeValue('SUCCESSFUL'),validatedAt:timeValue('VALIDATED')};
+}
+function invoiceNotesWithPaymentMeta(notes,meta){
+ const visible=cleanInvoiceNotes(notes);
+ const markers=[
+  `[[HP_PAYMENT_SUCCESSFUL:${meta.successful?1:0}]]`,
+  `[[HP_PAYMENT_VALIDATED:${meta.validated?1:0}]]`
+ ];
+ if(meta.successfulAt) markers.push(`[[HP_PAYMENT_SUCCESSFUL_AT:${meta.successfulAt}]]`);
+ if(meta.validatedAt) markers.push(`[[HP_PAYMENT_VALIDATED_AT:${meta.validatedAt}]]`);
+ return [visible,...markers].filter(Boolean).join('\n');
+}
+function formatPaymentCheckTime(value){
+ if(!value) return '';
+ const d=new Date(value);
+ return Number.isNaN(d.getTime())?'':d.toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'});
+}
+
 function resetInvoice(){
  const bnr=document.getElementById('inv-admin-notes-banner'); if(bnr) bnr.style.display='none';
  const sched=document.getElementById('inv-subs-schedule-card'); if(sched) sched.style.display='none';
@@ -6736,7 +6775,7 @@ function openInvoiceForEdit(id){
   const divEl=document.getElementById('inv-disc-value'); if(divEl) divEl.value=inv.discount_value||0;
   const dboEl=document.getElementById('inv-disc-base-only'); if(dboEl) dboEl.checked=!!inv.discount_base_only;
   const sbEl=document.getElementById('inv-subs-billing'); if(sbEl){sbEl.checked=!!inv.is_subscription_billing;updateSubsBillingDate();}
-  const ntEl=document.getElementById('inv-notes'); if(ntEl) ntEl.value=inv.notes||'';
+  const ntEl=document.getElementById('inv-notes'); if(ntEl) ntEl.value=cleanInvoiceNotes(inv.notes);
   // Advance booking
   const hasAdv=(inv.dogs||[]).some(d=>d.advance);
   const advCb=document.getElementById('inv-is-advance');
@@ -7726,6 +7765,8 @@ function buildInvoiceRecord(){
  const grId=document.getElementById('inv-groomer').value;
  const grManual=document.getElementById('inv-groomer-manual').value.trim();
  const groomerName=grManual||groomers.find(g=>g.id===grId)?.name||'';
+ const existingInv=invEditId?invoices.find(i=>i.id===invEditId):null;
+ const existingPayment=existingInv?invoicePaymentMeta(existingInv):{successful:false,validated:false,successfulAt:'',validatedAt:''};
  const dogsData=invSelectedDogs.map(did=>{
   const d=dogs.find(x=>x.id===did);
   const ds=invDogServices[did]||{services:{}};
@@ -7792,8 +7833,9 @@ function buildInvoiceRecord(){
   discount_amount:t.discAmount,
   discount_base_only:!!document.getElementById('inv-disc-base-only')?.checked,
   total:t.total,
-  status:'unpaid',
-  notes:document.getElementById('inv-notes').value.trim(),
+  // Only bank validation is final payment. Screenshot approval is an intermediate stage.
+  status:existingPayment.validated?'paid':'unpaid',
+  notes:invoiceNotesWithPaymentMeta(document.getElementById('inv-notes').value.trim(),existingPayment),
   is_advance:isAdvanceActive(),
   advance_interval:document.getElementById('inv-interval')?.value||'none',
   advance_first_date:document.getElementById('inv-first-date')?.value||null,
@@ -8716,7 +8758,13 @@ function renderFinancial(){
  const month=document.getElementById('fin-month')?.value||''; // 'YYYY-MM'
  const s=(document.getElementById('fin-search').value||'').toLowerCase();
  let rows=[...invoices];
- if(st) rows=rows.filter(i=>i.status===st);
+ if(st) rows=rows.filter(i=>{
+  const p=invoicePaymentMeta(i);
+  if(st==='awaiting_proof') return !p.successful&&!p.validated;
+  if(st==='payment_successful') return p.successful&&!p.validated;
+  if(st==='validated') return p.validated;
+  return true;
+ });
  if(month) rows=rows.filter(i=>(i.invoice_date||'').startsWith(month));
  if(s) rows=rows.filter(i=>(i.invoice_number||'').toLowerCase().includes(s)||(i.owner_name||'').toLowerCase().includes(s));
  // Item 17: sort by invoice_date desc, then created_at desc
@@ -8726,33 +8774,41 @@ function renderFinancial(){
   return (b.created_at||'').localeCompare(a.created_at||'');
  });
  // Filter-aware totals (item 19 Q5)
- const unpaidFiltered=rows.filter(i=>i.status==='unpaid').reduce((a,b)=>a+(b.total||0),0);
- const paidFiltered=rows.filter(i=>i.status==='paid').reduce((a,b)=>a+(b.total||0),0);
+ const awaitingFiltered=rows.filter(i=>{const p=invoicePaymentMeta(i);return !p.successful&&!p.validated;}).reduce((a,b)=>a+(b.total||0),0);
+ const successfulFiltered=rows.filter(i=>{const p=invoicePaymentMeta(i);return p.successful&&!p.validated;}).reduce((a,b)=>a+(b.total||0),0);
+ const validatedFiltered=rows.filter(i=>invoicePaymentMeta(i).validated).reduce((a,b)=>a+(b.total||0),0);
  const hasFilter=!!(st||month||s);
- const upActive=st==='unpaid'?' active':'';
- const pdActive=st==='paid'?' active':'';
+ const awaitingActive=st==='awaiting_proof'?' active':'';
+ const successfulActive=st==='payment_successful'?' active':'';
+ const validatedActive=st==='validated'?' active':'';
  document.getElementById('fin-totals').innerHTML=
- `<div class="badge bm badge-clickable${upActive}" style="padding:6px 12px;font-size:12px" onclick="toggleFinStatusFilter('unpaid')" title="Click to filter unpaid">Unpaid: ${fmtRp(unpaidFiltered)}</div>`+
- `<div class="badge bs badge-clickable${pdActive}" style="padding:6px 12px;font-size:12px" onclick="toggleFinStatusFilter('paid')" title="Click to filter paid">Paid: ${fmtRp(paidFiltered)}</div>`+
+ `<div class="badge bm badge-clickable${awaitingActive}" style="padding:6px 12px;font-size:12px" onclick="toggleFinStatusFilter('awaiting_proof')" title="Belum diperiksa admin">Awaiting check: ${fmtRp(awaitingFiltered)}</div>`+
+ `<div class="badge badge-clickable${successfulActive}" style="padding:6px 12px;font-size:12px;background:#dbeafe;color:#1d4ed8" onclick="toggleFinStatusFilter('payment_successful')" title="Screenshot sudah disetujui, belum dicocokkan ke rekening">Payment Successful: ${fmtRp(successfulFiltered)}</div>`+
+ `<div class="badge bs badge-clickable${validatedActive}" style="padding:6px 12px;font-size:12px" onclick="toggleFinStatusFilter('validated')" title="Sudah cocok dengan rekening bank">Validated: ${fmtRp(validatedFiltered)}</div>`+
  `<div class="badge bs" style="padding:6px 12px;font-size:12px">${hasFilter?'Filtered':'Total'}: ${rows.length} invoice${rows.length===1?'':'s'}</div>`;
  // Show/hide clear button
  const clearBtn=document.getElementById('fin-clear-btn');
  if(clearBtn) clearBtn.style.display=hasFilter?'inline-flex':'none';
  const tb=document.getElementById('fin-body');
- if(!rows.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted)">No invoices.</td></tr>';return}
+ if(!rows.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--muted)">No invoices.</td></tr>';return}
  tb.innerHTML=rows.map(i=>{
  const dogNames=(i.dogs||[]).map(d=>d.name).join(', ');
- const isPaid=i.status==='paid';
+ const payment=invoicePaymentMeta(i);
+ const isPaid=payment.validated;
  const rowClass=isPaid?'':'fin-row-unpaid';
+ const successfulTime=formatPaymentCheckTime(payment.successfulAt);
+ const validatedTime=formatPaymentCheckTime(payment.validatedAt);
  return `<tr class="${rowClass}">
  <td><span class="id-pill">${esc(i.invoice_number)}</span></td>
  <td>${i.invoice_date?fmtD(i.invoice_date):'-'}</td>
  <td>${i.customer_id?`<strong class="c360-clickable" onclick="openCust360('${i.customer_id}')">${esc(i.owner_name)}</strong>`:`<strong>${esc(i.owner_name)}</strong>`}</td>
  <td style="font-size:12px">${esc(dogNames)}</td>
  <td><strong>${fmtRp(i.total)}</strong></td>
- <td><span class="badge ${isPaid?'bs':'bm'}">${i.status}</span></td>
+ <td><button class="icon-btn ${payment.successful?'view':''}" onclick="setInvoicePaymentSuccessful('${i.id}',${payment.successful?'false':'true'})" title="Admin memeriksa screenshot pembayaran">${payment.successful?'✓ Payment Successful':'Check screenshot'}</button>${successfulTime?`<div style="font-size:10px;color:var(--muted);margin-top:4px">${esc(successfulTime)}</div>`:''}</td>
+ <td>${payment.successful
+  ? `<button class="icon-btn" onclick="setInvoiceValidated('${i.id}',${payment.validated?'false':'true'})" style="${payment.validated?'background:#dcfce7;color:#166534;border-color:#86efac':''}" title="Cocokkan pembayaran dengan rekening bank">${payment.validated?'✓ Validated':'Validate bank'}</button>${validatedTime?`<div style="font-size:10px;color:var(--muted);margin-top:4px">${esc(validatedTime)}</div>`:''}`
+  : '<span style="font-size:11px;color:var(--muted)">Waiting for screenshot check</span>'}</td>
  <td><div class="row-actions">
- <button class="icon-btn ${isPaid?'':'view'}" onclick="toggleInvStatus('${i.id}','${isPaid?'unpaid':'paid'}')">${isPaid?'Mark unpaid':'Mark paid'}</button>
  <button class="icon-btn" onclick="sendSavedInvoiceToWA('${i.id}',event)" style="background:#25d366;color:#fff;border-color:#25d366" title="Kirim ke WhatsApp customer">WA</button>
  ${!isPaid?`<button class="icon-btn" onclick="openInvoiceForEdit('${i.id}')">Edit</button>`:''}
  ${!isPaid?`<button class="icon-btn del" onclick="delInvoice('${i.id}','${esc(i.invoice_number)}')">Del</button>`:''}
@@ -8777,25 +8833,66 @@ function clearFinFilters(){
 }
 
 async function toggleInvStatus(id,newSt){
- const inv=invoices.find(x=>x.id===id);
- await db.from('invoices').update({status:newSt}).eq('id',id);
- if(inv){
-  if(newSt==='paid'){
-   // Build a minimal rec shape from the stored invoice for the subs creator
-   const rec={
-    customer_id:inv.customer_id,
-    invoice_number:inv.invoice_number,
-    invoice_date:inv.invoice_date,
-    is_advance:!!(inv.dogs||[]).some(d=>d.advance),
-    dogs:inv.dogs||[]
-   };
-   await createSubscriptionsFromInvoice(rec);
-  } else if(newSt==='unpaid'){
-   const r=await deleteSubscriptionsForInvoice(inv.invoice_number);
-   if(r.kept>0){
-    alert(`${r.kept} subscription(s) sudah dipakai dan tidak dihapus. ${r.deleted} dihapus.`);
-   }
-  }
+ // Backward-compatible entry point for older buttons/bookmarks.
+ if(newSt==='paid') return setInvoiceValidated(id,true);
+ return setInvoicePaymentSuccessful(id,false);
+}
+
+async function saveInvoicePaymentMeta(inv,meta){
+ const status=meta.validated?'paid':'unpaid';
+ const notes=invoiceNotesWithPaymentMeta(inv.notes,meta);
+ const {error}=await db.from('invoices').update({status,notes,...editStamp()}).eq('id',inv.id);
+ if(error){alert('Gagal menyimpan status pembayaran: '+error.message);return false}
+ Object.assign(inv,{status,notes});
+ return true;
+}
+
+async function setInvoicePaymentSuccessful(id,checked){
+ const inv=invoices.find(x=>x.id===id); if(!inv) return;
+ const current=invoicePaymentMeta(inv);
+ if(checked){
+  if(!confirm('Admin sudah memeriksa screenshot dan pembayaran terlihat berhasil?')) return;
+  current.successful=true;
+  current.successfulAt=current.successfulAt||new Date().toISOString();
+ } else {
+  const warning=current.validated?' Ini juga akan membatalkan status Validated.':'';
+  if(!confirm('Batalkan status Payment Successful?'+warning)) return;
+  current.successful=false; current.validated=false;
+  current.successfulAt=''; current.validatedAt='';
+ }
+ if(!await saveInvoicePaymentMeta(inv,current)) return;
+ if(!checked){
+  const r=await deleteSubscriptionsForInvoice(inv.invoice_number);
+  if(r.kept>0) alert(`${r.kept} subscription(s) sudah dipakai dan tidak dihapus. ${r.deleted} dihapus.`);
+ }
+ await reloadTables('invoices','tokens','subscriptions','visits'); renderFinancial();
+}
+
+async function setInvoiceValidated(id,checked){
+ const inv=invoices.find(x=>x.id===id); if(!inv) return;
+ const current=invoicePaymentMeta(inv);
+ if(checked){
+  if(!current.successful){alert('Periksa screenshot dan tandai Payment Successful terlebih dahulu.');return}
+  if(!confirm('Pembayaran sudah dicocokkan dengan rekening bank dan benar-benar masuk?')) return;
+  current.validated=true;
+  current.validatedAt=current.validatedAt||new Date().toISOString();
+ } else {
+  if(!confirm('Batalkan validasi rekening bank? Invoice akan kembali menjadi belum dibayar.')) return;
+  current.validated=false; current.validatedAt='';
+ }
+ if(!await saveInvoicePaymentMeta(inv,current)) return;
+ if(checked){
+  const rec={
+   customer_id:inv.customer_id,
+   invoice_number:inv.invoice_number,
+   invoice_date:inv.invoice_date,
+   is_advance:!!(inv.dogs||[]).some(d=>d.advance),
+   dogs:inv.dogs||[]
+  };
+  await createSubscriptionsFromInvoice(rec);
+ } else {
+  const r=await deleteSubscriptionsForInvoice(inv.invoice_number);
+  if(r.kept>0) alert(`${r.kept} subscription(s) sudah dipakai dan tidak dihapus. ${r.deleted} dihapus.`);
  }
  await reloadTables('invoices','tokens','subscriptions','visits'); renderFinancial();
 }
@@ -9193,6 +9290,7 @@ function buildInvoicesSheet(){
   const dogs_str=(inv.dogs||[]).map(d=>d.name||'?').join(', ');
   const svcs_str=(inv.dogs||[]).map(d=>(d.services||[]).map(s=>s.name).join('+')).join(' | ');
   const extras=(inv.extra_charges||[]).map(c=>c.label+' Rp'+c.amount).join(', ');
+  const payment=invoicePaymentMeta(inv);
   return {
    'Invoice Number': inv.invoice_number||'',
    'Invoice Date': inv.invoice_date||'',
@@ -9205,9 +9303,13 @@ function buildInvoicesSheet(){
    'Discount Amount': inv.discount_amount||0,
    'Extra Charges': extras,
    'Total': inv.total||0,
-   'Status': inv.status||'',
+   'Payment Successful': payment.successful?'Yes':'No',
+   'Payment Successful At': payment.successfulAt||'',
+   'Validated': payment.validated?'Yes':'No',
+   'Validated At': payment.validatedAt||'',
+   'Status': payment.validated?'paid':'unpaid',
    'Doc Mode': inv.doc_mode||'auto',
-   'Notes': inv.notes||'',
+   'Notes': cleanInvoiceNotes(inv.notes),
    'Created At': inv.created_at?new Date(inv.created_at).toLocaleDateString('id-ID'):'',
   };
  });
