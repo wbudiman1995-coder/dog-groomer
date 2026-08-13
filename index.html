@@ -193,7 +193,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 .ts-slot{height:44px;border-bottom:1px solid var(--border-subtle);cursor:pointer;position:absolute;left:0;right:0;transition:background .1s}
 .ts-slot:hover{background:var(--primary-tint)!important}
 .ts-slot.half-slot{border-bottom:1px dashed var(--border-subtle)}
-.appt-block{position:absolute;left:3px;right:3px;border-radius:7px;padding:4px 8px;font-size:var(--fs-micro);cursor:grab;overflow:hidden;z-index:2;border-left:3px solid;line-height:1.35;box-shadow:0 1px 4px rgba(61,31,13,.1)}
+.appt-block{position:absolute;left:3px;right:3px;border-radius:7px;padding:4px 8px;font-size:var(--fs-micro);cursor:pointer;overflow:hidden;z-index:6;border-left:3px solid;line-height:1.35;box-shadow:0 1px 4px rgba(61,31,13,.1);pointer-events:auto;touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .appt-block.status-confirmed{background:#dbeafe!important;border-left-color:#3b82f6!important;color:#1e40af!important}
 .appt-block.status-done{background:var(--green-lt)!important;border-left-color:var(--green)!important;color:var(--green-dk)!important}
 .appt-block.src-subscription{background:#fef3d3!important;border-left-color:#ca8a04!important;color:#92650e!important}
@@ -403,7 +403,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  .ab{font-size:10px;padding:3px 4px;min-height:38px}
  .ab-svc,.ab-time{font-size:9px}
  /* Make calendar blocks touch-friendly */
- .ab{touch-action:none}
+ .ab{touch-action:manipulation}
  /* Hide some columns on phone when many days shown */
  .cal-mobile-hide{display:none}
 }
@@ -623,7 +623,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="modal" style="max-width:420px">
   <button class="modal-close" onclick="cm('ov-prefs')" title="Close">&#x2715;</button>
   <div class="modal-title">Preferences</div>
-  <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Tersimpan di browser ini saja (per pengguna).</div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Tersimpan ke akun pengguna dan berlaku di desktop maupun mobile.</div>
   <div class="form-grid">
    <div class="fg full"><label>Halaman awal saat buka</label><select id="pref-landing"><option value="dashboard">Dashboard</option><option value="calendar">Calendar</option><option value="invoice">Invoice</option></select></div>
    <div class="fg full"><label>Tampilan calendar default</label><select id="pref-calview"><option value="week">Minggu</option><option value="3day">3 hari</option><option value="day">Hari</option></select></div>
@@ -2412,9 +2412,29 @@ let MEMBERSHIP_TNC=[
 ];
 function cm(id){document.getElementById(id).classList.remove('open')}
 function om(id){document.getElementById(id).classList.add('open')}
-// ===== Per-user preferences (localStorage, no backend) =====
-function getPrefs(){ try{return JSON.parse(localStorage.getItem('hp_prefs')||'{}')}catch(e){return {}} }
-function savePrefs(p){ try{localStorage.setItem('hp_prefs',JSON.stringify(p))}catch(e){} }
+// ===== Per-user preferences =====
+// Auth metadata keeps preferences consistent across desktop/mobile; localStorage
+// remains an instant/offline fallback for older sessions.
+function prefsStorageKey(){ return currentUser?.id?`hp_prefs_${currentUser.id}`:'hp_prefs'; }
+function getLocalPrefs(){
+ try{
+  const scoped=localStorage.getItem(prefsStorageKey());
+  return JSON.parse(scoped||localStorage.getItem('hp_prefs')||'{}');
+ }catch(e){return {}}
+}
+function getPrefs(){
+ const local=getLocalPrefs();
+ const account=currentUser?.user_metadata?.homepaw_preferences||{};
+ return {...local,...account};
+}
+async function savePrefs(p){
+ try{localStorage.setItem(prefsStorageKey(),JSON.stringify(p))}catch(e){}
+ if(currentUser){
+  const {data,error}=await db.auth.updateUser({data:{homepaw_preferences:p}});
+  if(error) throw error;
+  if(data?.user) currentUser=data.user;
+ }
+}
 function openPrefs(){
  const p=getPrefs(), g=id=>document.getElementById(id);
  if(g('pref-landing')) g('pref-landing').value=p.landing||(isOwner()?'dashboard':'calendar');
@@ -2423,16 +2443,16 @@ function openPrefs(){
  if(g('pref-lang')) g('pref-lang').value=p.lang||LANG;
  om('ov-prefs');
 }
-function savePrefsFromModal(){
+async function savePrefsFromModal(){
  const g=id=>document.getElementById(id);
  const p={landing:g('pref-landing')?.value,calView:g('pref-calview')?.value,dashPeriod:g('pref-dashperiod')?.value,lang:g('pref-lang')?.value};
- savePrefs(p);
+ try{await savePrefs(p)}catch(e){alert('Preferensi tersimpan di perangkat ini, tetapi gagal disinkronkan ke akun: '+e.message);return}
  const activeTab=document.querySelector('.nav-tab.active')?.id;
  if(p.calView){ if(activeTab==='tab-calendar') setCalView(p.calView); else calView=p.calView; }
  const dp=g('dash-period'); if(dp&&p.dashPeriod){ dp.value=p.dashPeriod; if(activeTab==='tab-dashboard') renderDashboard(); }
  if(p.lang){ LANG=p.lang; applyI18n(); }
  cm('ov-prefs');
- showToast('Preferensi tersimpan','success');
+ showToast('Preferensi tersimpan untuk desktop & mobile','success');
 }
 function openSearch(){
  om('ov-search');
@@ -2462,6 +2482,9 @@ function runGlobalSearch(){
 }
 function applyPrefsOnBoot(role){
  const p=getPrefs();
+ // One-time migration of older browser-only settings to the signed-in account.
+ const accountPrefs=currentUser?.user_metadata?.homepaw_preferences;
+ if(currentUser&&!accountPrefs&&Object.keys(p).length) savePrefs(p).catch(e=>console.warn('Preference sync:',e.message));
  if(p.lang){ LANG=p.lang; applyI18n(); }
  if(p.calView) calView=p.calView;
  const dp=document.getElementById('dash-period'); if(dp&&p.dashPeriod) dp.value=p.dashPeriod;
@@ -2590,9 +2613,7 @@ function sw(tab) {
  if(tab==='calendar'){
   // Batch O.11 — always jump to today when opening calendar
   const today=new Date(); today.setHours(0,0,0,0);
-  // On phone (<=480px), force Day view; else respect existing view
-  const isPhone480=window.matchMedia&&window.matchMedia('(max-width: 480px)').matches;
-  if(isPhone480) calView='day';
+  // Respect the saved user preference on every screen size, including mobile.
   if(calView==='week') calStart=weekStart(today);
   else { calStart=new Date(today); }
   calDay=iso(today);
@@ -3613,8 +3634,9 @@ function renderCal(){
      const kota=cust.kota||cust.area||'';
      const locFull=[kec,kota].filter(Boolean).join(', ');
      const locShort=kec||kota;
-     html+=`<div class="appt-block${isMSel?' mass-selected':''}${srcClass}"
+     html+=`<div class="appt-block${isMSel?' mass-selected':''}${srcClass}" role="button" tabindex="0" title="Click to edit appointment"
       onclick="event.stopPropagation();openGroupEdit([${groupIds}])"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();openGroupEdit([${groupIds}])}"
       style="top:${top}px;height:${ht}px;background:${bg};border-left:5px solid ${col};color:${textCol};cursor:pointer">
       <span class="ab-time"><span class="appt-status-dot ${statusDot}"></span>${m2t(sm)}${srcBadge}</span>
       <span class="ab-name">${esc(cust.owner||'?')} <span style="font-weight:400;font-size:9px">${group.length} anjing</span></span>
@@ -3631,11 +3653,12 @@ function renderCal(){
      const kota=cust?.kota||cust?.area||'';
      const locFull=[kec,kota].filter(Boolean).join(', ');
      const locShort=kec||kota;
-     html+=`<div class="appt-block${isMSel?' mass-selected':''}${srcClass}"
+     html+=`<div class="appt-block${isMSel?' mass-selected':''}${srcClass}" role="button" tabindex="0" title="Click to edit appointment"
       draggable="true"
       ondragstart="onDragStart(event,'${a.id}')" ondragend="onDragEnd(event)"
       ontouchstart="onApptTouchStart(event,'${a.id}')"
       onclick="event.stopPropagation();handleApptClick(event,'${a.id}')"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();openApptEdit('${a.id}')}"
       style="top:${top}px;height:${ht}px;background:${bg};border-left-color:${col};color:${textCol}">
       <span class="ab-time"><span class="appt-status-dot ${statusDot}"></span>${m2t(sm)}${srcBadge}</span>
       <span class="ab-name">${esc(owner||'?')}</span>
@@ -8799,16 +8822,16 @@ function renderFinancial(){
  const successfulTime=formatPaymentCheckTime(payment.successfulAt);
  const validatedTime=formatPaymentCheckTime(payment.validatedAt);
  return `<tr class="${rowClass}">
- <td><span class="id-pill">${esc(i.invoice_number)}</span></td>
- <td>${i.invoice_date?fmtD(i.invoice_date):'-'}</td>
- <td>${i.customer_id?`<strong class="c360-clickable" onclick="openCust360('${i.customer_id}')">${esc(i.owner_name)}</strong>`:`<strong>${esc(i.owner_name)}</strong>`}</td>
- <td style="font-size:12px">${esc(dogNames)}</td>
- <td><strong>${fmtRp(i.total)}</strong></td>
- <td><button class="icon-btn ${payment.successful?'view':''}" onclick="setInvoicePaymentSuccessful('${i.id}',${payment.successful?'false':'true'})" title="Admin memeriksa screenshot pembayaran">${payment.successful?'✓ Payment Successful':'Check screenshot'}</button>${successfulTime?`<div style="font-size:10px;color:var(--muted);margin-top:4px">${esc(successfulTime)}</div>`:''}</td>
- <td>${payment.successful
+ <td data-label="Invoice"><span class="id-pill">${esc(i.invoice_number)}</span></td>
+ <td data-label="Date">${i.invoice_date?fmtD(i.invoice_date):'-'}</td>
+ <td data-label="Customer">${i.customer_id?`<strong class="c360-clickable" onclick="openCust360('${i.customer_id}')">${esc(i.owner_name)}</strong>`:`<strong>${esc(i.owner_name)}</strong>`}</td>
+ <td data-label="Dogs" style="font-size:12px">${esc(dogNames)}</td>
+ <td data-label="Total"><strong>${fmtRp(i.total)}</strong></td>
+ <td data-label="Screenshot"><button class="icon-btn ${payment.successful?'view':''}" onclick="setInvoicePaymentSuccessful('${i.id}',${payment.successful?'false':'true'})" title="Admin memeriksa screenshot pembayaran">${payment.successful?'✓ Payment Successful':'Check screenshot'}</button>${successfulTime?`<div style="font-size:10px;color:var(--muted);margin-top:4px">${esc(successfulTime)}</div>`:''}</td>
+ <td data-label="Bank check">${payment.successful
   ? `<button class="icon-btn" onclick="setInvoiceValidated('${i.id}',${payment.validated?'false':'true'})" style="${payment.validated?'background:#dcfce7;color:#166534;border-color:#86efac':''}" title="Cocokkan pembayaran dengan rekening bank">${payment.validated?'✓ Validated':'Validate bank'}</button>${validatedTime?`<div style="font-size:10px;color:var(--muted);margin-top:4px">${esc(validatedTime)}</div>`:''}`
   : '<span style="font-size:11px;color:var(--muted)">Waiting for screenshot check</span>'}</td>
- <td><div class="row-actions">
+ <td data-label="Actions"><div class="row-actions">
  <button class="icon-btn" onclick="sendSavedInvoiceToWA('${i.id}',event)" style="background:#25d366;color:#fff;border-color:#25d366" title="Kirim ke WhatsApp customer">WA</button>
  ${!isPaid?`<button class="icon-btn" onclick="openInvoiceForEdit('${i.id}')">Edit</button>`:''}
  ${!isPaid?`<button class="icon-btn del" onclick="delInvoice('${i.id}','${esc(i.invoice_number)}')">Del</button>`:''}
@@ -12730,11 +12753,15 @@ function dashboardInvoicesIn(period){
  return invoices.filter(i=>i.invoice_date&&i.invoice_date>=period.start&&i.invoice_date<=period.end);
 }
 
+// Dashboard recognizes payment after the admin has checked the screenshot.
+// Bank-account validation remains a separate control in Financial.
+function isDashboardPaid(inv){ return invoicePaymentMeta(inv).successful; }
+
 function dashboardComputeMetrics(period){
  const invs=dashboardInvoicesIn(period);
  const totalInv=invs.reduce((s,i)=>s+(i.total||0),0);
- const paidInv=invs.filter(i=>i.status==='paid').reduce((s,i)=>s+(i.total||0),0);
- const unpaidInv=invs.filter(i=>i.status!=='paid').reduce((s,i)=>s+(i.total||0),0);
+ const paidInv=invs.filter(isDashboardPaid).reduce((s,i)=>s+(i.total||0),0);
+ const unpaidInv=invs.filter(i=>!isDashboardPaid(i)).reduce((s,i)=>s+(i.total||0),0);
  // Batch O.1 — include manual-billed visit amounts in revenue
  const manualVisits=visits.filter(v=>v.is_billed_manually&&v.visited_at&&v.visited_at>=period.start&&v.visited_at<=period.end);
  const manualBilledTotal=manualVisits.reduce((s,v)=>s+(v.billed_amount||0),0);
@@ -12751,7 +12778,7 @@ function dashboardComputeMetrics(period){
 
 function dashboardSourceROI(period){
  // For each source: customers with paid invoice in window, total revenue, LTV
- const invs=dashboardInvoicesIn(period).filter(i=>i.status==='paid');
+ const invs=dashboardInvoicesIn(period).filter(isDashboardPaid);
  const bySource={};
  invs.forEach(i=>{
   const c=custs.find(x=>x.id===i.customer_id);
@@ -12791,12 +12818,12 @@ function renderDashboard(){
    ${dc.paid!==false?`<div class="card" style="padding:16px;border-left:4px solid var(--green)">
     <div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Paid</div>
     <div style="font-size:20px;font-weight:700;color:#15803d">${fmtRp(m.paidInv)}</div>
-    <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.invs.filter(i=>i.status==='paid').length} paid</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.invs.filter(isDashboardPaid).length} payment screenshot confirmed</div>
    </div>`:''}
    ${dc.unpaid!==false?`<div class="card" style="padding:16px;border-left:4px solid var(--red-solid)">
     <div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Unpaid</div>
     <div style="font-size:20px;font-weight:700;color:#991b1b">${fmtRp(m.unpaidInv)}</div>
-    <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.invs.filter(i=>i.status!=='paid').length} outstanding</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.invs.filter(i=>!isDashboardPaid(i)).length} outstanding</div>
    </div>`:''}
    ${dc.payroll!==false?`<div class="card" style="padding:16px;border-left:4px solid #ca8a04">
     <div style="font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Payroll est.</div>
