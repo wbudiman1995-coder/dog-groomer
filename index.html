@@ -11910,13 +11910,15 @@ function computeGroomerDogsInCycle(groomerId,cycle){
  const review=[], handled=[], counted=[];
  const countedJobs=new Set();
  const rate=20000;
- // Payroll is earned from completed jobs documented by an after-visit invoice.
- // Package/subscription-sale invoices never enter this calculation.
+ // The after-visit invoice is the completion evidence for payroll. Appointment
+ // status is not required because legacy/admin flows often leave it pending or
+ // confirmed even after the invoice is issued. Package/subscription-sale
+ // invoices never enter this calculation; cancelled appointments stay excluded.
  invoices.forEach(inv=>{
   if(!isAfterVisitInvoice(inv)) return;
   (inv.dogs||[]).forEach(d=>{
    const a=linkedAppointmentForInvoiceDog(inv,d);
-   if(!a||a.status!=='done'||a.groomer_id!==groomerId) return;
+   if(!a||a.status==='cancelled'||a.groomer_id!==groomerId) return;
    const jobDate=a.appt_date||inv.invoice_date;
    if(!jobDate||jobDate<cycle.start||jobDate>cycle.end) return;
    const jobKey=a.id||jobDate+'|'+d.dog_id+'|'+groomerId;
@@ -12012,7 +12014,7 @@ function groomerStylingRevenue(groomerId,cycle){
   if(!isAfterVisitInvoice(inv)) return;
   (inv.dogs||[]).forEach(d=>{
    const a=linkedAppointmentForInvoiceDog(inv,d);
-   if(!a||a.status!=='done'||a.groomer_id!==groomerId||a.appt_date<cycle.start||a.appt_date>cycle.end) return;
+   if(!a||a.status==='cancelled'||a.groomer_id!==groomerId||a.appt_date<cycle.start||a.appt_date>cycle.end) return;
    (d.services||[]).forEach(s=>{ if(s.name==='Styling') rev+=(s.price||0); });
   });
  });
@@ -12854,7 +12856,7 @@ function renderLeaderboard(){
    </table>
   </div>
   <div style="margin-top:14px;font-size:11px;color:var(--muted);padding:8px 12px;background:var(--subtle);border-radius:6px">
-   Metrik: <strong>Dogs</strong> dari appointments status=done (excl. free). <strong>Revenue</strong> = sum grand_total invoice dengan groomer_id match. <strong>Take-home</strong> dari <code>computeGroomerPay</code> (basic + weekly + bonus + per-dog + styling %). Klik "Detail" untuk breakdown per groomer.
+   Metrik: <strong>Dogs</strong> dari job yang punya after-visit invoice (package sale tidak dihitung). <strong>Revenue</strong> = sum grand_total invoice dengan groomer_id match. <strong>Take-home</strong> dari <code>computeGroomerPay</code> (basic + weekly + bonus + per-dog + styling %). Klik "Detail" untuk breakdown per groomer.
   </div>
  `;
 }
