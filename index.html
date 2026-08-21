@@ -5034,12 +5034,20 @@ function renderWizStep4Dogs(){
  const container=document.getElementById('wiz-4-dogs'); if(!container) return;
  const multi=wiz.dogSvcs.length>1;
  const isGroupEdit=wiz.editIds?.length>1;
+ // Session C item 3: also enable add-dog for single-appt edit (wiz.editId set, not just group)
+ const isAnyEdit=!!wiz.editId;
  container.innerHTML=wiz.dogSvcs.map((ds,i)=>{
   const d=dogs.find(x=>x.id===ds.did);
-  const header=multi?`<div style="font-size:11px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding-right:24px">${esc(d?.name||'?')} — ${esc(ds.svc)}</div>`:'';
-  const xBtn=isGroupEdit?`<button onclick="deleteApptFromGroup('${ds.did}')" title="Hapus appointment ini" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(220,38,38,.12);color:#dc2626;font-size:14px;font-weight:700;cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;justify-content:center" onmouseover="this.style.background='rgba(220,38,38,.25)'" onmouseout="this.style.background='rgba(220,38,38,.12)'">&#x2715;</button>`:'';
+  // Session C item 3: mark newly-added dogs (no apptId yet) with a NEW badge
+  const isNewDog=isAnyEdit && !ds.apptId;
+  const newBadge=isNewDog?`<span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:4px;letter-spacing:.5px">NEW</span>`:'';
+  const header=multi?`<div style="font-size:11px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding-right:24px">${esc(d?.name||'?')} — ${esc(ds.svc)}${newBadge}</div>`:'';
+  // For new dogs (not yet saved), the X button should just remove from wiz.dogSvcs (no DB delete)
+  const xBtn=isGroupEdit?(isNewDog
+   ?`<button onclick="removeNewDogFromWiz('${ds.did}')" title="Hapus dari draft (belum tersimpan)" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(59,130,246,.15);color:#1d4ed8;font-size:14px;font-weight:700;cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;justify-content:center">&#x2715;</button>`
+   :`<button onclick="deleteApptFromGroup('${ds.did}')" title="Hapus appointment ini" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(220,38,38,.12);color:#dc2626;font-size:14px;font-weight:700;cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;justify-content:center" onmouseover="this.style.background='rgba(220,38,38,.25)'" onmouseout="this.style.background='rgba(220,38,38,.12)'">&#x2715;</button>`):'';
   const selectedSvcs=(Array.isArray(ds.svcs)&&ds.svcs.length?ds.svcs:parseSvcBase(ds.svc));
-  return `<div style="position:relative;background:var(--subtle);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:.7rem">
+  return `<div style="position:relative;background:${isNewDog?'#eff6ff':'var(--subtle)'};border:1px solid ${isNewDog?'#93c5fd':'var(--border)'};border-radius:6px;padding:10px;margin-bottom:.7rem">
    ${xBtn}
    ${header}
    <div class="fg" style="margin-bottom:6px">
@@ -5068,6 +5076,52 @@ function renderWizStep4Dogs(){
   const noteEl=document.getElementById('appt-note-'+ds.did);
   if(noteEl&&ds.note) noteEl.value=ds.note;
  });
+ // Session C item 3: add "+ Tambah anjing" picker for edit mode
+ // Shows other dogs of the same customer not already in wiz.dogSvcs
+ if(isAnyEdit && wiz.custId){
+  const existingDids=new Set(wiz.dogSvcs.map(x=>x.did));
+  const availDogs=dogs.filter(d=>d.customer_id===wiz.custId && !existingDids.has(d.id));
+  const pickerHTML=availDogs.length
+   ? `<div style="margin-top:.5rem;padding:10px;background:#eff6ff;border:1px dashed #93c5fd;border-radius:6px">
+       <div style="font-size:11px;font-weight:700;color:#1d4ed8;margin-bottom:6px;letter-spacing:.5px">+ TAMBAH ANJING KE APPOINTMENT INI</div>
+       <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${availDogs.map(d=>`<button type="button" onclick="addDogToWizGroup('${d.id}')" style="padding:5px 10px;border:1px solid #93c5fd;background:#fff;color:#1d4ed8;border-radius:4px;font-size:12px;cursor:pointer;font-weight:600">+ ${esc(d.name)} <span style="font-weight:400;color:var(--muted);font-size:10px">(${esc(d.breed||d.size||'')})</span></button>`).join('')}
+       </div>
+       <div style="font-size:10px;color:#1e40af;margin-top:6px;font-style:italic">Anjing baru akan diappend ke slot waktu setelah anjing terakhir. Klik "Update semua" untuk simpan.</div>
+      </div>`
+   : `<div style="margin-top:.5rem;padding:8px 10px;background:var(--subtle);border-radius:5px;font-size:11px;color:var(--muted);text-align:center">Semua anjing customer ini sudah ada di appointment.</div>`;
+  container.insertAdjacentHTML('beforeend',pickerHTML);
+ }
+}
+
+// Session C item 3: add another dog (from same customer) to the wizard group
+function addDogToWizGroup(did){
+ const dog=dogs.find(d=>d.id===did);
+ if(!dog){alert('Anjing tidak ditemukan.');return}
+ // Default new dog to Basic Grooming; user can adjust in step 4
+ wiz.dogSvcs.push({
+  did:did,
+  svc:'Basic Grooming',
+  svcs:['Basic Grooming'],
+  customDur:null,
+  note:'',
+  discType:'',
+  discValue:0,
+  discByCategory:null,
+  apptId:null // marker: new dog, INSERT on save
+ });
+ // Refresh step 4 view + summary
+ renderWizStep4Dogs();
+ if(typeof renderWizSummary==='function') renderWizSummary();
+}
+
+// Session C item 3: remove a newly-added (unsaved) dog from the wizard draft
+function removeNewDogFromWiz(did){
+ const idx=wiz.dogSvcs.findIndex(x=>x.did===did && !x.apptId);
+ if(idx<0) return;
+ wiz.dogSvcs.splice(idx,1);
+ renderWizStep4Dogs();
+ if(typeof renderWizSummary==='function') renderWizSummary();
 }
 
 /* Exact per-service discounts for booking step 4. Legacy appointment/category
@@ -5511,40 +5565,82 @@ async function saveAppt(){
    perfFields.actual_duration_mins=isNaN(ad)?null:Math.max(0,ad);
   }
   const updatePayload={...inserts[0],...perfFields};
-  if(wiz.editIds?.length>1){
-   // Group edit: ALWAYS persist service/note/discount for every dog in the group.
-   // Only date/time/groomer (the actual "reschedule") is gated by rescheduleSet.
-   const reschDogs=wiz.dogSvcs.filter((_,j)=>!wiz.rescheduleSet||wiz.rescheduleSet.has(wiz.editIds[j]));
-   for(let i=0;i<wiz.editIds.length;i++){
-    const eid=wiz.editIds[i];
-    const ds=wiz.dogSvcs[i];
-    if(!ds) continue;
-    const oldGroupRec=appts.find(a=>a.id===eid);
-    const dogNote=document.getElementById('appt-note-'+ds.did)?.value.trim()||null;
-    const dogDiscType=null, dogDiscValue=0;
-    const discByCategory=readWizServiceDiscounts(ds);
-    const upd={
-     service_base:ds.svc,duration_mins:getWizDogDur(ds),
-     appt_note:dogNote,appt_disc_type:dogDiscType||null,appt_disc_value:dogDiscValue,
-     appt_disc_by_category:discByCategory,
-     customer_note:custNote,admin_note:storedAdminNote,session_note:sessionNote,...editStamp()
-    };
-    // Only rescheduled dogs move in time
-    if(!wiz.rescheduleSet||wiz.rescheduleSet.has(eid)){
-     const myIdx=reschDogs.findIndex(d=>d.did===ds.did);
-     const myCursor=wiz.startMins+reschDogs.slice(0,myIdx).reduce((s,d)=>s+getWizDogDur(d),0);
-     upd.appt_date=wiz.date; upd.appt_time=m2t(myCursor)+':00'; upd.groomer_id=wiz.groomerId;
+  if(wiz.editIds?.length>1||wiz.editId){
+   // Session C item 3: separate existing appts (have apptId) from newly-added dogs (apptId=null).
+   // Existing → UPDATE. New → INSERT (appended after existing time slots).
+   const existingDS=wiz.dogSvcs.filter(ds=>ds.apptId);
+   const newDS=wiz.dogSvcs.filter(ds=>!ds.apptId);
+   if(wiz.editIds?.length>1){
+    // Group edit: ALWAYS persist service/note/discount for every dog in the group.
+    // Only date/time/groomer (the actual "reschedule") is gated by rescheduleSet.
+    const reschDogs=existingDS.filter(ds=>!wiz.rescheduleSet||wiz.rescheduleSet.has(ds.apptId));
+    for(const ds of existingDS){
+     const eid=ds.apptId;
+     const oldGroupRec=appts.find(a=>a.id===eid);
+     const dogNote=document.getElementById('appt-note-'+ds.did)?.value.trim()||null;
+     const dogDiscType=null, dogDiscValue=0;
+     const discByCategory=readWizServiceDiscounts(ds);
+     const upd={
+      service_base:ds.svc,duration_mins:getWizDogDur(ds),
+      appt_note:dogNote,appt_disc_type:dogDiscType||null,appt_disc_value:dogDiscValue,
+      appt_disc_by_category:discByCategory,
+      customer_note:custNote,admin_note:storedAdminNote,session_note:sessionNote,...editStamp()
+     };
+     // Only rescheduled dogs move in time
+     if(!wiz.rescheduleSet||wiz.rescheduleSet.has(eid)){
+      const myIdx=reschDogs.findIndex(d=>d.did===ds.did);
+      const myCursor=wiz.startMins+reschDogs.slice(0,myIdx).reduce((s,d)=>s+getWizDogDur(d),0);
+      upd.appt_date=wiz.date; upd.appt_time=m2t(myCursor)+':00'; upd.groomer_id=wiz.groomerId;
+     }
+     const {error:groupUpdateError}=await db.from('appointments').update(upd).eq('id',eid);
+     if(groupUpdateError){alert('Error: '+groupUpdateError.message);return}
+     await logAudit('appointment',eid,'update',{old:oldGroupRec,new:{...oldGroupRec,...upd},label:(dogs.find(d=>d.id===ds.did)?.name||'?')+' '+(upd.appt_date||oldGroupRec?.appt_date||wiz.date)});
     }
-    const {error:groupUpdateError}=await db.from('appointments').update(upd).eq('id',eid);
-    if(groupUpdateError){alert('Error: '+groupUpdateError.message);return}
-    await logAudit('appointment',eid,'update',{old:oldGroupRec,new:{...oldGroupRec,...upd},label:(dogs.find(d=>d.id===ds.did)?.name||'?')+' '+(upd.appt_date||oldGroupRec?.appt_date||wiz.date)});
+   } else {
+    // Single-appt edit path (legacy)
+    await db.from('appointments').update(updatePayload).eq('id',wiz.editId);
+    const dogName=dogs.find(d=>d.id===oldRec?.dog_id)?.name||'?';
+    await logAudit('appointment',wiz.editId,'update',{old:oldRec,new:{...oldRec,...updatePayload},label:dogName+' '+updatePayload.appt_date});
    }
-  } else {
-   await db.from('appointments').update(updatePayload).eq('id',wiz.editId);
-   const dogName=dogs.find(d=>d.id===oldRec?.dog_id)?.name||'?';
-   await logAudit('appointment',wiz.editId,'update',{old:oldRec,new:{...oldRec,...updatePayload},label:dogName+' '+updatePayload.appt_date});
+   // Session C item 3: INSERT rows for newly-added dogs (apptId=null).
+   // Append them at the end of the existing time span, same date/groomer.
+   if(newDS.length){
+    // Compute cursor = start + sum of durations of ALL existing dogs (they occupy the front)
+    let addCursor=wiz.startMins+existingDS.reduce((s,d)=>s+getWizDogDur(d),0);
+    const newInserts=newDS.map(ds=>{
+     const dur=getWizDogDur(ds);
+     const dogNote=document.getElementById('appt-note-'+ds.did)?.value.trim()||'';
+     const discByCategory=readWizServiceDiscounts(ds);
+     // Session source: same rules as fresh insert
+     let sessSrc='normal';
+     const isThisDogFree=wiz.freeDogs?wiz.freeDogs.has(ds.did):!!wiz.isFree;
+     if(isThisDogFree) sessSrc='free';
+     else if(wiz.tokenId) sessSrc='advance';
+     else {
+      const hasActiveSubs=subscriptions.some(s=>s.dog_id===ds.did&&s.status==='active');
+      if(hasActiveSubs) sessSrc='subscription';
+     }
+     const row={
+      dog_id:ds.did,groomer_id:wiz.groomerId,appt_date:wiz.date,
+      appt_time:m2t(addCursor)+':00',service_base:ds.svc,duration_mins:dur,
+      appt_note:dogNote,customer_note:custNote,admin_note:storedAdminNote,session_note:sessionNote,
+      appt_disc_type:null,appt_disc_value:0,appt_disc_by_category:discByCategory,
+      token_id:wiz.tokenId||null,token_used:false,session_source:sessSrc,
+      ...editStamp()
+     };
+     addCursor+=dur;
+     return row;
+    });
+    const {data:newIns,error:newErr}=await db.from('appointments').insert(newInserts).select();
+    if(newErr){alert('Error insert anjing baru: '+newErr.message);return}
+    for(const a of (newIns||[])){
+     const dogName=dogs.find(d=>d.id===a.dog_id)?.name||'?';
+     await logAudit('appointment',a.id,'create',{new:a,label:dogName+' (added to group) '+a.appt_date});
+     appts.push(a); // local patch so calendar reflects immediately
+    }
+   }
   }
- } else {
+  } else {
   const {data,error}=await db.from('appointments').insert(inserts).select();
   if(error){alert('Error: '+error.message);return}
   insertedAppts=data;
@@ -7754,10 +7850,27 @@ async function createSubsScheduleAppointments(){
  }
 
  if(!toCreate.length){alert('Tidak ada jadwal baru yang bisa dibuat.\n\nSemua slot bentrok atau tidak ada groomer available untuk kombinasi hari/jam yang dipilih.\n\nCoba: pilih groomer spesifik di kolom "Groomer" tiap anjing, atau ubah hari/jam, atau cek working_days groomer di tab Groomers.');return}
- const {error}=await db.from('appointments').insert(toCreate);
- if(error){alert('Error: '+error.message);return}
- showToast(`${toCreate.length} jadwal berhasil dibuat di kalender!`,'success');
+ // Session C item 5 UX: return inserted rows so we can (a) verify count matches, (b) surface the dates back to the user.
+ const {data:insertedRows,error}=await db.from('appointments').insert(toCreate).select();
+ if(error){alert('Gagal insert ke DB:\n\n'+error.message+'\n\nCoba refresh & ulangi. Kalau tetap error, screenshot pesan ini.');return}
  await reloadTables('appointments');
+ // Build human-readable summary with dates, groomer names, and switch-to-calendar option
+ const dayNamesID=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+ const summary=toCreate.map(a=>{
+  const d=new Date(a.appt_date+'T00:00:00');
+  const dayLbl=dayNamesID[d.getDay()];
+  const dateLbl=d.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
+  const grName=groomers.find(g=>g.id===a.groomer_id)?.name||'?';
+  const dogName=dogs.find(x=>x.id===a.dog_id)?.name||'?';
+  return `• ${dayLbl} ${dateLbl} ${a.appt_time.slice(0,5)} — ${dogName} (${grName})`;
+ }).join('\n');
+ const firstDate=toCreate[0]?.appt_date;
+ const goCal=confirm(`${insertedRows?.length||toCreate.length} jadwal berhasil dibuat:\n\n${summary}\n\nBuka kalender ke tanggal pertama (${firstDate})?`);
+ if(goCal){
+  if(typeof calStart!=='undefined'){calStart=new Date(firstDate+'T00:00:00');if(typeof weekStart==='function'&&typeof calView!=='undefined'&&calView==='week') calStart=weekStart(calStart);}
+  if(typeof sw==='function') sw('calendar');
+  if(typeof renderCal==='function') renderCal();
+ }
 }
 
 // Batch O.9 — invoice date changed → auto-update due_date field per current rules
@@ -9132,6 +9245,14 @@ async function sendInvoiceViaWA(rec, cust, sourceButton, preOpenedWin){
   try{preOpenedWin&&preOpenedWin.close()}catch(_){}
   return;
  }
+ // Session C fix v2: sanity-check number format BEFORE any async work
+ const waTarget=waLink(cust.wa);
+ if(!waTarget){
+  alert('Nomor WhatsApp customer tidak valid: '+cust.wa+'\n\nCek profil customer.');
+  try{preOpenedWin&&preOpenedWin.close()}catch(_){}
+  return;
+ }
+ const isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
  const origText=sourceButton?sourceButton.textContent:null;
  if(sourceButton){ sourceButton.textContent='⏳ Menyiapkan PDF...'; sourceButton.disabled=true; }
  try {
@@ -9139,20 +9260,9 @@ async function sendInvoiceViaWA(rec, cust, sourceButton, preOpenedWin){
   const ownerPrefix=(cust.owner||'').replace(/[^A-Za-z]/g,'').slice(0,3);
   const filename=`${rec.invoice_number}${ownerPrefix?'_'+ownerPrefix:''}.pdf`;
   const message=buildInvoiceWAMessage(rec, cust);
-  // Try Web Share API first (mobile — native PDF attachment)
-  const file=new File([blob], filename, {type:'application/pdf'});
-  if(navigator.canShare && navigator.canShare({files:[file]}) && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)){
-   // Web Share doesn't use the pre-opened window
-   try{preOpenedWin&&preOpenedWin.close()}catch(_){}
-   try {
-    await navigator.share({files:[file], text:message});
-    return;
-   } catch(shareErr){
-    if(shareErr.name==='AbortError') return;
-    console.warn('Web Share failed, falling back to URL:', shareErr);
-   }
-  }
-  // Desktop fallback: upload PDF to Supabase Storage, share URL in WA message
+  // Session C fix v2: skip Web Share API entirely. It opens a generic share sheet without
+  // pre-selecting the customer — user has to manually pick the contact. We always want the
+  // wa.me link so WA opens DIRECTLY on the customer's chat with the message pre-filled.
   if(sourceButton) sourceButton.textContent='⏳ Upload PDF...';
   const path=`invoices/${filename}`;
   const {error:upErr}=await db.storage.from('grooming-photos').upload(path, blob, {upsert:true, contentType:'application/pdf'});
@@ -9160,10 +9270,13 @@ async function sendInvoiceViaWA(rec, cust, sourceButton, preOpenedWin){
   const {data:urlData}=db.storage.from('grooming-photos').getPublicUrl(path);
   const pdfUrl=urlData.publicUrl;
   const fullMsg=message+'\n\n📎 Invoice PDF: '+pdfUrl;
-  const waUrl=waLink(cust.wa)+'?text='+encodeURIComponent(fullMsg);
-  // Session C: prefer navigating the pre-opened window (bypasses popup blockers).
-  // Fallback to window.open if pre-open failed or was closed.
-  if(preOpenedWin && !preOpenedWin.closed){
+  const waUrl=waTarget+'?text='+encodeURIComponent(fullMsg);
+  // Session C fix v2: mobile → navigate CURRENT window (universal link opens WA app on customer chat).
+  // Desktop → navigate the pre-opened tab (bypasses popup blocker; leaves user's work tab alone).
+  if(isMobile){
+   try{preOpenedWin&&preOpenedWin.close()}catch(_){}
+   window.location.href=waUrl;
+  } else if(preOpenedWin && !preOpenedWin.closed){
    preOpenedWin.location.href=waUrl;
   } else {
    window.open(waUrl, '_blank');
@@ -9179,9 +9292,11 @@ async function sendInvoiceViaWA(rec, cust, sourceButton, preOpenedWin){
 
 // From invoice form (current unsaved or just-built record)
 function sendCurrentInvoiceToWA(ev){
- // Session C: open window SYNCHRONOUSLY on user click to bypass popup blocker.
- // Async work happens after; we navigate this window once URL is ready.
- const preOpenedWin=window.open('about:blank','_blank');
+ // Session C fix v2: on mobile, skip preopen (mobile Safari/Chrome often ignore about:blank popups).
+ // Current-window navigation triggers the universal-link handler → opens WA app on customer's chat.
+ // On desktop, preopen a tab to bypass popup blocker.
+ const isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+ const preOpenedWin=isMobile?null:window.open('about:blank','_blank');
  const rec=buildInvoiceRecord();
  if(!rec){try{preOpenedWin&&preOpenedWin.close()}catch(_){} return}
  const cust=custs.find(c=>c.id===rec.customer_id)||{};
@@ -9190,8 +9305,9 @@ function sendCurrentInvoiceToWA(ev){
 
 // From Financial tab invoice list (saved invoice)
 function sendSavedInvoiceToWA(invId, ev){
- // Session C: pre-open window synchronously (see comment in sendCurrentInvoiceToWA)
- const preOpenedWin=window.open('about:blank','_blank');
+ // Session C fix v2: same mobile-vs-desktop split as sendCurrentInvoiceToWA
+ const isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+ const preOpenedWin=isMobile?null:window.open('about:blank','_blank');
  const inv=invoices.find(i=>i.id===invId);
  if(!inv){try{preOpenedWin&&preOpenedWin.close()}catch(_){} alert('Invoice tidak ditemukan');return}
  const cust=custs.find(c=>c.id===inv.customer_id)||{owner:inv.owner_name};
