@@ -9383,9 +9383,35 @@ async function sendInvoiceViaWA(rec, cust, sourceButton, preOpenedWin){
   const ownerPrefix=(cust.owner||'').replace(/[^A-Za-z]/g,'').slice(0,3);
   const filename=`${rec.invoice_number}${ownerPrefix?'_'+ownerPrefix:''}.pdf`;
   const message=buildInvoiceWAMessage(rec, cust);
-  // Session C fix v2: skip Web Share API entirely. It opens a generic share sheet without
-  // pre-selecting the customer — user has to manually pick the contact. We always want the
-  // wa.me link so WA opens DIRECTLY on the customer's chat with the message pre-filled.
+
+  // MOBILE: attach the REAL PDF file via Web Share API. Opens the native share sheet where the
+  // user picks WhatsApp → customer chat, and the actual PDF is attached (not a link).
+  if(isMobile){
+   const file=new File([blob], filename, {type:'application/pdf'});
+   if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{preOpenedWin&&preOpenedWin.close()}catch(_){}
+    try{
+     await navigator.share({files:[file], text:message});
+     return; // shared successfully (or user cancelled — either way we're done)
+    }catch(shareErr){
+     if(shareErr.name==='AbortError') return; // user cancelled the share sheet
+     console.warn('Web Share failed, falling back to link:',shareErr);
+     // fall through to link method below
+    }
+   }
+   // Fallback (older phone without Web Share): upload + send link
+   if(sourceButton) sourceButton.textContent='⏳ Upload PDF...';
+   const pathM=`invoices/${filename}`;
+   const {error:upErrM}=await db.storage.from('grooming-photos').upload(pathM, blob, {upsert:true, contentType:'application/pdf'});
+   if(upErrM){try{preOpenedWin&&preOpenedWin.close()}catch(_){} throw new Error('Upload error: '+upErrM.message);}
+   const {data:urlDataM}=db.storage.from('grooming-photos').getPublicUrl(pathM);
+   const fullMsgM=message+'\n\n\uD83D\uDCCE Invoice PDF: '+urlDataM.publicUrl;
+   const waNumM=normalizeWA(cust.wa);
+   window.location.href='https://api.whatsapp.com/send?phone='+waNumM+'&text='+encodeURIComponent(fullMsgM);
+   return;
+  }
+
+  // DESKTOP: upload PDF to storage and open customer chat directly with PDF link in the message.
   if(sourceButton) sourceButton.textContent='⏳ Upload PDF...';
   const path=`invoices/${filename}`;
   const {error:upErr}=await db.storage.from('grooming-photos').upload(path, blob, {upsert:true, contentType:'application/pdf'});
@@ -9393,14 +9419,9 @@ async function sendInvoiceViaWA(rec, cust, sourceButton, preOpenedWin){
   const {data:urlData}=db.storage.from('grooming-photos').getPublicUrl(path);
   const pdfUrl=urlData.publicUrl;
   const fullMsg=message+'\n\n\uD83D\uDCCE Invoice PDF: '+pdfUrl;
-  // Emoji fix: use api.whatsapp.com/send (handles long emoji-rich text reliably) instead of
-  // wa.me/<num>?text= (which mangles multi-byte emoji in long messages on iOS + desktop).
   const waNum=normalizeWA(cust.wa);
   const waUrl='https://api.whatsapp.com/send?phone='+waNum+'&text='+encodeURIComponent(fullMsg);
-  if(isMobile){
-   try{preOpenedWin&&preOpenedWin.close()}catch(_){}
-   window.location.href=waUrl;
-  } else if(preOpenedWin && !preOpenedWin.closed){
+  if(preOpenedWin && !preOpenedWin.closed){
    preOpenedWin.location.href=waUrl;
   } else {
    window.open(waUrl, '_blank');
