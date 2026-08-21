@@ -3875,29 +3875,6 @@ function handleApptClick(event,apptId){
   updateMassToolbar();
   renderCal();
  } else {
-  // Session C issue 3: always bind same-owner dogs together. If this appt is part of a
-  // consecutive same-customer group on that day, open the whole group for editing.
-  const a=appts.find(x=>x.id===apptId);
-  if(a){
-   const dog=dogs.find(d=>d.id===a.dog_id);
-   const custId=dog?.customer_id;
-   if(custId){
-    const sameDayCustAppts=appts.filter(x=>{
-     if(x.appt_date!==a.appt_date||x.status==='cancelled') return false;
-     const xd=dogs.find(d=>d.id===x.dog_id);
-     return xd?.customer_id===custId;
-    });
-    if(sameDayCustAppts.length>1){
-     // Find the consecutive group that contains this appt
-     const groups=groupConsecutiveAppts(sameDayCustAppts);
-     const myGroup=groups.find(g=>g.some(x=>x.id===apptId));
-     if(myGroup&&myGroup.length>1){
-      openGroupEdit(myGroup.map(x=>x.id));
-      return;
-     }
-    }
-   }
-  }
   openApptEdit(apptId);
  }
 }
@@ -5065,10 +5042,13 @@ function renderWizStep4Dogs(){
   const isNewDog=isAnyEdit && !ds.apptId;
   const newBadge=isNewDog?`<span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:4px;letter-spacing:.5px">NEW</span>`:'';
   const header=multi?`<div style="font-size:11px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding-right:24px">${esc(d?.name||'?')} — ${esc(ds.svc)}${newBadge}</div>`:'';
-  // For new dogs (not yet saved), the X button should just remove from wiz.dogSvcs (no DB delete)
-  const xBtn=isGroupEdit?(isNewDog
+  // For new dogs (not yet saved), the X button removes from draft (no DB delete) — show in both single & group edit.
+  // For existing dogs, the delete X (DB delete) only shows in group edit.
+  const xBtn=isNewDog
    ?`<button onclick="removeNewDogFromWiz('${ds.did}')" title="Hapus dari draft (belum tersimpan)" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(59,130,246,.15);color:#1d4ed8;font-size:14px;font-weight:700;cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;justify-content:center">&#x2715;</button>`
-   :`<button onclick="deleteApptFromGroup('${ds.did}')" title="Hapus appointment ini" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(220,38,38,.12);color:#dc2626;font-size:14px;font-weight:700;cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;justify-content:center" onmouseover="this.style.background='rgba(220,38,38,.25)'" onmouseout="this.style.background='rgba(220,38,38,.12)'">&#x2715;</button>`):'';
+   :(isGroupEdit
+    ?`<button onclick="deleteApptFromGroup('${ds.did}')" title="Hapus appointment ini" style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(220,38,38,.12);color:#dc2626;font-size:14px;font-weight:700;cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;justify-content:center" onmouseover="this.style.background='rgba(220,38,38,.25)'" onmouseout="this.style.background='rgba(220,38,38,.12)'">&#x2715;</button>`
+    :'');
   const selectedSvcs=(Array.isArray(ds.svcs)&&ds.svcs.length?ds.svcs:parseSvcBase(ds.svc));
   return `<div style="position:relative;background:${isNewDog?'#eff6ff':'var(--subtle)'};border:1px solid ${isNewDog?'#93c5fd':'var(--border)'};border-radius:6px;padding:10px;margin-bottom:.7rem">
    ${xBtn}
@@ -5239,7 +5219,7 @@ function openAppt(dateISO,groomerId,startMins){
 function openApptEdit(id){
  const a=appts.find(x=>x.id===id);if(!a)return;
  const d=dogs.find(x=>x.id===a.dog_id);
- wiz={step:4,custId:d?.customer_id||null,dogSvcs:d?[{did:d.id,svc:a.service_base||'Basic Grooming',svcs:parseSvcBase(a.service_base),customDur:null}]:[],groomerId:a.groomer_id,date:a.appt_date,startMins:t2m(a.appt_time||'09:00'),editId:id,rescheduleSet:new Set([id]),slotConflict:false,tokenId:a.token_id||null,isFree:a.session_source==='free',freeDogs:a.session_source==='free'&&d?new Set([d.id]):new Set()};
+ wiz={step:4,custId:d?.customer_id||null,dogSvcs:d?[{did:d.id,svc:a.service_base||'Basic Grooming',svcs:parseSvcBase(a.service_base),customDur:null,apptId:id}]:[],groomerId:a.groomer_id,date:a.appt_date,startMins:t2m(a.appt_time||'09:00'),editId:id,rescheduleSet:new Set([id]),slotConflict:false,tokenId:a.token_id||null,isFree:a.session_source==='free',freeDogs:a.session_source==='free'&&d?new Set([d.id]):new Set()};
  document.getElementById('appt-title').textContent='Edit appointment';
  document.getElementById('appt-save-btn').textContent='Update';
  const delBtnSingle=document.getElementById('appt-del-btn');
@@ -5382,8 +5362,32 @@ function openGroupEdit(ids){
  document.getElementById('appt-save-btn').textContent='Update semua';
  const delBtn=document.getElementById('appt-del-btn');
  if(delBtn){delBtn.style.display='inline-flex';delBtn.textContent='Hapus semua';}
- const confirmBtn=document.getElementById('appt-confirm-btn'); if(confirmBtn) confirmBtn.style.display='none';
- const invBtn=document.getElementById('appt-invoice-btn'); if(invBtn) invBtn.style.display='none';
+ // Session C QC: keep confirm + invoice available in group edit (auto-grouping must not remove these paths).
+ const confirmBtn=document.getElementById('appt-confirm-btn');
+ if(confirmBtn){
+  const anyPending=apptList.some(x=>x.status==='pending');
+  if(anyPending){confirmBtn.style.display='inline-flex';confirmBtn.textContent='Mark confirmed';}
+  else{confirmBtn.style.display='none';}
+ }
+ const invBtn=document.getElementById('appt-invoice-btn');
+ if(invBtn){
+  const dogIdsGrp=apptList.map(x=>x.dog_id);
+  const anyDone=apptList.some(x=>x.status!=='pending');
+  const linked=firstDog&&firstDog.customer_id;
+  if(!linked||!anyDone){
+   invBtn.style.display='none';
+  } else {
+   const existing=findInvoiceForDogsOnDate(dogIdsGrp,firstA.appt_date);
+   invBtn.style.display='inline-flex';
+   if(existing){
+    invBtn.textContent=`Open invoice ${existing.invoice_number}`;
+    invBtn.setAttribute('data-existing-inv',existing.id);
+   } else {
+    invBtn.textContent='+ Create invoice';
+    invBtn.removeAttribute('data-existing-inv');
+   }
+  }
+ }
  const cnElE=document.getElementById('appt-customer-note'); if(cnElE) cnElE.value=firstA.customer_note||'';
  const anElE=document.getElementById('appt-admin-note'); if(anElE) anElE.value=cleanApptAdminNote(firstA.admin_note||'');
  const tfElE=document.getElementById('appt-transport-fee');
@@ -5428,16 +5432,22 @@ function invoiceFromApptModal(){
 
 async function confirmApptFromModal(){
  if(!wiz.editId)return;
- const a=appts.find(x=>x.id===wiz.editId);if(!a)return;
- if(a.status!=='pending') return; // confirmed→done is auto-handled by autoLogPastAppointments
- const oldRec={...a};
- const confirmPayload={status:'confirmed',...editStamp()};
- const {error}=await db.from('appointments').update(confirmPayload).eq('id',wiz.editId);
- if(error){alert('Error: '+error.message);return}
- const dogName=dogs.find(d=>d.id===a.dog_id)?.name||'?';
- await logAudit('appointment',wiz.editId,'update',{old:oldRec,new:{...oldRec,...confirmPayload},label:dogName+' '+a.appt_date});
- const cIdx=appts.findIndex(a=>a.id===wiz.editId);
- if(cIdx>=0) Object.assign(appts[cIdx],confirmPayload);
+ // Session C QC: in group edit, confirm ALL pending appts in the group
+ const targetIds=(wiz.editIds&&wiz.editIds.length>1)?wiz.editIds:[wiz.editId];
+ let confirmedAny=false;
+ for(const eid of targetIds){
+  const a=appts.find(x=>x.id===eid);if(!a)continue;
+  if(a.status!=='pending') continue;
+  const oldRec={...a};
+  const confirmPayload={status:'confirmed',...editStamp()};
+  const {error}=await db.from('appointments').update(confirmPayload).eq('id',eid);
+  if(error){alert('Error: '+error.message);return}
+  const dogName=dogs.find(d=>d.id===a.dog_id)?.name||'?';
+  await logAudit('appointment',eid,'update',{old:oldRec,new:{...oldRec,...confirmPayload},label:dogName+' '+a.appt_date});
+  const cIdx=appts.findIndex(x=>x.id===eid);
+  if(cIdx>=0) Object.assign(appts[cIdx],confirmPayload);
+  confirmedAny=true;
+ }
  cm('ov-appt'); renderCal();
 }
 
@@ -9331,15 +9341,13 @@ async function sendInvoiceViaWA(rec, cust, sourceButton, preOpenedWin){
   const pdfUrl=urlData.publicUrl;
   const fullMsg=message+'\n\n📎 Invoice PDF: '+pdfUrl;
   const waUrl=waTarget+'?text='+encodeURIComponent(fullMsg);
-  // Session C fix v3: mobile → click a synthetic anchor (preserves emoji in the URL on iOS,
-  // where window.location.href assignment can corrupt surrogate-pair emoji). Desktop → pre-opened tab.
+  // Session C fix v4: mobile → window.location.href. This reliably opens WhatsApp even after the
+  // async PDF upload (an <a>.click() after await is NOT a user gesture and gets popup-blocked).
+  // encodeURIComponent already preserves emoji surrogate pairs correctly in the query string.
+  // Desktop → navigate the pre-opened tab (opened synchronously on click, bypasses popup blocker).
   if(isMobile){
    try{preOpenedWin&&preOpenedWin.close()}catch(_){}
-   const a=document.createElement('a');
-   a.href=waUrl; a.target='_blank'; a.rel='noopener';
-   document.body.appendChild(a);
-   a.click();
-   setTimeout(()=>{try{document.body.removeChild(a)}catch(_){}},0);
+   window.location.href=waUrl;
   } else if(preOpenedWin && !preOpenedWin.closed){
    preOpenedWin.location.href=waUrl;
   } else {
