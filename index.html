@@ -903,7 +903,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  </div>
  <div class="fg"><label>Or type manually</label><input id="inv-groomer-manual" placeholder="Nama groomer" oninput="renderInvoicePreview()"/></div>
  <div class="fg"><label>Tanggal invoice</label><input type="date" id="inv-date" onchange="onInvDateChange()"/></div>
- <div class="fg"><label>Tanggal jatuh tempo <span style="font-size:10px;color:var(--muted);font-weight:400">(optional, editable — auto-fill dari tanggal invoice; ubah manual bila perlu)</span></label><input type="date" id="inv-due-date" oninput="_invDueDateEdited=true;renderInvoicePreview();updateSubsBillingDate();" onchange="_invDueDateEdited=true;renderInvoicePreview();updateSubsBillingDate();"/></div>
+ <div class="fg"><label>Tanggal jatuh tempo <span style="font-size:10px;color:var(--muted);font-weight:400">(auto-fill dari tanggal invoice · edit manual bila perlu)</span></label><input type="date" id="inv-due-date" onchange="onInvDueDateManualEdit()"/></div>
  <div class="fg"><label>Jenis dokumen <span style="font-size:10px;color:var(--muted);font-weight:400">(auto = sistem pilih sendiri)</span></label>
   <select id="inv-doc-mode" onchange="onDocModeChange()">
    <option value="auto">Auto (deteksi otomatis)</option>
@@ -6996,9 +6996,12 @@ function loadInvFromToday(){
   const dogNames=cm_.appts.map(a=>a._dog.name).join(', ');
   const g=groomers.find(x=>x.id===cm_.groomer_id);
   const times=cm_.appts.map(a=>(a.appt_time||'').slice(0,5)).join(', ');
-  // Batch I: check if any of these dogs already invoiced today
+  // Session C item 6: check for existing invoice of the CURRENT mode's kind.
+  // In package mode, only lock out customers with an existing package invoice for today
+  // — those who have an after-visit invoice should still be reachable for a package purchase.
   const dogIds=cm_.appts.map(a=>a._dog.id);
-  const existingInv=findInvoiceForDogsOnDate(dogIds,todayStr);
+  const currentKind=(typeof INV_MODE!=='undefined' && INV_MODE==='package')?'package_sale':'after_visit';
+  const existingInv=findInvoiceForDogsOnDate(dogIds,todayStr,currentKind);
   const locked=!!existingInv;
   const hoverStyle=locked?'':"onmouseover=\"this.style.background='#dcfce7'\" onmouseout=\"this.style.background=''\"";
   const clickHandler=locked?'':`onclick="applyInvCustomer('${cid}','${todayStr}')"`;
@@ -7025,6 +7028,9 @@ function loadInvFromToday(){
 function applyInvCustomer(cid,dateStr){
  cm('ov-inv-appt-picker');
  const c=custs.find(x=>x.id===cid);if(!c)return;
+ // Session C item 6: preserve current mode so loading today's schedule while in
+ // package/renewal mode doesn't flip user back to after-visit mode.
+ const savedMode=(typeof INV_MODE!=='undefined')?INV_MODE:'visit';
  // Get ALL appointments for this customer on this date
  const custAppts=appts.filter(a=>{
   if(a.appt_date!==dateStr)return false;
@@ -7033,12 +7039,17 @@ function applyInvCustomer(cid,dateStr){
  }).sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
  resetInvoice();
  initInvoiceTab();
+ // Restore the mode the user was in BEFORE the reset
+ if(typeof setInvMode==='function' && savedMode==='package') setInvMode('package');
  // Carry the booking's optional transport fee into the invoice once, even
  // when several pets share the same customer/date and repeat the metadata.
- const transportFee=Math.max(0,...custAppts.map(getApptTransportFee));
- if(transportFee>0){
-  invExtraCharges=[{label:'Transport Fee',amount:transportFee}];
-  renderExtraCharges();
+ // Skip transport-fee carry when in package mode (paket invoice is for package only, no visit charges)
+ if(savedMode!=='package'){
+  const transportFee=Math.max(0,...custAppts.map(getApptTransportFee));
+  if(transportFee>0){
+   invExtraCharges=[{label:'Transport Fee',amount:transportFee}];
+   renderExtraCharges();
+  }
  }
  const custSel=document.getElementById('inv-customer');
  custSel.value=cid;
@@ -7518,6 +7529,17 @@ function renderSubsSchedulePicker(){
  card.style.display='block';
  const DAYS=['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
  const DAY_VALS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+ // Session C item 5: snapshot user's existing per-dog picks BEFORE rebuilding innerHTML,
+ // then restore after — previously, any change to services/other fields wiped these selections.
+ const existingPicks={};
+ invSelectedDogs.forEach(did=>{
+  existingPicks[did]={
+   day:document.getElementById('sched-day-'+did)?.value,
+   time:document.getElementById('sched-time-'+did)?.value,
+   start:document.getElementById('sched-start-'+did)?.value,
+   groomer:document.getElementById('sched-groomer-'+did)?.value
+  };
+ });
  listEl.innerHTML=invSelectedDogs.map(did=>{
   const dog=dogs.find(d=>d.id===did);
   const ds=invDogServices[did];
@@ -7552,6 +7574,14 @@ function renderSubsSchedulePicker(){
    </div>
   </div>`;
  }).join('');
+ // Session C item 5: restore user's picks after re-render (only for values user actually set)
+ invSelectedDogs.forEach(did=>{
+  const p=existingPicks[did]; if(!p) return;
+  const dayEl=document.getElementById('sched-day-'+did); if(dayEl&&p.day) dayEl.value=p.day;
+  const timeEl=document.getElementById('sched-time-'+did); if(timeEl&&p.time) timeEl.value=p.time;
+  const startEl=document.getElementById('sched-start-'+did); if(startEl&&p.start) startEl.value=p.start;
+  const grEl=document.getElementById('sched-groomer-'+did); if(grEl&&p.groomer) grEl.value=p.groomer;
+ });
 }
 
 // Pick a groomer for a given date/time slot: fewest appts that day, not blocked,
@@ -7648,7 +7678,7 @@ async function createSubsScheduleAppointments(){
   if(!proceed) return;
  }
 
- if(!toCreate.length){alert('Tidak ada jadwal baru yang bisa dibuat (semua konflik).');return}
+ if(!toCreate.length){alert('Tidak ada jadwal baru yang bisa dibuat.\n\nSemua slot bentrok atau tidak ada groomer available untuk kombinasi hari/jam yang dipilih.\n\nCoba: pilih groomer spesifik di kolom "Groomer" tiap anjing, atau ubah hari/jam, atau cek working_days groomer di tab Groomers.');return}
  const {error}=await db.from('appointments').insert(toCreate);
  if(error){alert('Error: '+error.message);return}
  showToast(`${toCreate.length} jadwal berhasil dibuat di kalender!`,'success');
@@ -7667,6 +7697,16 @@ function onInvDateChange(){
 //  - Subs billing checked, invoice day <= 5: due = 5th of same month
 //  - Subs billing checked, invoice day > 5: clear due date (admin sets manually)
 //  - Otherwise: due = invoice + 1 day (default)
+// Session C item 8B (fix): manual due-date edit handler. onchange only (never oninput —
+// oninput fires spuriously on picker open). If user clears the field, allow auto-fill to resume.
+function onInvDueDateManualEdit(){
+ const el=document.getElementById('inv-due-date');
+ const val=el?.value||'';
+ window._invDueDateEdited=!!val; // true if they picked a date, false if they cleared
+ renderInvoicePreview();
+ updateSubsBillingDate();
+}
+
 function updateInvDueDate(){
  const invDateEl=document.getElementById('inv-date');
  const dueDateEl=document.getElementById('inv-due-date');
@@ -8053,9 +8093,9 @@ function buildInvoiceRecord(){
   else if(types.length>1) invSubsType='mixed';
  }
  const custCode=invSelectedCust.customer_code||'CUST-000';
- // Gap-skipping numbering (item 16):
- // Find the highest existing trailing number for this customer_code and add 1.
- // If we're editing, keep the existing invoice_number.
+ // Session C item 4: Package invoices get "-subs{M}" suffix where M = renewal count.
+ // Base numbering (N) is shared across both invoice kinds and ignores any "-subs{M}" tail.
+ const isPackageMode_forNum=(typeof INV_MODE!=='undefined' && INV_MODE==='package');
  let invNum;
  if(invEditId){
   const ex=invoices.find(i=>i.id===invEditId);
@@ -8063,10 +8103,16 @@ function buildInvoiceRecord(){
  } else {
   const custInvNums=invoices
    .filter(i=>i.customer_code===invSelectedCust.customer_code&&typeof i.invoice_number==='string')
-   .map(i=>{const m=i.invoice_number.match(/-(\d+)$/);return m?parseInt(m[1]):0;})
+   .map(i=>{const m=(i.invoice_number||'').match(/-(\d+)(?:-subs\d+)?$/);return m?parseInt(m[1]):0;})
    .filter(n=>n>0);
   const nextN=(custInvNums.length?Math.max(...custInvNums):0)+1;
-  invNum=`${custCode}-${nextN}`;
+  if(isPackageMode_forNum){
+   // Count prior package_sale invoices for this customer to get the renewal number M
+   const priorPkgCount=invoices.filter(i=>i.customer_code===invSelectedCust.customer_code&&invoiceKind(i)==='package_sale').length;
+   invNum=`${custCode}-${nextN}-subs${priorPkgCount+1}`;
+  } else {
+   invNum=`${custCode}-${nextN}`;
+  }
  }
  return {
   id:invEditId||undefined,
@@ -8519,6 +8565,10 @@ function buildInvoiceHTML(rec, custObj, bankObj, forPrint){
  const docMode=detectInvoiceMode(rec);
  rec._docMode=docMode;
  rec._total=rec.total||0;
+ // Session C item 3: distinguish package-sale invoices with brown accent + banner
+ const isPackageInv=(typeof invoiceKind==='function' && invoiceKind(rec)==='package_sale');
+ const ACCENT=isPackageInv?'#78350f':'#e07b39'; // brown for package, original orange for after-visit
+ const ACCENT_LIGHT=isPackageInv?'#92400e':'#e07b39';
  const bn=bankObj.bank_name||'BCA';
  const baRaw=bankObj.bank_account||'770055777787';
  // Format account number with spaces every 4 digits (Iris item 5)
@@ -8560,10 +8610,11 @@ function buildInvoiceHTML(rec, custObj, bankObj, forPrint){
  return `<style>
 *{box-sizing:border-box;margin:0;padding:0}
 .inv-wrap{font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;background:#fff;padding:${pad};max-width:720px;margin:0 auto;font-size:13px}
+.pkg-banner{background:${ACCENT};color:#fff;padding:10px 18px;margin:-${forPrint?'48px 52px':'28px 32px'} -${forPrint?'48px 52px':'28px 32px'} 24px -${forPrint?'48px 52px':'28px 32px'};font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-align:center}
 .top-bar{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px}
 .logo-text{font-size:20px;font-weight:900;letter-spacing:-0.5px;color:#1a1a1a;line-height:1}
-.logo-text span{color:#e07b39}
-.inv-label{font-size:11px;font-weight:600;letter-spacing:2px;color:#aaa;text-align:right}
+.logo-text span{color:${ACCENT}}
+.inv-label{font-size:11px;font-weight:600;letter-spacing:2px;color:${isPackageInv?ACCENT:'#aaa'};text-align:right}
 .meta-row{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #e8e8e8;border-bottom:1px solid #e8e8e8;padding:12px 0;margin-bottom:28px}
 .meta-item{padding:0 14px;border-right:1px solid #eee}
 .meta-item:first-child{padding-left:0}
@@ -8588,24 +8639,25 @@ function buildInvoiceHTML(rec, custObj, bankObj, forPrint){
 .totals-box{min-width:240px}
 .tot-row{display:flex;justify-content:space-between;padding:3px 0;font-size:13px;color:#555}
 .tot-final{border-top:1px solid #e8e8e8;margin-top:5px;padding-top:9px;font-size:15px;font-weight:700;color:#1a1a1a;display:flex;justify-content:space-between}
-.tot-final span:last-child{color:#e07b39}
+.tot-final span:last-child{color:${ACCENT}}
 .pay-section{border-top:1px solid #e8e8e8;padding-top:18px;display:flex;justify-content:space-between;align-items:flex-end}
 .pay-lbl{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;margin-bottom:5px}
 .pay-bank{font-size:12px;color:#888;margin-bottom:3px}
-.pay-acc{font-size:22px;font-weight:700;color:#e07b39;letter-spacing:1px;margin-bottom:3px}
+.pay-acc{font-size:22px;font-weight:700;color:${ACCENT};letter-spacing:1px;margin-bottom:3px}
 .pay-note{font-size:11px;color:#aaa;line-height:1.5}
 .pay-due-lbl{font-size:9px;font-weight:600;letter-spacing:1.5px;color:#aaa;text-transform:uppercase;margin-bottom:3px;text-align:right}
 .pay-due-val{font-size:18px;font-weight:700;color:#aaa;text-align:right}
 .inv-footer{margin-top:28px;border-top:1px solid #f0f0f0;padding-top:14px;display:flex;justify-content:space-between;align-items:center}
-.inv-footer-brand{font-size:12px;font-weight:700;color:#e07b39}
+.inv-footer-brand{font-size:12px;font-weight:700;color:${ACCENT}}
 .inv-footer-brand span{color:#1a1a1a}
 .inv-footer-thanks{font-size:11px;color:#aaa}
 ${forPrint?'@media print{.inv-wrap{padding:24px 28px}}':''}
 </style>
 <div class="inv-wrap">
+${isPackageInv?`<div class="pkg-banner">Invoice Pembelian Paket / Renewal Subscription</div>`:''}
 <div class="top-bar">
  <img src="${HP_LOGO}" alt="${esc(BIZ_NAME)}" style="height:120px;width:auto"/>
- <div class="inv-label">${docMode==='report'?'LAPORAN GROOMING':'INVOICE'}</div>
+ <div class="inv-label">${isPackageInv?'INVOICE PAKET':(docMode==='report'?'LAPORAN GROOMING':'INVOICE')}</div>
 </div>
 <div class="meta-row">
  <div class="meta-item"><div class="meta-lbl">No. ${docMode==='report'?'Laporan':'Invoice'}</div><div class="meta-val">${rec.invoice_number}</div></div>
