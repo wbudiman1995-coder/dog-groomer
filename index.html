@@ -7552,26 +7552,27 @@ function renderSubsSchedulePicker(){
    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
     <div>
      <label style="font-size:11px;color:var(--muted)">Hari</label><br>
-     <select id="sched-day-${did}" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px">
+     <select id="sched-day-${did}" onchange="renderSchedAvailability('${did}')" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px">
       ${DAYS.map((d,i)=>`<option value="${DAY_VALS[i]}">${d}</option>`).join('')}
      </select>
     </div>
     <div>
      <label style="font-size:11px;color:var(--muted)">Jam</label><br>
-     <input type="time" id="sched-time-${did}" value="09:00" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
+     <input type="time" id="sched-time-${did}" value="09:00" onchange="renderSchedAvailability('${did}')" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
     </div>
     <div>
      <label style="font-size:11px;color:var(--muted)">Mulai dari</label><br>
-     <input type="date" id="sched-start-${did}" value="${document.getElementById('inv-date')?.value||iso(new Date())}" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
+     <input type="date" id="sched-start-${did}" value="${document.getElementById('inv-date')?.value||iso(new Date())}" onchange="renderSchedAvailability('${did}')" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
     </div>
     <div>
      <label style="font-size:11px;color:var(--muted)">Groomer</label><br>
-     <select id="sched-groomer-${did}" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px">
+     <select id="sched-groomer-${did}" onchange="renderSchedAvailability('${did}')" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px">
       <option value="">Auto-assign</option>
       ${groomers.filter(g=>g.active).map(g=>`<option value="${g.id}" ${(document.getElementById('inv-groomer')?.value===g.id)?'selected':''}>${esc(g.name)}</option>`).join('')}
      </select>
     </div>
    </div>
+   <div id="sched-avail-${did}" style="margin-top:10px"></div>
   </div>`;
  }).join('');
  // Session C item 5: restore user's picks after re-render (only for values user actually set)
@@ -7581,7 +7582,79 @@ function renderSubsSchedulePicker(){
   const timeEl=document.getElementById('sched-time-'+did); if(timeEl&&p.time) timeEl.value=p.time;
   const startEl=document.getElementById('sched-start-'+did); if(startEl&&p.start) startEl.value=p.start;
   const grEl=document.getElementById('sched-groomer-'+did); if(grEl&&p.groomer) grEl.value=p.groomer;
+  // Session C: render availability preview once picks restored
+  renderSchedAvailability(did);
  });
+}
+
+// Session C item 5: visual slot availability for a dog's target day/groomer.
+// Shows all 15-min slots from SSTART to SEND, color-coded free/busy/out-of-hours.
+// Click a green slot to snap the Jam field to it.
+function renderSchedAvailability(did){
+ const wrap=document.getElementById('sched-avail-'+did);
+ if(!wrap) return;
+ const dog=dogs.find(x=>x.id===did); if(!dog) return;
+ const day=document.getElementById('sched-day-'+did)?.value||'Monday';
+ const startStr=document.getElementById('sched-start-'+did)?.value||iso(new Date());
+ const chosenGroomer=document.getElementById('sched-groomer-'+did)?.value||'';
+ const jamStr=document.getElementById('sched-time-'+did)?.value||'09:00';
+ const svc=Object.keys(invDogServices[did]?.services||{}).filter(s=>invDogServices[did].services[s].checked).join(', ')||'Basic Grooming';
+ const dur=dogDur(svc,dog.size);
+ // Compute first occurrence of the chosen weekday on or after start date
+ const DAY_VALS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+ const targetIdx=DAY_VALS.indexOf(day);
+ const firstDate=new Date(startStr+'T00:00:00');
+ while(firstDate.getDay()!==targetIdx) firstDate.setDate(firstDate.getDate()+1);
+ const dateISO=iso(firstDate);
+ const dateLbl=firstDate.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'short'});
+ // If no groomer picked, show hint only (auto-assign will pick at save)
+ if(!chosenGroomer){
+  wrap.innerHTML=`<div style="font-size:11px;color:var(--muted);padding:6px 8px;background:var(--subtle);border-radius:4px">
+   Pilih groomer spesifik untuk melihat ketersediaan slot pada ${esc(dateLbl)}.
+   Kalau tetap "Auto-assign", sistem otomatis pilih groomer available saat save.
+  </div>`;
+  return;
+ }
+ // Build slot list
+ const jamMin=_toMin(jamStr);
+ const slots=[];
+ for(let m=SSTART;m<SEND;m+=30){
+  const outOfHours=m+dur>SEND;
+  const clash=appts.some(a=>a.groomer_id===chosenGroomer&&a.appt_date===dateISO&&a.status!=='cancelled'&&(()=>{
+   const s=_toMin((a.appt_time||'').slice(0,5));const e=s+(a.duration_mins||60);
+   return m<e&&s<(m+dur);
+  })());
+  // Also honor groomer blocks
+  const blocked=(typeof groomerBlocks!=='undefined')&&groomerBlocks.some(b=>b.block_date===dateISO&&(!b.groomer_id||b.groomer_id===chosenGroomer));
+  const status=outOfHours?'outofhours':(blocked?'blocked':(clash?'busy':'free'));
+  const isSelected=m===jamMin;
+  slots.push({m,status,isSelected});
+ }
+ const grName=groomers.find(g=>g.id===chosenGroomer)?.name||'?';
+ const legend=`<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--muted);margin-bottom:6px">
+  <span><span style="display:inline-block;width:10px;height:10px;background:#dcfce7;border:1px solid #86efac;border-radius:2px;vertical-align:middle"></span> Free</span>
+  <span><span style="display:inline-block;width:10px;height:10px;background:#fee2e2;border:1px solid #fca5a5;border-radius:2px;vertical-align:middle"></span> Busy</span>
+  <span><span style="display:inline-block;width:10px;height:10px;background:#f5f5f5;border:1px solid #d4d4d4;border-radius:2px;vertical-align:middle"></span> Out-of-hours</span>
+ </div>`;
+ const slotHTML=slots.map(s=>{
+  const hh=String(Math.floor(s.m/60)).padStart(2,'0');
+  const mm=String(s.m%60).padStart(2,'0');
+  const label=hh+':'+mm;
+  const styles={
+   free:'background:#dcfce7;border:1px solid #86efac;color:#15803d;cursor:pointer',
+   busy:'background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;cursor:not-allowed',
+   outofhours:'background:#f5f5f5;border:1px solid #d4d4d4;color:#a3a3a3;cursor:not-allowed',
+   blocked:'background:#fef3c7;border:1px solid #fde68a;color:#92400e;cursor:not-allowed'
+  }[s.status];
+  const selRing=s.isSelected?'box-shadow:0 0 0 2px #3b82f6;font-weight:700;':'';
+  const onClick=s.status==='free'?`onclick="document.getElementById('sched-time-${did}').value='${label}';renderSchedAvailability('${did}')"`:'';
+  return `<button type="button" ${onClick} style="${styles};${selRing}padding:3px 6px;border-radius:3px;font-size:10px;font-family:monospace;min-width:44px">${label}</button>`;
+ }).join('');
+ wrap.innerHTML=`
+  <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Ketersediaan ${esc(grName)} — ${esc(dateLbl)} (durasi ${dur}m)</div>
+  ${legend}
+  <div style="display:flex;flex-wrap:wrap;gap:4px">${slotHTML}</div>
+ `;
 }
 
 // Pick a groomer for a given date/time slot: fewest appts that day, not blocked,
@@ -9053,9 +9126,10 @@ function _findBestPageBreak(canvas, targetY, maxSearchUp, minAllowedY){
 }
 
 /* Main entry: generate PDF + send via WhatsApp */
-async function sendInvoiceViaWA(rec, cust, sourceButton){
+async function sendInvoiceViaWA(rec, cust, sourceButton, preOpenedWin){
  if(!cust.wa){
   alert('Customer ini tidak memiliki nomor WhatsApp yang tersimpan.\n\nTambahkan nomor WA di profil customer terlebih dahulu.');
+  try{preOpenedWin&&preOpenedWin.close()}catch(_){}
   return;
  }
  const origText=sourceButton?sourceButton.textContent:null;
@@ -9068,6 +9142,8 @@ async function sendInvoiceViaWA(rec, cust, sourceButton){
   // Try Web Share API first (mobile — native PDF attachment)
   const file=new File([blob], filename, {type:'application/pdf'});
   if(navigator.canShare && navigator.canShare({files:[file]}) && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)){
+   // Web Share doesn't use the pre-opened window
+   try{preOpenedWin&&preOpenedWin.close()}catch(_){}
    try {
     await navigator.share({files:[file], text:message});
     return;
@@ -9080,14 +9156,21 @@ async function sendInvoiceViaWA(rec, cust, sourceButton){
   if(sourceButton) sourceButton.textContent='⏳ Upload PDF...';
   const path=`invoices/${filename}`;
   const {error:upErr}=await db.storage.from('grooming-photos').upload(path, blob, {upsert:true, contentType:'application/pdf'});
-  if(upErr) throw new Error('Upload error: '+upErr.message);
+  if(upErr){try{preOpenedWin&&preOpenedWin.close()}catch(_){} throw new Error('Upload error: '+upErr.message);}
   const {data:urlData}=db.storage.from('grooming-photos').getPublicUrl(path);
   const pdfUrl=urlData.publicUrl;
   const fullMsg=message+'\n\n📎 Invoice PDF: '+pdfUrl;
   const waUrl=waLink(cust.wa)+'?text='+encodeURIComponent(fullMsg);
-  window.open(waUrl, '_blank');
+  // Session C: prefer navigating the pre-opened window (bypasses popup blockers).
+  // Fallback to window.open if pre-open failed or was closed.
+  if(preOpenedWin && !preOpenedWin.closed){
+   preOpenedWin.location.href=waUrl;
+  } else {
+   window.open(waUrl, '_blank');
+  }
  } catch(e){
   console.error('sendInvoiceViaWA failed:', e);
+  try{preOpenedWin&&preOpenedWin.close()}catch(_){}
   alert('Gagal generate/kirim invoice: '+e.message+'\n\nCoba refresh halaman.');
  } finally {
   if(sourceButton){ sourceButton.textContent=origText; sourceButton.disabled=false; }
@@ -9096,16 +9179,23 @@ async function sendInvoiceViaWA(rec, cust, sourceButton){
 
 // From invoice form (current unsaved or just-built record)
 function sendCurrentInvoiceToWA(ev){
- const rec=buildInvoiceRecord(); if(!rec) return;
+ // Session C: open window SYNCHRONOUSLY on user click to bypass popup blocker.
+ // Async work happens after; we navigate this window once URL is ready.
+ const preOpenedWin=window.open('about:blank','_blank');
+ const rec=buildInvoiceRecord();
+ if(!rec){try{preOpenedWin&&preOpenedWin.close()}catch(_){} return}
  const cust=custs.find(c=>c.id===rec.customer_id)||{};
- sendInvoiceViaWA(rec, cust, ev?.target);
+ sendInvoiceViaWA(rec, cust, ev?.target, preOpenedWin);
 }
 
 // From Financial tab invoice list (saved invoice)
 function sendSavedInvoiceToWA(invId, ev){
- const inv=invoices.find(i=>i.id===invId); if(!inv){alert('Invoice tidak ditemukan');return}
+ // Session C: pre-open window synchronously (see comment in sendCurrentInvoiceToWA)
+ const preOpenedWin=window.open('about:blank','_blank');
+ const inv=invoices.find(i=>i.id===invId);
+ if(!inv){try{preOpenedWin&&preOpenedWin.close()}catch(_){} alert('Invoice tidak ditemukan');return}
  const cust=custs.find(c=>c.id===inv.customer_id)||{owner:inv.owner_name};
- sendInvoiceViaWA(inv, cust, ev?.target);
+ sendInvoiceViaWA(inv, cust, ev?.target, preOpenedWin);
 }
 
 /* ============ FINANCIAL TAB ============ */
