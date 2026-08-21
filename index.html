@@ -1015,8 +1015,8 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  </div>
 
  <div class="form-actions" style="margin-top:1rem">
- <button class="btn btn-p" onclick="saveInvoice()">Simpan invoice</button>
- <button class="btn btn-b" onclick="saveInvoiceAndAppts()">Simpan invoice + kalender</button>
+ <button class="btn btn-p" id="inv-save-btn" onclick="saveInvoice()">Simpan invoice</button>
+ <button class="btn btn-b" id="inv-save-appts-btn" onclick="saveInvoiceAndAppts()">Simpan invoice + kalender</button>
  <button class="btn btn-g" onclick="downloadInvoicePDF()">Download PDF</button>
  <button class="btn btn-wa" onclick="sendCurrentInvoiceToWA(event)">Kirim ke WhatsApp</button>
  </div>
@@ -3573,7 +3573,7 @@ function dogDur(svc,size){
 }
 function t2m(t){const[h,m]=(t||'09:00').split(':').map(Number);return h*60+m}
 function m2t(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}
-let SSTART=8*60+30,SEND=18*60;const SSTEP=15,SH=22;
+let SSTART=8*60+30,SEND=20*60;const SSTEP=15,SH=22;
 
 function groupConsecutiveAppts(dayAppts){
  const sorted=[...dayAppts].sort((a,b)=>t2m(a.appt_time||'09:00')-t2m(b.appt_time||'09:00'));
@@ -6598,7 +6598,7 @@ function applyCfg(){
  if(CFG.durAdd) DUR_ADD=CFG.durAdd;
  if(CFG.sourceLabels&&Object.keys(CFG.sourceLabels).length) SOURCE_LABELS=CFG.sourceLabels;
  DUE_DAY_DEFAULT=(CFG.dueDayDefault!=null)?CFG.dueDayDefault:5;
- if(CFG.hours&&CFG.hours.open&&CFG.hours.close){const o=t2m(CFG.hours.open),c=t2m(CFG.hours.close);if(o<c){SSTART=o;SEND=c;}}
+ if(CFG.hours&&CFG.hours.open&&CFG.hours.close){const o=t2m(CFG.hours.open),c=t2m(CFG.hours.close);if(o<c){SSTART=o;SEND=Math.max(c,20*60);}} // Session C item 2: floor close time at 20:00
  if(Array.isArray(CFG.tnc)&&CFG.tnc.length) MEMBERSHIP_TNC=CFG.tnc;
  if(CFG.areas&&Object.keys(CFG.areas).length) AREAS=CFG.areas;
  if(CFG.styleRefTtlDays>0) STYLE_REFS_TTL_DAYS=CFG.styleRefTtlDays;
@@ -8202,45 +8202,63 @@ async function deleteSubscriptionsForInvoice(invoiceNumber){
 }
 
 async function saveInvoice(){
+ // Session C item 5: disable buttons during save + flip to edit mode after CREATE to prevent duplicates
+ const btn1=document.getElementById('inv-save-btn');
+ const btn2=document.getElementById('inv-save-appts-btn');
+ if(btn1?.disabled||btn2?.disabled) return; // guard against double-click
  const rec=buildInvoiceRecord(); if(!rec) return;
  const isEdit=!!invEditId;
  if(!confirm(`${isEdit?'Update':'Simpan'} invoice ${rec.invoice_number} untuk ${rec.owner_name}?\nTotal: ${fmtRp(rec.total)}`)) return;
- if(isEdit){
-  const oldRec=invoices.find(i=>i.id===invEditId);
-  const {error}=await db.from('invoices').update(stripRecForDB(rec)).eq('id',invEditId);
-  if(error){alert('Error: '+error.message);return}
-  await logAudit('invoice',invEditId,'update',{old:oldRec,new:rec,label:rec.invoice_number+' — '+rec.owner_name});
-  // Bug fix: when editing an invoice, refresh linked tokens to match the new content.
-  // Only safe to refresh tokens with 0 sessions_used. Same logic as subscriptions reversal.
-  const linkedTokens=tokens.filter(t=>t.source_invoice===rec.invoice_number);
-  const deletable=linkedTokens.filter(t=>(t.sessions_used||0)===0);
-  const kept=linkedTokens.length-deletable.length;
-  if(deletable.length){
-   const {error:e2}=await db.from('tokens').delete().in('id',deletable.map(t=>t.id));
-   if(e2) console.error('Token cleanup error:',e2.message);
+ const lbl1=btn1?.textContent, lbl2=btn2?.textContent;
+ if(btn1){btn1.disabled=true;btn1.textContent='Menyimpan\u2026';}
+ if(btn2){btn2.disabled=true;}
+ try{
+  if(isEdit){
+   const oldRec=invoices.find(i=>i.id===invEditId);
+   const {error}=await db.from('invoices').update(stripRecForDB(rec)).eq('id',invEditId);
+   if(error){alert('Error: '+error.message);return}
+   await logAudit('invoice',invEditId,'update',{old:oldRec,new:rec,label:rec.invoice_number+' — '+rec.owner_name});
+   // Bug fix: when editing an invoice, refresh linked tokens to match the new content.
+   // Only safe to refresh tokens with 0 sessions_used. Same logic as subscriptions reversal.
+   const linkedTokens=tokens.filter(t=>t.source_invoice===rec.invoice_number);
+   const deletable=linkedTokens.filter(t=>(t.sessions_used||0)===0);
+   const kept=linkedTokens.length-deletable.length;
+   if(deletable.length){
+    const {error:e2}=await db.from('tokens').delete().in('id',deletable.map(t=>t.id));
+    if(e2) console.error('Token cleanup error:',e2.message);
+   }
+   // Recreate tokens for current prepaid dogs (handles add + change cases)
+   await createTokensFromInvoice(rec);
+   await saveVisitsFromInvoice(rec);
+   await deductSubsOnInvoice(rec);
+   let msg='Invoice diupdate: '+rec.invoice_number;
+   if(kept>0) msg+=`\n(${kept} token sudah dipakai, tidak diganti — cek manual kalau perlu)`;
+   alert(msg);
+   // Keep invEditId set so further clicks continue to UPDATE the same record (no duplicates)
+   updateInvoiceModeBanner();
+  } else {
+   const {data:inserted,error}=await db.from('invoices').insert(stripRecForDB(rec)).select().single();
+   if(error){alert('Error: '+error.message);return}
+   if(inserted) await logAudit('invoice',inserted.id,'create',{new:rec,label:rec.invoice_number+' — '+rec.owner_name});
+   await saveVisitsFromInvoice(rec);
+   await createTokensFromInvoice(rec);
+   await deductSubsOnInvoice(rec);
+   alert('Invoice tersimpan: '+rec.invoice_number);
+   // Session C item 5: flip to edit mode so any subsequent save clicks UPDATE the same record instead of creating duplicates
+   if(inserted?.id){invEditId=inserted.id;updateInvoiceModeBanner();}
   }
-  // Recreate tokens for current prepaid dogs (handles add + change cases)
-  await createTokensFromInvoice(rec);
-  await saveVisitsFromInvoice(rec);
-  await deductSubsOnInvoice(rec);
-  let msg='Invoice diupdate: '+rec.invoice_number;
-  if(kept>0) msg+=`\n(${kept} token sudah dipakai, tidak diganti — cek manual kalau perlu)`;
-  alert(msg);
-  invEditId=null;
-  updateInvoiceModeBanner();
- } else {
-  const {data:inserted,error}=await db.from('invoices').insert(stripRecForDB(rec)).select().single();
-  if(error){alert('Error: '+error.message);return}
-  if(inserted) await logAudit('invoice',inserted.id,'create',{new:rec,label:rec.invoice_number+' — '+rec.owner_name});
-  await saveVisitsFromInvoice(rec);
-  await createTokensFromInvoice(rec);
-  await deductSubsOnInvoice(rec);
-  alert('Invoice tersimpan: '+rec.invoice_number);
+  await reloadTables('invoices','visits','tokens','subscriptions');
+ } finally {
+  if(btn1){btn1.disabled=false;btn1.textContent=lbl1||'Simpan invoice';}
+  if(btn2){btn2.disabled=false;btn2.textContent=lbl2||'Simpan invoice + kalender';}
  }
- await reloadTables('invoices','visits','tokens','subscriptions');
 }
 
 async function saveInvoiceAndAppts(){
+ // Session C item 5: disable buttons during save + flip to edit mode after CREATE
+ const btn1=document.getElementById('inv-save-btn');
+ const btn2=document.getElementById('inv-save-appts-btn');
+ if(btn1?.disabled||btn2?.disabled) return; // guard against double-click
  const rec=buildInvoiceRecord(); if(!rec) return;
  const grId=document.getElementById('inv-groomer').value;
  if(!grId){alert('Pilih groomer dari list untuk save ke kalender');return}
@@ -8250,39 +8268,49 @@ async function saveInvoiceAndAppts(){
   : 1;
  if(rec.is_advance&&!firstDate){alert('Pilih tanggal sesi pertama');return}
  if(!confirm(`Simpan invoice ${rec.invoice_number}${rec.is_advance?` + ${totalSessions} sesi advance booking`:''}?\nTotal: ${fmtRp(rec.total)}`)) return;
- const interval=document.getElementById('inv-interval')?.value||'none';
- const customDays=parseInt(document.getElementById('inv-custom-days')?.value)||14;
- const intervalDays=interval==='custom'?customDays:(interval==='none'?0:parseInt(interval));
- const {error:e1}=await db.from('invoices').insert(stripRecForDB(rec));
- if(e1){alert('Invoice error: '+e1.message);return}
- await saveVisitsFromInvoice(rec);
- await createTokensFromInvoice(rec);
- await deductSubsOnInvoice(rec);
- if(rec.is_advance&&interval!=='none'&&firstDate){
-  const apptsToInsert=[];
-  for(let s=0;s<totalSessions;s++){
-   const d=new Date(firstDate);
-   d.setDate(d.getDate()+(s*intervalDays));
-   const dateStr=iso(d);
-   invSelectedDogs.forEach((did,idx)=>{
-    const dogAdv=rec.dogs.find(x=>x.dog_id===did)?.advance;
-    if(dogAdv&&s>=dogAdv.sessions) return;
-    const svcForDog=dogAdv?.service_type||Object.entries(invDogServices[did]?.services||{}).filter(([_,sv])=>sv.checked).map(([n])=>n).join(', ');
-    const hour=9+idx;
-    apptsToInsert.push({
-     dog_id:did,groomer_id:grId,appt_date:dateStr,
-     appt_time:`${String(hour).padStart(2,'0')}:00:00`,
-     service_base:svcForDog,
-     appt_note:`Inv ${rec.invoice_number} sesi ${s+1}/${totalSessions}`,
-     duration_mins:dogDur(svcForDog,(dogs.find(x=>x.id===did)||{}).size)
+ const lbl1=btn1?.textContent, lbl2=btn2?.textContent;
+ if(btn1){btn1.disabled=true;}
+ if(btn2){btn2.disabled=true;btn2.textContent='Menyimpan\u2026';}
+ try{
+  const interval=document.getElementById('inv-interval')?.value||'none';
+  const customDays=parseInt(document.getElementById('inv-custom-days')?.value)||14;
+  const intervalDays=interval==='custom'?customDays:(interval==='none'?0:parseInt(interval));
+  const {data:inserted,error:e1}=await db.from('invoices').insert(stripRecForDB(rec)).select().single();
+  if(e1){alert('Invoice error: '+e1.message);return}
+  await saveVisitsFromInvoice(rec);
+  await createTokensFromInvoice(rec);
+  await deductSubsOnInvoice(rec);
+  if(rec.is_advance&&interval!=='none'&&firstDate){
+   const apptsToInsert=[];
+   for(let s=0;s<totalSessions;s++){
+    const d=new Date(firstDate);
+    d.setDate(d.getDate()+(s*intervalDays));
+    const dateStr=iso(d);
+    invSelectedDogs.forEach((did,idx)=>{
+     const dogAdv=rec.dogs.find(x=>x.dog_id===did)?.advance;
+     if(dogAdv&&s>=dogAdv.sessions) return;
+     const svcForDog=dogAdv?.service_type||Object.entries(invDogServices[did]?.services||{}).filter(([_,sv])=>sv.checked).map(([n])=>n).join(', ');
+     const hour=9+idx;
+     apptsToInsert.push({
+      dog_id:did,groomer_id:grId,appt_date:dateStr,
+      appt_time:`${String(hour).padStart(2,'0')}:00:00`,
+      service_base:svcForDog,
+      appt_note:`Inv ${rec.invoice_number} sesi ${s+1}/${totalSessions}`,
+      duration_mins:dogDur(svcForDog,(dogs.find(x=>x.id===did)||{}).size)
+     });
     });
-   });
+   }
+   const {error:e2}=await db.from('appointments').insert(apptsToInsert);
+   if(e2){alert('Appt save error: '+e2.message);return}
   }
-  const {error:e2}=await db.from('appointments').insert(apptsToInsert);
-  if(e2){alert('Appt save error: '+e2.message);return}
+  alert(`Invoice ${rec.invoice_number}${rec.is_advance?` + ${totalSessions} sesi ke kalender`:''} tersimpan`);
+  // Session C item 5: flip to edit mode so subsequent saves UPDATE (no duplicates)
+  if(inserted?.id){invEditId=inserted.id;updateInvoiceModeBanner();}
+  await reloadTables('invoices','visits','tokens','appointments','subscriptions');
+ } finally {
+  if(btn1){btn1.disabled=false;btn1.textContent=lbl1||'Simpan invoice';}
+  if(btn2){btn2.disabled=false;btn2.textContent=lbl2||'Simpan invoice + kalender';}
  }
- alert(`Invoice ${rec.invoice_number}${rec.is_advance?` + ${totalSessions} sesi ke kalender`:''} tersimpan`);
- await reloadTables('invoices','visits','tokens','appointments','subscriptions');
 }
 
 function buildServiceRows(dogsData,counter){
@@ -11453,7 +11481,7 @@ async function saveConfig(){
  const sourceLabels={};
  Object.keys(SOURCE_LABELS).forEach(k=>{sourceLabels[k]=gv(`cfg-src-${k}`)?.value.trim()||k});
  const dueDayDefault=Math.min(28,Math.max(1,parseInt(gv('cfg-dueday')?.value)||5));
- const hours={open:gv('cfg-hours-open')?.value||'08:30',close:gv('cfg-hours-close')?.value||'18:00'};
+ const hours={open:gv('cfg-hours-open')?.value||'08:30',close:gv('cfg-hours-close')?.value||'20:00'};
  const followupDays=Math.max(1,parseInt(gv('cfg-followup-days')?.value)||14);
  const styleRefTtlDays=Math.max(1,parseInt(gv('cfg-styleref-ttl')?.value)||60);
  const tnc=(gv('cfg-tnc')?.value||'').split('\n').map(s=>s.trim()).filter(Boolean);
