@@ -1974,6 +1974,47 @@ let WA_TPL_FOLLOWUP='Hai Kak {nama}, sudah lebih dari {inactive_period} nih kami
 let WA_TPL_RENEWAL='Halo kak {nama}, \uD83D\uDC3E\n\nSubscription {tier} untuk {dogs} sudah waktunya diperpanjang untuk bulan depan.\n\nBiaya: {amount}\nMohon konfirmasi & pembayaran sebelum tanggal {due_day} ya kak supaya jadwal grooming tetap lancar.\n\nTerima kasih! {biz}';
 function applyTpl(tpl,vars){return String(tpl||'').replace(/\{(\w+)\}/g,(m,k)=>vars[k]!=null?vars[k]:'')}
 
+// Emoji fix: pristine defaults snapshot (captured before any CFG override runs).
+// Used by resetWaTemplatesToDefault() to repair corrupted stored templates.
+const _WA_TPL_DEFAULTS={
+ waClosing:WA_CLOSING_TPL,
+ waTplDone:WA_TPL_DONE,
+ waTplInvoice:WA_TPL_INVOICE,
+ waTplFollowup:WA_TPL_FOLLOWUP,
+ waTplRenewal:WA_TPL_RENEWAL
+};
+async function resetWaTemplatesToDefault(){
+ if(!confirm('Kembalikan semua template WhatsApp ke bawaan?\n\nIni memperbaiki emoji yang rusak. Kalau kamu pernah edit template, perubahan itu akan hilang.')) return;
+ // Restore in-memory
+ WA_CLOSING_TPL=_WA_TPL_DEFAULTS.waClosing;
+ WA_TPL_DONE=_WA_TPL_DEFAULTS.waTplDone;
+ WA_TPL_INVOICE=_WA_TPL_DEFAULTS.waTplInvoice;
+ WA_TPL_FOLLOWUP=_WA_TPL_DEFAULTS.waTplFollowup;
+ WA_TPL_RENEWAL=_WA_TPL_DEFAULTS.waTplRenewal;
+ // Persist to DB: merge clean templates into existing config
+ try{
+  const cleanCfg={...(CFG||{}),
+   waClosing:WA_CLOSING_TPL,
+   waTplDone:WA_TPL_DONE,
+   waTplInvoice:WA_TPL_INVOICE,
+   waTplFollowup:WA_TPL_FOLLOWUP,
+   waTplRenewal:WA_TPL_RENEWAL};
+  const {error}=await db.from('business_settings').upsert({id:1,config:cleanCfg,updated_at:new Date().toISOString()});
+  if(error){alert('Gagal simpan ke server: '+error.message);return}
+  CFG=cleanCfg;
+  await reloadTables('business_settings');
+  // Refresh the settings textareas if visible
+  const invEl=document.getElementById('cfg-wa-invoice'); if(invEl) invEl.value=WA_TPL_INVOICE;
+  const doneEl=document.getElementById('cfg-wa-done'); if(doneEl) doneEl.value=WA_TPL_DONE;
+  const fuEl=document.getElementById('cfg-wa-followup'); if(fuEl) fuEl.value=WA_TPL_FOLLOWUP;
+  const renEl=document.getElementById('cfg-wa-renewal'); if(renEl) renEl.value=WA_TPL_RENEWAL;
+  const closeEl=document.getElementById('cfg-wa-closing'); if(closeEl) closeEl.value=WA_CLOSING_TPL;
+  alert('Template WhatsApp sudah dikembalikan ke bawaan. Emoji sudah diperbaiki. Coba kirim invoice lagi ya.');
+ }catch(e){
+  alert('Error: '+e.message);
+ }
+}
+
 // ===== i18n (translation layer) =====
 // Default 'en' keeps the current on-screen text unchanged. Untranslated keys fall back to the element's existing text.
 let LANG='en';
@@ -6758,14 +6799,26 @@ function applyCfg(){
  if(CFG.styleRefTtlDays>0) STYLE_REFS_TTL_DAYS=CFG.styleRefTtlDays;
  if(CFG.followupDays>0) STALE_DAYS=CFG.followupDays;
  if(CFG.branding){if(CFG.branding.bizName)BIZ_NAME=CFG.branding.bizName;if(CFG.branding.tagline)BIZ_TAGLINE=CFG.branding.tagline;if(CFG.branding.logo)HP_LOGO=CFG.branding.logo;}
- if(CFG.waClosing) WA_CLOSING_TPL=CFG.waClosing;
+ // Emoji fix: reject CFG templates whose emoji got corrupted (contain U+FFFD replacement char)
+ // and keep the clean hardcoded defaults instead. Guards against a lossily-saved DB template.
+ // Emoji-safe template loader. A stored template is REJECTED (clean default used instead) when it
+ // shows signs of emoji corruption: contains the replacement char, OR the default has emoji but the
+ // stored copy has none (emoji were flattened to '?'/stripped by a bad encoding round-trip).
+ const _hasEmoji=(s)=>/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2700}-\u{27BF}\u2714\u2764]/u.test(String(s||''));
+ const _tplOk=(stored,fallback)=>{
+  if(typeof stored!=='string'||!stored.length) return false;
+  if(stored.includes('\uFFFD')) return false;               // replacement char → corrupt
+  if(_hasEmoji(fallback)&&!_hasEmoji(stored)) return false;  // default has emoji, stored lost them → corrupt
+  return true;
+ };
+ if(_tplOk(CFG.waClosing,_WA_TPL_DEFAULTS.waClosing)) WA_CLOSING_TPL=CFG.waClosing;
  if(CFG.customFields) CUSTOM_FIELDS={customers:CFG.customFields.customers||[],pets:CFG.customFields.pets||[]};
- if(CFG.waTplDone) WA_TPL_DONE=CFG.waTplDone;
- if(CFG.waTplInvoice) WA_TPL_INVOICE=CFG.waTplInvoice;
+ if(_tplOk(CFG.waTplDone,_WA_TPL_DEFAULTS.waTplDone)) WA_TPL_DONE=CFG.waTplDone;
+ if(_tplOk(CFG.waTplInvoice,_WA_TPL_DEFAULTS.waTplInvoice)) WA_TPL_INVOICE=CFG.waTplInvoice;
  if(CFG.remGreeting!=null) REM_GREETING=CFG.remGreeting;
  if(CFG.remClosing!=null) REM_CLOSING=CFG.remClosing;
- if(CFG.waTplFollowup) WA_TPL_FOLLOWUP=CFG.waTplFollowup;
- if(CFG.waTplRenewal) WA_TPL_RENEWAL=CFG.waTplRenewal;
+ if(_tplOk(CFG.waTplFollowup,_WA_TPL_DEFAULTS.waTplFollowup)) WA_TPL_FOLLOWUP=CFG.waTplFollowup;
+ if(_tplOk(CFG.waTplRenewal,_WA_TPL_DEFAULTS.waTplRenewal)) WA_TPL_RENEWAL=CFG.waTplRenewal;
  TOAST_MS=CFG.toastMs>0?CFG.toastMs:3500;
  SERVICE_LIST=Object.keys(PRICING);
 }
@@ -9339,12 +9392,11 @@ async function sendInvoiceViaWA(rec, cust, sourceButton, preOpenedWin){
   if(upErr){try{preOpenedWin&&preOpenedWin.close()}catch(_){} throw new Error('Upload error: '+upErr.message);}
   const {data:urlData}=db.storage.from('grooming-photos').getPublicUrl(path);
   const pdfUrl=urlData.publicUrl;
-  const fullMsg=message+'\n\n📎 Invoice PDF: '+pdfUrl;
-  const waUrl=waTarget+'?text='+encodeURIComponent(fullMsg);
-  // Session C fix v4: mobile → window.location.href. This reliably opens WhatsApp even after the
-  // async PDF upload (an <a>.click() after await is NOT a user gesture and gets popup-blocked).
-  // encodeURIComponent already preserves emoji surrogate pairs correctly in the query string.
-  // Desktop → navigate the pre-opened tab (opened synchronously on click, bypasses popup blocker).
+  const fullMsg=message+'\n\n\uD83D\uDCCE Invoice PDF: '+pdfUrl;
+  // Emoji fix: use api.whatsapp.com/send (handles long emoji-rich text reliably) instead of
+  // wa.me/<num>?text= (which mangles multi-byte emoji in long messages on iOS + desktop).
+  const waNum=normalizeWA(cust.wa);
+  const waUrl='https://api.whatsapp.com/send?phone='+waNum+'&text='+encodeURIComponent(fullMsg);
   if(isMobile){
    try{preOpenedWin&&preOpenedWin.close()}catch(_){}
    window.location.href=waUrl;
@@ -11804,6 +11856,7 @@ function renderConfig(){
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan followup "belum grooming" <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{inactive_period}</code> <code>{days}</code> <code>{biz}</code></span><textarea id="cfg-wa-followup" rows="4" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_FOLLOWUP)}</textarea></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan renewal subscription bulanan <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{tier}</code> <code>{amount}</code> <code>{due_day}</code> <code>{biz}</code></span><textarea id="cfg-wa-renewal" rows="8" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_RENEWAL)}</textarea></label>
     <div style="font-size:11px;color:var(--muted)">Pesan invoice (belum bayar) tetap dihitung otomatis oleh sistem karena ada logika diskon, biaya tambahan, dan rekening bank.</div>
+    <button class="btn btn-sm" style="background:#fef3c7;border:1px solid #fbbf24;color:#78350f;align-self:flex-start" onclick="resetWaTemplatesToDefault()" title="Kembalikan semua template WhatsApp ke bawaan (memperbaiki emoji yang rusak)">🔧 Reset template WA ke default (perbaiki emoji)</button>
    </div>`)}
   ${sec('Tampilan',`
    <div style="display:flex;flex-direction:column;gap:12px;max-width:520px">
