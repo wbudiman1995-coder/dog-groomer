@@ -553,7 +553,7 @@ function groupApptsByCustomer(appts){
 
 function renderGroupedAppt(group, isFirstGroup, isToday){
  const firstA=group[0];
- const transportFee=Math.max(0,...group.map(getApptTransportFee));
+ // Session C item 4: transport fee removed from groomer view
  const cust=dataCache.custs.find(c=>{const d=dataCache.dogs.find(x=>x.id===firstA.dog_id);return c.id===d?.customer_id;})||{};
  const firstDog=dataCache.dogs.find(d=>d.id===firstA.dog_id)||{};
  const addrParts=[cust.address,cust.kecamatan,cust.kota].filter(Boolean);
@@ -627,7 +627,6 @@ function renderGroupedAppt(group, isFirstGroup, isToday){
   </div>
   <div class="appt-cust">${esc(cust.owner||'?')}</div>
   <div class="appt-addr">${esc(addrStr)}<br/><a href="${mapsLink}" target="_blank">Buka di Google Maps →</a></div>
-  ${transportFee?`<div style="margin:8px 0;padding:8px 10px;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;border-radius:6px;font-size:12px;font-weight:700">Transport Fee: ${fmtRp(transportFee)}</div>`:''}
   ${firstA.session_note?`<div style="margin:8px 0;padding:9px 11px;background:#fef9c3;border:1px solid #fde047;border-left:4px solid #ca8a04;border-radius:6px;font-size:13px;color:#713f12"><strong>Instruksi grooming:</strong> ${esc(firstA.session_note)}</div>`:''}
   <div class="appt-photos">
    <div class="photo-section-label">Bukti Kehadiran</div>
@@ -648,7 +647,7 @@ function renderAppt(a, isFirst=false){
  const endTime=String(Math.floor(endMin/60)).padStart(2,'0')+':'+String(endMin%60).padStart(2,'0');
 
  const status=a.status||'pending';
- const transportFee=getApptTransportFee(a);
+ // Session C item 4: transport fee removed from groomer view
 
  // Address: build full string, add Google Maps link
  const addrParts=[cust.address,cust.kecamatan,cust.kota].filter(Boolean);
@@ -704,7 +703,6 @@ function renderAppt(a, isFirst=false){
   <div class="appt-addr">${esc(addrStr)}<br/>
    <a href="${mapsLink}" target="_blank">Buka di Google Maps →</a>
   </div>
-  ${transportFee?`<div style="margin:8px 0;padding:8px 10px;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;border-radius:6px;font-size:12px;font-weight:700">Transport Fee: ${fmtRp(transportFee)}</div>`:''}
   ${a.session_note?`<div style="margin:8px 0;padding:9px 11px;background:#fef9c3;border:1px solid #fde047;border-left:4px solid #ca8a04;border-radius:6px;font-size:13px;color:#713f12"><strong>Instruksi grooming:</strong> ${esc(a.session_note)}</div>`:''}
   <div class="dog-card">
    <div class="dog-name">${esc(dog.name||'?')}</div>
@@ -731,6 +729,7 @@ const PHOTO_TYPES=[
  {key:'after',label:'After'},
  {key:'ear_left',label:'Telinga Kiri',section:'Telinga'},
  {key:'ear_right',label:'Telinga Kanan'},
+ {key:'clean_area',label:'Area Kemaluan',section:'Kebersihan',full:true}, // Session C item 6
  {key:'dematting',label:'Bulu Gimbal',section:'Dokumentasi Kondisi',multi:true,conditional:'Dematting'},
  {key:'fungal',label:'Bekas Jamur',multi:true},
  {key:'injury',label:'Luka',multi:true},
