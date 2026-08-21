@@ -903,7 +903,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  </div>
  <div class="fg"><label>Or type manually</label><input id="inv-groomer-manual" placeholder="Nama groomer" oninput="renderInvoicePreview()"/></div>
  <div class="fg"><label>Tanggal invoice</label><input type="date" id="inv-date" onchange="onInvDateChange()"/></div>
- <div class="fg"><label>Tanggal jatuh tempo <span style="font-size:10px;color:var(--muted);font-weight:400">(optional, default: invoice + 1)</span></label><input type="date" id="inv-due-date" onchange="renderInvoicePreview()"/></div>
+ <div class="fg"><label>Tanggal jatuh tempo <span style="font-size:10px;color:var(--muted);font-weight:400">(optional, editable — auto-fill dari tanggal invoice; ubah manual bila perlu)</span></label><input type="date" id="inv-due-date" oninput="_invDueDateEdited=true;renderInvoicePreview();updateSubsBillingDate();" onchange="_invDueDateEdited=true;renderInvoicePreview();updateSubsBillingDate();"/></div>
  <div class="fg"><label>Jenis dokumen <span style="font-size:10px;color:var(--muted);font-weight:400">(auto = sistem pilih sendiri)</span></label>
   <select id="inv-doc-mode" onchange="onDocModeChange()">
    <option value="auto">Auto (deteksi otomatis)</option>
@@ -915,7 +915,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  </div>
  </div>
 
- <div class="card" style="padding:1rem;margin-bottom:1rem">
+ <div class="card" id="inv-advance-card" style="padding:1rem;margin-bottom:1rem">
  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
   <div class="det-lbl" style="margin:0">4. Advance booking</div>
   <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
@@ -969,7 +969,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  </div>
  </div>
 
- <div class="card" style="padding:1rem;margin-bottom:1rem">
+ <div class="card" id="inv-subs-billing-card" style="padding:1rem;margin-bottom:1rem">
   <div class="det-lbl">6b. Subscription billing</div>
   <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">
    <input type="checkbox" id="inv-subs-billing" onchange="onSubsBillingToggle()" style="cursor:pointer;margin-top:3px"/>
@@ -977,7 +977,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
     <label for="inv-subs-billing" style="font-size:13px;cursor:pointer;margin:0;font-weight:500">Tagihan subscription</label>
     <div style="font-size:11px;color:var(--muted);margin-top:4px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
      Jatuh tempo tanggal
-     <input type="number" id="inv-subs-due-day" value="5" min="1" max="28" onchange="updateInvDueDate()" style="width:44px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center"/>
+     <input type="number" id="inv-subs-due-day" value="5" min="1" max="28" onchange="window._invDueDateEdited=false;updateInvDueDate()" style="width:44px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center"/>
      setiap bulan.
     </div>
    </div>
@@ -6838,6 +6838,7 @@ function resetInvoice(){
  if(g('inv-disc-base-only')) g('inv-disc-base-only').checked=false;
  if(g('inv-subs-billing')) g('inv-subs-billing').checked=false;
  if(g('inv-due-date')) g('inv-due-date').value='';
+ window._invDueDateEdited=false; // Session C item 8B: reset manual-override flag
  if(g('inv-subs-due-day')) g('inv-subs-due-day').value=DUE_DAY_DEFAULT;
  if(g('inv-doc-mode')) g('inv-doc-mode').value='auto';
  invExtraCharges=[];
@@ -6932,6 +6933,7 @@ function openInvoiceForEdit(id){
   // Invoice-level fields
   const dtEl=document.getElementById('inv-date'); if(dtEl) dtEl.value=inv.invoice_date||iso(new Date());
   const ddEl=document.getElementById('inv-due-date'); if(ddEl) ddEl.value=inv.due_date||'';
+  window._invDueDateEdited=!!inv.due_date; // Session C item 8B: treat loaded date as user-set to prevent auto-overwrite
   const dmEl=document.getElementById('inv-doc-mode'); if(dmEl) dmEl.value=inv.doc_mode||'auto';
   invExtraCharges=Array.isArray(inv.extra_charges)?inv.extra_charges.map(c=>({label:c.label||'',amount:c.amount||0})):[];
   renderExtraCharges();
@@ -7501,6 +7503,7 @@ function onIntervalChange(){
 
 // Batch O.4 — Subscription billing toggle
 function onSubsBillingToggle(){
+ window._invDueDateEdited=false; // Session C item 8B: fresh auto-fill on toggle
  updateInvDueDate();
  renderInvoicePreview();
  renderSubsSchedulePicker();
@@ -7654,6 +7657,7 @@ async function createSubsScheduleAppointments(){
 
 // Batch O.9 — invoice date changed → auto-update due_date field per current rules
 function onInvDateChange(){
+ window._invDueDateEdited=false; // Session C item 8B: fresh auto-fill on invoice date change
  updateInvDueDate();
  renderInvoicePreview();
 }
@@ -7668,6 +7672,8 @@ function updateInvDueDate(){
  const dueDateEl=document.getElementById('inv-due-date');
  if(!invDateEl||!dueDateEl) return;
  const invDateStr=invDateEl.value;
+ // Session C item 8B: if user manually edited the due-date, don't overwrite it (only refresh subs preview)
+ if(window._invDueDateEdited){updateSubsBillingDate();return}
  if(!invDateStr){dueDateEl.value='';updateSubsBillingDate();return}
  const invDate=new Date(invDateStr+'T00:00:00');
  const subsCb=document.getElementById('inv-subs-billing');
@@ -7780,6 +7786,14 @@ function setInvMode(mode){
   advCb.checked=isPackage;
   onAdvanceToggle(isPackage);
  }
+ // Session C items 7 & 8A: hide entire advance booking + subs billing cards in visit mode
+ const advCard=document.getElementById('inv-advance-card');
+ if(advCard) advCard.style.display=isPackage?'':'none';
+ const subsCard=document.getElementById('inv-subs-billing-card');
+ if(subsCard) subsCard.style.display=isPackage?'':'none';
+ // Also force-uncheck subs billing when leaving package mode so it doesn't persist into a visit invoice
+ const subsCb=document.getElementById('inv-subs-billing');
+ if(!isPackage&&subsCb?.checked){subsCb.checked=false;onSubsBillingToggle();}
  // Hide the per-visit services section entirely in Package mode
  const svcSection=document.getElementById('inv-dogs-services');
  if(svcSection) svcSection.style.display=isPackage?'none':'';
