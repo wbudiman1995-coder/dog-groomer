@@ -7542,11 +7542,11 @@ function renderSubsSchedulePicker(){
  });
  listEl.innerHTML=invSelectedDogs.map(did=>{
   const dog=dogs.find(d=>d.id===did);
-  const ds=invDogServices[did];
-  // Detect subs type from advance config or default
-  const subsType=ds?.advance?.subs_type||invSubsType||'monthly';
-  const freqLabel={weekly:'Setiap minggu',biweekly:'Setiap 2 minggu',monthly:'Setiap bulan'}[subsType]||'';
-  const sessions=ds?.advance?.sessions||{weekly:4,biweekly:2,monthly:1}[subsType]||4;
+  // Session C item 5 (real fix): subs config lives in invAdvanceDogs, NOT invDogServices.advance
+  const ad=invAdvanceDogs[did];
+  const subsType=ad?.subs_type||'monthly';
+  const freqLabel={weekly:'Setiap minggu',biweekly:'Setiap 2 minggu',monthly:'Setiap bulan',prepaid:'Prepaid (fleksibel)'}[subsType]||'';
+  const sessions=ad?.sessions||{weekly:4,biweekly:2,monthly:1,prepaid:4}[subsType]||4;
   return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
    <div style="font-weight:600;font-size:13px;margin-bottom:8px">${esc(dog?.name||'?')} <span style="font-size:11px;color:var(--muted);font-weight:400">${esc(freqLabel)} · ${sessions} sesi</span></div>
    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -7623,9 +7623,11 @@ async function createSubsScheduleAppointments(){
  for(const did of invSelectedDogs){
   const dog=dogs.find(d=>d.id===did); if(!dog) continue;
   const ds=invDogServices[did];
-  const subsType=ds?.advance?.subs_type||invSubsType||'monthly';
-  const sessions=ds?.advance?.sessions||{weekly:4,biweekly:2,monthly:1}[subsType]||4;
-  const freqDays={weekly:7,biweekly:14,monthly:30}[subsType]||7;
+  // Session C item 5 (real fix): subs config lives in invAdvanceDogs, not invDogServices.advance
+  const ad=invAdvanceDogs[did];
+  const subsType=ad?.subs_type||'monthly';
+  const sessions=ad?.sessions||{weekly:4,biweekly:2,monthly:1,prepaid:4}[subsType]||4;
+  const freqDays={weekly:7,biweekly:14,monthly:30,prepaid:14}[subsType]||7;
 
   const dayName=document.getElementById('sched-day-'+did)?.value||'Monday';
   const time=document.getElementById('sched-time-'+did)?.value||'09:00';
@@ -7720,12 +7722,13 @@ function updateInvDueDate(){
  if(subsCb?.checked){
   const dueDay=parseInt(document.getElementById('inv-subs-due-day')?.value)||DUE_DAY_DEFAULT;
   const day=invDate.getDate();
-  if(day<=dueDay){
-   const due=new Date(invDate.getFullYear(),invDate.getMonth(),dueDay);
-   dueDateEl.value=iso(due);
-  } else {
-   dueDateEl.value='';
-  }
+  // Session C bug 2 fix: never clear the field. If invoice day > dueDay, roll to NEXT month.
+  // Previously this cleared the field, and any subsequent invoice-date change / subs toggle
+  // would wipe the user's manual entry again by re-clearing.
+  const due=(day<=dueDay)
+   ? new Date(invDate.getFullYear(),invDate.getMonth(),dueDay)
+   : new Date(invDate.getFullYear(),invDate.getMonth()+1,dueDay);
+  dueDateEl.value=iso(due);
  } else {
   // Default: invoice + 1 day
   const due=new Date(invDate); due.setDate(due.getDate()+1);
@@ -7744,18 +7747,15 @@ function updateSubsBillingDate(){
  const invDate=new Date(invDateStr+'T00:00:00');
  const dueDay=parseInt(document.getElementById('inv-subs-due-day')?.value)||DUE_DAY_DEFAULT;
  const day=invDate.getDate();
- if(day<=dueDay){
-  const due=new Date(invDate.getFullYear(),invDate.getMonth(),dueDay);
-  preview.style.display='block';
-  preview.style.background='#dcfce7';
-  preview.style.color='#15803d';
-  preview.textContent='Due date: '+due.toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});
- } else {
-  preview.style.display='block';
-  preview.style.background='#fef3c7';
-  preview.style.color='#92400e';
-  preview.textContent=`Tanggal invoice lewat tanggal ${dueDay}. Atur due date manual di field jatuh tempo.`;
- }
+ // Session C bug 2 fix: always show a due date (same or next month depending on cutoff)
+ const due=(day<=dueDay)
+  ? new Date(invDate.getFullYear(),invDate.getMonth(),dueDay)
+  : new Date(invDate.getFullYear(),invDate.getMonth()+1,dueDay);
+ const nextMonthNote=(day>dueDay)?' (bulan depan)':'';
+ preview.style.display='block';
+ preview.style.background='#dcfce7';
+ preview.style.color='#15803d';
+ preview.textContent='Due date: '+due.toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})+nextMonthNote;
 }
 
 /* ===== TOKEN / ADVANCE BOOKING ===== */
@@ -7930,6 +7930,7 @@ function onAdvDogChange(did,field,val){
   }
   renderAdvanceDogs();
   recalcInvoice();
+  renderSubsSchedulePicker(); // Session C item 5: reflect new freq/sessions in schedule picker
   return;
  }
  if(field==='disc_type'){
@@ -7941,6 +7942,7 @@ function onAdvDogChange(did,field,val){
  invAdvanceDogs[did][field]=field==='sessions'?parseInt(val)||1:parseFloat(val)||0;
  renderAdvanceDogs();
  recalcInvoice();
+ if(field==='sessions') renderSubsSchedulePicker(); // Session C item 5: update session count in schedule picker
 }
 
 function advDogTotal(did){
@@ -8782,6 +8784,9 @@ ${(()=>{
 })()}
 ${(()=>{
  // Page 2: groomer notes + before/after photos (if any)
+ // Session C item 6: skip photo page entirely for package/renewal invoices — those are for
+ // future services, not the current visit, so grooming photos don't belong there.
+ if(isPackageInv) return '';
  const hasContent=rec.dogs.some(d=>{
   if(d.groomer_notes) return true;
   if(Array.isArray(invPhotos[d.dog_id])&&invPhotos[d.dog_id].length>0) return true;
