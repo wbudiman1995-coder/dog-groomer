@@ -3875,6 +3875,29 @@ function handleApptClick(event,apptId){
   updateMassToolbar();
   renderCal();
  } else {
+  // Session C issue 3: always bind same-owner dogs together. If this appt is part of a
+  // consecutive same-customer group on that day, open the whole group for editing.
+  const a=appts.find(x=>x.id===apptId);
+  if(a){
+   const dog=dogs.find(d=>d.id===a.dog_id);
+   const custId=dog?.customer_id;
+   if(custId){
+    const sameDayCustAppts=appts.filter(x=>{
+     if(x.appt_date!==a.appt_date||x.status==='cancelled') return false;
+     const xd=dogs.find(d=>d.id===x.dog_id);
+     return xd?.customer_id===custId;
+    });
+    if(sameDayCustAppts.length>1){
+     // Find the consecutive group that contains this appt
+     const groups=groupConsecutiveAppts(sameDayCustAppts);
+     const myGroup=groups.find(g=>g.some(x=>x.id===apptId));
+     if(myGroup&&myGroup.length>1){
+      openGroupEdit(myGroup.map(x=>x.id));
+      return;
+     }
+    }
+   }
+  }
   openApptEdit(apptId);
  }
 }
@@ -5607,6 +5630,31 @@ async function saveAppt(){
    if(newDS.length){
     // Compute cursor = start + sum of durations of ALL existing dogs (they occupy the front)
     let addCursor=wiz.startMins+existingDS.reduce((s,d)=>s+getWizDogDur(d),0);
+    // Session C issue 3: clash-check each new dog's slot against OTHER appointments on the
+    // same groomer/day (excluding this group's own appts). Block insert if any overlap.
+    const ownGroupIds=new Set(existingDS.map(d=>d.apptId).filter(Boolean));
+    const clashes=[];
+    let checkCursor=addCursor;
+    for(const ds of newDS){
+     const dur=getWizDogDur(ds);
+     const start=checkCursor, end=checkCursor+dur;
+     const hit=appts.find(x=>{
+      if(x.groomer_id!==wiz.groomerId||x.appt_date!==wiz.date||x.status==='cancelled') return false;
+      if(ownGroupIds.has(x.id)) return false; // ignore our own group
+      const xs=t2m((x.appt_time||'').slice(0,5)), xe=xs+(x.duration_mins||60);
+      return start<xe&&xs<end;
+     });
+     if(hit){
+      const otherDog=dogs.find(d=>d.id===hit.dog_id)?.name||'?';
+      const newDogNm=dogs.find(d=>d.id===ds.did)?.name||'?';
+      clashes.push(`${newDogNm} @ ${m2t(start)} bentrok dengan ${otherDog} (${(hit.appt_time||'').slice(0,5)})`);
+     }
+     checkCursor+=dur;
+    }
+    if(clashes.length){
+     alert('Tidak bisa tambah anjing — jadwal bentrok:\n\n'+clashes.join('\n')+'\n\nPindahkan appointment ini ke slot yang lebih longgar dulu, atau ganti groomer.');
+     return;
+    }
     const newInserts=newDS.map(ds=>{
      const dur=getWizDogDur(ds);
      const dogNote=document.getElementById('appt-note-'+ds.did)?.value.trim()||'';
@@ -7621,7 +7669,16 @@ function renderSubsSchedulePicker(){
  const listEl=document.getElementById('inv-subs-schedule-dogs');
  if(!card||!listEl) return;
  const subsOn=document.getElementById('inv-subs-billing')?.checked;
- if(!subsOn||!invSelectedDogs.length){card.style.display='none';return}
+ // Session C issue 2 fix: also show the schedule picker when advance booking is active with
+ // a RECURRING tier (weekly/biweekly/monthly). That's the real subscription-scheduling path in
+ // Jual Paket mode — it was previously gated only on the separate 6b checkbox, so it never appeared.
+ const advActive=(typeof isAdvanceActive==='function')&&isAdvanceActive();
+ const hasRecurringAdv=advActive&&invSelectedDogs.some(did=>{
+  const st=invAdvanceDogs[did]?.subs_type;
+  return st==='weekly'||st==='biweekly'||st==='monthly';
+ });
+ const shouldShow=(subsOn||hasRecurringAdv)&&invSelectedDogs.length;
+ if(!shouldShow){card.style.display='none';return}
  card.style.display='block';
  const DAYS=['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
  const DAY_VALS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
@@ -7694,7 +7751,9 @@ function renderSchedAvailability(did){
  const startStr=document.getElementById('sched-start-'+did)?.value||iso(new Date());
  const chosenGroomer=document.getElementById('sched-groomer-'+did)?.value||'';
  const jamStr=document.getElementById('sched-time-'+did)?.value||'09:00';
- const svc=Object.keys(invDogServices[did]?.services||{}).filter(s=>invDogServices[did].services[s].checked).join(', ')||'Basic Grooming';
+ // Session C issue 2: in package mode invDogServices is empty; fall back to advance service_type
+ const svcFromServices=Object.keys(invDogServices[did]?.services||{}).filter(s=>invDogServices[did].services[s].checked).join(', ');
+ const svc=svcFromServices||invAdvanceDogs[did]?.service_type||'Basic Grooming';
  const dur=dogDur(svc,dog.size);
  // Compute first occurrence of the chosen weekday on or after start date
  const DAY_VALS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -7802,7 +7861,7 @@ async function createSubsScheduleAppointments(){
   const time=document.getElementById('sched-time-'+did)?.value||'09:00';
   const startStr=document.getElementById('sched-start-'+did)?.value||iso(new Date());
   const chosenGroomer=document.getElementById('sched-groomer-'+did)?.value||''; // '' = auto-assign
-  const svcBase=Object.keys(ds?.services||{}).filter(s=>ds.services[s].checked).join(', ')||'Basic Grooming';
+  const svcBase=(Object.keys(ds?.services||{}).filter(s=>ds.services[s].checked).join(', '))||ad?.service_type||'Basic Grooming';
   const dur=dogDur(svcBase,dog.size);
 
   // Find first occurrence of dayName on or after startStr
@@ -7963,6 +8022,7 @@ function onAdvanceToggle(on){
  if(wrap) wrap.style.display=on?'':'none';
  if(on) renderAdvanceDogs();
  recalcInvoice();
+ if(typeof renderSubsSchedulePicker==='function') renderSubsSchedulePicker(); // Session C issue 2: show/hide jadwal card
 }
 
 /* Session E — Big invoice mode toggle. Two modes:
@@ -9271,11 +9331,15 @@ async function sendInvoiceViaWA(rec, cust, sourceButton, preOpenedWin){
   const pdfUrl=urlData.publicUrl;
   const fullMsg=message+'\n\n📎 Invoice PDF: '+pdfUrl;
   const waUrl=waTarget+'?text='+encodeURIComponent(fullMsg);
-  // Session C fix v2: mobile → navigate CURRENT window (universal link opens WA app on customer chat).
-  // Desktop → navigate the pre-opened tab (bypasses popup blocker; leaves user's work tab alone).
+  // Session C fix v3: mobile → click a synthetic anchor (preserves emoji in the URL on iOS,
+  // where window.location.href assignment can corrupt surrogate-pair emoji). Desktop → pre-opened tab.
   if(isMobile){
    try{preOpenedWin&&preOpenedWin.close()}catch(_){}
-   window.location.href=waUrl;
+   const a=document.createElement('a');
+   a.href=waUrl; a.target='_blank'; a.rel='noopener';
+   document.body.appendChild(a);
+   a.click();
+   setTimeout(()=>{try{document.body.removeChild(a)}catch(_){}},0);
   } else if(preOpenedWin && !preOpenedWin.closed){
    preOpenedWin.location.href=waUrl;
   } else {
