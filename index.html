@@ -993,7 +993,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   <div id="inv-subs-schedule-dogs" style="padding:0 1rem"></div>
   <div style="padding:1rem;padding-top:8px;border-top:1px solid var(--border);margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
    <button class="btn btn-p btn-sm" onclick="createSubsScheduleAppointments()">Buat jadwal di kalender</button>
-   <span style="font-size:11px;color:var(--muted)">Groomer belum ditentukan — isi nanti via kalender</span>
+   <span id="inv-subs-groomer-hint" style="font-size:11px;color:var(--muted)"></span>
   </div>
  </div>
 
@@ -7782,7 +7782,7 @@ function renderSubsSchedulePicker(){
     </div>
     <div>
      <label style="font-size:11px;color:var(--muted)">Groomer</label><br>
-     <select id="sched-groomer-${did}" onchange="renderSchedAvailability('${did}')" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px">
+     <select id="sched-groomer-${did}" onchange="renderSchedAvailability('${did}');updateSubsGroomerHint()" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px">
       <option value="">Auto-assign</option>
       ${groomers.filter(g=>g.active).map(g=>`<option value="${g.id}" ${(document.getElementById('inv-groomer')?.value===g.id)?'selected':''}>${esc(g.name)}</option>`).join('')}
      </select>
@@ -7801,6 +7801,28 @@ function renderSubsSchedulePicker(){
   // Session C: render availability preview once picks restored
   renderSchedAvailability(did);
  });
+ // Bug 2 fix: dynamic groomer hint reflecting actual selections
+ updateSubsGroomerHint();
+}
+
+// Bug 2 fix: reflect the actual per-dog groomer selections in the hint under the create button
+function updateSubsGroomerHint(){
+ const hintEl=document.getElementById('inv-subs-groomer-hint');
+ if(!hintEl) return;
+ const picks=invSelectedDogs.map(did=>document.getElementById('sched-groomer-'+did)?.value||'');
+ const allChosen=picks.length&&picks.every(p=>p);
+ const noneChosen=picks.every(p=>!p);
+ if(allChosen){
+  const names=[...new Set(invSelectedDogs.map(did=>{const g=document.getElementById('sched-groomer-'+did)?.value;return groomers.find(x=>x.id===g)?.name;}).filter(Boolean))];
+  hintEl.textContent='Groomer: '+names.join(', ');
+  hintEl.style.color='var(--green-dk)';
+ } else if(noneChosen){
+  hintEl.textContent='Groomer belum dipilih — sistem auto-assign saat dibuat';
+  hintEl.style.color='var(--muted)';
+ } else {
+  hintEl.textContent='Sebagian groomer belum dipilih — yang kosong akan auto-assign';
+  hintEl.style.color='#92400e';
+ }
 }
 
 // Session C item 5: visual slot availability for a dog's target day/groomer.
@@ -7909,6 +7931,7 @@ function _toMin(hhmm){const [h,m]=String(hhmm||'0:0').split(':').map(Number);ret
 async function createSubsScheduleAppointments(){
  const toCreate=[];
  const conflicts=[];
+ const alreadyScheduled=[]; // Bug 1 fix: sessions that already exist at the exact same slot
  const DAY_VALS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
  for(const did of invSelectedDogs){
@@ -7937,7 +7960,14 @@ async function createSubsScheduleAppointments(){
    // Dog already booked that day?
    const existing=appts.find(a=>a.dog_id===did&&a.appt_date===dateISO&&a.status!=='cancelled');
    if(existing){
-    conflicts.push({dogName:dog.name,date:dateISO,reason:`sudah ada appt jam ${existing.appt_time?.slice(0,5)||'?'}`});
+    // Bug 1 fix: if the existing appt is essentially the SAME slot we'd create (same time),
+    // it's already scheduled — count it as done, don't alarm the user as a conflict.
+    const existTime=(existing.appt_time||'').slice(0,5);
+    if(existTime===time){
+     alreadyScheduled.push({dogName:dog.name,date:dateISO,time:existTime});
+    } else {
+     conflicts.push({dogName:dog.name,date:dateISO,reason:`sudah ada appt jam ${existTime||'?'} (beda jam)`});
+    }
     d.setDate(d.getDate()+freqDays); continue;
    }
    // Resolve groomer: manual pick (with time-clash check) or auto-assign
@@ -7964,10 +7994,24 @@ async function createSubsScheduleAppointments(){
   }
  }
 
- // Show conflict summary and confirm
+ // Bug 1 fix: if nothing to create but sessions already exist, tell the user plainly (not a scary conflict)
+ if(!toCreate.length && alreadyScheduled.length && !conflicts.length){
+  const lines=alreadyScheduled.map(a=>`• ${a.dogName} — ${a.date} jam ${a.time}`).join('\n');
+  const firstExisting=alreadyScheduled[0]?.date;
+  const goCalEx=confirm(`Semua ${alreadyScheduled.length} sesi sudah ada di kalender:\n\n${lines}\n\nTidak ada yang perlu dibuat lagi. Buka kalender ke tanggal pertama (${firstExisting})?`);
+  if(goCalEx&&firstExisting){
+   if(typeof calStart!=='undefined'){calStart=new Date(firstExisting+'T00:00:00');if(typeof weekStart==='function'&&typeof calView!=='undefined'&&calView==='week') calStart=weekStart(calStart);}
+   if(typeof sw==='function') sw('calendar');
+   if(typeof renderCal==='function') renderCal();
+  }
+  return;
+ }
+
+ // Show conflict summary and confirm (real conflicts only — different-time or no-groomer)
  if(conflicts.length){
   const lines=conflicts.map(c=>`• ${c.dogName} — ${c.date} (${c.reason})`).join('\n');
-  const proceed=confirm(`${conflicts.length} slot dilewati:\n\n${lines}\n\nBuat ${toCreate.length} appointment baru?`);
+  const alreadyNote=alreadyScheduled.length?`\n\n(${alreadyScheduled.length} sesi sudah ada di kalender, dilewati)`:'';
+  const proceed=confirm(`${conflicts.length} slot bentrok:\n\n${lines}${alreadyNote}\n\nBuat ${toCreate.length} appointment baru?`);
   if(!proceed) return;
  }
 
