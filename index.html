@@ -7989,22 +7989,48 @@ async function createSubsScheduleAppointments(){
      d.setDate(d.getDate()+freqDays); continue;
     }
    }
-   toCreate.push({dog_id:did,customer_id:dog.customer_id,groomer_id:gid,appt_date:dateISO,appt_time:time+':00',service_base:svcBase,duration_mins:dur,session_source:'subscription',status:'pending',token_used:false,subs_deducted:false});
+   toCreate.push({dog_id:did,groomer_id:gid,appt_date:dateISO,appt_time:time+':00',service_base:svcBase,duration_mins:dur,session_source:'subscription',status:'pending',token_used:false,appt_note:`Subs ${subsType} sesi ${i+1}/${sessions}`,...editStamp()});
    d.setDate(d.getDate()+freqDays);
   }
  }
 
- // Bug 1 fix: if nothing to create but sessions already exist, tell the user plainly (not a scary conflict)
+ // Bug 1 fix: if nothing to create but sessions already exist, VERIFY against DB before assuming.
+ // In-memory appts can hold phantom rows from a previously-failed insert; check the real table.
  if(!toCreate.length && alreadyScheduled.length && !conflicts.length){
-  const lines=alreadyScheduled.map(a=>`• ${a.dogName} — ${a.date} jam ${a.time}`).join('\n');
-  const firstExisting=alreadyScheduled[0]?.date;
-  const goCalEx=confirm(`Semua ${alreadyScheduled.length} sesi sudah ada di kalender:\n\n${lines}\n\nTidak ada yang perlu dibuat lagi. Buka kalender ke tanggal pertama (${firstExisting})?`);
-  if(goCalEx&&firstExisting){
-   if(typeof calStart!=='undefined'){calStart=new Date(firstExisting+'T00:00:00');if(typeof weekStart==='function'&&typeof calView!=='undefined'&&calView==='week') calStart=weekStart(calStart);}
-   if(typeof sw==='function') sw('calendar');
-   if(typeof renderCal==='function') renderCal();
+  // Re-fetch appointments straight from DB to confirm these really exist
+  let dbConfirmed=alreadyScheduled.length;
+  try{
+   const dogIds=[...new Set(alreadyScheduled.map((_,i)=>invSelectedDogs).flat())];
+   const dates=alreadyScheduled.map(a=>a.date);
+   const {data:dbAppts}=await db.from('appointments').select('id,dog_id,appt_date,appt_time,status').in('appt_date',dates);
+   const realSet=new Set((dbAppts||[]).filter(a=>a.status!=='cancelled').map(a=>a.dog_id+'|'+a.appt_date+'|'+(a.appt_time||'').slice(0,5)));
+   // How many of our "alreadyScheduled" are actually in the DB?
+   dbConfirmed=alreadyScheduled.filter(a=>{
+    const did=invSelectedDogs.find(id=>dogs.find(x=>x.id===id)?.name===a.dogName);
+    return realSet.has(did+'|'+a.date+'|'+a.time);
+   }).length;
+  }catch(e){ console.warn('DB verify failed, trusting in-memory',e); }
+
+  if(dbConfirmed>=alreadyScheduled.length){
+   // Genuinely all present in DB
+   const lines=alreadyScheduled.map(a=>`• ${a.dogName} — ${a.date} jam ${a.time}`).join('\n');
+   const firstExisting=alreadyScheduled[0]?.date;
+   const goCalEx=confirm(`Semua ${alreadyScheduled.length} sesi sudah ada di kalender:\n\n${lines}\n\nTidak ada yang perlu dibuat lagi. Buka kalender ke tanggal pertama (${firstExisting})?`);
+   if(goCalEx&&firstExisting){
+    if(typeof calStart!=='undefined'){calStart=new Date(firstExisting+'T00:00:00');if(typeof weekStart==='function'&&typeof calView!=='undefined'&&calView==='week') calStart=weekStart(calStart);}
+    if(typeof sw==='function') sw('calendar');
+    if(typeof renderCal==='function') renderCal();
+   }
+   return;
+  } else {
+   // In-memory said "exists" but DB disagrees → phantoms from a failed insert. Clean up + recreate.
+   console.warn('[subs-schedule] phantom appts detected. in-memory:',alreadyScheduled.length,'DB:',dbConfirmed);
+   alert(`Terdeteksi ${alreadyScheduled.length-dbConfirmed} jadwal "hantu" (ada di layar tapi tidak tersimpan di database, kemungkinan dari percobaan sebelumnya yang gagal).\n\nAkan dibuat ulang sekarang.`);
+   // Force a fresh reload to purge phantoms, then re-run this function once
+   await reloadTables('appointments');
+   if(!window._subsRetried){ window._subsRetried=true; setTimeout(()=>{window._subsRetried=false;createSubsScheduleAppointments();},100); }
+   return;
   }
-  return;
  }
 
  // Show conflict summary and confirm (real conflicts only — different-time or no-groomer)
@@ -8016,10 +8042,23 @@ async function createSubsScheduleAppointments(){
  }
 
  if(!toCreate.length){alert('Tidak ada jadwal baru yang bisa dibuat.\n\nSemua slot bentrok atau tidak ada groomer available untuk kombinasi hari/jam yang dipilih.\n\nCoba: pilih groomer spesifik di kolom "Groomer" tiap anjing, atau ubah hari/jam, atau cek working_days groomer di tab Groomers.');return}
- // Session C item 5 UX: return inserted rows so we can (a) verify count matches, (b) surface the dates back to the user.
+ // Diagnostic: log payload so any schema mismatch is visible in console
+ console.log('[subs-schedule] inserting', toCreate.length, 'appointments:', toCreate);
  const {data:insertedRows,error}=await db.from('appointments').insert(toCreate).select();
- if(error){alert('Gagal insert ke DB:\n\n'+error.message+'\n\nCoba refresh & ulangi. Kalau tetap error, screenshot pesan ini.');return}
+ if(error){
+  console.error('[subs-schedule] INSERT FAILED:', error);
+  alert('GAGAL simpan ke database:\n\n'+(error.message||error.details||JSON.stringify(error))+'\n\n(Detail lengkap di Console / F12)\n\nKemungkinan ada kolom yang tidak cocok dengan tabel appointments.');
+  return;
+ }
+ if(!insertedRows||!insertedRows.length){
+  console.error('[subs-schedule] insert returned no rows', insertedRows);
+  alert('Insert tidak mengembalikan data. Kemungkinan diblokir oleh Row Level Security (RLS) di Supabase.\n\nCek policy INSERT untuk tabel appointments.');
+  return;
+ }
+ // Patch local appts array immediately so the calendar shows them without waiting on reload
+ insertedRows.forEach(a=>appts.push(a));
  await reloadTables('appointments');
+ console.log('[subs-schedule] success:', insertedRows.length, 'rows. Total appts now:', appts.length);
  // Build human-readable summary with dates, groomer names, and switch-to-calendar option
  const dayNamesID=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
  const summary=toCreate.map(a=>{
