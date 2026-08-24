@@ -671,13 +671,13 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 
  <div class="sec" id="sec-database">
  <div class="toolbar">
- <span class="toolbar-title">Database</span>
+ <span class="toolbar-title" data-i18n="tt.database">Database</span>
  <button class="btn btn-p" onclick="openAddCust()">+ Add customer</button>
  </div>
  <div class="subtabs">
- <button class="subtab active" id="stab-cust" onclick="swSub('cust')">Customers</button>
- <button class="subtab" id="stab-dogs" onclick="swSub('dogs')">Pets</button>
- <button class="subtab" id="stab-export" onclick="swSub('export')">Export</button>
+ <button class="subtab active" id="stab-cust" onclick="swSub('cust')" data-i18n="sub.cust">Customers</button>
+ <button class="subtab" id="stab-dogs" onclick="swSub('dogs')" data-i18n="sub.pets">Pets</button>
+ <button class="subtab" id="stab-export" onclick="swSub('export')" data-i18n="sub.export">Export</button>
  </div>
 
  <div class="subsec active" id="ssec-cust">
@@ -821,13 +821,13 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 
  <div class="sec" id="sec-groomers">
  <div class="toolbar">
- <span class="toolbar-title">Groomers</span>
+ <span class="toolbar-title" data-i18n="tt.groomers">Groomers</span>
  <button class="btn btn-p" onclick="openAddGroomer()">+ Add groomer</button>
  </div>
  <div class="subtabs" style="margin-bottom:1rem">
-  <button class="subtab active" id="gtab-list" onclick="swGroomer('list')">Groomer list</button>
-  <button class="subtab" id="gtab-attendance" onclick="swGroomer('attendance')">Attendance</button>
-  <button class="subtab" id="gtab-leaderboard" onclick="swGroomer('leaderboard')">Leaderboard</button>
+  <button class="subtab active" id="gtab-list" onclick="swGroomer('list')" data-i18n="sub.groomerlist">Groomer list</button>
+  <button class="subtab" id="gtab-attendance" onclick="swGroomer('attendance')" data-i18n="sub.attendance">Attendance</button>
+  <button class="subtab" id="gtab-leaderboard" onclick="swGroomer('leaderboard')" data-i18n="sub.leaderboard">Leaderboard</button>
  </div>
  <div class="subsec active" id="gsec-list">
  <div class="tbl-wrap">
@@ -847,7 +847,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 
  <div class="sec" id="sec-invoice">
  <div class="toolbar">
- <span class="toolbar-title">Buat invoice</span>
+ <span class="toolbar-title" data-i18n="tt.invoice">Buat invoice</span>
  <button class="btn btn-g btn-sm" onclick="resetInvoice()">Reset</button>
  </div>
 
@@ -1003,15 +1003,15 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 
  <div class="sec" id="sec-financial">
  <div class="toolbar">
- <span class="toolbar-title">Financial</span>
+ <span class="toolbar-title" data-i18n="tt.financial">Financial</span>
  </div>
  <div class="subtabs">
-  <button class="subtab active" id="fstab-invoices" onclick="swFin('invoices')">Invoices</button>
-  <button class="subtab" id="fstab-visits" onclick="swFin('visits')">Visits</button>
-  <button class="subtab" id="fstab-payroll" onclick="swFin('payroll')">Payroll</button>
-  <button class="subtab" id="fstab-expenses" onclick="swFin('expenses')">Expenses</button>
-  <button class="subtab" id="fstab-capital" onclick="swFin('capital')">Capital</button>
-  <button class="subtab" id="fstab-bank" onclick="swFin('bank')">Bank</button>
+  <button class="subtab active" id="fstab-invoices" onclick="swFin('invoices')" data-i18n="sub.invoices">Invoices</button>
+  <button class="subtab" id="fstab-visits" onclick="swFin('visits')" data-i18n="sub.visits">Visits</button>
+  <button class="subtab" id="fstab-payroll" onclick="swFin('payroll')" data-i18n="sub.payroll">Payroll</button>
+  <button class="subtab" id="fstab-expenses" onclick="swFin('expenses')" data-i18n="sub.expenses">Expenses</button>
+  <button class="subtab" id="fstab-capital" onclick="swFin('capital')" data-i18n="sub.capital">Capital</button>
+  <button class="subtab" id="fstab-bank" onclick="swFin('bank')" data-i18n="sub.bank">Bank</button>
  </div>
 
  <!-- Cash on hand — always visible -->
@@ -1120,13 +1120,13 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 
  <div class="sec" id="sec-reminders">
  <div class="toolbar">
-  <span class="toolbar-title">Reminders</span>
+  <span class="toolbar-title" data-i18n="tt.reminders">Reminders</span>
  </div>
  <div class="subtabs">
-  <button class="subtab active" id="rstab-groomer" onclick="swRem('groomer')">Groomer reminders</button>
-  <button class="subtab" id="rstab-customer" onclick="swRem('customer')">Customer reminders</button>
-  <button class="subtab" id="rstab-followup" onclick="swRem('followup')">Followup (belum grooming)</button>
-  <button class="subtab" id="rstab-renewal" onclick="swRem('renewal')">Renewal subs</button>
+  <button class="subtab active" id="rstab-groomer" onclick="swRem('groomer')" data-i18n="sub.groomerrem">Groomer reminders</button>
+  <button class="subtab" id="rstab-customer" onclick="swRem('customer')" data-i18n="sub.custrem">Customer reminders</button>
+  <button class="subtab" id="rstab-followup" onclick="swRem('followup')" data-i18n="sub.followup">Followup (belum grooming)</button>
+  <button class="subtab" id="rstab-renewal" onclick="swRem('renewal')" data-i18n="sub.renewal">Renewal subs</button>
  </div>
 
  <div class="subsec active" id="rsec-groomer">
@@ -1192,7 +1192,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 
  <div class="sec" id="sec-membership">
  <div class="toolbar">
-  <span class="toolbar-title">Membership &amp; Tokens</span>
+  <span class="toolbar-title" data-i18n="tt.membership">Membership &amp; Tokens</span>
   <select id="memb-kind" onchange="renderMembership()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:13px;margin-right:6px">
    <option value="all">All kinds</option>
    <option value="subscription">Subscriptions only</option>
@@ -1219,7 +1219,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 
  <div class="sec" id="sec-access">
  <div class="toolbar">
-  <span class="toolbar-title">Admin access</span>
+  <span class="toolbar-title" data-i18n="tt.access">Admin access</span>
   <select id="access-filter" onchange="renderAccess()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:13px">
    <option value="pending">Pending only</option>
    <option value="approved">Approved only</option>
@@ -1242,7 +1242,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <!-- Batch O.10 — History audit log section -->
  <div class="sec" id="sec-history">
   <div class="toolbar">
-   <span class="toolbar-title">History</span>
+   <span class="toolbar-title" data-i18n="tt.history">History</span>
    <span style="font-size:11px;color:var(--muted)">Audit log — all changes across system</span>
   </div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
@@ -1288,12 +1288,12 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 
 <!-- ADD/EDIT CUSTOMER -->
  <div class="sec" id="sec-settings">
-  <div class="toolbar"><span class="toolbar-title">Settings</span></div>
+  <div class="toolbar"><span class="toolbar-title" data-i18n="tt.settings">Settings</span></div>
   <div class="subtabs">
-   <button class="subtab active" id="stab-storage" onclick="swSettings('storage')">Storage</button>
-   <button class="subtab" id="stab-data" onclick="swSettings('data')">Data</button>
-   <button class="subtab" id="stab-ideas" onclick="swSettings('ideas')">Roadmap</button>
-   <button class="subtab" id="stab-config" onclick="swSettings('config')">Configuration</button>
+   <button class="subtab active" id="stab-storage" onclick="swSettings('storage')" data-i18n="sub.storage">Storage</button>
+   <button class="subtab" id="stab-data" onclick="swSettings('data')" data-i18n="sub.data">Data</button>
+   <button class="subtab" id="stab-ideas" onclick="swSettings('ideas')" data-i18n="sub.roadmap">Roadmap</button>
+   <button class="subtab" id="stab-config" onclick="swSettings('config')" data-i18n="sub.config">Configuration</button>
   </div>
   <div class="subsec active" id="ssec-storage">
    <div id="settings-storage-content"><div style="color:var(--muted);padding:1rem">Loading...</div></div>
@@ -1655,6 +1655,31 @@ thead th[onclick]:hover{color:var(--primary-darker)}
     <label>Catatan admin (internal) <span style="font-size:10px;color:var(--muted);font-weight:400">— hanya terlihat di invoice, tidak ke customer/groomer</span></label>
     <input id="appt-admin-note" placeholder="e.g. Diskon khusus loyal customer, jangan di-charge parkir"/>
    </div>
+   <!-- Session D item 2: recurring appointment options -->
+   <div id="appt-repeat-section" class="fg" style="margin-bottom:.9rem;background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:12px">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:0">
+     <input type="checkbox" id="appt-repeat-on" onchange="onRepeatToggle()" style="width:16px;height:16px"/>
+     <span style="font-weight:600">🔁 Ulangi appointment ini (recurring)</span>
+    </label>
+    <div id="appt-repeat-opts" style="display:none;margin-top:10px">
+     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div>
+       <label style="font-size:11px;color:var(--muted)">Ulangi setiap</label><br>
+       <select id="appt-repeat-freq" style="padding:6px 8px;border:1px solid var(--border);border-radius:5px;font-size:13px">
+        <option value="7">Setiap minggu</option>
+        <option value="14">Setiap 2 minggu</option>
+        <option value="21">Setiap 3 minggu</option>
+        <option value="28">Setiap 4 minggu</option>
+       </select>
+      </div>
+      <div>
+       <label style="font-size:11px;color:var(--muted)">Jumlah total sesi</label><br>
+       <input type="number" id="appt-repeat-count" value="4" min="2" max="52" style="width:80px;padding:6px 8px;border:1px solid var(--border);border-radius:5px;font-size:13px"/>
+      </div>
+     </div>
+     <div style="font-size:11px;color:var(--muted);margin-top:8px;font-style:italic">Termasuk appointment ini sebagai sesi pertama. Kalau ada tanggal yang bentrok, kamu akan ditanya per tanggal (skip atau ganti jam).</div>
+    </div>
+   </div>
    <div id="appt-groomer-field-note-wrap" class="fg" style="margin-bottom:.9rem;display:none">
     <label>Catatan groomer (dari lapangan) <span style="font-size:10px;color:var(--muted);font-weight:400">— read-only, diisi groomer via halaman groomer</span></label>
     <div id="appt-groomer-field-note" style="padding:8px 12px;background:#fef9c3;border-left:3px solid #ca8a04;border-radius:6px;font-size:13px;color:#713f12;white-space:pre-wrap"></div>
@@ -2001,11 +2026,15 @@ const I18N={
  en:{'nav.dashboard':'Dashboard','nav.database':'Database','nav.calendar':'Calendar','nav.groomers':'Groomers','nav.invoice':'Invoice','nav.financial':'Financial','nav.reminders':'Reminders','nav.membership':'Membership','nav.access':'Access','nav.history':'History','nav.tally':'Tally','nav.settings':'Settings','ui.signout':'Sign out','ui.search':'Search','ui.prefs':'Preferences',
   'tb.dashboard':'Dashboard','tb.database':'Database','tb.calendar':'Calendar','tb.groomers':'Groomers','tb.financial':'Financial','tb.reminders':'Reminders','tb.membership':'Membership','tb.settings':'Settings',
   'btn.add':'Add','btn.save':'Save','btn.cancel':'Cancel','btn.delete':'Delete','btn.edit':'Edit','btn.export':'Export','btn.today':'Today','btn.reset':'Reset',
-  'st.customers':'Customers','st.dogs':'Dogs','st.invoices':'Invoices','st.visits':'Visits','st.payroll':'Payroll','st.expenses':'Expenses','st.capital':'Capital','st.bank':'Bank'},
+  'st.customers':'Customers','st.dogs':'Dogs','st.invoices':'Invoices','st.visits':'Visits','st.payroll':'Payroll','st.expenses':'Expenses','st.capital':'Capital','st.bank':'Bank',
+  'tt.database':'Database','tt.groomers':'Groomers','tt.invoice':'Create invoice','tt.financial':'Financial','tt.reminders':'Reminders','tt.membership':'Membership & Tokens','tt.access':'Admin access','tt.history':'History','tt.settings':'Settings','tt.tally':'Tally / Reconcile',
+  'sub.cust':'Customers','sub.pets':'Pets','sub.export':'Export','sub.back':'Back','sub.groomerlist':'Groomer list','sub.attendance':'Attendance','sub.leaderboard':'Leaderboard','sub.invoices':'Invoices','sub.visits':'Visits','sub.payroll':'Payroll','sub.expenses':'Expenses','sub.capital':'Capital','sub.bank':'Bank','sub.groomerrem':'Groomer reminders','sub.custrem':'Customer reminders','sub.followup':'Followup (not yet groomed)','sub.renewal':'Renewal subs','sub.storage':'Storage','sub.data':'Data','sub.roadmap':'Roadmap','sub.config':'Configuration'},
  id:{'nav.dashboard':'Dasbor','nav.database':'Data','nav.calendar':'Kalender','nav.groomers':'Groomer','nav.invoice':'Invoice','nav.financial':'Keuangan','nav.reminders':'Pengingat','nav.membership':'Keanggotaan','nav.access':'Akses','nav.history':'Riwayat','nav.tally':'Rekonsiliasi','nav.settings':'Pengaturan','ui.signout':'Keluar','ui.search':'Cari','ui.prefs':'Preferensi',
   'tb.dashboard':'Dasbor','tb.database':'Data','tb.calendar':'Kalender','tb.groomers':'Groomer','tb.financial':'Keuangan','tb.reminders':'Pengingat','tb.membership':'Keanggotaan','tb.settings':'Pengaturan',
   'btn.add':'Tambah','btn.save':'Simpan','btn.cancel':'Batal','btn.delete':'Hapus','btn.edit':'Ubah','btn.export':'Ekspor','btn.today':'Hari ini','btn.reset':'Reset',
-  'st.customers':'Pelanggan','st.dogs':'Anjing','st.invoices':'Invoice','st.visits':'Kunjungan','st.payroll':'Gaji','st.expenses':'Pengeluaran','st.capital':'Modal','st.bank':'Bank'}
+  'st.customers':'Pelanggan','st.dogs':'Anjing','st.invoices':'Invoice','st.visits':'Kunjungan','st.payroll':'Gaji','st.expenses':'Pengeluaran','st.capital':'Modal','st.bank':'Bank',
+  'tt.database':'Data','tt.groomers':'Groomer','tt.invoice':'Buat invoice','tt.financial':'Keuangan','tt.reminders':'Pengingat','tt.membership':'Keanggotaan & Token','tt.access':'Akses admin','tt.history':'Riwayat','tt.settings':'Pengaturan','tt.tally':'Rekonsiliasi',
+  'sub.cust':'Pelanggan','sub.pets':'Anjing','sub.export':'Ekspor','sub.back':'Kembali','sub.groomerlist':'Daftar groomer','sub.attendance':'Kehadiran','sub.leaderboard':'Peringkat','sub.invoices':'Invoice','sub.visits':'Kunjungan','sub.payroll':'Gaji','sub.expenses':'Pengeluaran','sub.capital':'Modal','sub.bank':'Bank','sub.groomerrem':'Pengingat groomer','sub.custrem':'Pengingat pelanggan','sub.followup':'Followup (belum grooming)','sub.renewal':'Perpanjangan subs','sub.storage':'Penyimpanan','sub.data':'Data','sub.roadmap':'Roadmap','sub.config':'Konfigurasi'}
 };
 function t(key){ const d=I18N[LANG]||{}; if(d[key]!==undefined) return d[key]; return null; }
 function applyI18n(){
@@ -5221,6 +5250,10 @@ function openAppt(dateISO,groomerId,startMins){
  const tfEl=document.getElementById('appt-transport-fee'); if(tfEl) tfEl.value='';
  const snEl=document.getElementById('appt-session-note'); if(snEl) snEl.value='';
  const adtEl=document.getElementById('appt-disc-type'); if(adtEl) adtEl.value='';
+ // Session D item 2: show recurrence section for new appts, reset to off
+ const repSec=document.getElementById('appt-repeat-section'); if(repSec) repSec.style.display='';
+ const repOn=document.getElementById('appt-repeat-on'); if(repOn) repOn.checked=false;
+ const repOpts=document.getElementById('appt-repeat-opts'); if(repOpts) repOpts.style.display='none';
  const advEl=document.getElementById('appt-disc-value'); if(advEl) advEl.value=0;
  const aesEl=document.getElementById('appt-edit-stamp'); if(aesEl) aesEl.innerHTML='';
  // Batch O.13 — reset perf fields
@@ -5250,6 +5283,9 @@ function openApptEdit(id){
  document.getElementById('appt-title').textContent='Edit appointment';
  document.getElementById('appt-save-btn').textContent='Update';
  const delBtnSingle=document.getElementById('appt-del-btn');
+ // Session D item 2: recurrence only for new appts, hide in edit
+ const repSecE=document.getElementById('appt-repeat-section'); if(repSecE) repSecE.style.display='none';
+ const repOnE=document.getElementById('appt-repeat-on'); if(repOnE) repOnE.checked=false;
  if(delBtnSingle){delBtnSingle.style.display='inline-flex';delBtnSingle.textContent='Delete';}
  const compBtn=document.getElementById('appt-complaint-btn'); if(compBtn) compBtn.style.display='inline-flex';
  const confirmBtn=document.getElementById('appt-confirm-btn');
@@ -5372,6 +5408,9 @@ function openApptEdit(id){
 function openGroupEdit(ids){
  const apptList=ids.map(id=>appts.find(a=>a.id===id)).filter(Boolean);
  if(!apptList.length) return;
+ // Session D item 2: recurrence only for new appts, hide in group edit
+ const repSecG=document.getElementById('appt-repeat-section'); if(repSecG) repSecG.style.display='none';
+ const repOnG=document.getElementById('appt-repeat-on'); if(repOnG) repOnG.checked=false;
  const firstA=apptList[0];
  const firstDog=dogs.find(d=>d.id===firstA.dog_id);
  const dogSvcs=apptList.map(a=>{
@@ -5764,8 +5803,113 @@ async function saveAppt(){
  } else if(insertedAppts?.length){
   insertedAppts.forEach(a=>appts.push(a));
  }
+ // Session D item 2: capture recurrence settings BEFORE closing the modal (which clears inputs)
+ const wantRepeat=!wiz.editId && insertedAppts?.length && document.getElementById('appt-repeat-on')?.checked;
+ const repeatFreq=parseInt(document.getElementById('appt-repeat-freq')?.value)||7;
+ const repeatCount=Math.max(2,parseInt(document.getElementById('appt-repeat-count')?.value)||4);
  cm('ov-appt');
  renderCal();
+ if(wantRepeat){
+  await createRecurringSeries(insertedAppts, repeatFreq, repeatCount);
+ }
+}
+
+// ===== Session D item 2: recurring appointments =====
+function onRepeatToggle(){
+ const on=document.getElementById('appt-repeat-on')?.checked;
+ const opts=document.getElementById('appt-repeat-opts');
+ if(opts) opts.style.display=on?'':'none';
+}
+
+// Check if a given date/groomer/time-span clashes with existing appts. Returns the conflicting appt or null.
+function _findApptClash(dateISO,groomerId,startMins,durMins,ignoreIds){
+ const ignore=ignoreIds||new Set();
+ return appts.find(x=>{
+  if(x.groomer_id!==groomerId||x.appt_date!==dateISO||x.status==='cancelled') return false;
+  if(ignore.has(x.id)) return false;
+  const xs=t2m((x.appt_time||'').slice(0,5)), xe=xs+(x.duration_mins||60);
+  return startMins<xe&&xs<(startMins+durMins);
+ })||null;
+}
+
+// After the first appointment(s) of a series are created, generate the remaining occurrences.
+// firstAppts = the just-created rows (session 1). Handles per-date clash resolution via popups.
+async function createRecurringSeries(firstAppts, freqDays, totalCount){
+ freqDays=freqDays||7;
+ totalCount=Math.max(2,totalCount||4);
+ if(!firstAppts||!firstAppts.length) return;
+ // Base the series on the first-session appts (could be multiple dogs in a group).
+ // Each subsequent occurrence replicates the same dogs/times/groomer, shifted by freqDays.
+ const baseDate=firstAppts[0].appt_date;
+ const groomerId=firstAppts[0].groomer_id;
+ // Build a template of the per-dog rows (relative to base date)
+ const template=firstAppts.map(a=>({
+  dog_id:a.dog_id, groomer_id:a.groomer_id, service_base:a.service_base,
+  duration_mins:a.duration_mins, appt_time:a.appt_time,
+  appt_note:a.appt_note||'', customer_note:a.customer_note||'', session_note:a.session_note||'',
+  admin_note:a.admin_note||'', session_source:a.session_source||'normal'
+ }));
+ let created=0, skipped=0;
+ const createdRows=[];
+ // occurrence 0 = the already-created first session; start from 1
+ for(let occ=1; occ<totalCount; occ++){
+  const d=new Date(baseDate+'T00:00:00');
+  d.setDate(d.getDate()+occ*freqDays);
+  let dateISO=iso(d);
+  // Check clash for each dog in the template on this date
+  const rowsForDate=[];
+  let dateHasClash=false, clashInfo='';
+  for(const tpl of template){
+   const startMins=t2m((tpl.appt_time||'').slice(0,5));
+   const clash=_findApptClash(dateISO,groomerId,startMins,tpl.duration_mins);
+   if(clash){
+    dateHasClash=true;
+    const otherDog=dogs.find(x=>x.id===clash.dog_id)?.name||'?';
+    clashInfo=`sudah ada booking ${otherDog} jam ${(clash.appt_time||'').slice(0,5)}`;
+    break;
+   }
+   rowsForDate.push({...tpl, appt_date:dateISO, token_used:false, ...editStamp()});
+  }
+  if(dateHasClash){
+   // Per-clash popup: skip this date OR pick a different time for this date only
+   const dogNm=dogs.find(x=>x.id===template[0].dog_id)?.name||'anjing ini';
+   const choice=prompt(
+    `⚠️ Tidak bisa buat jadwal untuk ${dogNm} pada ${fmtD(dateISO)} — ${clashInfo}.\n\n`+
+    `Ketik jam baru khusus tanggal ini (format HH:MM, contoh 14:30),\n`+
+    `atau ketik "skip" untuk lewati tanggal ini,\n`+
+    `atau kosongkan + OK untuk lewati juga.`,
+    'skip'
+   );
+   if(choice===null){ skipped++; continue; } // cancelled = skip this occurrence
+   const trimmed=choice.trim().toLowerCase();
+   if(trimmed==='skip'||trimmed===''){ skipped++; continue; }
+   // Validate new time
+   const mt=/^(\d{1,2}):(\d{2})$/.exec(trimmed);
+   if(!mt){ alert('Format jam salah, tanggal '+fmtD(dateISO)+' dilewati.'); skipped++; continue; }
+   const newStart=parseInt(mt[1])*60+parseInt(mt[2]);
+   // Re-check clash at the new time for all dogs
+   let stillClash=false, retryRows=[];
+   let cursor=newStart;
+   for(const tpl of template){
+    const c=_findApptClash(dateISO,groomerId,cursor,tpl.duration_mins);
+    if(c){ stillClash=true; break; }
+    retryRows.push({...tpl, appt_date:dateISO, appt_time:m2t(cursor)+':00', token_used:false, ...editStamp()});
+    cursor+=tpl.duration_mins;
+   }
+   if(stillClash){ alert('Jam baru '+trimmed+' juga bentrok. Tanggal '+fmtD(dateISO)+' dilewati.'); skipped++; continue; }
+   rowsForDate.length=0; rowsForDate.push(...retryRows);
+  }
+  // Insert this occurrence's rows
+  if(rowsForDate.length){
+   const {data:ins,error}=await db.from('appointments').insert(rowsForDate).select();
+   if(error){ console.error('Recurring insert failed:',error); alert('Gagal buat sesi tanggal '+fmtD(dateISO)+': '+error.message); continue; }
+   (ins||[]).forEach(a=>{ appts.push(a); createdRows.push(a); });
+   created++;
+  }
+ }
+ renderCal();
+ const msg=`Recurring selesai:\n\n✓ ${created+1} sesi dibuat (termasuk sesi pertama)\n${skipped?`✗ ${skipped} tanggal dilewati (bentrok)`:''}`;
+ alert(msg);
 }
 
 async function delApptFromModal(){
@@ -13590,7 +13734,7 @@ function renderTally(){
 
  wrap.innerHTML=`
   <div class="toolbar">
-   <span class="toolbar-title">Tally / Reconcile</span>
+   <span class="toolbar-title" data-i18n="tt.tally">Tally / Reconcile</span>
    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <button class="btn btn-g btn-sm" onclick="tallyPrevCycle()">\u2190 Prev</button>
     <span style="font-weight:600;font-size:14px">${esc(cycle.label)}</span>
