@@ -915,30 +915,19 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  </div>
  </div>
 
+ <!-- Session D item 1: kept package session/pricing setup; removed the buggy calendar-interval auto-scheduling.
+      Recurring calendar appointments now live in the calendar wizard instead. -->
  <div class="card" id="inv-advance-card" style="padding:1rem;margin-bottom:1rem">
  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
-  <div class="det-lbl" style="margin:0">4. Advance booking</div>
+  <div class="det-lbl" style="margin:0">4. Paket / Sesi</div>
   <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
    <input type="checkbox" id="inv-is-advance" onchange="onAdvanceToggle(this.checked)" style="width:15px;height:15px"/>
-   Aktifkan advance booking
+   Aktifkan paket
   </label>
  </div>
  <div id="inv-advance-wrap" style="display:none">
-  <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Per dog, atur sesi + service + harga + diskon khusus. Token otomatis dibuat saat invoice disimpan.</div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Per dog, atur sesi + service + harga + diskon khusus. Token/subscription otomatis dibuat saat invoice disimpan.</div>
   <div id="inv-advance-dogs"></div>
-  <div class="form-grid" style="margin-top:.75rem">
-   <div class="fg"><label>Tanggal sesi pertama</label><input type="date" id="inv-first-date"/></div>
-   <div class="fg"><label>Interval</label>
-    <select id="inv-interval" onchange="onIntervalChange()">
-     <option value="7">Setiap minggu</option>
-     <option value="14" selected>Setiap 2 minggu</option>
-     <option value="28">Setiap 4 minggu</option>
-     <option value="custom">Custom (hari)</option>
-     <option value="none">Belum dijadwalkan</option>
-    </select>
-   </div>
-   <div class="fg" id="inv-custom-days-wrap" style="display:none"><label>Custom (hari)</label><input type="number" id="inv-custom-days" value="14" min="1"/></div>
-  </div>
  </div>
  </div>
 
@@ -985,17 +974,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   <div id="inv-subs-due-preview" style="display:none;font-size:var(--fs-label);color:var(--green-dk);padding:8px 12px;background:var(--green-lt);border:1px solid var(--green-md);border-radius:var(--r);margin-top:8px">Due date akan otomatis ditampilkan di PDF</div>
  </div>
 
- <div id="inv-subs-schedule-card" style="display:none" class="card">
-  <div style="padding:1rem;padding-bottom:0">
-   <div class="det-lbl" style="margin-bottom:6px">6c. Jadwal rutin di kalender</div>
-   <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Set jadwal berulang untuk subscription ini. Akan dibuat otomatis di kalender sesuai jumlah sesi.</div>
-  </div>
-  <div id="inv-subs-schedule-dogs" style="padding:0 1rem"></div>
-  <div style="padding:1rem;padding-top:8px;border-top:1px solid var(--border);margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-   <button class="btn btn-p btn-sm" onclick="createSubsScheduleAppointments()">Buat jadwal di kalender</button>
-   <span id="inv-subs-groomer-hint" style="font-size:11px;color:var(--muted)"></span>
-  </div>
- </div>
+ <!-- Session D item 1: 6c Jadwal rutin removed. Recurring scheduling moved to the calendar wizard. -->
 
  <div class="card" style="padding:1rem;margin-bottom:1rem">
  <div class="det-lbl">7. Catatan</div>
@@ -1016,7 +995,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 
  <div class="form-actions" style="margin-top:1rem">
  <button class="btn btn-p" id="inv-save-btn" onclick="saveInvoice()">Simpan invoice</button>
- <button class="btn btn-b" id="inv-save-appts-btn" onclick="saveInvoiceAndAppts()">Simpan invoice + kalender</button>
+ <button class="btn btn-b" id="inv-save-appts-btn" onclick="saveInvoiceAndAppts()" style="display:none">Simpan invoice + kalender</button>
  <button class="btn btn-g" onclick="downloadInvoicePDF()">Download PDF</button>
  <button class="btn btn-wa" onclick="sendCurrentInvoiceToWA(event)">Kirim ke WhatsApp</button>
  </div>
@@ -2019,8 +1998,14 @@ async function resetWaTemplatesToDefault(){
 // Default 'en' keeps the current on-screen text unchanged. Untranslated keys fall back to the element's existing text.
 let LANG='en';
 const I18N={
- en:{'nav.dashboard':'Dashboard','nav.database':'Database','nav.calendar':'Calendar','nav.groomers':'Groomers','nav.invoice':'Invoice','nav.financial':'Financial','nav.reminders':'Reminders','nav.membership':'Membership','nav.access':'Access','nav.history':'History','nav.tally':'Tally','nav.settings':'Settings','ui.signout':'Sign out','ui.search':'Search','ui.prefs':'Preferences'},
- id:{'nav.dashboard':'Dasbor','nav.database':'Data','nav.calendar':'Kalender','nav.groomers':'Groomer','nav.invoice':'Invoice','nav.financial':'Keuangan','nav.reminders':'Pengingat','nav.membership':'Keanggotaan','nav.access':'Akses','nav.history':'Riwayat','nav.tally':'Rekonsiliasi','nav.settings':'Pengaturan','ui.signout':'Keluar','ui.search':'Cari','ui.prefs':'Preferensi'}
+ en:{'nav.dashboard':'Dashboard','nav.database':'Database','nav.calendar':'Calendar','nav.groomers':'Groomers','nav.invoice':'Invoice','nav.financial':'Financial','nav.reminders':'Reminders','nav.membership':'Membership','nav.access':'Access','nav.history':'History','nav.tally':'Tally','nav.settings':'Settings','ui.signout':'Sign out','ui.search':'Search','ui.prefs':'Preferences',
+  'tb.dashboard':'Dashboard','tb.database':'Database','tb.calendar':'Calendar','tb.groomers':'Groomers','tb.financial':'Financial','tb.reminders':'Reminders','tb.membership':'Membership','tb.settings':'Settings',
+  'btn.add':'Add','btn.save':'Save','btn.cancel':'Cancel','btn.delete':'Delete','btn.edit':'Edit','btn.export':'Export','btn.today':'Today','btn.reset':'Reset',
+  'st.customers':'Customers','st.dogs':'Dogs','st.invoices':'Invoices','st.visits':'Visits','st.payroll':'Payroll','st.expenses':'Expenses','st.capital':'Capital','st.bank':'Bank'},
+ id:{'nav.dashboard':'Dasbor','nav.database':'Data','nav.calendar':'Kalender','nav.groomers':'Groomer','nav.invoice':'Invoice','nav.financial':'Keuangan','nav.reminders':'Pengingat','nav.membership':'Keanggotaan','nav.access':'Akses','nav.history':'Riwayat','nav.tally':'Rekonsiliasi','nav.settings':'Pengaturan','ui.signout':'Keluar','ui.search':'Cari','ui.prefs':'Preferensi',
+  'tb.dashboard':'Dasbor','tb.database':'Data','tb.calendar':'Kalender','tb.groomers':'Groomer','tb.financial':'Keuangan','tb.reminders':'Pengingat','tb.membership':'Keanggotaan','tb.settings':'Pengaturan',
+  'btn.add':'Tambah','btn.save':'Simpan','btn.cancel':'Batal','btn.delete':'Hapus','btn.edit':'Ubah','btn.export':'Ekspor','btn.today':'Hari ini','btn.reset':'Reset',
+  'st.customers':'Pelanggan','st.dogs':'Anjing','st.invoices':'Invoice','st.visits':'Kunjungan','st.payroll':'Gaji','st.expenses':'Pengeluaran','st.capital':'Modal','st.bank':'Bank'}
 };
 function t(key){ const d=I18N[LANG]||{}; if(d[key]!==undefined) return d[key]; return null; }
 function applyI18n(){
@@ -3688,7 +3673,8 @@ function startCalAutoRefresh(){
   if(document.querySelector('#sec-calendar')?.classList.contains('active')){
    const status=document.getElementById('cal-refresh-status');
    try {
-    await loadAll();
+    // Lag fix (Session D item 4): only reload appointments here, not loadAll() (17 tables).
+    await reloadTables('appointments');
     _calLastRefreshAt=Date.now();
     if(status){
      status.textContent='✓ Auto-sync';
@@ -8347,8 +8333,11 @@ function advDogTotal(did){
 }
 
 function isAdvanceActive(){
+ // Session D item 1: advance booking UI removed from invoice. Always inactive.
+ // The #inv-is-advance checkbox no longer exists, so this returns false and the
+ // advance/token/subscription-from-invoice paths are effectively disabled.
  const cb=document.getElementById('inv-is-advance');
- return cb&&cb.checked;
+ return !!(cb&&cb.checked);
 }
 
 function calcInvoiceTotals(){
@@ -9213,7 +9202,13 @@ ${(()=>{
 })()}`;
 }
 
+let _invPreviewTimer=null;
 function renderInvoicePreview(){
+ // Lag fix (Session D item 4): debounce full-HTML rebuild triggered by rapid input events
+ if(_invPreviewTimer) clearTimeout(_invPreviewTimer);
+ _invPreviewTimer=setTimeout(_renderInvoicePreviewNow,150);
+}
+function _renderInvoicePreviewNow(){
  const el=document.getElementById('inv-preview'); if(!el) return;
  if(!invSelectedCust||!invSelectedDogs.length){
   el.innerHTML='<div style="color:var(--muted);font-size:12px;text-align:center;padding:2rem">Pilih customer dan dog untuk melihat preview.</div>';
@@ -14040,13 +14035,18 @@ function autoLabelTables(){
  });
 }
 
-// Run auto-label after each render via mutation observer (lightweight)
+// Run auto-label after each render via mutation observer (debounced to avoid thrashing on bulk renders)
+let _autoLabelTimer=null;
+function _scheduleAutoLabel(){
+ if(_autoLabelTimer) return;
+ _autoLabelTimer=setTimeout(()=>{_autoLabelTimer=null;autoLabelTables();},120);
+}
 function observeTablesForLabels(){
  const tbls=document.querySelectorAll('.tbl-wrap table tbody');
  tbls.forEach(tb=>{
   if(tb._batchOObserved) return;
   tb._batchOObserved=true;
-  const obs=new MutationObserver(()=>autoLabelTables());
+  const obs=new MutationObserver(_scheduleAutoLabel);
   obs.observe(tb,{childList:true});
  });
 }
@@ -14094,7 +14094,7 @@ checkAuthState();
  if(!target) return;
  // Initial pass after first render
  setTimeout(autoLabelTables,500);
- // Lightweight observer: only watch for new <tr> elements
+ // Lightweight observer: only watch for new <tr> elements, debounced to coalesce bulk inserts
  const obs=new MutationObserver(muts=>{
   let any=false;
   for(const m of muts){
@@ -14103,7 +14103,7 @@ checkAuthState();
    }
    if(any) break;
   }
-  if(any) autoLabelTables();
+  if(any) _scheduleAutoLabel();
  });
  obs.observe(target,{childList:true,subtree:true});
 })();
