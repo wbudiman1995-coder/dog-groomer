@@ -475,7 +475,7 @@ function renderActiveTab(){
 
  // Compute global late banner (first group of today, first appt in that group)
  const now=new Date();
- const todayISO=now.toISOString().slice(0,10);
+ const todayISO=iso(now); // local date, NOT UTC (UTC+7: after 17:00 WIB UTC is already tomorrow)
  const todaySec=sections.find(s=>s.isToday);
  let globalLateBanner='';
  if(todaySec&&todaySec.appts.length){
@@ -560,7 +560,7 @@ function renderGroupedAppt(group, isFirstGroup, isToday){
  const addrStr=addrParts.join(', ')||'(alamat tidak tersedia)';
  const mapsLink=cust.gmaps_link||'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(addrParts.concat(['Jakarta']).join(', '));
  const now=new Date();
- const todayISO=now.toISOString().slice(0,10);
+ const todayISO=iso(now); // local date, NOT UTC (UTC+7: after 17:00 WIB UTC is already tomorrow)
  // Full time span
  const startMin=parseInt((firstA.appt_time||'09:00').split(':')[0])*60+parseInt((firstA.appt_time||'09:00').split(':')[1]);
  const totalDur=group.reduce((s,a)=>s+(a.duration_mins||60),0);
@@ -675,7 +675,7 @@ function renderAppt(a, isFirst=false){
  </div>`:'';
 
  const now=new Date();
- const todayISO=now.toISOString().slice(0,10);
+ const todayISO=iso(now); // local date, NOT UTC (UTC+7: after 17:00 WIB UTC is already tomorrow)
  const apptDate=a.appt_date||'';
  const isToday=apptDate===todayISO;
  // Late attendance warning: only on first appointment of the day
