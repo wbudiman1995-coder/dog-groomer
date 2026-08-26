@@ -5541,6 +5541,24 @@ function openGroupEdit(ids){
    gfnWrap2.style.display='none';
   }
  }
+ // Perf/late/waive section — applies to the group's FIRST appointment (lateness is judged on first-of-day)
+ const perfSecG=document.getElementById('appt-perf-section');
+ const todayISOG=iso(new Date());
+ const anyPastG=apptList.some(x=>x.appt_date<todayISOG||x.status==='done');
+ if(perfSecG) perfSecG.style.display=anyPastG?'block':'none';
+ const wasLateG=(firstA.late_minutes||0)>=LATE_GRACE_MINUTES;
+ const lateCbG=document.getElementById('appt-was-late'); if(lateCbG) lateCbG.checked=wasLateG;
+ const lateDetG=document.getElementById('appt-late-details'); if(lateDetG) lateDetG.style.display=wasLateG?'block':'none';
+ const lateMinsG=document.getElementById('appt-late-mins'); if(lateMinsG) lateMinsG.value=firstA.late_minutes||'';
+ const lateReasonG=document.getElementById('appt-late-reason'); if(lateReasonG) lateReasonG.value=firstA.late_reason||'';
+ const waivedCbG=document.getElementById('appt-late-waived');
+ if(waivedCbG){
+  waivedCbG.checked=!!firstA.late_waived;
+  const wnG=document.getElementById('appt-late-waive-note');
+  if(wnG){wnG.value=(firstA.late_waived&&firstA.late_reason&&!(firstA.late_minutes>=LATE_GRACE_MINUTES))?(firstA.late_reason):'';wnG.style.display=waivedCbG.checked?'block':'none';}
+ }
+ const actDurG=document.getElementById('appt-actual-dur'); if(actDurG) actDurG.value=firstA.actual_duration_mins||'';
+ updateOverrunHint();
  loadAppointmentAuditHistory(ids);
  om('ov-appt');
  wizShow(4);
@@ -5769,6 +5787,17 @@ async function saveAppt(){
      const {error:groupUpdateError}=await db.from('appointments').update(upd).eq('id',eid);
      if(groupUpdateError){alert('Error: '+groupUpdateError.message);return}
      await logAudit('appointment',eid,'update',{old:oldGroupRec,new:{...oldGroupRec,...upd},label:(dogs.find(d=>d.id===ds.did)?.name||'?')+' '+(upd.appt_date||oldGroupRec?.appt_date||wiz.date)});
+    }
+    // Late/waive/actual-duration fields ride on the group's first appointment
+    if(Object.keys(perfFields).length){
+     const firstOldRec=appts.find(a=>a.id===wiz.editId);
+     const {error:perfErr}=await db.from('appointments').update(perfFields).eq('id',wiz.editId);
+     if(perfErr){alert('Error: '+perfErr.message);return}
+     if(firstOldRec){
+      await logAudit('appointment',wiz.editId,'update',{old:firstOldRec,new:{...firstOldRec,...perfFields},label:(dogs.find(d=>d.id===firstOldRec.dog_id)?.name||'?')+' perf/late'});
+      const pi=appts.findIndex(a=>a.id===wiz.editId);
+      if(pi>=0) Object.assign(appts[pi],perfFields);
+     }
     }
    } else {
     // Single-appt edit path (legacy)
