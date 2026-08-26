@@ -1074,8 +1074,12 @@ thead th[onclick]:hover{color:var(--primary-darker)}
     <div id="payroll-cycle-lbl" style="font-weight:600;font-size:14px"></div>
     <button class="btn btn-g btn-sm" onclick="payrollNextCycle()">Next cycle &rarr;</button>
    </div>
-   <div style="display:flex;gap:8px">
+   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <div id="payroll-total" style="font-size:13px;color:var(--muted)"></div>
+    <label style="display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-label);font-weight:500;height:36px;padding:0 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-2);cursor:pointer;white-space:nowrap;transition:all .15s" title="Munculkan tombol 'Publish gaji' di setiap kartu payroll. Saat OFF, halaman groomer juga menyembunyikan kartu gaji.">
+     <input type="checkbox" id="pay-publish-toggle" onchange="togglePayPublish(this.checked)" style="margin:0;width:16px;height:16px;min-height:0;accent-color:var(--primary)"/>
+     <span>Publish gaji ke groomer</span>
+    </label>
     <button class="btn btn-g btn-sm" onclick="exportPayrollCycle()" title="Export cycle payroll ke Excel (summary + detail + missing)">Export Excel</button>
     <button class="btn btn-g btn-sm" onclick="openPayrollSettings()">Settings</button>
    </div>
@@ -6965,6 +6969,7 @@ function applyCfg(){
  // Payroll globals (styling tiers + botak incentive) live in business_settings.config
  if(Array.isArray(CFG.stylingTiers)&&CFG.stylingTiers.length) payrollSettings.styling_tiers=normalizeStylingTiers(CFG.stylingTiers);
  if(CFG.botakIncentive!=null) payrollSettings.botak_incentive=Math.max(0,parseInt(CFG.botakIncentive)||0);
+ GROOMER_PAY_PUBLISH=CFG.payPublish===true;
  SERVICE_LIST=Object.keys(PRICING);
 }
 function fmtRp(n){return 'Rp '+(n||0).toLocaleString('id-ID')}
@@ -12595,17 +12600,20 @@ function payrollNextCycle(){
 function computeGroomerDogsInCycle(groomerId,cycle){
  const sizes={XS:0,Small:0,Medium:0,Large:0,XL:0,Cat:0,Unknown:0};
  let totalAmount=0;
- let manualHandledTotal=0;
- let botakCount=0; // jobs (counted or handled) whose services include Botak
- const review=[], handled=[], counted=[];
+ let botakCount=0; // jobs whose services include Botak (basic or botak-only)
+ let transportTotal=0, transportCount=0; // ½ of transport fee, once per invoice
+ const counted=[];
  const countedJobs=new Set();
  const rate=payrollSettings.rate_per_dog||20000;
  // The after-visit invoice is the completion evidence for payroll. Appointment
  // status is not required because legacy/admin flows often leave it pending or
  // confirmed even after the invoice is issued. Package/subscription-sale
  // invoices never enter this calculation; cancelled appointments stay excluded.
+ // Non-basic jobs (no Basic Grooming) are NOT paid per-dog — only their Botak
+ // incentive applies; everything else about them is out of payroll.
  invoices.forEach(inv=>{
   if(!isAfterVisitInvoice(inv)) return;
+  let invHasJob=false, invTransport=0;
   (inv.dogs||[]).forEach(d=>{
    const a=linkedAppointmentForInvoiceDog(inv,d);
    if(!a||a.status==='cancelled'||a.groomer_id!==groomerId) return;
@@ -12616,24 +12624,28 @@ function computeGroomerDogsInCycle(groomerId,cycle){
    countedJobs.add(jobKey);
    const services=(d.services||[]).map(s=>s.name).filter(Boolean);
    const item={invoice:inv,dog:d,appointment:a,jobKey,services};
+   const hasBotak=services.includes('Botak');
    if(invoiceDogHasBasic(d)){
     const sz=d.size||dogs.find(x=>x.id===d.dog_id)?.size||'Unknown';
     sizes[sz]=(sizes[sz]||0)+1;
     totalAmount+=rate;
     counted.push(item);
-    if(services.includes('Botak')) botakCount++;
-   } else if(d.payroll_manual_handled){
-    const amount=Math.max(0,Math.round(Number(d.payroll_manual_amount)||0));
-    manualHandledTotal+=amount;
-    handled.push({...item,amount,note:d.payroll_manual_note||''});
-    if(services.includes('Botak')) botakCount++;
-   } else {
-    review.push(item);
+    if(hasBotak) botakCount++;
+   } else if(hasBotak){
+    // Botak-only job: incentive only, no per-dog rate
+    botakCount++;
    }
+   invHasJob=true;
+   invTransport=Math.max(invTransport,getApptTransportFee(a));
   });
+  // Transport fee is per booking, not per dog — count ½ once per invoice
+  if(invHasJob&&invTransport>0){
+   transportCount++;
+   transportTotal+=Math.round(invTransport/2);
+  }
  });
  const total=Object.values(sizes).reduce((s,n)=>s+n,0);
- return {sizes,total,totalAmount,manualHandledTotal,review,handled,counted,rate,botakCount};
+ return {sizes,total,totalAmount,counted,rate,botakCount,transportTotal,transportCount};
 }
 
 // ===== Compensation engine (per-worker) =====
@@ -12726,7 +12738,7 @@ function computeGroomerPay(g,cycle){
  const wdPerWeek=6;
  const lateCount=calcGroomerLateCountForCycle(g.id,cycle.start,cycle.end);
  const dogPay=computeGroomerDogsInCycle(g.id,cycle);
- const {total:dogCount,totalAmount:basicDogAmount,manualHandledTotal,sizes:sizeCounts,review:nonBasicReview,handled:nonBasicHandled}=dogPay;
+ const {total:dogCount,totalAmount:basicDogAmount,sizes:sizeCounts}=dogPay;
  const styStats=groomerStylingStats(g.id,cycle);
  const stylingTiers=stylingTiersEffective(c.styling.tiers);
  const stylingAppliedPct=c.styling.on?stylingPctFor(styStats.count,stylingTiers):0;
@@ -12738,17 +12750,17 @@ function computeGroomerPay(g,cycle){
   noSick: c.noSick.on?(sickDays===0?c.noSick.amount:0):0,
   styling: c.styling.on?Math.round(styStats.rev*stylingAppliedPct/100):0,
   botak: (c.botak.on&&dogPay.botakCount>0)?botakRate*dogPay.botakCount:0,
+  transport: dogPay.transportTotal||0,
   perDog: basicDogAmount,
-  manualJobs:manualHandledTotal,
   daily: c.daily.on?c.daily.amount*daysWorked:0
  };
  const takeHome=Object.values(comp).reduce((s,v)=>s+v,0);
  const ten=tenureMonths(g);
  let retBalance=0,retPayable=false,retMonths=0;
  if(c.retention.on&&ten!=null){ retMonths=Math.min(c.retention.months,ten); retBalance=retMonths*c.retention.amount; retPayable=ten>=c.retention.months; }
- return {c,comp,takeHome,meta:{scheduled,daysWorked,weeklyPaidDays,sickDays,lateCount,dogCount,stylingRev:styStats.rev,stylingCount:styStats.count,stylingAppliedPct,stylingTiers,botakCount:dogPay.botakCount,botakRate,countedJobs:dogPay.counted,wdPerWeek,sizeCounts,nonBasicReview,nonBasicHandled,dogRate:dogPay.rate},retention:{on:c.retention.on,balance:retBalance,payable:retPayable,months:retMonths,target:c.retention.months,per:c.retention.amount,tenure:ten}};
+ return {c,comp,takeHome,meta:{scheduled,daysWorked,weeklyPaidDays,sickDays,lateCount,dogCount,stylingRev:styStats.rev,stylingCount:styStats.count,stylingAppliedPct,stylingTiers,botakCount:dogPay.botakCount,botakRate,transportTotal:dogPay.transportTotal,transportCount:dogPay.transportCount,countedJobs:dogPay.counted,wdPerWeek,sizeCounts,dogRate:dogPay.rate},retention:{on:c.retention.on,balance:retBalance,payable:retPayable,months:retMonths,target:c.retention.months,per:c.retention.amount,tenure:ten}};
 }
-const COMP_LINES=[['basic','Gaji pokok'],['weekly','Gaji mingguan'],['noLate','Bonus no-late'],['noSick','Bonus no-sakit'],['styling','Komisi styling'],['botak','Insentif Botak'],['perDog','Basic Grooming per dog'],['manualJobs','Non-basic job pay'],['daily','Uang harian']];
+const COMP_LINES=[['basic','Gaji pokok'],['weekly','Gaji mingguan'],['noLate','Bonus no-late'],['noSick','Bonus no-sakit'],['styling','Komisi styling'],['botak','Insentif Botak'],['transport','Transport fee ½'],['perDog','Basic Grooming per dog'],['daily','Uang harian']];
 function payrollCustomKey(gid,cycleStart){return `${gid}::${cycleStart}`}
 function payrollDraftStorageKey(gid,cycleStart){return `hp_payroll_extra_${currentUser?.id||'local'}_${gid}_${cycleStart}`}
 function cleanPayrollCustomRows(rows){
@@ -12792,31 +12804,9 @@ function recalcPayCard(gid,cycleStart){
  sum+=payrollCustomTotal(gid,cycleStart);
  const t=document.getElementById(`pay-total-${gid}`); if(t) t.textContent=fmtRp(sum);
 }
-async function markNonBasicPayrollHandled(invoiceId,dogId,appointmentId,groomerId){
- const inv=invoices.find(x=>x.id===invoiceId); if(!inv){alert('Invoice tidak ditemukan.');return}
- const key=invoiceId+'-'+dogId;
- const amount=Math.max(0,Math.round(Number(document.getElementById('nb-amount-'+key)?.value)||0));
- const note=(document.getElementById('nb-note-'+key)?.value||'').trim();
- if(amount<=0){alert('Isi nominal tambahan untuk job non-Basic ini.');return}
- const dogLine=(inv.dogs||[]).find(d=>d.dog_id===dogId&&(!appointmentId||!d.appointment_id||d.appointment_id===appointmentId));
- if(!dogLine){alert('Dog line tidak ditemukan di invoice.');return}
- const dogName=dogLine.name||dogs.find(d=>d.id===dogId)?.name||'?';
- if(!confirm('Tandai job '+dogName+' sebagai handled?\n\nNominal tambahan: '+fmtRp(amount)+'\nNominal ini akan masuk payroll groomer.')) return;
- let changed=false;
- const nextDogs=(inv.dogs||[]).map(d=>{
-  if(changed||d.dog_id!==dogId||(appointmentId&&d.appointment_id&&d.appointment_id!==appointmentId)) return d;
-  changed=true;
-  return {...d,payroll_manual_handled:true,payroll_manual_amount:amount,payroll_manual_note:note,payroll_manual_at:new Date().toISOString(),payroll_manual_by:currentUser?.id||null};
- });
- const {error}=await db.from('invoices').update({dogs:nextDogs,...editStamp()}).eq('id',invoiceId);
- if(error){alert('Error: '+error.message);return}
- await logAudit('invoice',invoiceId,'update',{old:inv,new:{...inv,dogs:nextDogs},label:(inv.invoice_number||'Invoice')+' — non-basic payroll handled'});
- await reloadTables('invoices');
- renderPayroll();
- showToast('Job non-Basic masuk ke payroll','success');
-}
 
 function renderPayroll(){
+ const tgl=document.getElementById('pay-publish-toggle'); if(tgl) tgl.checked=GROOMER_PAY_PUBLISH;
  const cycle=getPayrollCycle(payrollCycleAnchor);
  const lbl=document.getElementById('payroll-cycle-lbl');
  if(lbl) lbl.textContent='Cycle: '+cycle.label;
@@ -12830,7 +12820,7 @@ function renderPayroll(){
   const isPaid=payout&&payout.status==='paid';
   const pay=computeGroomerPay(g,cycle);
   const m=pay.meta;
-  const notes={basic:'',weekly:`${m.weeklyPaidDays} hari dibayar · ÷6/minggu`,noLate:`<button type="button" onclick="showPayrollLateList('${g.id}')" title="Lihat hari terlambat cycle ini" style="background:none;border:none;color:inherit;font:inherit;cursor:pointer;text-decoration:underline;padding:0">late: ${m.lateCount}</button>`,noSick:`sakit: ${m.sickDays} hari`,styling:`${m.stylingAppliedPct}% × ${fmtRp(m.stylingRev)} (${m.stylingCount} job${m.stylingTiers.length>1?' · tier':''})`,botak:`${m.botakCount} × ${fmtRp(m.botakRate)}`,perDog:`${m.dogCount} dog × ${fmtRp(m.dogRate)}`,manualJobs:`${m.nonBasicHandled.length} handled`,daily:`${m.daysWorked} hari × ${fmtRp(pay.c.daily.amount)}`};
+  const notes={basic:'',weekly:`${m.weeklyPaidDays} hari dibayar · ÷6/minggu`,noLate:`<button type="button" onclick="showPayrollLateList('${g.id}')" title="Lihat hari terlambat cycle ini" style="background:none;border:none;color:inherit;font:inherit;cursor:pointer;text-decoration:underline;padding:0">late: ${m.lateCount}</button>`,noSick:`sakit: ${m.sickDays} hari`,styling:`${m.stylingAppliedPct}% × ${fmtRp(m.stylingRev)} (${m.stylingCount} job${m.stylingTiers.length>1?' · tier':''})`,botak:`${m.botakCount} × ${fmtRp(m.botakRate)}`,transport:`${m.transportCount} invoice × ½`,perDog:`${m.dogCount} dog × ${fmtRp(m.dogRate)}`,daily:`${m.daysWorked} hari × ${fmtRp(pay.c.daily.amount)}`};
   const stored=isPaid?(payout.breakdown||{}):null;
   const val=k=>stored?(stored[k]||0):pay.comp[k];
   const rows=COMP_LINES.map(([k,label])=>{
@@ -12851,21 +12841,6 @@ function renderPayroll(){
      <span style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Additional pay</span>
      ${isPaid?'':`<button type="button" onclick="addPayrollCustomRow('${g.id}','${cycle.start}')" title="Tambah bonus atau gaji lain" style="width:25px;height:25px;border:1px solid var(--green);border-radius:50%;background:#fff;color:var(--green-dk);font-size:17px;line-height:20px;cursor:pointer;padding:0">+</button>`}
     </div>${customRowsHTML}</div>`;
-  const nonBasicReviewHTML=m.nonBasicReview.length?`<div style="margin-top:8px;padding:8px;background:#fff7ed;border:1px solid #fb923c;border-radius:6px">
-    <div style="font-size:11px;font-weight:700;color:#9a3412;margin-bottom:6px">⚠ Non-Basic jobs — needs review (${m.nonBasicReview.length})</div>
-    ${m.nonBasicReview.map(item=>{
-     const inv=item.invoice,d=item.dog,a=item.appointment,key=inv.id+'-'+d.dog_id;
-     const serviceText=item.services.join(', ')||'No service';
-     return `<div style="padding:7px 0;border-top:1px dashed #fed7aa">
-      <div style="font-size:11px;color:#7c2d12"><strong>${esc(d.name||'?')}</strong> · ${fmtD(a.appt_date)} · ${esc(serviceText)} · ${esc(inv.invoice_number||'')}</div>
-      ${isPaid?`<div style="font-size:10px;color:#9a3412;margin-top:4px">Cycle sudah dibayar. Tambahkan koreksi di cycle berikutnya.</div>`:`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px">
-       <input id="nb-note-${key}" placeholder="Keterangan pembayaran" style="flex:1 1 130px;min-width:0;padding:5px 6px;border:1px solid #fdba74;border-radius:4px;font-size:11px"/>
-       <input id="nb-amount-${key}" type="number" min="0" step="1000" placeholder="Nominal Rp" style="flex:0 1 105px;width:105px;padding:5px 6px;border:1px solid #fdba74;border-radius:4px;font-size:11px;text-align:right"/>
-       <button type="button" onclick="markNonBasicPayrollHandled('${inv.id}','${d.dog_id}','${a.id}','${g.id}')" style="border:0;border-radius:4px;background:#ea580c;color:#fff;padding:5px 8px;font-size:10px;font-weight:600;cursor:pointer">Mark handled</button>
-      </div>`}
-     </div>`;
-    }).join('')}
-   </div>`:'';
   const total=isPaid?(payout.amount||0):(pay.takeHome+payrollCustomTotal(g.id,cycle.start));
   grandTotal+=total;
   const ret=pay.retention;
@@ -12883,14 +12858,14 @@ function renderPayroll(){
     <div style="font-weight:600;font-size:14px">${esc(g.name)}</div>
     ${isPaid?`<span class="badge bs" title="Paid ${payout.paid_at?fmtD(payout.paid_at.slice(0,10)):''}">PAID</span>`:`<span class="badge bm">PENDING</span>`}
    </div>
-   <div style="border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px 0;margin-bottom:8px">${rows}${customBlock}</div>
-   ${nonBasicReviewHTML}
-   <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px;color:var(--muted);margin:8px 0">${Object.entries(m.sizeCounts||{}).filter(([,n])=>n>0).map(([s,n])=>`<span style="background:var(--subtle);padding:1px 6px;border-radius:8px">${esc(s)}: <strong>${n}</strong></span>`).join('')||'<span>Belum ada Basic Grooming yang eligible</span>'}</div>
+    <div style="border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px 0;margin-bottom:8px">${rows}${customBlock}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px;color:var(--muted);margin:8px 0">${Object.entries(m.sizeCounts||{}).filter(([,n])=>n>0).map(([s,n])=>`<span style="background:var(--subtle);padding:1px 6px;border-radius:8px">${esc(s)}: <strong>${n}</strong></span>`).join('')||'<span>Belum ada Basic Grooming yang eligible</span>'}</div>
    <div style="display:flex;justify-content:space-between;align-items:baseline">
     <span style="font-size:11px;color:var(--muted)">Take-home</span>
     <strong style="font-size:16px;color:#16a34a" id="pay-total-${g.id}">${fmtRp(total)}</strong>
    </div>
    ${retBlock}
+   ${GROOMER_PAY_PUBLISH?`<button class="btn btn-g btn-sm" style="width:100%;margin-top:8px" onclick="publishPaySnapshot('${g.id}')">Publish gaji ke groomer</button>`:''}
    <button class="btn btn-g btn-sm" style="width:100%;margin-top:8px" onclick="showPayrollDetail('${g.id}')">Detail (appointment &amp; invoice)</button>
    ${isPaid?`<button class="btn btn-g btn-sm" style="width:100%;margin-top:8px" onclick="unmarkGroomerPaid('${g.id}','${cycle.start}')">Undo payment</button>`:`<button class="btn btn-p btn-sm" style="width:100%;margin-top:8px" onclick="markGroomerPaid('${g.id}','${cycle.start}','${cycle.end}')">Mark as paid</button>`}
   </div>`;
@@ -12921,6 +12896,7 @@ async function markGroomerPaid(groomerId,cycleStart,cycleEnd){
  if(resp.error){alert('Error: '+resp.error.message);return}
  try{localStorage.removeItem(payrollDraftStorageKey(groomerId,cycleStart))}catch(e){}
  await reloadTables('groomer_payouts');
+ if(GROOMER_PAY_PUBLISH) await publishPaySnapshot(groomerId);
  renderPayroll();
 }
 async function payGroomerRetention(groomerId,cycleStart,cycleEnd,balance){
@@ -12944,6 +12920,61 @@ async function unmarkGroomerPaid(groomerId,cycleStart){
  savePayrollCustomDraft(groomerId,cycleStart);
  await reloadTables('groomer_payouts');
  renderPayroll();
+}
+
+/* ----- Publish payroll snapshot to groomer page (feature C — master toggle di tab Payroll) ----- */
+let GROOMER_PAY_PUBLISH=false; // diset dari toggle di tab Payroll (tersimpan di business_settings)
+async function publishPaySnapshot(gid){
+ const g=groomers.find(x=>x.id===gid); if(!g) return;
+ const cycle=getPayrollCycle(payrollCycleAnchor);
+ const payout=groomerPayouts.find(p=>p.groomer_id===gid&&p.cycle_start===cycle.start&&(p.payout_type||'salary')==='salary');
+ const isPaid=payout&&payout.status==='paid';
+ const pay=computeGroomerPay(g,cycle);
+ const br=isPaid?(payout.breakdown||{}):null;
+ const val=k=>br?(br[k]||0):(pay.comp[k]||0);
+ const custom=isPaid?(br.custom_rows||[]):getPayrollCustomRows(gid,cycle.start);
+ const customTotal=custom.reduce((s,r)=>s+(r.amount||0),0);
+ const snap={
+  enabled:true,
+  label:cycle.label,start:cycle.start,end:cycle.end,
+  status:isPaid?'PAID':'BERJALAN',
+  published_at:new Date().toISOString(),
+  breakdown:{
+   basic:val('basic'),weekly:val('weekly'),noLate:val('noLate'),noSick:val('noSick'),
+   styling:val('styling'),botak:val('botak'),transport:val('transport'),
+   perDog:val('perDog'),daily:val('daily')
+  },
+  custom_rows:custom.map(r=>({label:r.label,amount:r.amount})),
+  total:isPaid?(payout.amount||0):(pay.takeHome+customTotal)
+ };
+ const {error}=await db.from('groomers').update({pay_snapshot:snap}).eq('id',gid);
+ if(error){alert('Gagal publish: '+error.message);return}
+ alert('Snapshot gaji dipublish ke halaman groomer:\n'+g.name+' — '+cycle.label+'\nTotal: '+fmtRp(snap.total)+(isPaid?' (PAID)':' (masih berjalan)'));
+}
+
+// Master toggle di tab Payroll: ON = tombol publish muncul + snapshot terlihat di groomer.
+// OFF = tombol hilang + kartu gaji disembunyikan di sisi groomer (enabled:false).
+async function togglePayPublish(on){
+ const prev=GROOMER_PAY_PUBLISH;
+ GROOMER_PAY_PUBLISH=!!on;
+ try{
+  CFG={...(CFG||{}),payPublish:GROOMER_PAY_PUBLISH};
+  const {error}=await db.from('business_settings').upsert({id:1,config:CFG,updated_at:new Date().toISOString()});
+  if(error) throw error;
+  // Sinkronkan flag enabled di snapshot yang sudah ada (agar kartu groomer ikut muncul/hilang)
+  const withSnap=groomers.filter(g=>g.pay_snapshot);
+  for(const g of withSnap){
+   if(g.pay_snapshot.enabled===GROOMER_PAY_PUBLISH) continue;
+   const merged={...g.pay_snapshot,enabled:GROOMER_PAY_PUBLISH};
+   const {error:e2}=await db.from('groomers').update({pay_snapshot:merged}).eq('id',g.id);
+   if(!e2) g.pay_snapshot=merged;
+  }
+  renderPayroll();
+ }catch(e){
+  GROOMER_PAY_PUBLISH=prev;
+  const el=document.getElementById('pay-publish-toggle'); if(el) el.checked=prev;
+  alert('Gagal simpan: '+(e.message||e));
+ }
 }
 
 /* ----- Payroll settings modal ----- */
@@ -13113,7 +13144,7 @@ function showPayrollDetail(gid){
   ${body||'<div style="font-size:12px;color:#16a34a;padding:4px 0">&#10003; Tidak ada.</div>'}
  </div>`;
  // A. Jobs yang masuk hitungan (basic + handled), dengan invoice sumbernya
- const jobs=[...m.countedJobs.map(it=>({it,type:'basic'})),...m.nonBasicHandled.map(it=>({it,type:'handled',amount:it.amount,note:it.note}))]
+ const jobs=m.countedJobs.map(it=>({it,type:'basic'}))
   .sort((x,y)=>(y.it.appointment.appt_date||'').localeCompare(x.it.appointment.appt_date||''));
  const jobTable=jobs.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;background:var(--surface)">${th(['Tanggal','Owner','Dog','Size','Layanan','Invoice','Dasar bayar'])}<tbody>${jobs.map(({it,type,amount,note})=>{
   const c=custs.find(cc=>cc.id===it.dog.customer_id);
@@ -13124,17 +13155,9 @@ function showPayrollDetail(gid){
    <td style="padding:6px 8px;font-size:12px">${esc(it.dog.size||'')}</td>
    <td style="padding:6px 8px;font-size:11px;color:var(--muted)">${esc(it.services.join(', ')||'-')}</td>
    <td style="padding:6px 8px;font-size:12px"><a href="#" onclick="event.preventDefault();cm('ov-payroll-detail');openInvoiceForEdit('${it.invoice.id}')" style="color:var(--green-dk);font-weight:600">${esc(it.invoice.invoice_number||'?')}</a></td>
-   <td style="padding:6px 8px;font-size:11px">${type==='basic'?fmtRp(m.dogRate)+' /dog':'Handled '+fmtRp(amount)+(note?' · '+esc(note):'')}${it.services.includes('Botak')?' · +botak':''}</td>
+   <td style="padding:6px 8px;font-size:11px">${fmtRp(m.dogRate)} /dog${it.services.includes('Botak')?' + Botak':''}</td>
   </tr>`;}).join('')}</tbody></table></div>`:'';
- // B. Non-basic menunggu ditandai handled
- const revTable=m.nonBasicReview.length?`<table style="width:100%;border-collapse:collapse">${th(['Tanggal','Dog','Layanan','Invoice'])}<tbody>${m.nonBasicReview.map(it=>`
-  <tr style="border-bottom:1px solid var(--border-subtle)">
-   <td style="padding:6px 8px;font-size:12px">${fmtD(it.appointment.appt_date)}</td>
-   <td style="padding:6px 8px;font-size:12px">${esc(it.dog.name||'?')}</td>
-   <td style="padding:6px 8px;font-size:11px;color:#92400e">${esc(it.services.join(', ')||'-')}</td>
-   <td style="padding:6px 8px;font-size:12px"><a href="#" onclick="event.preventDefault();cm('ov-payroll-detail');openInvoiceForEdit('${it.invoice.id}')" style="color:var(--green-dk);font-weight:600">${esc(it.invoice.invoice_number||'?')}</a></td>
-  </tr>`).join('')}</tbody></table>`:'';
- // C. Done tanpa invoice (tidak masuk payroll sama sekali)
+ // B. Done tanpa invoice (tidak masuk payroll sama sekali)
  const miss=payrollMissingDone(gid,cycle);
  const missTable=miss.length?`<table style="width:100%;border-collapse:collapse">${th(['Tanggal','Jam','Owner','Dog'])}<tbody>${miss.map(a=>{
   const d=dogs.find(x=>x.id===a.dog_id)||{};
@@ -13152,7 +13175,6 @@ function showPayrollDetail(gid){
    Take-home cycle: <strong style="color:#16a34a">${fmtRp(pay.takeHome)}</strong> · ${m.dogCount} basic job · ${m.stylingCount} styling job (${m.stylingAppliedPct}%) · ${m.botakCount} botak · late: ${m.lateCount}
   </div>`
   +sec('Job dihitung (appointment + invoice sumber)',jobs.length,jobTable,'Semua baris di sini adalah sumber uang: klik nomor invoice untuk buka invoice-nya.')
-  +sec('Non-basic menunggu "Mark handled"',m.nonBasicReview.length,revTable,'Job ini BELUM masuk take-home sampai ditandai handled di kartu payroll.')
   +sec('Done tapi tanpa invoice (hilang dari payroll)',miss.length,missTable,'Appointment done di cycle ini yang belum punya invoice — buat invoice-nya agar terhitung.');
  om('ov-payroll-detail');
 }
@@ -13187,7 +13209,7 @@ function exportPayrollCycle(){
    'Insentif Botak':val('botak')||0,
    'Botak job count':m.botakCount,
    'Basic Grooming per dog':val('perDog'),
-   'Non-basic job pay':val('manualJobs'),
+   'Transport fee share':val('transport'),
    'Uang harian':val('daily'),
    'Custom rows total':customTotal,
    'Take-home':isPaid?(payout.amount||0):(pay.takeHome+customTotal),
@@ -13213,21 +13235,6 @@ function exportPayrollCycle(){
     'Catatan':''
    });
   });
-  m.nonBasicHandled.forEach(it=>{
-   detail.push({
-    'Tanggal':it.appointment.appt_date,
-    'Jam':(it.appointment.appt_time||'').slice(0,5),
-    'Groomer':g.name,
-    'Owner':custs.find(cc=>cc.id===it.dog.customer_id)?.owner||it.invoice.owner_name||'',
-    'Dog':it.dog.name||'',
-    'Size':it.dog.size||'',
-    'Services':it.services.join(', '),
-    'Jenis bayar':'Handled (non-basic)',
-    'Nominal':it.amount,
-    'Invoice #':it.invoice.invoice_number||'',
-    'Catatan':it.note||''
-   });
-  });
   payrollMissingDone(g.id,cycle).forEach(a=>{
    const d=dogs.find(x=>x.id===a.dog_id)||{};
    const c=d.customer_id?custs.find(x=>x.id===d.customer_id):null;
@@ -13241,19 +13248,6 @@ function exportPayrollCycle(){
     'Layanan':a.service_base||'',
     'Invoice #':'',
     'Tindakan':'Buat invoice utk tanggal ini agar masuk payroll'
-   });
-  });
-  m.nonBasicReview.forEach(it=>{
-   missing.push({
-    'Jenis':'NON-BASIC PERLU HANDLED',
-    'Tanggal':it.appointment.appt_date,
-    'Jam':(it.appointment.appt_time||'').slice(0,5),
-    'Groomer':g.name,
-    'Owner':it.invoice.owner_name||'',
-    'Dog':it.dog.name||'',
-    'Layanan':it.services.join(', '),
-    'Invoice #':it.invoice.invoice_number||'',
-    'Tindakan':'Isi nominal + Mark handled di kartu payroll'
    });
   });
  });
