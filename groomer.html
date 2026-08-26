@@ -159,6 +159,8 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
   <button class="tab" id="tab-later" onclick="switchTab('later')">2-3 Hari <span class="count" id="cnt-later">0</span></button>
  </div>
 
+ <div id="mypay-wrap" style="display:none"></div>
+
  <div class="content" id="content"><div class="loader"><span class="spin"></span>Loading schedule…</div></div>
 
  <div class="footer">HomePaw — Jadwal grooming, read-only.<br/>Bookmark this page on your phone. Refresh untuk update.</div>
@@ -267,6 +269,42 @@ function showGate(errMsg){
 function showApp(){
  document.getElementById('gate').style.display='none';
  document.getElementById('app-wrap').style.display='block';
+ renderMyPay();
+}
+
+/* Self-pay card — angka dihitung admin dari invoice, dipublish sebagai snapshot.
+   Tidak ada perhitungan di sini: groomer melihat persis angka payroll admin.
+   Kartu muncul hanya jika admin mengaktifkan toggle "Publish gaji" di CRM. */
+function renderMyPay(){
+ const wrap=document.getElementById('mypay-wrap');
+ if(!wrap) return;
+ if(!currentGroomer?.pay_snapshot||currentGroomer.pay_snapshot.enabled===false){wrap.style.display='none';return}
+ const s=currentGroomer.pay_snapshot;
+ const paid=s.status==='PAID';
+ const rows=(s.breakdown?[
+  ['Gaji pokok',s.breakdown.basic],['Gaji mingguan',s.breakdown.weekly],
+  ['Bonus no-late',s.breakdown.noLate],['Bonus no-sakit',s.breakdown.noSick],
+  ['Komisi styling',s.breakdown.styling],['Insentif Botak',s.breakdown.botak],
+  ['Bagi hasil transport',s.breakdown.transport],['Basic Grooming per dog',s.breakdown.perDog],
+  ['Uang harian',s.breakdown.daily]
+ ]:[]).filter(([,v])=>v>0)
+  .map(([k,v])=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px"><span>${k}</span><strong>${fmtRp(v)}</strong></div>`).join('')
+ +(s.custom_rows||[]).filter(r=>r.amount>0)
+  .map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px"><span>${esc(r.label||'Tambahan')}</span><strong>${fmtRp(r.amount)}</strong></div>`).join('');
+ wrap.style.display='block';
+ wrap.innerHTML=`<div style="background:var(--surface);border-radius:10px;padding:14px;margin:12px 12px 0;box-shadow:var(--sh);border-left:4px solid ${paid?'var(--green)':'var(--yellow)'}">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+   <div style="font-size:13px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:1px">Gaji saya</div>
+   <span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:${paid?'#dcfce7':'#fef3c7'};color:${paid?'#15803d':'#92400e'}">${paid?'DIBAYAR':'BERJALAN'}</span>
+  </div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">${esc(s.label||'')}</div>
+  ${rows||'<div style="font-size:12px;color:var(--muted);padding:4px 0">Belum ada komponen gaji cycle ini.</div>'}
+  <div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:4px;border-top:2px solid var(--border)">
+   <span style="font-size:14px;font-weight:700">Total</span>
+   <span style="font-size:18px;font-weight:700;color:var(--green)">${fmtRp(s.total||0)}</span>
+  </div>
+  <div style="font-size:10px;color:var(--muted);margin-top:8px">Angka dari admin HomePaw · dihitung dari invoice · update ${esc((s.published_at||'').slice(0,16).replace('T',' '))}</div>
+ </div>`;
 }
 
 async function tryLogin(){
@@ -286,7 +324,7 @@ async function init(){
  if(!name||!token){showGate();return}
  // Look up groomer by name (case-insensitive) AND token
  const {data,error}=await db.from('groomers')
-  .select('id,name,active,access_token')
+  .select('id,name,active,access_token,pay_snapshot')
   .ilike('name',name)
   .limit(1)
   .maybeSingle();
