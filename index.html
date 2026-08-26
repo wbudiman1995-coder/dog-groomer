@@ -677,6 +677,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="subtabs">
  <button class="subtab active" id="stab-cust" onclick="swSub('cust')" data-i18n="sub.cust">Customers</button>
  <button class="subtab" id="stab-dogs" onclick="swSub('dogs')" data-i18n="sub.pets">Pets</button>
+ <button class="subtab" id="stab-onboarding" onclick="swSub('onboarding')">Onboarding</button>
  <button class="subtab" id="stab-export" onclick="swSub('export')" data-i18n="sub.export">Export</button>
  </div>
 
@@ -738,6 +739,17 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  </div>
  </div>
  </div>
+ <!-- Customer onboarding submissions (one-time WhatsApp links) -->
+ <div class="subsec" id="ssec-onboarding">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:1rem">
+   <div style="font-size:12px;color:var(--muted)">Link sekali-pakai (2 hari) untuk pelanggan baru isi data sendiri. Masuk ke sini dulu — masuk database utama setelah kamu approve.</div>
+   <button class="btn btn-p btn-sm" onclick="openOnbCreate()">+ Buat link pendaftaran</button>
+  </div>
+  <div id="onb-pending-list"></div>
+  <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:1.25rem 0 .5rem">Semua link</div>
+  <div id="onb-links-list"></div>
+ </div>
+
  <!-- Batch O.18 — Export subsection -->
  <div class="subsec" id="ssec-export" style="padding:1rem 0">
   <div class="card" style="padding:1.2rem">
@@ -1839,6 +1851,48 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  </div>
 </div>
 
+<!-- ONBOARDING: CREATE LINK -->
+<div class="overlay" id="ov-onb-create">
+ <div class="modal" style="max-width:520px">
+  <button class="modal-close" onclick="cm('ov-onb-create')" title="Close">&#x2715;</button>
+  <div class="modal-title">Buat link pendaftaran</div>
+  <div id="onb-create-step1">
+   <div class="fg" style="margin-bottom:.75rem"><label>Sumber customer (opsional — otomatis terpasang saat approve)</label>
+    <select id="onb-src"><option value="">— Tidak ditentukan —</option><option value="ads">Ads (iklan)</option><option value="free_session">Free session</option><option value="organic">Organic</option><option value="family">Family</option><option value="friend">Friend</option></select>
+   </div>
+   <div class="fg" style="margin-bottom:.75rem"><label>Catatan internal (opsional)</label><input id="onb-note" placeholder="e.g. Chat IG 12 Aug, minat grooming"/></div>
+   <div style="font-size:11px;color:var(--muted);margin-bottom:.9rem">Link berlaku 2 hari & bisa diisi satu kali saja. Setelah customer submit, muncul di daftar review di bawah.</div>
+   <button class="btn btn-p" onclick="doCreateOnbLink()">Generate link</button>
+  </div>
+  <div id="onb-create-step2" style="display:none">
+   <div style="font-size:12px;font-weight:600;margin-bottom:6px">Link siap dikirim:</div>
+   <input id="onb-link-url" readonly onclick="this.select()" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--subtle);margin-bottom:.6rem;font-family:monospace;word-break:break-all"/>
+   <div class="fg" style="margin-bottom:.6rem"><label>Pesan WhatsApp (bisa diedit)</label>
+    <textarea id="onb-wa-msg" rows="6" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;line-height:1.5"></textarea>
+   </div>
+   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.5rem">
+    <button class="btn btn-g btn-sm" onclick="copyOnb('onb-link-url','Link')">Copy link</button>
+    <button class="btn btn-g btn-sm" onclick="copyOnb('onb-wa-msg','Pesan')">Copy pesan</button>
+   </div>
+   <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;border-top:1px dashed var(--border);padding-top:.75rem">
+    <input id="onb-phone" placeholder="No. WA customer (08xx…)" style="flex:1;min-width:150px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px" oninput="onOnbPhoneInput(this)"/>
+    <a class="btn btn-p btn-sm" id="onb-wa-btn" href="#" target="_blank" style="pointer-events:none;opacity:.5" onclick="return onbWaReady(this)">Kirim via WhatsApp</a>
+   </div>
+   <div id="onb-phone-hint" style="font-size:10px;color:var(--muted);margin-top:4px">Isi nomor dulu, atau copy pesan & tempel manual di chat.</div>
+  </div>
+ </div>
+</div>
+
+<!-- ONBOARDING: REVIEW SUBMISSION -->
+<div class="overlay" id="ov-onb-review">
+ <div class="modal" style="max-width:640px">
+  <button class="modal-close" onclick="cm('ov-onb-review')" title="Close">&#x2715;</button>
+  <div class="modal-title" id="onb-review-title">Review pendaftaran</div>
+  <div id="onb-review-body" style="max-height:60vh;overflow-y:auto"></div>
+  <div id="onb-review-actions" style="margin-top:1rem;display:flex;gap:8px;flex-wrap:wrap"></div>
+ </div>
+</div>
+
 <!-- PAYROLL LATE LIST -->
 <div class="overlay" id="ov-payroll-late">
  <div class="modal" style="max-width:560px">
@@ -1999,6 +2053,7 @@ let complaints=[];
 let custSort={key:'owner',dir:1};
 let dogSort={key:'name',dir:1};
 let expenses=[];
+let onboardingLinks=[],pendingSubs=[];
 // Batch H — auth state
 let adminUsers=[], currentUser=null, currentAdminRow=null, _authReady=false;
 function isOwner(){return currentAdminRow&&currentAdminRow.role==='owner'}
@@ -2937,6 +2992,7 @@ function swSub(sub){
  document.getElementById('ssec-'+sub).classList.add('active');
  if(sub==='dogs') renderDogsTable();
  if(sub==='cust') renderCusts();
+ if(sub==='onboarding') renderOnboarding();
 }
 
 async function loadAll() {
@@ -2976,6 +3032,7 @@ async function loadAll() {
  refreshAccessBadge();
  rebuildDropdowns();
  refreshActiveView();
+ loadOnboarding().catch(function(e){console.warn('onboarding load failed:',e.message)});
 }
 
 function rebuildDropdowns(){
@@ -3039,7 +3096,7 @@ function refreshActiveView(){
   const activeTab=document.querySelector('.nav-tab.active')?.id?.replace('tab-','');
   const subActive=(scope,prefix)=>document.querySelector(scope+' .subtab.active')?.id?.replace(prefix,'');
   if(activeTab==='dashboard') renderDashboard();
-  else if(activeTab==='database'){ subActive('#sec-database','stab-')==='dogs'?renderDogsTable():renderCusts(); }
+  else if(activeTab==='database'){ const dbsub=subActive('#sec-database','stab-'); if(dbsub==='dogs') renderDogsTable(); else if(dbsub==='onboarding') renderOnboarding(); else renderCusts(); }
   else if(activeTab==='calendar') renderCal();
   else if(activeTab==='groomers'){ 
    const sub=subActive('#sec-groomers','gtab-');
@@ -12855,7 +12912,7 @@ function renderPayroll(){
   }
   return `<div class="card" style="padding:14px;border-left:4px solid ${esc(g.color||'#16a34a')}">
    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
-    <div style="font-weight:600;font-size:14px">${esc(g.name)}</div>
+    <div style="font-weight:600;font-size:14px">${esc(g.name)}${(pay.c.styling.tiers||pay.c.botak.amount!=null)?` <span title="Groomer ini punya setting khusus (tier styling / insentif botak) — lihat tab Groomers → Edit" style="font-size:9px;background:#f0e6fb;color:#6b21a8;padding:1px 5px;border-radius:3px;font-weight:700;vertical-align:middle;cursor:help">CUSTOM</span>`:''}</div>
     ${isPaid?`<span class="badge bs" title="Paid ${payout.paid_at?fmtD(payout.paid_at.slice(0,10)):''}">PAID</span>`:`<span class="badge bm">PENDING</span>`}
    </div>
     <div style="border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px 0;margin-bottom:8px">${rows}${customBlock}</div>
@@ -14559,6 +14616,283 @@ function closeNavDrawer(){
 document.addEventListener('keydown',e=>{
  if(e.key==='Escape'&&document.getElementById('nav-drawer')?.classList.contains('open')) closeNavDrawer();
 });
+
+/* ========== CUSTOMER ONBOARDING (one-time WhatsApp links) ========== */
+
+function onbTokenExp(token){
+ const i=token.lastIndexOf('.');
+ const v=i<0?0:parseInt(token.slice(i+1),10);
+ return isNaN(v)?0:v;
+}
+function onbIsExpired(l){
+ return l.status==='pending'&&onbTokenExp(l.token)>0&&onbTokenExp(l.token)<Date.now();
+}
+function onbBuildLink(token){
+ return window.location.origin+window.location.pathname.replace(/[^/]+$/,'')+'join.html?t='+token;
+}
+async function loadOnboarding(){
+ const [lr,pr]=await Promise.all([
+  db.from('onboarding_links').select('*').order('created_at',{ascending:false}),
+  db.from('pending_customers').select('*').order('created_at',{ascending:false})
+ ]);
+ if(lr.error) throw lr.error;
+ if(pr.error) throw pr.error;
+ onboardingLinks=lr.data||[];
+ pendingSubs=pr.data||[];
+ updateOnboardingBadge();
+}
+function updateOnboardingBadge(){
+ const el=document.getElementById('stab-onboarding');
+ if(!el) return;
+ const n=pendingSubs.filter(s=>s.status==='submitted').length;
+ el.innerHTML='Onboarding'+(n?` <span class="access-badge" style="display:inline-block">${n}</span>`:'');
+}
+function renderOnboarding(){
+ loadOnboarding().then(()=>{
+  const pending=pendingSubs.filter(s=>s.status==='submitted');
+  const pl=document.getElementById('onb-pending-list');
+  if(pl){
+   if(!pending.length){
+    pl.innerHTML='<div class="empty" style="padding:1.5rem">Tidak ada pendaftaran menunggu review.</div>';
+   } else {
+    pl.innerHTML=pending.map(s=>{
+     const p=s.payload||{};
+     const dogs=p.dogs||[];
+     const photoN=dogs.reduce((n,d)=>n+((d.styling_refs||[]).length),0);
+     return `<div class="card" style="padding:.9rem 1.1rem;margin-bottom:.6rem;border-left:4px solid var(--primary)">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
+       <div>
+        <strong style="font-size:14px">${esc(p.owner||'?')}</strong>
+        <span style="font-size:11px;color:var(--muted);margin-left:6px">${esc(p.wa||'')} · ${esc([p.kecamatan,p.kota].filter(Boolean).join(', ')||'-')}</span>
+       </div>
+       <div style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:11px;color:var(--muted)">${fmtD(s.created_at?s.created_at.slice(0,10):iso(new Date()))} · ${dogs.length} anabul${photoN?` · ${photoN} foto`:''}</span>
+        <button class="btn btn-p btn-sm" onclick="openOnbReview('${s.id}')">Review</button>
+       </div>
+      </div>
+     </div>`;
+    }).join('');
+   }
+  }
+  const ll=document.getElementById('onb-links-list');
+  if(ll){
+   if(!onboardingLinks.length){
+    ll.innerHTML='<div class="empty" style="padding:1.5rem">Belum ada link. Klik "+ Buat link pendaftaran".</div>';
+   } else {
+    ll.innerHTML='<div class="tbl-wrap"><table><thead><tr><th>Dibuat</th><th>Sumber / catatan</th><th>Status</th><th>Link</th><th></th></tr></thead><tbody>'+
+     onboardingLinks.map(l=>{
+      const expired=onbIsExpired(l);
+      const badge=l.status==='approved'?'<span class="badge bs">APPROVED</span>'
+       :l.status==='rejected'?'<span class="badge bl">DITOLAK</span>'
+       :l.status==='revoked'?'<span class="badge" style="background:var(--border);color:var(--text-2)">REVOKED</span>'
+       :expired?'<span class="badge bm">KEDALUWARSA</span>'
+       :l.status==='submitted'?'<span class="badge" style="background:#dbeafe;color:#1d4ed8">TERISI</span>'
+       :'<span class="badge bs">AKTIF</span>';
+      return `<tr>
+       <td style="white-space:nowrap">${fmtD(l.created_at?l.created_at.slice(0,10):'')}</td>
+       <td style="font-size:12px">${esc(l.source?SOURCE_LABELS[l.source]||l.source:'')}${l.note?' · <span style="color:var(--muted)">'+esc(l.note)+'</span>':''}</td>
+       <td>${badge}</td>
+       <td><button class="icon-btn" onclick="navigator.clipboard.writeText('${onbBuildLink(l.token)}').then(()=>showToast('Link dicopy','success')).catch(()=>{})">Copy</button></td>
+       <td>${l.status==='pending'&&!expired?`<button class="icon-btn del" onclick="revokeOnbLink('${l.id}')">Revoke</button>`:''}</td>
+      </tr>`;
+     }).join('')+'</tbody></table></div>';
+   }
+  }
+ }).catch(e=>{
+  const pl=document.getElementById('onb-pending-list');
+  if(pl) pl.innerHTML='<div class="empty">Fitur onboarding belum aktif: '+esc(e.message)+'<br>Jalankan SQL migration-nya dulu.</div>';
+  const ll=document.getElementById('onb-links-list');
+  if(ll) ll.innerHTML='';
+ });
+}
+function openOnbCreate(){
+ document.getElementById('onb-create-step1').style.display='';
+ document.getElementById('onb-create-step2').style.display='none';
+ document.getElementById('onb-src').value='';
+ document.getElementById('onb-note').value='';
+ om('ov-onb-create');
+}
+async function doCreateOnbLink(){
+ const token=Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2)+'.'+(Date.now()+2*864e5);
+ const src=document.getElementById('onb-src').value||null;
+ const note=document.getElementById('onb-note').value.trim()||null;
+ const {error}=await db.from('onboarding_links').insert({token,source:src,note,created_by:currentUser?.id||null});
+ if(error){alert('Gagal buat link: '+error.message);return}
+ await loadOnboarding();
+ document.getElementById('onb-create-step1').style.display='none';
+ document.getElementById('onb-create-step2').style.display='';
+ document.getElementById('onb-link-url').value=onbBuildLink(token);
+ document.getElementById('onb-wa-msg').value='Halo kak! \uD83D\uDC3E Berikut link pendaftaran HomePaw:\n\n'+onbBuildLink(token)+'\n\nIsi data kamu & anabul di link ini ya (bisa dibuka di HP, cukup diisi satu kali, berlaku 2 hari). Setelah diisi, admin kami akan konfirmasi via WhatsApp. Terima kasih!';
+ document.getElementById('onb-phone').value='';
+ const btn=document.getElementById('onb-wa-btn'); btn.removeAttribute('href'); btn.style.pointerEvents='none'; btn.style.opacity='.5';
+ renderOnboarding();
+}
+function copyOnb(id,label,btn){
+ const el=document.getElementById(id); if(!el) return;
+ navigator.clipboard.writeText(el.value).then(()=>{
+  const orig=btn.textContent; btn.textContent='Tercopy!'; setTimeout(()=>btn.textContent=orig,1500);
+ }).catch(()=>{el.select();document.execCommand('copy')});
+}
+function onOnbPhoneInput(el){
+ const num=normalizeWA(el.value);
+ const btn=document.getElementById('onb-wa-btn');
+ const msg=document.getElementById('onb-wa-msg')?.value||'';
+ if(num){
+  btn.href='https://wa.me/'+num+'?text='+encodeURIComponent(msg);
+  btn.style.pointerEvents=''; btn.style.opacity='';
+  document.getElementById('onb-phone-hint').textContent='\u2713 wa.me/'+num;
+ } else {
+  btn.removeAttribute('href'); btn.style.pointerEvents='none'; btn.style.opacity='.5';
+  document.getElementById('onb-phone-hint').textContent='Isi nomor dulu, atau copy pesan & tempel manual di chat.';
+ }
+}
+function onbWaReady(){ return !!document.getElementById('onb-wa-btn')?.href; }
+async function revokeOnbLink(id){
+ if(!confirm('Revoke link ini? Customer tidak akan bisa submit lagi (kalau belum).')) return;
+ const {error}=await db.from('onboarding_links').update({status:'revoked'}).eq('id',id);
+ if(error){alert('Error: '+error.message);return}
+ await loadOnboarding(); renderOnboarding();
+}
+function onbStatusBadge(s){
+ return s==='approved'?'<span class="badge bs">APPROVED</span>'
+  :s==='rejected'?'<span class="badge bl">DITOLAK</span>'
+  :'<span class="badge bm">MENUNGGU REVIEW</span>';
+}
+function openOnbReview(id){
+ const s=pendingSubs.find(x=>x.id===id); if(!s) return;
+ const p=s.payload||{};
+ const link=onboardingLinks.find(l=>l.token===s.token)||{};
+ const dogs=p.dogs||[];
+ const norm=p.wa?normalizeWA(p.wa):'';
+ const dups=norm?custs.filter(c=>c.wa&&normalizeWA(c.wa)===norm):[];
+ document.getElementById('onb-review-title').textContent='Review: '+(p.owner||'?');
+ let html='';
+ html+=`<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Submit ${fmtD(s.created_at?s.created_at.slice(0,10):'')} · link: ${esc(link.source?SOURCE_LABELS[link.source]||link.source:'tanpa sumber')}${link.note?' · '+esc(link.note):''}</div>`;
+ html+=`<div class="c360-card" style="margin-bottom:10px">
+  <div class="c360-card-title">${esc(p.owner||'?')}</div>
+  <div class="c360-card-meta">${esc(p.wa||'')} · ${esc([p.address,p.kecamatan,p.kota].filter(Boolean).join(', ')||'-')}</div>
+  ${p.latitude!=null?`<div class="c360-card-meta" style="margin-top:3px">\uD83D\uDCCD ${p.latitude}, ${p.longitude} <a href="https://www.google.com/maps?q=${p.latitude},${p.longitude}" target="_blank" style="color:var(--primary-darker)">cek Maps</a></div>`:''}
+  ${p.gmaps_link?`<div class="c360-card-meta" style="margin-top:3px"><a href="${esc(p.gmaps_link)}" target="_blank" style="color:var(--primary-darker)">Link Maps customer</a></div>`:''}
+  ${p.prefs?`<div class="c360-card-meta" style="margin-top:4px;font-style:italic">${esc(p.prefs)}</div>`:''}
+ </div>`;
+ html+='<div class="c360-section-lbl">Anabul ('+dogs.length+')</div>';
+ dogs.forEach((d,i)=>{
+  html+=`<div class="c360-card" style="margin-bottom:8px">
+   <div class="c360-card-title">${esc(d.name||'?')} <span style="font-weight:400;font-size:11px;color:var(--muted)">${esc(d.pet_type==='cat'?'kucing':'anjing')}${d.breed?' · '+esc(d.breed):''}${d.size?' · '+esc(d.size):''}</span></div>
+   <div class="c360-card-meta">${esc([d.age?d.age+' thn':null,d.weight||null,d.coat_color||null].filter(Boolean).join(' · ')||'-')}</div>
+   ${d.prefs?`<div class="c360-card-meta" style="margin-top:3px;font-style:italic">${esc(d.prefs)}</div>`:''}
+   ${d.skin_history?`<div style="font-size:11px;color:#92400e;background:#fef3c7;padding:5px 8px;border-radius:5px;margin-top:5px;border-left:3px solid #ca8a04"><strong>Kulit:</strong> ${esc(d.skin_history)}</div>`:''}
+   ${(d.styling_refs||[]).length?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${d.styling_refs.map(r=>`<a href="${esc(r.url)}" target="_blank"><img src="${esc(r.url)}" style="width:54px;height:54px;object-fit:cover;border-radius:5px;border:1px solid var(--border)"/></a>`).join('')}</div>`:''}
+  </div>`;
+ });
+ if(dups.length){
+  html+=`<div style="background:#fef3c7;border:1px solid #fde68a;border-left:4px solid #ca8a04;border-radius:var(--r);padding:10px 12px;margin:10px 0;font-size:12px;color:#92400e">
+   <strong>\u26A0 Nomor WA sudah terdaftar:</strong>
+   <div style="margin-top:6px;display:flex;flex-direction:column;gap:4px">
+   ${dups.map(d=>`<label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+    <input type="radio" name="onb-mode" value="merge:${d.id}" ${d===dups[0]?'checked':''}/>
+    <span>Gabung ke <strong>${esc(d.owner)}</strong> (${esc(d.customer_code||'?')} · ${dogsOf(d.id).length} anabul existing)</span>
+   </label>`).join('')}
+   <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+    <input type="radio" name="onb-mode" value="create"/>
+    <span>Tetap buat customer baru</span>
+   </label>
+   </div>
+  </div>`;
+ } else {
+  html+='<input type="radio" name="onb-mode" value="create" checked style="display:none"/>';
+ }
+ document.getElementById('onb-review-body').innerHTML=html;
+ const act=document.getElementById('onb-review-actions');
+ act.innerHTML=`<button class="btn btn-p" onclick="approveOnb('${s.id}')">Approve & masukkan ke database</button>
+  <button class="btn btn-d btn-sm" onclick="rejectOnb('${s.id}')">Tolak</button>
+  <button class="btn btn-g btn-sm" onclick="cm('ov-onb-review')">Tutup</button>`;
+ om('ov-onb-review');
+}
+async function approveOnb(id){
+ const s=pendingSubs.find(x=>x.id===id); if(!s) return;
+ const p=s.payload||{};
+ const modeEl=document.querySelector('input[name="onb-mode"]:checked');
+ const mode=modeEl?modeEl.value:'create';
+ const dogs=p.dogs||[];
+ if(!dogs.length){alert('Submission ini tidak punya data anabul.');return}
+ let targetCust=null;
+ if(mode.startsWith('merge:')){
+  targetCust=custs.find(c=>c.id===mode.slice(6));
+  if(!targetCust){alert('Customer tujuan tidak ditemukan.');return}
+ }
+ const btnGuard=document.querySelector('#onb-review-actions .btn-p'); if(btnGuard&&btnGuard.disabled) return;
+ if(btnGuard){btnGuard.disabled=true;btnGuard.textContent='Menyimpan\u2026'}
+ try{
+  let custId,custCode;
+  if(targetCust){
+   custId=targetCust.id; custCode=targetCust.customer_code;
+  } else {
+   let maxN=0;
+   custs.forEach(c=>{const m=(c.customer_code||'').match(/^CUST-(\d+)$/);if(m){const n=parseInt(m[1]);if(n>maxN)maxN=n}});
+   custCode='CUST-'+String(maxN+1).padStart(3,'0');
+   const custRow={
+    owner:p.owner.trim(),wa:p.wa||null,address:p.address||null,
+    kota:p.kota||null,kecamatan:p.kecamatan||null,
+    area:[p.kota,p.kecamatan].filter(Boolean).join(' - ')||null,
+    gmaps_link:p.gmaps_link||null,latitude:p.latitude,longitude:p.longitude,
+    prefs:p.prefs||null,source:onboardingLinks.find(l=>l.token===s.token)?.source||null,
+    customer_code:custCode,...editStamp()
+   };
+   const {data:ins,error}=await db.from('customers').insert(custRow).select().single();
+   if(error) throw error;
+   custId=ins.id;
+   await logAudit('customer',custId,'create',{new:custRow,label:custRow.owner+' (onboarding)'});
+  }
+  const existing=targetCust?dogsOf(targetCust.id):[];
+  let maxD=0;
+  existing.forEach(d=>{const m=(d.dog_code||'').match(/-D(\d+)$/);if(m){const n=parseInt(m[1]);if(n>maxN)maxD=n}});
+  const insertedDogs=[];
+  for(let i=0;i<dogs.length;i++){
+   const d=dogs[i];
+   const row={
+    name:(d.name||'').trim(),pet_type:d.pet_type||'dog',customer_id:custId,
+    breed:d.breed||null,age:d.age||null,weight:d.weight||null,
+    size:d.size||null,coat:d.coat||null,coat_color:d.coat_color||null,
+    prefs:d.prefs||null,skin_history:d.skin_history||null,
+    styling_refs:Array.isArray(d.styling_refs)?d.styling_refs:[],
+    dog_code:custCode+'-D'+(maxD+i+1),...editStamp()
+   };
+   const {data:di,error:de}=await db.from('dogs').insert(row).select().single();
+   if(de) throw de;
+   insertedDogs.push(di);
+   await logAudit('dog',di.id,'create',{new:row,label:row.name+' (onboarding)'});
+  }
+  await db.from('pending_customers').update({status:'approved',reviewed_by:currentUser?.id||null,reviewed_at:new Date().toISOString(),created_customer_id:custId}).eq('id',s.id);
+  await db.from('onboarding_links').update({status:'approved'}).eq('token',s.token);
+  await reloadTables('customers','dogs');
+  await loadOnboarding();
+  renderOnboarding();
+  const firstName=(p.owner||'').split(' ')[0];
+  const dogNames=insertedDogs.map(d=>d.name).join(' & ');
+  const waNum=p.wa?normalizeWA(p.wa):null;
+  const msg='Halo kak '+firstName+'! \uD83D\uDC3E Data kamu & '+dogNames+' sudah terdaftar di HomePaw \u2705\n\nKode customer: '+custCode+'\n\nKami akan konfirmasi jadwal grooming via chat ini ya. Terima kasih!';
+  document.getElementById('onb-review-body').innerHTML=`<div style="padding:14px;background:#dcfce7;border-radius:var(--r);color:#15803d;font-size:13px;line-height:1.7">
+   \u2705 <strong>Tersimpan.</strong><br>
+   Customer: <strong>${esc(p.owner)}</strong> (${custCode})${targetCust?' — digabung ke existing':''}<br>
+   Anabul: ${insertedDogs.map(d=>esc(d.name)+' ('+esc(d.dog_code)+')').join(', ')}
+  </div>
+  ${waNum?`<a class="btn btn-p btn-sm" style="margin-top:10px" href="https://wa.me/${waNum}?text=${encodeURIComponent(msg)}" target="_blank">Kirim konfirmasi WhatsApp</a>`:''}`;
+  document.getElementById('onb-review-actions').innerHTML='<button class="btn btn-g btn-sm" onclick="cm(\'ov-onb-review\')">Tutup</button>';
+ }catch(e){
+  alert('Gagal approve: '+(e.message||e));
+  if(btnGuard){btnGuard.disabled=false;btnGuard.textContent='Approve & masukkan ke database'}
+ }
+}
+async function rejectOnb(id){
+ if(!confirm('Tolak pendaftaran ini? Link-nya juga jadi mati.')) return;
+ const s=pendingSubs.find(x=>x.id===id); if(!s) return;
+ const {error}=await db.from('pending_customers').update({status:'rejected',reviewed_by:currentUser?.id||null,reviewed_at:new Date().toISOString()}).eq('id',id);
+ if(error){alert('Error: '+error.message);return}
+ await db.from('onboarding_links').update({status:'rejected'}).eq('token',s.token);
+ await loadOnboarding(); renderOnboarding(); cm('ov-onb-review');
+ showToast('Pendaftaran ditolak','success');
+}
 
 /* ========== BOOT ========== */
 // Don't call loadAll() directly anymore — let checkAuthState() decide.
