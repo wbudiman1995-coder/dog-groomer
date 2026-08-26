@@ -1613,6 +1613,13 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 
   <!-- Step 3: Groomer + Date + Time slots -->
   <div id="wiz-3" style="display:none">
+   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:.75rem">
+    <button type="button" class="btn btn-g btn-sm" onclick="findBestSlotsUI()" title="Pindai 7 hari ke depan: slot yang cukup untuk semua anabul, paling dekat rute groomer">★ Cari slot terbaik</button>
+    <select id="wiz-anchor" onchange="document.getElementById('wiz-best-slots').style.display='none'" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--surface);color:var(--text)" title="Hanya cari hari yang juga ada jadwal customer ini — supaya new stop berada di rute yang sama">
+     <option value="">Semua hari</option>
+    </select>
+   </div>
+   <div id="wiz-best-slots" style="display:none;margin-bottom:.75rem"></div>
    <div id="wiz-groomer-suggest" style="display:none;margin-bottom:.75rem;padding:12px 14px;background:var(--primary-tint);border:1px solid var(--primary-lt);border-left:4px solid var(--primary);border-radius:var(--r);font-size:var(--fs-label);font-weight:500;color:var(--primary-darker);cursor:pointer" onclick="applyGroomerSuggestion()"></div>
    <div id="wiz-travel-estimate" style="display:none;margin-bottom:.6rem;padding:8px 12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:var(--r)"></div>
    <div class="form-grid" style="margin-bottom:.75rem">
@@ -1755,6 +1762,8 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="form-grid">
  <div class="fg full"><label>Name *</label><input id="gf-name" placeholder="e.g. Pak Budi"/></div>
  <div class="fg"><label>Phone</label><input id="gf-phone" placeholder="08xxxxxxxxxx"/></div>
+ <div class="fg full"><label>Alamat groomer (titik awal rute harian)</label><input id="gf-address" placeholder="Jl. … (untuk rekomendasi slot terbaik)"/></div>
+ <div class="fg full"><label>Link Google Maps rumah <span style="font-size:10px;color:var(--muted);font-weight:400">(paste full link — koordinat terbaca otomatis)</span></label><input id="gf-gmaps" placeholder="Paste link Maps / koordinat…" oninput="onGfGmapsInput()"/><div id="gf-coords-hint" style="font-size:10px;color:var(--muted);margin-top:3px"></div></div>
  <div class="fg"><label>Color</label><input type="color" id="gf-color" value="#16a34a" style="height:38px;padding:2px"/></div>
  <div class="fg"><label>Gaji pokok (Rp/bulan)</label><input type="number" id="gf-basic-salary" value="0" min="0" placeholder="0"/></div>
  <div class="fg" id="gf-join-fg"><label>Join date</label><input type="date" id="gf-join-date"/></div>
@@ -4450,6 +4459,7 @@ function wizNext(n){
   if(!wiz.dogSvcs.length){alert('Select at least one dog');return}
   wizShow(3);renderWizSlots();renderWizTokens();renderWizSessionSummary();
   renderWizFreePerDog();
+  populateWizAnchor();
  } else if(n===4){
   if(!wiz.groomerId){alert('Select a groomer');return}
   if(wiz.startMins===null){alert('Select a time slot');return}
@@ -4654,6 +4664,159 @@ function selectWizSlot(m,isConflict=false){
   msg.textContent=isConflict?'⚠️ Slot ini bentrok. Kamu masih bisa lanjut, tetapi harus memberikan konfirmasi tambahan saat menyimpan.':'';
  }
  renderWizSlots();
+}
+
+/* ========== BEST-SLOT FINDER: detour-aware schedule recommendation ========== */
+// Koordinat customer dari sebuah appointment (null kalau belum ada koordinat)
+function custCoordsOfAppt(a){
+ if(!a) return null;
+ const d=dogs.find(x=>x.id===a.dog_id);
+ const c=d?custs.find(x=>x.id===d.customer_id):null;
+ if(!c||c.latitude==null||c.longitude==null) return null;
+ return {lat:c.latitude,lng:c.longitude,cust:c};
+}
+// Fallback tanpa koordinat: kecamatan sama≈1.5km, kota sama≈5km, lain=12km
+function areaGapKm(custA,custB){
+ if(!custA||!custB) return 8;
+ if(custA.kecamatan&&custA.kecamatan===custB.kecamatan) return 1.5;
+ if(custA.kota&&custA.kota===custB.kota) return 5;
+ return 12;
+}
+// Pindai 7 hari × groomer aktif × slot 15-menit. Skor: detour rute (km) + hari makin dekat + beban hari.
+// anchorCustId opsional: hanya hari yang juga ada jadwal customer tsb (stop baru berada di rute yang sama).
+function findBestSlots(custId,totalDur,anchorCustId){
+ const cust=custs.find(c=>c.id===custId); if(!cust) return [];
+ const hasCoords=cust.latitude!=null&&cust.longitude!=null;
+ const today=new Date(); today.setHours(0,0,0,0);
+ const dayMap=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+ const skipIds=new Set([...(wiz.editIds||[]),...(wiz.editId?[wiz.editId]:[])]);
+ const activeG=groomers.filter(g=>g.active);
+ const cands=[];
+ for(let dOff=0;dOff<7;dOff++){
+  const d=new Date(today); d.setDate(d.getDate()+dOff);
+  const dateISO=iso(d);
+  if(anchorCustId){
+   const anchorDogIds=dogs.filter(x=>x.customer_id===anchorCustId).map(x=>x.id);
+   if(!appts.some(a=>anchorDogIds.includes(a.dog_id)&&a.appt_date===dateISO&&a.status!=='cancelled')) continue;
+  }
+  activeG.forEach(g=>{
+   if(!(g.working_days||'Mon,Tue,Wed,Thu,Fri,Sat').split(',').includes(dayMap[d.getDay()])) return;
+   if(groomerBlocks.some(b=>b.block_date===dateISO&&(!b.groomer_id||b.groomer_id===g.id))) return;
+   const dayAppts=appts.filter(a=>a.groomer_id===g.id&&a.appt_date===dateISO&&a.status!=='cancelled'&&!skipIds.has(a.id))
+    .map(a=>{const cc=custCoordsOfAppt(a);const st=t2m((a.appt_time||'09:00').slice(0,5));return {a,cc,owner:cc?cc.cust.owner:null,start:st,end:st+(a.duration_mins||60)};});
+   const dayCount=dayAppts.length;
+   const byEndDesc=[...dayAppts].sort((x,y)=>y.end-x.end);
+   const byStartAsc=[...dayAppts].sort((x,y)=>x.start-y.start);
+   const dayDate=new Date(dateISO+'T00:00:00');
+   for(let m=SSTART;m+totalDur<=SEND;m+=SSTEP){
+    if(isBlocked(g.id,dateISO,m,totalDur,wiz.editId)) continue;
+    const prev=byEndDesc.find(e=>e.end<=m)||null;
+    const next=byStartAsc.find(e=>e.start>=m+totalDur)||null;
+    const pc=prev?prev.cc:null, nc=next?next.cc:null;
+    let detour=0, detourNote='Stop pertama hari ini';
+    if(hasCoords){
+     if(prev&&next){
+      detourNote='di antara '+(prev.owner||'?')+' & '+(next.owner||'?');
+      if(pc&&nc) detour=haversineKm(pc.lat,pc.lng,cust.latitude,cust.longitude)+haversineKm(cust.latitude,cust.longitude,nc.lat,nc.lng)-haversineKm(pc.lat,pc.lng,nc.lat,nc.lng);
+      else detour=areaGapKm(cust,pc?pc.cust:(nc?nc.cust:null));
+     } else if(prev){
+      detour=pc?haversineKm(pc.lat,pc.lng,cust.latitude,cust.longitude):areaGapKm(cust,pc?pc.cust:null);
+      detourNote='setelah '+(prev.owner||'?');
+     } else if(next){
+      // Stop pertama hari itu: pakai rumah groomer sebagai titik awal rute kalau ada
+      if(g.latitude!=null&&g.longitude!=null&&hasCoords){
+       if(nc) detour=haversineKm(g.latitude,g.longitude,cust.latitude,cust.longitude)+haversineKm(cust.latitude,cust.longitude,nc.lat,nc.lng)-haversineKm(g.latitude,g.longitude,nc.lat,nc.lng);
+       else detour=haversineKm(g.latitude,g.longitude,cust.latitude,cust.longitude)*0.5;
+       detourNote='dari rumah '+g.name;
+      } else {
+       detour=nc?haversineKm(cust.latitude,cust.longitude,nc.lat,nc.lng)*0.5:areaGapKm(cust,nc?nc.cust:null);
+       detourNote='sebelum '+(next.owner||'?');
+      }
+     } else if(g.latitude!=null&&g.longitude!=null&&hasCoords){
+      detour=haversineKm(g.latitude,g.longitude,cust.latitude,cust.longitude)*0.5;
+      detourNote='dari rumah '+g.name;
+     }
+    } else {
+     detour=areaGapKm(cust,pc?pc.cust:(nc?nc.cust:null));
+     detourNote='perkiraan area (customer belum punya koordinat)';
+    }
+    let score=100-detour*8-dOff*2-dayCount*1.5;
+    if(prev&&pc&&hasCoords){
+     const km=haversineKm(pc.lat,pc.lng,cust.latitude,cust.longitude);
+     const mins=estimateTravelMins(km,dateISO,m2t(m));
+     const buf=m-prev.end;
+     if(buf<mins) score-=(mins-buf)*1.5; // buffer travel terlalu mepet
+    }
+    if(!prev&&g.latitude!=null&&g.longitude!=null&&hasCoords){
+     // perjalanan pertama: rumah groomer → customer, buffer dihitung dari jam buka
+     const mins=estimateTravelMins(haversineKm(g.latitude,g.longitude,cust.latitude,cust.longitude),dateISO,m2t(m));
+     const buf=m-SSTART;
+     if(buf<mins) score-=(mins-buf)*1.5;
+    }
+    cands.push({dateISO,groomId:g.id,gname:g.name,startMins:m,detour:Math.max(0,detour),detourNote,dayCount,score});
+   }
+  });
+ }
+ // satu kandidat terbaik per kombinasi groomer+tanggal, lalu top 5
+ const best={};
+ cands.forEach(c=>{const k=c.groomId+'|'+c.dateISO; if(!best[k]||c.score>best[k].score) best[k]=c;});
+ return Object.values(best).sort((a,b)=>b.score-a.score).slice(0,5);
+}
+let _bestSlots=[];
+function findBestSlotsUI(){
+ const wrap=document.getElementById('wiz-best-slots'); if(!wrap) return;
+ if(!wiz.custId||!wiz.dogSvcs.length){
+  wrap.style.display='block';
+  wrap.innerHTML='<div style="font-size:12px;color:#b45309;padding:4px 0">Pilih customer & anabul dulu di langkah sebelumnya.</div>';
+  return;
+ }
+ const totalDur=wiz.dogSvcs.reduce((s,ds)=>s+getWizDogDur(ds),0);
+ const anchor=document.getElementById('wiz-anchor')?.value||null;
+ wrap.style.display='block';
+ wrap.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">⏳ Memindai 7 hari × semua groomer…</div>';
+ setTimeout(()=>{
+  _bestSlots=findBestSlots(wiz.custId,totalDur,anchor);
+  if(!_bestSlots.length){
+   wrap.innerHTML='<div style="font-size:12px;color:#991b1b;padding:6px 0">Tidak ada slot kosong dalam 7 hari'+(anchor?' dengan filter hari itu':'')+'. Coba ganti anchor ke "Semua hari", atau tanggalnya memang penuh.</div>';
+   return;
+  }
+  wrap.innerHTML=_bestSlots.map((c,i)=>{
+   const d=new Date(c.dateISO+'T00:00:00');
+   const dayLbl=d.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'short'});
+   return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--subtle);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
+    <div style="flex:1;min-width:0">
+     <div style="font-size:13px;font-weight:700">${esc(dayLbl)} · ${m2t(c.startMins)}–${m2t(c.startMins+totalDur)} · ${esc(c.gname)}</div>
+     <div style="font-size:11px;color:var(--muted)">${esc(c.detourNote)}${c.detour>0.05?' · +'+c.detour.toFixed(1)+' km detour':''} · ${c.dayCount} anjing sudah ada hari itu</div>
+    </div>
+    <button type="button" class="btn btn-p btn-sm" onclick="applyBestSlot(${i})">Pilih</button>
+   </div>`;
+  }).join('');
+ },30);
+}
+function applyBestSlot(i){
+ const c=_bestSlots[i]; if(!c) return;
+ wiz.groomerId=c.groomId; wiz.date=c.dateISO; wiz.startMins=c.startMins; wiz.slotConflict=false;
+ const gs=document.getElementById('wiz-groomer'); if(gs) gs.value=c.groomId;
+ const di=document.getElementById('wiz-date'); if(di) di.value=c.dateISO;
+ const msg=document.getElementById('wiz-conflict-msg'); if(msg) msg.style.display='none';
+ renderWizSlots(); renderWizTokens(); renderWizSessionSummary();
+ showToast('Slot dipilih: '+m2t(c.startMins)+' — '+c.gname,'success');
+}
+// Anchor dropdown: customer yang punya jadwal dalam 7 hari ke depan (e.g. "Denta — Permata Hijau")
+function populateWizAnchor(){
+ const sel=document.getElementById('wiz-anchor'); if(!sel) return;
+ const prev=sel.value;
+ const todayISO=iso(new Date());
+ const maxD=new Date(); maxD.setDate(maxD.getDate()+7);
+ const maxISO=iso(maxD);
+ const map={};
+ appts.filter(a=>a.appt_date>=todayISO&&a.appt_date<=maxISO&&a.status!=='cancelled').forEach(a=>{
+  const d=dogs.find(x=>x.id===a.dog_id);
+  const c=d?custs.find(x=>x.id===d.customer_id):null;
+  if(c) map[c.id]=c;
+ });
+ sel.innerHTML='<option value="">Semua hari</option>'+Object.values(map).map(c=>`<option value="${c.id}">${esc(c.owner)}${c.kecamatan?' — '+esc(c.kecamatan):''}</option>`).join('');
+ if(prev&&map[prev]) sel.value=prev;
 }
 
 /* ========== FEATURE 5: AUTO-SUGGEST GROOMER BY AREA + AVAILABILITY ========== */
@@ -6740,12 +6903,26 @@ function copyGroomerScheduleLink(groomerId){
  document.getElementById('g-link-body').innerHTML=modalHtml;
 }
 
+function onGfGmapsInput(){
+ const v=document.getElementById('gf-gmaps').value.trim();
+ const hint=document.getElementById('gf-coords-hint');
+ window._gfCoords=null;
+ if(!v){hint.textContent='';return}
+ const m=v.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)||v.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/)||v.match(/[?&](?:q|ll)=(-?\d+\.\d+)(?:,|%2C)(-?\d+\.\d+)/i)||v.match(/^\s*(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$/);
+ if(m){window._gfCoords={lat:+m[1],lng:+m[2]};hint.textContent='\u2713 Koordinat: '+m[1]+', '+m[2];hint.style.color='#16a34a'}
+ else{hint.textContent='Full link Maps saja (short link tidak terbaca), atau ketik "lat, lng" langsung.';hint.style.color='#b45309'}
+}
+
 function openAddGroomer(){
  groomerEditId=null;
  document.getElementById('groomer-title').textContent='Add groomer';
  document.getElementById('groomer-save-btn').textContent='Save';
  document.getElementById('gf-name').value='';
  document.getElementById('gf-phone').value='';
+ document.getElementById('gf-address').value='';
+ document.getElementById('gf-gmaps').value='';
+ document.getElementById('gf-coords-hint').textContent='';
+ window._gfCoords=null;
  document.getElementById('gf-color').value='#16a34a';
  document.getElementById('gf-active').checked=true;
  fillGroomerComp(null);
@@ -6778,6 +6955,11 @@ function openEditGroomer(id){
  document.getElementById('groomer-save-btn').textContent='Update';
  document.getElementById('gf-name').value=g.name||'';
  document.getElementById('gf-phone').value=g.phone||'';
+ document.getElementById('gf-address').value=g.address||'';
+ document.getElementById('gf-gmaps').value=(g.latitude!=null)?(g.latitude+', '+g.longitude):'';
+ window._gfCoords=(g.latitude!=null)?{lat:g.latitude,lng:g.longitude}:null;
+ const hintEl=document.getElementById('gf-coords-hint');
+ if(hintEl) hintEl.textContent=(g.latitude!=null)?'\u2713 Koordinat tersimpan':'';
  document.getElementById('gf-color').value=g.color||'#16a34a';
  document.getElementById('gf-active').checked=g.active!==false;
  fillGroomerComp(g);
@@ -6791,6 +6973,9 @@ async function saveGroomer(){
  const p={
  name,
  phone:document.getElementById('gf-phone').value.trim(),
+ address:document.getElementById('gf-address')?.value.trim()||null,
+ latitude:window._gfCoords?window._gfCoords.lat:null,
+ longitude:window._gfCoords?window._gfCoords.lng:null,
  color:document.getElementById('gf-color').value,
  active:document.getElementById('gf-active').checked,
  basic_salary:parseInt(document.getElementById('gf-basic-salary')?.value)||0,
@@ -14631,6 +14816,11 @@ function onbBuildLink(token){
  return window.location.origin+window.location.pathname.replace(/[^/]+$/,'')+'join.html?t='+token;
 }
 async function loadOnboarding(){
+ // Auto-bersihkan: link kedaluwarsa 2 hari yang tidak pernah terisi + link revoked lama
+ try{
+  const cutoff=new Date(Date.now()-2*864e5).toISOString();
+  await db.from('onboarding_links').delete().lt('created_at',cutoff).in('status',['pending','revoked']);
+ }catch(e){/* non-fatal */}
  const [lr,pr]=await Promise.all([
   db.from('onboarding_links').select('*').order('created_at',{ascending:false}),
   db.from('pending_customers').select('*').order('created_at',{ascending:false})
@@ -14863,8 +15053,8 @@ async function approveOnb(id){
    insertedDogs.push(di);
    await logAudit('dog',di.id,'create',{new:row,label:row.name+' (onboarding)'});
   }
-  await db.from('pending_customers').update({status:'approved',reviewed_by:currentUser?.id||null,reviewed_at:new Date().toISOString(),created_customer_id:custId}).eq('id',s.id);
-  await db.from('onboarding_links').update({status:'approved'}).eq('token',s.token);
+  await db.from('pending_customers').delete().eq('id',s.id);
+  await db.from('onboarding_links').delete().eq('token',s.token);
   await reloadTables('customers','dogs');
   await loadOnboarding();
   renderOnboarding();
@@ -14887,9 +15077,8 @@ async function approveOnb(id){
 async function rejectOnb(id){
  if(!confirm('Tolak pendaftaran ini? Link-nya juga jadi mati.')) return;
  const s=pendingSubs.find(x=>x.id===id); if(!s) return;
- const {error}=await db.from('pending_customers').update({status:'rejected',reviewed_by:currentUser?.id||null,reviewed_at:new Date().toISOString()}).eq('id',id);
- if(error){alert('Error: '+error.message);return}
- await db.from('onboarding_links').update({status:'rejected'}).eq('token',s.token);
+ await db.from('pending_customers').delete().eq('id',id);
+ await db.from('onboarding_links').delete().eq('token',s.token);
  await loadOnboarding(); renderOnboarding(); cm('ov-onb-review');
  showToast('Pendaftaran ditolak','success');
 }
