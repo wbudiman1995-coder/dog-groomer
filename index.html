@@ -495,7 +495,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 <script>
  const SUPABASE_URL = "https://cwqrpslypcjgjuxagglc.supabase.co";
  const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
- const ANTHROPIC_KEY = "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";
+ // Route optimizer removed — API keys never belong in client-side code.
 </script>
 
 <!-- AUTH SCREENS (Batch H) — hidden by default, shown by setAuthScreen() -->
@@ -1238,7 +1238,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  </div>
  </div>
 
- <div class="sec" id="sec-route" style="display:none"></div>
+ <!-- Route optimizer UI removed (was hidden/dead code) -->
 
  <!-- Batch O.10 — History audit log section -->
  <div class="sec" id="sec-history">
@@ -1814,7 +1814,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="modal-title">Payroll settings</div>
  <div class="form-grid">
  <div class="fg full" style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding-top:4px">Insentif Basic Grooming</div>
- <div class="fg full"><label>Rate per dog selesai (Rp)</label><input type="number" id="pf-rate" value="20000" readonly/></div>
+ <div class="fg full"><label>Rate per dog selesai (Rp)</label><input type="number" id="pf-rate" value="20000" min="0" step="1000"/></div>
  <div class="fg full"><label>Tanggal mulai cycle gaji (1–28)</label><input type="number" id="pf-cycle-day" min="1" max="28" step="1" placeholder="26"/></div>
  <div class="fg full"><label>Insentif Botak default (Rp per job)</label><input type="number" id="pf-botak" value="10000" min="0" step="1000"/></div>
  <div class="fg full">
@@ -6105,7 +6105,7 @@ function renderAttendance(){
   const ts=typeof absency==='object'?absency.timestamp:null;
   const lat=typeof absency==='object'?absency.lat:null;
   const lng=typeof absency==='object'?absency.lng:null;
-  items.push({date:a.appt_date,time:a.appt_time,groomer:g?.name||'?',dog:d?.name||'?',url,ts,lat,lng,apptId:a.id,isLate:a.absency_late});
+  items.push({date:a.appt_date,time:a.appt_time,groomer:g?.name||'?',dog:d?.name||'?',url,ts,lat,lng,apptId:a.id,isLate:a.absency_late,waived:!!a.late_waived});
  });
  const byDate={};
  items.forEach(it=>{if(!byDate[it.date]) byDate[it.date]=[];byDate[it.date].push(it);});
@@ -6133,7 +6133,10 @@ function renderAttendance(){
      let isLate=false;
      if(it.ts&&it.time){const[ah,am]=it.time.split(':').map(Number);const apptStart=new Date(it.date+'T'+String(ah).padStart(2,'0')+':'+String(am).padStart(2,'0')+':00');isLate=new Date(it.ts).getTime()>=apptStart.getTime()+LATE_GRACE_MINUTES*60*1000;}
      else isLate=!!it.isLate;
-     const lateBadge=isLate?'<span style="font-size:10px;background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:4px;font-weight:600;margin-top:3px;display:inline-block">Terlambat</span>':'';
+     if(it.waived) isLate=false; // waived — bukan salah groomer
+     const lateBadge=it.waived
+      ?'<span style="font-size:10px;background:#dcfce7;color:#15803d;padding:2px 6px;border-radius:4px;font-weight:600;margin-top:3px;display:inline-block" title="Di-waive admin — tidak dihitung telat">WAIVED</span>'
+      :(isLate?'<span style="font-size:10px;background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:4px;font-weight:600;margin-top:3px;display:inline-block">Terlambat</span>':'');
      const mapsLink=it.lat?`<a href="https://maps.google.com/?q=${it.lat},${it.lng}" target="_blank" style="font-size:11px;color:var(--primary)">Buka Maps</a>`:'<span style="font-size:11px;color:var(--muted)">Lokasi tidak tersedia</span>';
      return `<div class="card" style="padding:10px">
       <a href="${esc(it.url)}" target="_blank"><img src="${esc(it.url)}" style="width:100%;border-radius:6px;aspect-ratio:4/3;object-fit:cover;margin-bottom:8px"/></a>
@@ -6884,108 +6887,6 @@ async function saveGSched(){
  if(error){alert('Error: '+error.message);return;}
  cm('ov-gsched');
  await loadAll();
-}
-function renderChips(){
- document.getElementById('chips').innerHTML=dogs.map(d=>
- `<button class="chip" data-name="${esc(d.name)}" onclick="toggleChip('${d.id}',this)">${esc(d.name)}</button>`
- ).join('');
-}
-
-function toggleChip(id,el){
- el.classList.toggle('on');
- const sel=[...document.querySelectorAll('.chip.on')].map(c=>c.dataset.name);
- document.getElementById('route-input').value=sel.length?`I want to groom ${sel.join(', ')} tomorrow.`:'';
-}
-
-function loadFromCal(){
- const tom=new Date(); tom.setDate(tom.getDate()+1);
- const isoT=iso(tom);
- const ta=appts.filter(a=>a.appt_date===isoT);
- if(!ta.length){alert('No appointments for tomorrow. Add some in the Calendar tab!');return}
- const names=ta.map(a=>{const d=dogs.find(x=>x.id===a.dog_id);return a.dogs?.name||d?.name}).filter(Boolean);
- const firstTime=ta[0]?.appt_time?.slice(0,5)||'09:00';
- document.getElementById('route-input').value=`I want to groom ${names.join(', ')} tomorrow starting at ${firstTime}.`;
- document.querySelectorAll('.chip').forEach(c=>{
- if(names.includes(c.dataset.name)) c.classList.add('on'); else c.classList.remove('on');
- });
-}
-
-function buildMapsUrl(stops){
- const a=stops.map(s=>encodeURIComponent(s.address));
- if(!a.length) return null;
- if(a.length===1) return `https://www.google.com/maps/dir/?api=1&destination=${a[0]}&travelmode=driving&avoid=tolls`;
- const wps=a.slice(1,-1).join('|');
- let u=`https://www.google.com/maps/dir/?api=1&origin=${a[0]}&destination=${a[a.length-1]}&travelmode=driving&avoid=tolls`;
- if(wps) u+=`&waypoints=${wps}`;
- return u;
-}
-
-async function optimizeRoute(){
- const input=document.getElementById('route-input').value.trim();
- if(!input){alert('Please describe who to groom.');return}
- const rd=document.getElementById('route-result');
- rd.innerHTML='<div class="loading"><span class="spin"></span>Planning your motorcycle route…</div>';
-
- const dogList=dogs.map(d=>{
- const c=custs.find(x=>x.id===d.customer_id)||{};
- return `- ${d.name} (${d.breed||'mixed'}, ${d.size||'?'}, area:${c.area||'?'}, address:${c.address||'?'}, owner:${c.owner||'?'}, WA:${c.wa||'n/a'}, prefs:"${d.prefs||'none'}")`;
- }).join('\n');
-
- try {
- const resp=await fetch("https://api.anthropic.com/v1/messages",{
- method:"POST",
- headers:{"Content-Type":"application/json","x-api-key":ANTHROPIC_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
- body:JSON.stringify({
- model:"claude-sonnet-4-20250514",
- max_tokens:1024,
- messages:[{role:"user",content:`You are a route optimizer for a mobile dog grooming service in Jakarta, Indonesia. Groomer uses MOTORCYCLE, NO toll roads (no tol).
-
-Clients:
-${dogList}
-
-Request: "${input}"
-
-1. Find the dogs mentioned by name.
-2. Optimize route for motorcycle avoiding tolls. Group nearby areas: Sudirman/Kuningan=Central; Kemang/Tebet/Pancoran=South; Kelapa Gading/Sunter=North; Grogol/Kebon Jeruk=West; Cibubur/Kramat Jati=East.
-3. Schedule times from 9:00 AM unless stated. Large=60min, Medium=45min, Small=30min, travel buffer=20min (motorcycle, no toll).
-4. Return ONLY this exact JSON (no markdown, no backticks, no extra text):
-{"summary":"one sentence","stops":[{"order":1,"dog":"Name","owner":"Owner","area":"Area","address":"Full address","wa":"number","time":"09:00","duration":"60 min","note":"grooming reminder"}],"total_time":"X hrs","tip":"Jakarta motorcycle tip"}`}]
- })
- });
- if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||resp.status)}
- const data=await resp.json();
- const raw=(data.content||[]).map(b=>b.text||'').join('').replace(/```json|```/g,'').trim();
- const json=JSON.parse(raw);
- const tom=new Date(); tom.setDate(tom.getDate()+1);
- const dateStr=tom.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'});
- const mapsUrl=buildMapsUrl(json.stops);
- rd.innerHTML=`
- <div class="sum-bar"><span> ${dateStr}</span><span>No tolls · ${json.total_time}</span></div>
- ${mapsUrl?`<div class="maps-banner">
- <div><div class="maps-t">Open full route in Google Maps</div><div class="maps-s">${json.stops.length} stops · Motorcycle · No tolls · Live traffic</div></div>
- <a class="btn-maps" href="${mapsUrl}" target="_blank">Open in Maps</a>
- </div>`:''}
- <div class="card" style="padding:1rem">
- <div style="font-size:12px;color:var(--muted);margin-bottom:.9rem">${json.summary}</div>
- ${json.stops.map(s=>`<div class="stop-row">
- <div class="stop-n">${s.order}</div>
- <div class="stop-info">
- <div class="stop-nm">${s.dog} <span style="font-weight:400;color:var(--muted);font-size:11px">· ${s.owner}</span></div>
- <div class="stop-det">${s.address}</div>
- <div class="stop-det">${s.note}</div>
- <div class="stop-links">
- ${s.wa?`<a class="stop-lnk" href="${waLink(s.wa)}" target="_blank">WA</a>`:''}
- <a class="stop-lnk" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.address)}&travelmode=driving&avoid=tolls" target="_blank">Navigate</a>
- </div>
- </div>
- <div class="stime"><div class="stime-v">${s.time}</div><div class="stime-d">${s.duration}</div></div>
- </div>`).join('')}
- ${json.tip?`<div class="tip">${json.tip}</div>`:''}
- </div>`;
- } catch(e){
- rd.innerHTML=`<div class="empty"><span class="empty-icon">️</span>Error: ${e.message}</div>`;
- console.error(e);
- }
 }
 
 /* ============ INVOICE TAB ============ */
@@ -9717,7 +9618,8 @@ async function sendInvoiceViaWA(rec, cust, sourceButton, preOpenedWin){
  try {
   const blob=await _generateInvoicePDF(rec, cust);
   const ownerPrefix=(cust.owner||'').replace(/[^A-Za-z]/g,'').slice(0,3);
-  const filename=`${rec.invoice_number}${ownerPrefix?'_'+ownerPrefix:''}.pdf`;
+  // Random suffix so public-bucket paths can't be guessed from sequential invoice numbers
+  const filename=`${rec.invoice_number}${ownerPrefix?'_'+ownerPrefix:''}_${Math.random().toString(36).slice(2,8)}.pdf`;
   const message=buildInvoiceWAMessage(rec, cust);
 
   // MOBILE: attach the REAL PDF file via Web Share API. Opens the native share sheet where the
@@ -12697,7 +12599,7 @@ function computeGroomerDogsInCycle(groomerId,cycle){
  let botakCount=0; // jobs (counted or handled) whose services include Botak
  const review=[], handled=[], counted=[];
  const countedJobs=new Set();
- const rate=20000;
+ const rate=payrollSettings.rate_per_dog||20000;
  // The after-visit invoice is the completion evidence for payroll. Appointment
  // status is not required because legacy/admin flows often leave it pending or
  // confirmed even after the invoice is issued. Package/subscription-sale
@@ -13065,7 +12967,7 @@ function addPfTier(){
 function removePfTier(i){_pfTiersDraft.splice(i,1);renderPfTiers();}
 
 function openPayrollSettings(){
- document.getElementById('pf-rate').value=20000;
+ document.getElementById('pf-rate').value=payrollSettings.rate_per_dog||20000;
  document.getElementById('pf-cycle-day').value=payrollSettings.cycle_start_day??26;
  document.getElementById('pf-botak').value=payrollSettings.botak_incentive??10000;
  _pfTiersDraft=normalizeStylingTiers(payrollSettings.styling_tiers).map(t=>({...t}));
@@ -13074,7 +12976,7 @@ function openPayrollSettings(){
 }
 
 async function savePayrollSettings(){
- const rate=20000;
+ const rate=Math.max(0,parseInt(document.getElementById('pf-rate').value)||20000);
  const cycleDay=Math.min(28,Math.max(1,parseInt(document.getElementById('pf-cycle-day').value)||26));
  const botakAmt=Math.max(0,parseInt(document.getElementById('pf-botak')?.value)||0);
  const tiers=normalizeStylingTiers(_pfTiersDraft);
