@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e07b39">
+<title>HomePaw — Pendaftaran Customer Baru</title>
+<style>
+:root{--bg:#faf6f0;--surface:#fff;--text:#2e2116;--muted:#8c7a68;--border:#ece0d0;--subtle:#f6efe5;--primary:#e07b39;--primary-dk:#c25f22;--green:#16a34a;--red:#dc2626}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh}
+.wrap{max-width:520px;margin:0 auto;padding:16px 14px 60px}
+.hero{background:linear-gradient(135deg,#3d1f0d,#e07b39);color:#fff;border-radius:14px;padding:20px 18px;margin-bottom:16px}
+.hero h1{font-size:20px;letter-spacing:-.02em}
+.hero p{font-size:12px;opacity:.9;margin-top:4px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(61,31,13,.06)}
+.sec-lbl{font-size:11px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+.fg{margin-bottom:12px}
+.fg label{display:block;font-size:12px;font-weight:600;color:var(--text-2,#5b4a3a);margin-bottom:5px}
+.fg label .req{color:var(--red)}
+.fg input,.fg select,.fg textarea{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:10px;font-size:16px;background:var(--subtle);color:var(--text);font-family:inherit}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--primary);background:#fff;box-shadow:0 0 0 3px rgba(224,123,57,.22)}
+.fg textarea{resize:vertical;min-height:60px}
+.hint{font-size:11px;color:var(--muted);margin-top:4px}
+.hint.ok{color:var(--green);font-weight:600}
+.hint.err{color:var(--red)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:12px 18px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:600;font-family:inherit;min-height:46px}
+.btn-p{background:var(--primary);color:#fff;width:100%}
+.btn-p:active{background:var(--primary-dk)}
+.btn-g{background:var(--subtle);color:var(--text);border:1px solid var(--border);font-size:13px;min-height:40px;padding:8px 14px}
+.btn-g:active{background:var(--border)}
+.geo-chip{display:inline-flex;align-items:center;gap:6px;background:#e6f4ea;color:#1e7a3c;padding:6px 12px;border-radius:99px;font-size:12px;font-weight:600;margin-top:6px}
+.geo-chip a{color:#1e7a3c}
+.dog-card{border:2px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--subtle)}
+.dog-card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.dog-card-head span{font-size:12px;font-weight:700;color:var(--primary-dk)}
+.dog-del{background:none;border:none;color:var(--red);font-size:12px;font-weight:600;cursor:pointer;padding:4px 8px}
+.photo-grid{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.photo-grid .thumb{position:relative}
+.photo-grid img{width:70px;height:70px;object-fit:cover;border-radius:8px;border:1px solid var(--border);display:block}
+.photo-grid .rm{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.7);color:#fff;font-size:11px;cursor:pointer;line-height:1}
+.add-dog{width:100%;background:none;border:2px dashed var(--primary);color:var(--primary-dk);border-radius:12px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+.submit-wrap{position:sticky;bottom:0;padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,var(--bg) 70%,transparent)}
+.err-box{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:12px;display:none}
+.screen{text-align:center;padding:60px 20px}
+.screen .big{font-size:44px;margin-bottom:14px}
+.screen h2{font-size:18px;margin-bottom:8px}
+.screen p{font-size:13px;color:var(--muted);max-width:360px;margin:0 auto}
+.spin{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div id="screen-loading" class="screen"><span class="spin"></span><div style="margin-top:10px;font-size:13px;color:var(--muted)">Memuat…</div></div>
+
+<div id="screen-invalid" class="screen" style="display:none">
+ <div class="big">🔗</div>
+ <h2>Link tidak valid</h2>
+ <p>Link pendaftaran ini salah atau sudah dicabut. Hubungi admin HomePaw untuk mendapat link baru.</p>
+</div>
+
+<div id="screen-expired" class="screen" style="display:none">
+ <div class="big">⏰</div>
+ <h2>Link kedaluwarsa</h2>
+ <p>Link pendaftaran hanya berlaku 2 hari. Hubungi admin HomePaw untuk mendapat link baru.</p>
+</div>
+
+<div id="screen-used" class="screen" style="display:none">
+ <div class="big">✅</div>
+ <h2>Link sudah digunakan</h2>
+ <p>Data dari link ini sudah pernah dikirim. Jika belum menerima konfirmasi, hubungi admin HomePaw.</p>
+</div>
+
+<div id="screen-done" class="screen" style="display:none">
+ <div class="big">🎉</div>
+ <h2>Terima kasih!</h2>
+ <p>Data kamu & anabul sudah kami terima dan sedang diverifikasi admin. Kami akan konfirmasi via WhatsApp ya.</p>
+</div>
+
+<div id="form-wrap" style="display:none">
+ <div class="hero">
+  <h1>HomePaw 🐾</h1>
+  <p>Form pendaftaran customer baru — isi sekali, admin kami yang lanjutkan.</p>
+ </div>
+
+ <div class="err-box" id="err-box"></div>
+
+ <form onsubmit="return false">
+ <div class="card">
+  <div class="sec-lbl">Data pemilik</div>
+  <div class="fg"><label>Nama kamu <span class="req">*</span></label><input id="f-owner" placeholder="e.g. Sarah" autocapitalize="words"/></div>
+  <div class="fg"><label>Nomor WhatsApp <span class="req">*</span></label><input id="f-wa" type="tel" placeholder="08xxx / +62 8xx" inputmode="tel" oninput="onWaInput(this)"/><div class="hint" id="wa-hint"></div></div>
+  <div class="fg"><label>Alamat lengkap rumah <span class="req">*</span></label><textarea id="f-addr" rows="2" placeholder="Jl. Kemang Raya No.10, RT/RW…"></textarea></div>
+  <div class="row2">
+   <div class="fg"><label>Kota / Kabupaten <span class="req">*</span></label><select id="f-kota" onchange="onKotaChange()"><option value="">Pilih…</option></select></div>
+   <div class="fg"><label>Kecamatan</label><select id="f-kec"><option value="">Pilih kota dulu…</option></select></div>
+  </div>
+  <div class="fg"><label>Lokasi rumah (biar groomer nyampe tepat waktu)</label>
+   <button type="button" class="btn btn-g" style="width:100%" onclick="useCurrentLocation(this)" id="geo-btn">📍 Bagikan lokasi saat ini</button>
+   <div id="geo-chip"></div>
+   <div class="hint">Atau paste link Google Maps di bawah (opsional)</div>
+   <input id="f-gmaps" placeholder="Paste link / koordinat…" style="margin-top:6px" oninput="onGmapsPaste(this)"/>
+   <div class="hint" id="gmaps-hint"></div>
+  </div>
+  <div class="fg"><label>Catatan untuk kami (opsional)</label><textarea id="f-prefs" rows="2" placeholder="e.g. Gerbang pagar hitam, titip ke security…"></textarea></div>
+ </div>
+
+ <div class="card">
+  <div class="sec-lbl">Anabul kamu</div>
+  <div id="dogs-list"></div>
+  <button type="button" class="add-dog" onclick="addDog()">+ Tambah anabul lain</button>
+ </div>
+
+ <div class="submit-wrap">
+  <button type="button" class="btn btn-p" id="submit-btn" onclick="submitForm()">Kirim ke admin HomePaw</button>
+  <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px">Data hanya masuk setelah diverifikasi admin HomePaw 🔒</div>
+ </div>
+ </form>
+</div>
+
+</div>
+
+<script>
+const SUPABASE_URL="https://cwqrpslypcjgjuxagglc.supabase.co";
+const SUPABASE_ANON="sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
+const db=supabase.createClient(SUPABASE_URL,SUPABASE_ANON);
+const MAX_DOGS=5,MAX_PHOTOS=5,EXPIRY_MS=2*864e5;
+
+function esc(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function fmtRp(n){return 'Rp '+(Number(n)||0).toLocaleString('id-ID')}
+
+const AREAS={
+ 'Jakarta Pusat':['Cempaka Putih','Gambir','Johar Baru','Kemayoran','Menteng','Sawah Besar','Senen','Tanah Abang'],
+ 'Jakarta Utara':['Cilincing','Kelapa Gading','Koja','Pademangan','Penjaringan','Tanjung Priok'],
+ 'Jakarta Selatan':['Cilandak','Jagakarsa','Kebayoran Baru','Kebayoran Lama','Mampang Prapatan','Pancoran','Pasar Minggu','Pesanggrahan','Setiabudi','Tebet'],
+ 'Jakarta Barat':['Cengkareng','Grogol Petamburan','Kalideres','Kebon Jeruk','Kembangan','Palmerah','Taman Sari','Tambora'],
+ 'Jakarta Timur':['Cakung','Cipayung','Ciracas','Duren Sawit','Jatinegara','Kramat Jati','Makasar','Matraman','Pasar Rebo','Pulo Gadung'],
+ 'Alam Sutera':['Pinang','Serpong Utara','Pondok Aren'],
+ 'Gading Serpong':['Kelapa Dua','Pagedangan','Cisauk'],
+ 'BSD':['Serpong','Setu','Cisauk','Pagedangan'],
+ 'Kota Tangerang':['Batuceper','Benda','Ciledug','Cipondoh','Cibodas','Jatiuwung','Karang Tengah','Karawaci','Larangan','Neglasari','Periuk','Pinang','Tangerang'],
+ 'Tangerang Selatan':['Ciputat','Ciputat Timur','Pamulang','Pondok Aren','Serpong','Serpong Utara','Setu'],
+ 'Kabupaten Tangerang':['Balaraja','Cikupa','Cisauk','Curug','Kelapa Dua','Kosambi','Legok','Pagedangan','Panongan','Rajeg','Sepatan','Tigaraksa'],
+ 'Depok':['Beji','Bojongsari','Cilodong','Cimanggis','Cinere','Cipayung','Limo','Pancoran Mas','Sawangan','Sukmajaya','Tapos'],
+ 'Kota Bekasi':['Bantargebang','Bekasi Barat','Bekasi Selatan','Bekasi Timur','Bekasi Utara','Jatiasih','Jatisampurna','Medan Satria','Mustikajaya','Pondok Gede','Pondok Melati','Rawalumbu'],
+ 'Kabupaten Bekasi':['Babelan','Bojongmangu','Cabangbungin','Cibarusah','Cibitung','Cikarang Barat','Cikarang Pusat','Cikarang Selatan','Cikarang Timur','Cikarang Utara','Karangbahagia','Kedungwaringin','Muaragembong','Pebayuran','Serang Baru','Setu','Sukakarya','Sukatani','Sukawangi','Tambelang','Tambun Selatan','Tambun Utara','Tarumajaya']
+};
+
+function normalizeWA(raw){
+ if(!raw) return null;
+ let d=raw.replace(/[\s\-\.()]/g,'');
+ if(d.startsWith('+')) d=d.slice(1);
+ if(d.startsWith('62')) return d;
+ if(d.startsWith('0')) return '62'+d.slice(1);
+ if(d.startsWith('8')) return '62'+d;
+ return null;
+}
+function onWaInput(el){
+ const hint=document.getElementById('wa-hint');
+ const v=el.value.trim();
+ const norm=normalizeWA(v);
+ if(norm){hint.textContent='\u2713 wa.me/'+norm;hint.className='hint ok'}
+ else if(v){hint.textContent='Format nomor tidak dikenali';hint.className='hint err'}
+ else {hint.textContent='';hint.className='hint'}
+}
+function sizeFromWeight(w){
+ const m=String(w||'').match(/(\d+(?:[.,]\d+)?)/);
+ if(!m) return '';
+ const kg=parseFloat(m[1].replace(',','.'));
+ if(isNaN(kg)) return '';
+ if(kg<5) return 'XS';
+ if(kg<10) return 'Small';
+ if(kg<15) return 'Medium';
+ if(kg<25) return 'Large';
+ return 'XL';
+}
+function onKotaChange(){
+ const k=document.getElementById('f-kota').value;
+ const kec=document.getElementById('f-kec');
+ kec.innerHTML='<option value="">Pilih kecamatan…</option>'+(AREAS[k]||[]).map(x=>'<option>'+esc(x)+'</option>').join('');
+}
+
+/* ---- lokasi: GPS seperti share location WhatsApp ---- */
+let geo={lat:null,lng:null};
+function useCurrentLocation(btn){
+ if(!navigator.geolocation){alert('Browser tidak mendukung lokasi. Coba paste link Google Maps.');return}
+ const orig=btn.textContent; btn.disabled=true; btn.textContent='⏳ Mencari lokasi…';
+ navigator.geolocation.getCurrentPosition(
+  pos=>{
+   geo.lat=+pos.coords.latitude.toFixed(7); geo.lng=+pos.coords.longitude.toFixed(7);
+   btn.disabled=false; btn.textContent=orig;
+   renderGeoChip();
+  },
+  err=>{
+   btn.disabled=false; btn.textContent=orig;
+   alert(err.code===1?'Izin lokasi ditolak. Izinkan akses lokasi di browser, atau paste link Google Maps.':'Gagal ambil lokasi. Coba lagi atau paste link Google Maps.');
+  },
+  {enableHighAccuracy:true,timeout:15000,maximumAge:0}
+ );
+}
+function renderGeoChip(){
+ const el=document.getElementById('geo-chip');
+ if(geo.lat==null){el.innerHTML='';return}
+ el.innerHTML=`<span class="geo-chip">📍 ${geo.lat}, ${geo.lng} <a href="https://www.google.com/maps?q=${geo.lat},${geo.lng}" target="_blank">cek</a> <a href="javascript:void(0)" onclick="clearGeo()" style="color:#b42318">hapus</a></span>`;
+}
+function clearGeo(){geo={lat:null,lng:null};renderGeoChip()}
+function onGmapsPaste(el){
+ const v=el.value.trim(); const hint=document.getElementById('gmaps-hint');
+ if(!v){hint.textContent='';hint.className='hint';return}
+ let m=v.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)||v.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/)||v.match(/[?&](?:q|ll|query|destination)=(-?\d+\.\d+)(?:,|%2C)(-?\d+\.\d+)/i);
+ if(m){
+  geo.lat=+m[1]; geo.lng=+m[2];
+  hint.textContent='\u2713 Koordinat terbaca dari link'; hint.className='hint ok';
+  renderGeoChip();
+ } else {
+  hint.textContent='Link tidak bisa dibaca di sini (short link maps.app.goo.gl tidak didukung). Pakai tombol lokasi, atau buka link di Maps \u2192 tekan lama titik rumah \u2192 copy koordinat.'; hint.className='hint';
+ }
+}
+
+/* ---- anabul repeater ---- */
+let dogs=[];
+function addDog(){
+ if(dogs.length>=MAX_DOGS){alert('Maksimal '+MAX_DOGS+' anabul. Sisanya bisa ditambah admin nanti.');return}
+ dogs.push({pet_type:'dog',name:'',breed:'',age:'',weight:'',size:'',coat_color:'',prefs:'',skin_history:'',photos:[]});
+ renderDogs();
+}
+function removeDog(i){
+ if(!confirm('Hapus anabul ini dari form?')) return;
+ dogs.splice(i,1); renderDogs();
+}
+function renderDogs(){
+ const el=document.getElementById('dogs-list');
+ el.innerHTML=dogs.map((d,i)=>`<div class="dog-card">
+  <div class="dog-card-head"><span>ANABUL ${i+1}</span>${dogs.length>1?`<button type="button" class="dog-del" onclick="removeDog(${i})">Hapus</button>`:''}</div>
+  <div class="row2">
+   <div class="fg"><label>Jenis <span class="req">*</span></label>
+    <select onchange="dogs[${i}].pet_type=this.value;dogs[${i}].size=this.value==='cat'?'Cat':'';renderDogs()">
+     <option value="dog" ${d.pet_type!=='cat'?'selected':''}>Anjing</option>
+     <option value="cat" ${d.pet_type==='cat'?'selected':''}>Kucing</option>
+    </select></div>
+   <div class="fg"><label>Nama <span class="req">*</span></label><input value="${esc(d.name)}" oninput="dogs[${i}].name=this.value" placeholder="e.g. Latte"/></div>
+  </div>
+  <div class="row2">
+   <div class="fg"><label>Breed / ras</label><input value="${esc(d.breed)}" oninput="dogs[${i}].breed=this.value" placeholder="e.g. Poodle"/></div>
+   <div class="fg"><label>Umur (tahun)</label><input value="${esc(d.age)}" oninput="dogs[${i}].age=this.value" inputmode="decimal" placeholder="e.g. 3"/></div>
+  </div>
+  <div class="row2">
+   <div class="fg"><label>Berat (kg)</label><input value="${esc(d.weight)}" oninput="dogs[${i}].weight=this.value;dogs[${i}].size=dogs[${i}].pet_type==='cat'?'Cat':(sizeFromWeight(this.value)||'')" inputmode="decimal" placeholder="e.g. 8"/><div class="hint">${d.size&&d.pet_type!=='cat'?'Ukuran: '+d.size:'&nbsp;'}</div></div>
+   <div class="fg"><label>Warna bulu</label><input value="${esc(d.coat_color)}" oninput="dogs[${i}].coat_color=this.value" placeholder="e.g. Putih"/></div>
+  </div>
+  <div class="fg"><label>Catatan khusus untuk groomer</label><textarea rows="2" oninput="dogs[${i}].prefs=this.value" placeholder="e.g. Takut clipper, lion cut, gentler di kaki…">${esc(d.prefs)}</textarea></div>
+  <div class="fg"><label>Riwayat kulit (kalau ada)</label><textarea rows="2" oninput="dogs[${i}].skin_history=this.value" placeholder="e.g. Pernah jamur Agustus lalu, sudah sembuh…">${esc(d.skin_history)}</textarea></div>
+  <div class="fg"><label>Foto preferensi / kondisi (maks ${MAX_PHOTOS})</label>
+   <button type="button" class="btn btn-g" style="width:100%" onclick="document.getElementById('pf-${i}').click()">📷 Pilih foto</button>
+   <input type="file" id="pf-${i}" accept="image/*" multiple style="display:none" onchange="addPhotos(${i},this)"/>
+   <div class="photo-grid" id="pg-${i}"></div>
+  </div>
+ </div>`).join('');
+ dogs.forEach((d,i)=>renderPhotos(i));
+}
+function renderPhotos(i){
+ const el=document.getElementById('pg-'+i); if(!el) return;
+ el.innerHTML=dogs[i].photos.map((p,pi)=>`<div class="thumb"><img src="${p.url}"/><button type="button" class="rm" onclick="rmPhoto(${i},${pi})">✕</button></div>`).join('');
+}
+function addPhotos(i,input){
+ const files=Array.from(input.files||[]).filter(f=>f.type.startsWith('image/'));
+ input.value='';
+ if(!files.length) return;
+ const room=MAX_PHOTOS-dogs[i].photos.length;
+ if(room<=0){alert('Maksimal '+MAX_PHOTOS+' foto per anabul.');return}
+ const take=files.slice(0,room);
+ let done=0;
+ take.forEach(f=>{
+  compressImage(f).then(blob=>{
+   dogs[i].photos.push({blob,url:URL.createObjectURL(blob)});
+   done++; if(done===take.length) renderPhotos(i);
+  }).catch(()=>{done++; if(done===take.length) renderPhotos(i);});
+ });
+}
+function rmPhoto(i,pi){dogs[i].photos.splice(pi,1);renderPhotos(i)}
+function compressImage(file,maxW=1200){
+ return new Promise((resolve,reject)=>{
+  const img=new Image();
+  img.onload=()=>{
+   let w=img.width,h=img.height;
+   if(w>maxW){h=Math.round(h*maxW/w);w=maxW}
+   const c=document.createElement('canvas');c.width=w;c.height=h;
+   c.getContext('2d').drawImage(img,0,0,w,h);
+   c.toBlob(b=>{URL.revokeObjectURL(img.src);b?resolve(b):reject(new Error('compress fail'))},'image/jpeg',0.8);
+  };
+  img.onerror=()=>reject(new Error('cannot read image'));
+  img.src=URL.createObjectURL(file);
+ });
+}
+
+/* ---- token gating ---- */
+function show(id){
+ ['loading','invalid','expired','used','done'].forEach(x=>{const el=document.getElementById('screen-'+x);if(el)el.style.display='none'});
+ const el=document.getElementById('screen-'+id); if(el) el.style.display='block';
+ if(id==='done'){const fw=document.getElementById('form-wrap');if(fw)fw.style.display='none'}
+}
+let TOKEN='';
+function boot(){
+ const p=new URLSearchParams(window.location.search);
+ TOKEN=(p.get('t')||'').trim();
+ const dot=TOKEN.lastIndexOf('.');
+ const rand=dot>0?TOKEN.slice(0,dot):'';
+ const exp=dot>0?parseInt(TOKEN.slice(dot+1),10):0;
+ if(rand.length<10||isNaN(exp)||exp<=0){show('invalid');return}
+ if(Date.now()>exp){show('expired');return}
+ // populate kota
+ const kota=document.getElementById('f-kota');
+ kota.innerHTML='<option value="">Pilih…</option>'+Object.keys(AREAS).map(k=>'<option>'+esc(k)+'</option>').join('');
+ addDog();
+ show('form'); document.getElementById('form-wrap').style.display='';
+}
+
+/* ---- submit ---- */
+function fail(msg){
+ const box=document.getElementById('err-box');
+ box.textContent=msg; box.style.display='block';
+ box.scrollIntoView({behavior:'smooth',block:'center'});
+ const btn=document.getElementById('submit-btn'); btn.disabled=false; btn.textContent='Kirim ke admin HomePaw';
+}
+async function submitForm(){
+ const btn=document.getElementById('submit-btn');
+ const owner=document.getElementById('f-owner').value.trim();
+ const waRaw=document.getElementById('f-wa').value.trim();
+ const addr=document.getElementById('f-addr').value.trim();
+ const kota=document.getElementById('f-kota').value;
+ const kec=document.getElementById('f-kec').value;
+ const prefs=document.getElementById('f-prefs').value.trim();
+ const gmaps=document.getElementById('f-gmaps').value.trim();
+ const waNorm=normalizeWA(waRaw);
+ if(!owner) return fail('Isi nama kamu dulu ya.');
+ if(!waNorm) return fail('Nomor WhatsApp tidak valid. Contoh: 087880945541');
+ if(!addr) return fail('Isi alamat lengkap dulu ya.');
+ if(!kota) return fail('Pilih kota/kabupaten dulu ya.');
+ const cleanDogs=dogs.filter(d=>d.name.trim());
+ if(!cleanDogs.length) return fail('Tambahkan minimal 1 anabul + namanya.');
+ const missing=cleanDogs.findIndex(d=>!d.name.trim());
+ if(missing>=0) return fail('Anabul #'+(missing+1)+' belum ada nama.');
+ btn.disabled=true; btn.textContent='⏳ Mengirim…';
+ document.getElementById('err-box').style.display='none';
+ try{
+  // upload photos
+  for(let i=0;i<dogs.length;i++){
+   const d=dogs[i];
+   for(let pi=0;pi<d.photos.length;pi++){
+    const ph=d.photos[pi];
+    if(ph.uploaded) continue;
+    const path='onboarding/'+TOKEN+'/dog'+i+'_'+pi+'_'+Date.now()+'.jpg';
+    const {error:upErr}=await db.storage.from('grooming-photos').upload(path,ph.blob,{contentType:'image/jpeg',upsert:false});
+    if(upErr) continue; // foto gagal = lanjut tanpa foto, data utama tetap aman
+    const {data:urlData}=db.storage.from('grooming-photos').getPublicUrl(path);
+    (d.styling_refs=d.styling_refs||[]).push({url:urlData.publicUrl,uploaded_at:new Date().toISOString(),path,bucket:'grooming-photos',label:''});
+    ph.uploaded=true;
+   }
+  }
+  const payload={
+   owner, wa:waRaw, wa_norm:waNorm,
+   address:addr, kota, kecamatan:kec||null,
+   latitude:geo.lat, longitude:geo.lng,
+   gmaps_link:gmaps||null,
+   prefs:prefs||null,
+   dogs:cleanDogs.map(d=>({
+    pet_type:d.pet_type,name:d.name.trim(),breed:d.breed.trim()||null,
+    age:d.age.trim()||null,weight:d.weight.trim()||null,
+    size:d.pet_type==='cat'?'Cat':(d.size||sizeFromWeight(d.weight)||null),
+    coat_color:d.coat_color.trim()||null,
+    prefs:d.prefs.trim()||null,skin_history:d.skin_history.trim()||null,
+    styling_refs:d.styling_refs||[]
+   }))
+  };
+  const {error}=await db.from('pending_customers').insert({token:TOKEN,payload});
+  if(error){
+   if(error.code==='23505') return show('used');
+   if(error.code==='23503') return show('invalid');
+   throw error;
+  }
+  show('done');
+  window.scrollTo(0,0);
+ }catch(e){
+  fail('Gagal mengirim: '+(e.message||e)+'. Cek koneksi internet lalu coba lagi.');
+ }
+}
+
+boot();
+</script>
+</body>
+</html>
