@@ -1755,6 +1755,27 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  </div>
 </div>
 
+<!-- Calendar deletion: the exact affected rows are previewed before confirmation. -->
+<div class="overlay" id="ov-appt-delete" style="z-index:1200">
+ <div class="modal" style="max-width:560px">
+  <button class="modal-close" onclick="closeApptDelete()" title="Close">&#x2715;</button>
+  <div class="modal-title">Delete calendar appointments</div>
+  <div id="appt-delete-description" style="font-size:12px;margin-bottom:12px"></div>
+  <label for="appt-delete-scope">Delete scope</label>
+  <select id="appt-delete-scope" onchange="setApptDeleteScope(this.value)" style="width:100%;padding:8px;margin:6px 0 12px">
+   <option value="only">This appointment only (selected pets)</option>
+   <option value="including">This and following appointments</option>
+   <option value="following">Following appointments only — keep this one</option>
+  </select>
+  <div id="appt-delete-list" style="max-height:45vh;overflow:auto"></div>
+  <div id="appt-delete-count" style="font-weight:600;margin:12px 0"></div>
+  <div class="form-actions">
+   <button class="btn btn-d" id="appt-delete-confirm" onclick="confirmApptDelete()">Delete selected</button>
+   <button class="btn btn-g" onclick="closeApptDelete()">Cancel</button>
+  </div>
+ </div>
+</div>
+
 <!-- GROOMER -->
 <div class="overlay" id="ov-groomer">
  <div class="modal" style="max-width:380px">
@@ -4425,7 +4446,7 @@ function getApptTransportFee(apptOrNote){
 }
 function cleanApptAdminNote(note){
  APPT_TRANSPORT_FEE_RE.lastIndex=0;
- const clean=(note||'').replace(APPT_TRANSPORT_FEE_RE,'\n').replace(/\n{3,}/g,'\n\n').trim();
+ const clean=(note||'').replace(APPT_TRANSPORT_FEE_RE,'\n').replace(/(?:^|\n)\[\[HP_RECURRENCE:[a-zA-Z0-9-]+:\d+\]\](?=\n|$)/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
  APPT_TRANSPORT_FEE_RE.lastIndex=0;
  return clean;
 }
@@ -4433,6 +4454,16 @@ function buildApptAdminNote(note,transportFee){
  const clean=cleanApptAdminNote(note);
  const fee=Math.max(0,Math.round(Number(transportFee)||0));
  return [clean,fee?`[[HP_TRANSPORT_FEE:${fee}]]`:''].filter(Boolean).join('\n')||null;
+}
+// Series metadata uses the existing internal-note field; no database migration.
+function getApptRecurrence(apptOrNote){
+ const note=typeof apptOrNote==='string'?apptOrNote:(apptOrNote?.admin_note||'');
+ const m=/(?:^|\n)\[\[HP_RECURRENCE:([a-zA-Z0-9-]+):(\d+)\]\](?=\n|$)/.exec(note);
+ return m?{id:m[1],occurrence:Number(m[2])}:null;
+}
+function withApptRecurrence(note,series){
+ const clean=(note||'').replace(/(?:^|\n)\[\[HP_RECURRENCE:[a-zA-Z0-9-]+:\d+\]\](?=\n|$)/g,'\n').trim();
+ return [clean,series?`[[HP_RECURRENCE:${series.id}:${series.occurrence}]]`:''].filter(Boolean).join('\n')||null;
 }
 
 function wizDots(n){
@@ -5392,7 +5423,7 @@ function renderWizStep4Dogs(){
    ${header}
    <div class="fg" style="margin-bottom:6px">
     <label style="font-size:11px">Catatan groomer <span style="font-weight:400;color:var(--muted)">— ke groomer saja</span></label>
-    <input id="appt-note-${ds.did}" placeholder="e.g. Lion cut, pelan-pelan di kaki" style="padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;width:100%"/>
+    <input id="appt-note-${ds.did}" oninput="rememberWizDogInputs('${ds.did}')" placeholder="e.g. Lion cut, pelan-pelan di kaki" style="padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;width:100%"/>
    </div>
    <div style="padding:8px;background:#fef3c7;border:1px solid #fbbf24;border-radius:5px">
     <div style="font-size:11px;color:#78350f;font-weight:600;margin-bottom:6px">📊 Diskon per layanan:</div>
@@ -5400,11 +5431,11 @@ function renderWizStep4Dogs(){
      const rule=getWizServiceDiscountRule(ds,svc);
      return `<div style="display:grid;grid-template-columns:minmax(120px,1fr) 82px 80px;align-items:center;gap:6px;font-size:11px;margin-bottom:5px">
       <span style="color:#78350f;overflow:hidden;text-overflow:ellipsis" title="${esc(svc)}">${esc(svc)}:</span>
-      <select id="appt-disc-svc-type-${ds.did}-${svcIdx}" style="padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;background:var(--surface)">
+      <select id="appt-disc-svc-type-${ds.did}-${svcIdx}" onchange="rememberWizDogInputs('${ds.did}')" style="padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;background:var(--surface)">
        <option value="percent" ${rule.type==='percent'?'selected':''}>Percent (%)</option>
        <option value="fixed" ${rule.type==='fixed'?'selected':''}>Fixed (Rp)</option>
       </select>
-      <input type="number" id="appt-disc-svc-value-${ds.did}-${svcIdx}" value="${rule.value||0}" min="0" step="${rule.type==='fixed'?'1000':'1'}" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px"/>
+      <input type="number" id="appt-disc-svc-value-${ds.did}-${svcIdx}" oninput="rememberWizDogInputs('${ds.did}')" value="${rule.value||0}" min="0" step="${rule.type==='fixed'?'1000':'1'}" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px"/>
      </div>`;
     }).join('')}
     <div style="font-size:10px;color:#78350f;margin-top:4px;font-style:italic">Preset setiap layanan adalah Percent (%). Nilai 0 berarti tidak ada diskon. Semua diskon akan dibawa ke invoice.</div>
@@ -5469,40 +5500,53 @@ function removeNewDogFromWiz(did){
 function getWizServiceDiscountRule(ds,svc){
  const exact=ds.discByCategory?.services?.[svc];
  if(exact?.type) return {type:exact.type,value:parseFloat(exact.value)||0};
- const legacyCategory=ds.discByCategory?.[_serviceCategory(svc)];
- if(legacyCategory?.type) return {type:legacyCategory.type,value:parseFloat(legacyCategory.value)||0};
- if(ds.discType) return {type:ds.discType,value:parseFloat(ds.discValue)||0};
- return {type:'percent',value:0};
+ const category=_serviceCategory(svc);
+ const rule=ds.discByCategory?.[category]||(ds.discType&&(!ds.discBaseOnly||category==='basic')?{type:ds.discType,value:ds.discValue}:null);
+ if(!rule?.type) return {type:'percent',value:0};
+ const value=Math.max(0,Number(rule.value)||0);
+ if(rule.type!=='fixed') return {type:rule.type,value};
+ // A legacy fixed category discount is ONE budget, not one discount per add-on.
+ const selected=Array.isArray(ds.svcs)&&ds.svcs.length?ds.svcs:parseSvcBase(ds.svc);
+ const names=[...new Set(selected)].filter(s=>_serviceCategory(s)===category&&!ds.discByCategory?.services?.[s]?.type);
+ const size=dogs.find(d=>d.id===ds.did)?.size;
+ const prices=names.map(s=>Math.max(0,Number(priceFor(s,size))||0));
+ const total=prices.reduce((a,b)=>a+b,0);
+ const budget=total?Math.min(Math.round(value),total):Math.round(value);
+ let cumulative=0,allocated=0;
+ for(let i=0;i<names.length;i++){
+  cumulative+=total?prices[i]:1;
+  const next=Math.round(budget*cumulative/(total||names.length));
+  const amount=next-allocated;allocated=next;
+  if(names[i]===svc) return {type:'fixed',value:amount};
+ }
+ return {type:'fixed',value:0};
 }
 function readWizServiceDiscounts(ds){
  const selectedSvcs=(Array.isArray(ds.svcs)&&ds.svcs.length?ds.svcs:parseSvcBase(ds.svc));
  const services={};
  selectedSvcs.forEach((svc,idx)=>{
-  const type=document.getElementById(`appt-disc-svc-type-${ds.did}-${idx}`)?.value||'percent';
-  const value=Math.max(0,parseFloat(document.getElementById(`appt-disc-svc-value-${ds.did}-${idx}`)?.value)||0);
+  const fallback=getWizServiceDiscountRule(ds,svc);
+  const type=document.getElementById(`appt-disc-svc-type-${ds.did}-${idx}`)?.value||fallback.type;
+  const value=Math.max(0,parseFloat(document.getElementById(`appt-disc-svc-value-${ds.did}-${idx}`)?.value??fallback.value)||0);
   services[svc]={type:type==='fixed'?'fixed':'percent',value};
  });
  return {version:2,services};
+}
+function rememberWizDogInputs(did){
+ const ds=wiz.dogSvcs.find(d=>d.did===did);if(!ds)return;
+ ds.discByCategory=readWizServiceDiscounts(ds);
+ ds.note=document.getElementById('appt-note-'+did)?.value??ds.note??'';
+ (ds.svcs?.length?ds.svcs:parseSvcBase(ds.svc)).forEach((svc,idx)=>{
+  const input=document.getElementById(`appt-disc-svc-value-${did}-${idx}`);
+  if(input) input.step=ds.discByCategory.services[svc].type==='fixed'?'1000':'1';
+ });
 }
 
 async function deleteApptFromGroup(did){
  const ds=wiz.dogSvcs.find(x=>x.did===did);
  const apptId=ds?.apptId||(wiz.editIds?.find(id=>appts.find(a=>a.id===id)?.dog_id===did));
  if(!apptId){alert('Appointment tidak ditemukan.');return}
- const dogName=dogs.find(d=>d.id===did)?.name||'?';
- if(!confirm(`Hapus appointment ${dogName} dari group ini?`)) return;
- await deleteAppointmentWithVisitCheck(apptId);
- // Remove from wiz state
- wiz.editIds=wiz.editIds.filter(id=>id!==apptId);
- wiz.dogSvcs=wiz.dogSvcs.filter(ds=>ds.did!==did);
- await reloadTables('appointments');
- if(wiz.editIds.length===0){cm('ov-appt');renderCal();return}
- // Update title
- const titleEl=document.getElementById('appt-title');
- if(titleEl) titleEl.textContent=`Edit group (${wiz.editIds.length} anjing)`;
- renderWizStep4Dogs();
- loadAppointmentAuditHistory(wiz.editIds);
- renderCal();
+ await openApptDelete([apptId]);
 }
 
 function populateWizCustList(){
@@ -5618,6 +5662,7 @@ function openApptEdit(id){
   wiz.dogSvcs[0].note=a.appt_note||'';
   wiz.dogSvcs[0].discType=a.appt_disc_type||'';
   wiz.dogSvcs[0].discValue=a.appt_disc_value||0;
+  wiz.dogSvcs[0].discBaseOnly=!!a.appt_disc_base_only;
   // Session E — load per-category discount if present
   wiz.dogSvcs[0].discByCategory=a.appt_disc_by_category||null;
  }
@@ -5707,7 +5752,7 @@ function openGroupEdit(ids){
   const d=dogs.find(x=>x.id===a.dog_id)||{};
   return {did:a.dog_id,svc:a.service_base||'Basic Grooming',svcs:parseSvcBase(a.service_base),
    customDur:a.duration_mins||null,note:a.appt_note||'',discType:a.appt_disc_type||'',discValue:a.appt_disc_value||0,
-   discByCategory:a.appt_disc_by_category||null,
+   discByCategory:a.appt_disc_by_category||null,discBaseOnly:!!a.appt_disc_base_only,
    apptId:a.id};
  });
  wiz={step:4,custId:firstDog?.customer_id||null,dogSvcs,groomerId:firstA.groomer_id,
@@ -5717,7 +5762,7 @@ function openGroupEdit(ids){
  document.getElementById('appt-title').textContent=`Edit group (${ids.length} anjing)`;
  document.getElementById('appt-save-btn').textContent='Update semua';
  const delBtn=document.getElementById('appt-del-btn');
- if(delBtn){delBtn.style.display='inline-flex';delBtn.textContent='Hapus semua';}
+ if(delBtn){delBtn.style.display='inline-flex';delBtn.textContent='Delete…';}
  // Session C QC: keep confirm + invoice available in group edit (auto-grouping must not remove these paths).
  const confirmBtn=document.getElementById('appt-confirm-btn');
  if(confirmBtn){
@@ -5851,11 +5896,27 @@ function updateOverrunHint(){
  else {hint.textContent=diff+'m dari prediksi ('+predicted+'m)';hint.style.color='#16a34a'}
 }
 
+let apptSaveBusy=false;
 async function saveAppt(){
+ if(apptSaveBusy)return;
+ apptSaveBusy=true;
+ const btn=document.getElementById('appt-save-btn');if(btn)btn.disabled=true;
+ try{await saveApptImpl();}
+ catch(e){alert('Penyimpanan berhenti: '+e.message+'\nPeriksa kalender sebelum mencoba lagi; beberapa sesi mungkin sudah tersimpan.');}
+ finally{apptSaveBusy=false;if(btn)btn.disabled=false;}
+}
+async function saveApptImpl(){
  if(!wiz.groomerId||!wiz.date||wiz.startMins===null||!wiz.dogSvcs.length){
   alert('Incomplete booking details');return;
  }
  let insertedAppts=null;  // Session E fix: hoisted so post-save local patch can read new appts
+ const wantRepeat=!wiz.editId&&!!document.getElementById('appt-repeat-on')?.checked;
+ const repeatFreq=Number(document.getElementById('appt-repeat-freq')?.value)||7;
+ const repeatCount=Number(document.getElementById('appt-repeat-count')?.value)||4;
+ if(wantRepeat&&(![7,14,21,28].includes(repeatFreq)||!Number.isInteger(repeatCount)||repeatCount<2||repeatCount>52)){
+  alert('Pilih interval 7/14/21/28 hari dan jumlah 2–52 sesi.');return;
+ }
+ const newSeries=wantRepeat?{id:crypto.randomUUID(),occurrence:0}:null;
  const custNote=document.getElementById('appt-customer-note')?.value.trim()||null;
  const adminNote=document.getElementById('appt-admin-note')?.value.trim()||null;
  const transportFee=Math.max(0,Math.round(Number(document.getElementById('appt-transport-fee')?.value)||0));
@@ -5919,7 +5980,7 @@ async function saveAppt(){
    appt_time:m2t(cursor)+':00',service_base:ds.svc,duration_mins:dur,
    appt_note:dogNote+(wiz.dogSvcs.length>1?` (${i+1}/${wiz.dogSvcs.length})`:''),
    customer_note:custNote,
-   admin_note:storedAdminNote,
+   admin_note:withApptRecurrence(storedAdminNote,newSeries||getApptRecurrence(appts.find(a=>a.id===(ds.apptId||wiz.editId)))),
    session_note:sessionNote,
    appt_disc_type:dogDiscType,
    appt_disc_value:dogDiscValue,
@@ -5999,7 +6060,7 @@ async function saveAppt(){
       service_base:ds.svc,duration_mins:getWizDogDur(ds),
       appt_note:dogNote,appt_disc_type:dogDiscType||null,appt_disc_value:dogDiscValue,
       appt_disc_by_category:discByCategory,
-      customer_note:custNote,admin_note:storedAdminNote,session_note:sessionNote,...editStamp()
+      customer_note:custNote,admin_note:withApptRecurrence(storedAdminNote,getApptRecurrence(oldGroupRec)),session_note:sessionNote,...editStamp()
      };
      // Only rescheduled dogs move in time
      if(!wiz.rescheduleSet||wiz.rescheduleSet.has(eid)){
@@ -6010,6 +6071,7 @@ async function saveAppt(){
      const {error:groupUpdateError}=await db.from('appointments').update(upd).eq('id',eid);
      if(groupUpdateError){alert('Error: '+groupUpdateError.message);return}
      await logAudit('appointment',eid,'update',{old:oldGroupRec,new:{...oldGroupRec,...upd},label:(dogs.find(d=>d.id===ds.did)?.name||'?')+' '+(upd.appt_date||oldGroupRec?.appt_date||wiz.date)});
+     if(oldGroupRec) Object.assign(oldGroupRec,upd);
     }
     // Late/waive/actual-duration fields ride on the group's first appointment
     if(Object.keys(perfFields).length){
@@ -6024,9 +6086,11 @@ async function saveAppt(){
     }
    } else {
     // Single-appt edit path (legacy)
-    await db.from('appointments').update(updatePayload).eq('id',wiz.editId);
+    const {error:singleUpdateError}=await db.from('appointments').update(updatePayload).eq('id',wiz.editId);
+    if(singleUpdateError){alert('Error: '+singleUpdateError.message);return;}
     const dogName=dogs.find(d=>d.id===oldRec?.dog_id)?.name||'?';
     await logAudit('appointment',wiz.editId,'update',{old:oldRec,new:{...oldRec,...updatePayload},label:dogName+' '+updatePayload.appt_date});
+    if(oldRec) Object.assign(oldRec,updatePayload);
    }
    // Session C item 3: INSERT rows for newly-added dogs (apptId=null).
    // Append them at the end of the existing time span, same date/groomer.
@@ -6113,30 +6177,13 @@ async function saveAppt(){
  }
  calDay=wiz.date;
  // Instant refresh: patch local appts array, render immediately
- if(wiz.editId){
-  if(wiz.editIds?.length>1){
-   wiz.editIds.forEach((eid,i)=>{
-    const ds=wiz.dogSvcs[i];
-    const idx=appts.findIndex(a=>a.id===eid);
-    if(idx>=0&&ds){
-     Object.assign(appts[idx],{service_base:ds.svc,duration_mins:getWizDogDur(ds),admin_note:storedAdminNote});
-     if(!wiz.rescheduleSet||wiz.rescheduleSet.has(eid)) Object.assign(appts[idx],{appt_date:wiz.date,groomer_id:wiz.groomerId});
-    }
-   });
-  } else {
-   const idx=appts.findIndex(a=>a.id===wiz.editId);
-   if(idx>=0) Object.assign(appts[idx],{appt_date:wiz.date,appt_time:m2t(wiz.startMins)+':00',groomer_id:wiz.groomerId,service_base:wiz.dogSvcs[0]?.svc,duration_mins:getWizDogDur(wiz.dogSvcs[0]),admin_note:storedAdminNote});
-  }
- } else if(insertedAppts?.length){
+ // Edited rows were patched with their exact successful payload above.
+ if(!wiz.editId&&insertedAppts?.length){
   insertedAppts.forEach(a=>appts.push(a));
  }
- // Session D item 2: capture recurrence settings BEFORE closing the modal (which clears inputs)
- const wantRepeat=!wiz.editId && insertedAppts?.length && document.getElementById('appt-repeat-on')?.checked;
- const repeatFreq=parseInt(document.getElementById('appt-repeat-freq')?.value)||7;
- const repeatCount=Math.max(2,parseInt(document.getElementById('appt-repeat-count')?.value)||4);
  cm('ov-appt');
  renderCal();
- if(wantRepeat){
+ if(wantRepeat&&insertedAppts?.length){
   await createRecurringSeries(insertedAppts, repeatFreq, repeatCount);
  }
 }
@@ -6163,7 +6210,7 @@ function _findApptClash(dateISO,groomerId,startMins,durMins,ignoreIds){
 // firstAppts = the just-created rows (session 1). Handles per-date clash resolution via popups.
 async function createRecurringSeries(firstAppts, freqDays, totalCount){
  freqDays=freqDays||7;
- totalCount=Math.max(2,totalCount||4);
+ totalCount=Math.min(52,Math.max(2,totalCount||4));
  if(!firstAppts||!firstAppts.length) return;
  // Base the series on the first-session appts (could be multiple dogs in a group).
  // Each subsequent occurrence replicates the same dogs/times/groomer, shifted by freqDays.
@@ -6179,9 +6226,17 @@ async function createRecurringSeries(firstAppts, freqDays, totalCount){
   appt_disc_type:a.appt_disc_type||null,
   appt_disc_value:a.appt_disc_value||0,
   appt_disc_base_only:!!a.appt_disc_base_only,
-  appt_disc_by_category:a.appt_disc_by_category||null
+  appt_disc_by_category:a.appt_disc_by_category?JSON.parse(JSON.stringify(a.appt_disc_by_category)):null
  }));
- let created=0, skipped=0;
+ // Each occurrence receives an independent copy of the saved first-session rules.
+ function occurrenceRow(tpl,occ,date,time){
+  const series=getApptRecurrence(tpl);
+  return {...tpl,appt_date:date,appt_time:time||tpl.appt_time,
+   admin_note:withApptRecurrence(tpl.admin_note,series?{id:series.id,occurrence:occ}:null),
+   appt_disc_by_category:tpl.appt_disc_by_category?JSON.parse(JSON.stringify(tpl.appt_disc_by_category)):null,
+   token_used:false,...editStamp()};
+ }
+ let created=0, skipped=0, failed=0;
  const createdRows=[];
  // occurrence 0 = the already-created first session; start from 1
  for(let occ=1; occ<totalCount; occ++){
@@ -6200,7 +6255,7 @@ async function createRecurringSeries(firstAppts, freqDays, totalCount){
     clashInfo=`sudah ada booking ${otherDog} jam ${(clash.appt_time||'').slice(0,5)}`;
     break;
    }
-   rowsForDate.push({...tpl, appt_date:dateISO, token_used:false, ...editStamp()});
+   rowsForDate.push(occurrenceRow(tpl,occ,dateISO));
   }
   if(dateHasClash){
    // Per-clash popup: skip this date OR pick a different time for this date only
@@ -6217,7 +6272,7 @@ async function createRecurringSeries(firstAppts, freqDays, totalCount){
    if(trimmed==='skip'||trimmed===''){ skipped++; continue; }
    // Validate new time
    const mt=/^(\d{1,2}):(\d{2})$/.exec(trimmed);
-   if(!mt){ alert('Format jam salah, tanggal '+fmtD(dateISO)+' dilewati.'); skipped++; continue; }
+   if(!mt||Number(mt[1])>23||Number(mt[2])>59||Number(mt[2])%15){ alert('Gunakan jam valid dengan interval 15 menit; tanggal '+fmtD(dateISO)+' dilewati.'); skipped++; continue; }
    const newStart=parseInt(mt[1])*60+parseInt(mt[2]);
    // Re-check clash at the new time for all dogs
    let stillClash=false, retryRows=[];
@@ -6225,7 +6280,7 @@ async function createRecurringSeries(firstAppts, freqDays, totalCount){
    for(const tpl of template){
     const c=_findApptClash(dateISO,groomerId,cursor,tpl.duration_mins);
     if(c){ stillClash=true; break; }
-    retryRows.push({...tpl, appt_date:dateISO, appt_time:m2t(cursor)+':00', token_used:false, ...editStamp()});
+    retryRows.push(occurrenceRow(tpl,occ,dateISO,m2t(cursor)+':00'));
     cursor+=tpl.duration_mins;
    }
    if(stillClash){ alert('Jam baru '+trimmed+' juga bentrok. Tanggal '+fmtD(dateISO)+' dilewati.'); skipped++; continue; }
@@ -6234,114 +6289,175 @@ async function createRecurringSeries(firstAppts, freqDays, totalCount){
   // Insert this occurrence's rows
   if(rowsForDate.length){
    const {data:ins,error}=await db.from('appointments').insert(rowsForDate).select();
-   if(error){ console.error('Recurring insert failed:',error); alert('Gagal buat sesi tanggal '+fmtD(dateISO)+': '+error.message); continue; }
-   (ins||[]).forEach(a=>{ appts.push(a); createdRows.push(a); });
+   if(error||!ins?.length){ failed++;alert('Gagal buat sesi tanggal '+fmtD(dateISO)+': '+(error?.message||'Tidak ada row tersimpan.')); continue; }
+   for(const a of ins){
+    appts.push(a);createdRows.push(a);
+    await logAudit('appointment',a.id,'create',{new:a,label:(dogs.find(d=>d.id===a.dog_id)?.name||'?')+' recurring '+a.appt_date});
+   }
    created++;
   }
  }
  renderCal();
- const msg=`Recurring selesai:\n\n✓ ${created+1} sesi dibuat (termasuk sesi pertama)\n${skipped?`✗ ${skipped} tanggal dilewati (bentrok)`:''}`;
+ const msg=`Recurring selesai:\n\n✓ ${created+1} sesi dibuat (termasuk sesi pertama)\n${skipped?`✗ ${skipped} tanggal dilewati (bentrok)`:''}\n${failed?`✗ ${failed} tanggal gagal disimpan`:''}`;
  alert(msg);
 }
 
 async function delApptFromModal(){
- if(!wiz.editId)return;
- const isGroup=wiz.editIds?.length>1;
- 
- if(isGroup){
-  const msg=`Hapus semua ${wiz.editIds.length} appointment dalam group ini?`;
-  if(!confirm(msg))return;
-  for(const id of wiz.editIds){await deleteAppointmentWithVisitCheck(id);}
-  wiz.editIds.forEach(id=>{const i=appts.findIndex(a=>a.id===id);if(i>=0)appts.splice(i,1);});
-  cm('ov-appt'); renderCal();
-  return;
- }
- 
- // Single appointment - offer delete options
- const a=appts.find(x=>x.id===wiz.editId);
- if(!a){return}
- 
- const isRecurring=appts.some(x=>
-  x.id!==a.id &&
-  x.dog_id===a.dog_id &&
-  x.groomer_id===a.groomer_id &&
-  x.service_base===a.service_base &&
-  x.appt_time===a.appt_time &&
-  x.duration_mins===a.duration_mins &&
-  x.appt_date > a.appt_date &&
-  x.status!=='cancelled'
- );
- 
- let msg, action;
- if(isRecurring){
-  msg=`Hapus opsi:\n\n1. Hanya appointment ini (${fmtD(a.appt_date)} ${(a.appt_time||'').slice(0,5)})\n2. Ini dan SEMUA jadwal berulang setelahnya\n\nPilih: ketik "1" atau "2" (kosong = batal)`;
-  const choice=prompt(msg);
-  if(choice==='1') action='single';
-  else if(choice==='2') action='series';
-  else return;
- } else {
-  if(!confirm(`Hapus appointment ${fmtD(a.appt_date)} ${(a.appt_time||'').slice(0,5)}?`)) return;
-  action='single';
- }
- 
- if(action==='single'){
-  await deleteAppointmentWithVisitCheck(wiz.editId);
-  const i=appts.findIndex(x=>x.id===wiz.editId); if(i>=0) appts.splice(i,1);
- } else if(action==='series'){
-  const future=appts.filter(x=>
-   x.dog_id===a.dog_id &&
-   x.groomer_id===a.groomer_id &&
-   x.service_base===a.service_base &&
-   x.appt_time===a.appt_time &&
-   x.duration_mins===a.duration_mins &&
-   x.appt_date >= a.appt_date &&
-   x.status!=='cancelled'
-  );
-  for(const f of future){
-   await deleteAppointmentWithVisitCheck(f.id);
-   const i=appts.findIndex(x=>x.id===f.id); if(i>=0) appts.splice(i,1);
-  }
-  showToast(`${future.length} appointment dihapus (termasuk hari ini)`,'success');
- }
- cm('ov-appt'); renderCal();
+ if(wiz.editId) await openApptDelete(wiz.editIds?.length?wiz.editIds:[wiz.editId]);
 }
 
 async function delAppt(id){
- if(!confirm('Remove appointment?'))return;
- await deleteAppointmentWithVisitCheck(id);
- const i=appts.findIndex(a=>a.id===id); if(i>=0) appts.splice(i,1);
- renderCal();
+ await openApptDelete([id]);
 }
 
-// Batch O.10 — appt delete: check for linked visit + log audit + token refund
-async function deleteAppointmentWithVisitCheck(apptId){
- const oldAppt=appts.find(a=>a.id===apptId);
- if(!oldAppt) return;
+let apptDeleteState=null,apptDeleteLoadSeq=0;
+function appointmentDeleteCandidates(seeds,rows,scope){
+ const seedIds=new Set(seeds.map(a=>a.id));
+ if(scope==='only') return seeds.map(a=>({appt:a,verified:true}));
+ const candidates=rows.filter(a=>!seedIds.has(a.id)&&a.status!=='cancelled').map(a=>{
+  const matching=seeds.filter(seed=>{
+   if(a.dog_id!==seed.dog_id||a.appt_date<=seed.appt_date)return false;
+   const s=getApptRecurrence(seed),r=getApptRecurrence(a);
+   // New series: exact ID; groomer/service/time edits do not break membership.
+   if(s) return r?.id===s.id;
+   // Older data: these are suggestions ONLY, never auto-selected.
+   return !r;
+  });
+  return {appt:a,verified:matching.some(s=>!!getApptRecurrence(s)),matches:matching.length>0};
+ }).filter(x=>x.matches);
+ if(scope==='including')candidates.push(...seeds.map(a=>({appt:a,verified:true})));
+ return candidates.sort((a,b)=>(a.appt.appt_date+' '+a.appt.appt_time).localeCompare(b.appt.appt_date+' '+b.appt.appt_time));
+}
+async function openApptDelete(ids){
+ if(apptDeleteState?.busy)return;
+ const seq=++apptDeleteLoadSeq;
+ const seeds=[...new Set(ids)].map(id=>appts.find(a=>a.id===id)).filter(Boolean);
+ if(!seeds.length)return;
+ apptDeleteState=null;
+ const dogIds=[...new Set(seeds.map(a=>a.dog_id))];
+ const firstDate=seeds.map(a=>a.appt_date).sort()[0];
+ try{
+  const rows=[];
+  // Fetch every future page; do not silently stop at the Supabase row limit.
+  for(let offset=0;;offset+=500){
+   const {data,error}=await db.from('appointments').select('*').in('dog_id',dogIds).gte('appt_date',firstDate).order('id').range(offset,offset+499);
+   if(error)throw new Error(error.message);
+   if(!Array.isArray(data))throw new Error('Tidak bisa membaca appointment.');
+   rows.push(...data);
+   if(data.length<500)break;
+  }
+  if(seq!==apptDeleteLoadSeq)return;
+  const freshSeeds=seeds.map(a=>rows.find(r=>r.id===a.id));
+  if(freshSeeds.some(a=>!a))throw new Error('Appointment berubah atau tidak tersedia. Refresh kalender terlebih dahulu.');
+  apptDeleteState={seeds:freshSeeds,rows,scope:'only',selected:new Set(),busy:false};
+  document.getElementById('appt-delete-description').textContent='Batas tanggal mengikuti appointment yang dibuka: '+[...new Set(freshSeeds.map(a=>a.appt_date))].join(', ')+'. Invoice tidak ikut dihapus. Untuk jadwal lama tanpa ID seri, centang sendiri tanggal berikutnya yang memang ingin dihapus.';
+  document.getElementById('appt-delete-scope').value='only';
+  setApptDeleteScope('only');om('ov-appt-delete');
+ }catch(e){if(seq===apptDeleteLoadSeq)alert('Gagal menyiapkan delete: '+e.message);}
+}
+function setApptDeleteScope(scope){
+ const s=apptDeleteState;if(!s||s.busy)return;
+ if(!['only','including','following'].includes(scope))return;
+ s.scope=scope;s.candidates=appointmentDeleteCandidates(s.seeds,s.rows,scope);
+ s.selected=new Set(s.candidates.filter(x=>x.verified).map(x=>x.appt.id));
+ renderApptDeleteList();
+}
+function renderApptDeleteList(){
+ const s=apptDeleteState;if(!s)return;
+ document.getElementById('appt-delete-list').innerHTML=s.candidates.map(({appt:a,verified},index)=>{
+  const dog=dogs.find(d=>d.id===a.dog_id),cust=custs.find(c=>c.id===dog?.customer_id);
+  return `<label style="display:flex;gap:8px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border)">
+   <input type="checkbox" ${s.selected.has(a.id)?'checked':''} onchange="toggleApptDeleteRow(${index},this.checked)" style="margin-top:4px"/>
+   <span style="font-size:12px"><strong>${esc(dog?.name||'?')}</strong> · ${esc(cust?.owner||'?')}<br>${esc(a.appt_date)} ${(a.appt_time||'').slice(0,5)} · ${esc(a.service_base||'')} · ${esc(groomers.find(g=>g.id===a.groomer_id)?.name||'?')}
+   ${verified?'': '<br><span style="color:#92400e">Jadwal lama — keanggotaan seri tidak tersimpan. Pilih manual.</span>'}</span>
+  </label>`;
+ }).join('')||'<p>Tidak ada appointment berikutnya.</p>';
+ updateApptDeleteCount();
+}
+function toggleApptDeleteRow(index,checked){
+ const s=apptDeleteState;if(!s||s.busy)return;
+ const id=s.candidates[index]?.appt.id;if(!id)return;
+ checked?s.selected.add(id):s.selected.delete(id);updateApptDeleteCount();
+}
+function updateApptDeleteCount(){
+ const s=apptDeleteState;if(!s)return;
+ document.getElementById('appt-delete-count').textContent=s.selected.size+' appointment dipilih untuk dihapus';
+ document.getElementById('appt-delete-confirm').disabled=s.busy||!s.selected.size;
+ document.getElementById('appt-delete-scope').disabled=s.busy;
+}
+function closeApptDelete(){
+ if(apptDeleteState?.busy)return;
+ ++apptDeleteLoadSeq;apptDeleteState=null;cm('ov-appt-delete');
+}
+async function confirmApptDelete(){
+ const s=apptDeleteState;if(!s||s.busy)return;
+ const targets=s.candidates.filter(x=>s.selected.has(x.appt.id)).map(x=>x.appt);
+ if(!targets.length)return;
+ const dates=[...new Set(targets.map(a=>a.appt_date))].sort();
+ if(!confirm(`Hapus ${targets.length} appointment pada ${dates.join(', ')}?\n\nHanya baris yang dicentang akan dihapus. Tindakan ini tidak dapat di-undo dari aplikasi. Invoice tetap disimpan.`))return;
+ s.busy=true;updateApptDeleteCount();let deleted=0;
+ try{
+  for(const a of targets){
+   const result=await deleteAppointmentWithVisitCheck(a.id,{snapshot:a});
+   if(result.deleted){deleted++;s.rows=s.rows.filter(x=>x.id!==a.id);}
+   if(!result.deleted||result.warning)break;
+  }
+ }catch(e){alert('Delete berhenti: '+e.message);}
+ finally{
+  s.busy=false;updateApptDeleteCount();closeApptDelete();
+  if(deleted){cm('ov-appt');renderCal();}
+  alert(`${deleted} dari ${targets.length} appointment terkonfirmasi dihapus.${deleted<targets.length?' Sisanya belum dikonfirmasi terhapus; refresh kalender dan periksa pesan di atas sebelum mencoba lagi.':''}`);
+ }
+}
+
+// Confirm first; only remove local state/refund after a verified database deletion.
+async function deleteAppointmentWithVisitCheck(apptId,options={}){
+ const oldAppt=options.snapshot||appts.find(a=>a.id===apptId);
+ if(!oldAppt)return {deleted:false};
  const dogName=dogs.find(d=>d.id===oldAppt.dog_id)?.name||'?';
- // Auto-refund token if appointment used one
- if(oldAppt.session_source==='advance'&&oldAppt.token_id&&oldAppt.token_used){
-  const tok=tokens.find(t=>t.id===oldAppt.token_id);
-  if(tok){
-   const newUsed=Math.max(0,(tok.sessions_used||0)-1);
-   await db.from('tokens').update({sessions_used:newUsed}).eq('id',oldAppt.token_id);
-   await db.from('appointments').update({token_used:false}).eq('id',apptId);
-   tok.sessions_used=newUsed;
-   oldAppt.token_used=false;
+ const {data:linkedVisits,error:visitReadError}=await db.from('visits').select('*').eq('dog_id',oldAppt.dog_id).eq('visited_at',oldAppt.appt_date);
+ if(visitReadError){alert('Delete dibatalkan: '+visitReadError.message);return {deleted:false};}
+ let removeVisits=false;
+ if(linkedVisits?.length){
+  const choice=prompt(`Ada ${linkedVisits.length} visit untuk ${dogName} pada ${oldAppt.appt_date}.\nKetik "yes" untuk hapus visit tersebut juga, "no" untuk simpan visit, atau Cancel untuk batalkan delete appointment. Invoice tetap disimpan.`,'no');
+  if(!choice||!['yes','no'].includes(choice.trim().toLowerCase()))return {deleted:false};
+  removeVisits=choice.trim().toLowerCase()==='yes';
+ }
+ let query=db.from('appointments').delete().eq('id',apptId).eq('appt_date',oldAppt.appt_date);
+ if(oldAppt.updated_at)query=query.eq('updated_at',oldAppt.updated_at);
+ const {data:deletedRows,error}=await query.select('*');
+ if(error||!deletedRows?.some(a=>a.id===apptId)){
+  alert('Appointment tidak dihapus: '+(error?.message||'Data berubah atau izin tidak cukup. Refresh kalender.'));return {deleted:false};
+ }
+ const deletedAppt=deletedRows.find(a=>a.id===apptId);
+ const idx=appts.findIndex(a=>a.id===apptId);if(idx>=0)appts.splice(idx,1);
+ const warnings=[];
+ try{
+ await logAudit('appointment',apptId,'delete',{old:deletedAppt,label:dogName+' '+oldAppt.appt_date+' '+(oldAppt.appt_time||'').slice(0,5)});
+ if(removeVisits){
+  for(const v of linkedVisits){
+   const {data:removed,error:ve}=await db.from('visits').delete().eq('id',v.id).select('id');
+   if(ve||!removed?.length){warnings.push('Visit '+v.id+' belum dihapus.');continue;}
+   const vi=visits.findIndex(x=>x.id===v.id);if(vi>=0)visits.splice(vi,1);
+   await logAudit('visit',v.id,'delete',{old:v,label:dogName+' '+v.visited_at});
   }
  }
- // Check for linked visit (same dog + date)
- const linkedVisit=visits.find(v=>v.dog_id===oldAppt.dog_id&&v.visited_at===oldAppt.appt_date);
- if(linkedVisit){
-  const choice=prompt(`Ada visit terlinked dengan appointment ini (${dogName} pada ${oldAppt.appt_date}).\n\nKetik:\n- "yes" untuk hapus visit juga\n- "no" untuk simpan visit (mis. service tetap dilakukan)\n- batal/kosong untuk batalkan delete appointment\n\nPilihan:`,'yes');
-  if(choice===null||choice===''||choice.trim()==='') return; // cancelled
-  if(choice.trim().toLowerCase()==='yes'){
-   await db.from('visits').delete().eq('id',linkedVisit.id);
-   await logAudit('visit',linkedVisit.id,'delete',{old:linkedVisit,label:dogName+' ('+linkedVisit.visited_at+')'});
-   const vi=visits.findIndex(v=>v.id===linkedVisit.id); if(vi>=0) visits.splice(vi,1);
-  }
+ // Optimistic counter update: refuse to overwrite a concurrent booking/refund.
+ async function refundCounter(table,id){
+  const {data:row,error:readError}=await db.from(table).select('*').eq('id',id).single();
+  if(readError||!row){warnings.push(table+' '+id+': refund belum dilakukan.');return;}
+  const count=row.sessions_used||0,newUsed=Math.max(0,count-1);
+  let update=db.from(table).update({sessions_used:newUsed}).eq('id',id);
+  update=row.sessions_used==null?update.is('sessions_used',null):update.eq('sessions_used',row.sessions_used);
+  const {data:changed,error:refundError}=await update.select('id');
+  if(refundError||!changed?.length){warnings.push(table+' '+id+': refund belum dilakukan; periksa count sesi.');return;}
+  const local=(table==='tokens'?tokens:subscriptions).find(t=>t.id===id);if(local)local.sessions_used=newUsed;
  }
- await db.from('appointments').delete().eq('id',apptId);
- await logAudit('appointment',apptId,'delete',{old:oldAppt,label:dogName+' '+oldAppt.appt_date+' '+(oldAppt.appt_time||'').slice(0,5)});
+ if(deletedAppt.session_source==='advance'&&deletedAppt.token_id&&deletedAppt.token_used)await refundCounter('tokens',deletedAppt.token_id);
+ if(deletedAppt.subs_deducted&&options.subscriptionId)await refundCounter('subscriptions',options.subscriptionId);
+ }catch(e){warnings.push('Pembersihan/refund berhenti: '+e.message+'. Periksa visit dan saldo sesi sebelum mengubahnya lagi.');}
+ if(warnings.length)alert('Appointment sudah dihapus, tetapi perlu pengecekan manual:\n'+warnings.join('\n'));
+ return {deleted:true,warning:warnings.length>0};
 }
 /* GROOMERS TAB */
 function swGroomer(sub){
@@ -12859,16 +12975,8 @@ async function delSubsSession(apptId,subId){
  const a=appts.find(x=>x.id===apptId); if(!a) return;
  const aDog=dogs.find(d=>d.id===a.dog_id);
  if(!confirm(`Hapus appointment ${aDog?.name||'?'} ${a.appt_date}?\n\nIni akan mengurangi count subscription dipakai bila sudah ter-deducted.`)) return;
- if(a.subs_deducted){
-  const sub=subscriptions.find(s=>s.id===subId);
-  if(sub){
-   const newUsed=Math.max(0,(sub.sessions_used||0)-1);
-   await db.from('subscriptions').update({sessions_used:newUsed}).eq('id',subId);
-   sub.sessions_used=newUsed;
-  }
- }
- await deleteAppointmentWithVisitCheck(apptId);
- const i=appts.findIndex(x=>x.id===apptId); if(i>=0) appts.splice(i,1);
+ const result=await deleteAppointmentWithVisitCheck(apptId,{subscriptionId:subId});
+ if(!result.deleted)return;
  openSubsSessions(subId);
  renderCal(); renderMembership(); loadAll();
 }
@@ -15101,7 +15209,7 @@ async function approveOnb(id){
   }
   const existing=targetCust?dogsOf(targetCust.id):[];
   let maxD=0;
-  existing.forEach(d=>{const m=(d.dog_code||'').match(/-D(\d+)$/);if(m){const n=parseInt(m[1]);if(n>maxN)maxD=n}});
+  existing.forEach(d=>{const m=(d.dog_code||'').match(/-D(\d+)$/);if(m){const n=parseInt(m[1]);if(n>maxD)maxD=n}});
   const insertedDogs=[];
   for(let i=0;i<dogs.length;i++){
    const d=dogs[i];
