@@ -6175,12 +6175,7 @@ async function createRecurringSeries(firstAppts, freqDays, totalCount){
   dog_id:a.dog_id, groomer_id:a.groomer_id, service_base:a.service_base,
   duration_mins:a.duration_mins, appt_time:a.appt_time,
   appt_note:a.appt_note||'', customer_note:a.customer_note||'', session_note:a.session_note||'',
-  admin_note:a.admin_note||'', session_source:a.session_source||'normal',
-  // Discount fields carried forward
-  appt_disc_type:a.appt_disc_type||null,
-  appt_disc_value:a.appt_disc_value||0,
-  appt_disc_base_only:!!a.appt_disc_base_only,
-  appt_disc_by_category:a.appt_disc_by_category||null
+  admin_note:a.admin_note||'', session_source:a.session_source||'normal'
  }));
  let created=0, skipped=0;
  const createdRows=[];
@@ -11937,20 +11932,7 @@ async function loadInvFromAppointment(apptId){
  requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(()=>{
   const src=a.session_source||'normal';
   const ntEl=document.getElementById('inv-notes');
-// Apply discount/promo from the appointment
-  const dt=document.getElementById('inv-disc-type'); if(dt) dt.value=a.appt_disc_type||'';
-  const dv=document.getElementById('inv-disc-value'); if(dv) dv.value=a.appt_disc_value||0;
-  const dbo=document.getElementById('inv-disc-base-only'); if(dbo) dbo.checked=!!a.appt_disc_base_only;
-  const dbc=document.getElementById('inv-doc-mode'); if(dbc) dbc.value='auto'; // doc mode handled separately
-  // Per-category discount (stored in appt_disc_by_category)
-  if(a.appt_disc_by_category&&typeof a.appt_disc_by_category==='object'){
-   Object.entries(a.appt_disc_by_category).forEach(([svc,rule])=>{
-    const typeSel=document.getElementById('appt-disc-svc-type-'+svc.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,''));
-    const valIn=document.getElementById('appt-disc-svc-value-'+svc.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,''));
-    if(typeSel) typeSel.value=rule.type||'percent';
-    if(valIn) valIn.value=rule.value||0;
-   });
-const custAppts=appts.filter(ap=>{
+  const custAppts=appts.filter(ap=>{
    if(ap.appt_date!==a.appt_date) return false;
    const dd=dogs.find(x=>x.id===ap.dog_id);
    return dd?.customer_id===cid;
@@ -11987,7 +11969,7 @@ const custAppts=appts.filter(ap=>{
    });
   });
   renderInvoicePreview();
- })));
+ }))));
 }
 
 /* ========== BATCH H — AUTH GATE ========== */
@@ -15125,7 +15107,7 @@ checkAuthState();
  });
  obs.observe(target,{childList:true,subtree:true});
 })();
-}</script>
+</script>
 
 <!-- Batch L5 — Customer 360 slide-in panel -->
 <div class="c360-backdrop" id="c360-backdrop" onclick="closeCust360()"></div>
