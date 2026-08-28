@@ -6248,14 +6248,61 @@ async function createRecurringSeries(firstAppts, freqDays, totalCount){
 async function delApptFromModal(){
  if(!wiz.editId)return;
  const isGroup=wiz.editIds?.length>1;
- const msg=isGroup?`Hapus semua ${wiz.editIds.length} appointment dalam group ini?`:'Delete this appointment?';
- if(!confirm(msg))return;
+ 
  if(isGroup){
+  const msg=`Hapus semua ${wiz.editIds.length} appointment dalam group ini?`;
+  if(!confirm(msg))return;
   for(const id of wiz.editIds){await deleteAppointmentWithVisitCheck(id);}
   wiz.editIds.forEach(id=>{const i=appts.findIndex(a=>a.id===id);if(i>=0)appts.splice(i,1);});
+  cm('ov-appt'); renderCal();
+  return;
+ }
+ 
+ // Single appointment - offer delete options
+ const a=appts.find(x=>x.id===wiz.editId);
+ if(!a){return}
+ 
+ const isRecurring=appts.some(x=>
+  x.id!==a.id &&
+  x.dog_id===a.dog_id &&
+  x.groomer_id===a.groomer_id &&
+  x.service_base===a.service_base &&
+  x.appt_time===a.appt_time &&
+  x.duration_mins===a.duration_mins &&
+  x.appt_date > a.appt_date &&
+  x.status!=='cancelled'
+ );
+ 
+ let msg, action;
+ if(isRecurring){
+  msg=`Hapus opsi:\n\n1. Hanya appointment ini (${fmtD(a.appt_date)} ${(a.appt_time||'').slice(0,5)})\n2. Ini dan SEMUA jadwal berulang setelahnya\n\nPilih: ketik "1" atau "2" (kosong = batal)`;
+  const choice=prompt(msg);
+  if(choice==='1') action='single';
+  else if(choice==='2') action='series';
+  else return;
  } else {
+  if(!confirm(`Hapus appointment ${fmtD(a.appt_date)} ${(a.appt_time||'').slice(0,5)}?`)) return;
+  action='single';
+ }
+ 
+ if(action==='single'){
   await deleteAppointmentWithVisitCheck(wiz.editId);
-  const i=appts.findIndex(a=>a.id===wiz.editId);if(i>=0)appts.splice(i,1);
+  const i=appts.findIndex(x=>x.id===wiz.editId); if(i>=0) appts.splice(i,1);
+ } else if(action==='series'){
+  const future=appts.filter(x=>
+   x.dog_id===a.dog_id &&
+   x.groomer_id===a.groomer_id &&
+   x.service_base===a.service_base &&
+   x.appt_time===a.appt_time &&
+   x.duration_mins===a.duration_mins &&
+   x.appt_date >= a.appt_date &&
+   x.status!=='cancelled'
+  );
+  for(const f of future){
+   await deleteAppointmentWithVisitCheck(f.id);
+   const i=appts.findIndex(x=>x.id===f.id); if(i>=0) appts.splice(i,1);
+  }
+  showToast(`${future.length} appointment dihapus (termasuk hari ini)`,'success');
  }
  cm('ov-appt'); renderCal();
 }
