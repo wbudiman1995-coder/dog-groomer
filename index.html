@@ -495,7 +495,8 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 <script>
  const SUPABASE_URL = "https://cwqrpslypcjgjuxagglc.supabase.co";
  const SUPABASE_ANON = "sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
- // Route optimizer removed — API keys never belong in client-side code.
+ const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+ // Route optimizer removed - API keys never belong in client-side code.
 </script>
 
 <!-- AUTH SCREENS (Batch H) — hidden by default, shown by setAuthScreen() -->
