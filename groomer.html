@@ -195,6 +195,7 @@ const SUPABASE_ANON="sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
 const db=supabase.createClient(SUPABASE_URL,SUPABASE_ANON);
 
 let currentGroomer=null;
+const SHOW_MY_PAY=false; // flip true setelah admin publish + angka diverifikasi
 let currentTab='today';
 let dataCache={appts:[],dogs:[],custs:[]};
 
@@ -266,6 +267,24 @@ function showGate(errMsg){
  }
 }
 
+function openOnbCreate(){
+ window.location.href=window.location.origin+window.location.pathname.replace(/[^/]+$/,'')+'join.html?t='+onbBuildLink(onbToken());
+}
+
+function doCreateOnbLink(){
+ const token=onbToken();
+ const url=onbBuildLink(token);
+ const msg='Halo kak! \uD83D\uDC3E Berikut link pendaftaran HomePaw:\n\n'+url+'\n\nIsi data kamu & anabul di link ini ya (bisa dibuka di HP, cukup diisi satu kali, berlaku 2 hari). Setelah diisi, admin kami akan konfirmasi via WhatsApp. Terima kasih!';
+ const waPhone=prompt('Nomor WA customer (untuk kirim link via WA, kosongkan untuk copy saja):');
+ if(waPhone){
+  const num=normalizeWA(waPhone);
+  if(num) window.open('https://wa.me/'+num+'?text='+encodeURIComponent(msg),'_blank');
+ } else {
+  navigator.clipboard.writeText(url+'\n\n'+msg);
+  alert('Link & pesan dicopy! Tempel di chat customer.');
+ }
+}
+
 function showApp(){
  document.getElementById('gate').style.display='none';
  document.getElementById('app-wrap').style.display='block';
@@ -275,6 +294,12 @@ function showApp(){
 /* Self-pay card — angka dihitung admin dari invoice, dipublish sebagai snapshot.
    Tidak ada perhitungan di sini: groomer melihat persis angka payroll admin.
    Kartu muncul hanya jika admin mengaktifkan toggle "Publish gaji" di CRM. */
+function onWaiveToggle(){
+ const cb=document.getElementById('appt-late-waived');
+ const note=document.getElementById('appt-late-waive-note');
+ if(cb&&note) note.style.display=cb.checked?'block':'none';
+}
+
 function renderMyPay(){
  const wrap=document.getElementById('mypay-wrap');
  if(!wrap) return;
