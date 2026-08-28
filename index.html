@@ -2047,8 +2047,6 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 </div>
 
 <script>
-const { createClient } = supabase;
-const db = createClient(SUPABASE_URL, SUPABASE_ANON);
 // Cross-browser: AbortSignal.timeout polyfill (Safari <15.4, older Chrome/WebView)
 if(typeof AbortSignal!=='undefined'&&!AbortSignal.timeout){AbortSignal.timeout=function(ms){const c=new AbortController();setTimeout(function(){try{c.abort(new DOMException('Timeout','TimeoutError'))}catch(e){c.abort()}},ms);return c.signal}}
 let dogs=[], visits=[], appts=[], custs=[], groomers=[], invoices=[], tokens=[], subscriptions=[], bankSettings={}, custEditId=null, dogEditId=null, currentCustId=null, apptDate=null, apptEditId=null, groomerEditId=null, membEditState=null;
@@ -11995,9 +11993,10 @@ async function loadInvFromAppointment(apptId){
    Object.entries(a.appt_disc_by_category).forEach(([svc,rule])=>{
     const typeSel=document.getElementById('appt-disc-svc-type-'+svc.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,''));
     const valIn=document.getElementById('appt-disc-svc-value-'+svc.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,''));
-    if(typeSel) typeSel.value=rule.type||'percent';
-    if(valIn) valIn.value=rule.value||0;
+   if(typeSel) typeSel.value=rule.type||'percent';
+   if(valIn) valIn.value=rule.value||0;
    });
+  }
 const custAppts=appts.filter(ap=>{
    if(ap.appt_date!==a.appt_date) return false;
    const dd=dogs.find(x=>x.id===ap.dog_id);
@@ -15173,7 +15172,7 @@ checkAuthState();
  });
  obs.observe(target,{childList:true,subtree:true});
 })();
-}</script>
+</script>
 
 <!-- Batch L5 — Customer 360 slide-in panel -->
 <div class="c360-backdrop" id="c360-backdrop" onclick="closeCust360()"></div>
