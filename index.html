@@ -1218,8 +1218,8 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   </select>
   <select id="memb-filter" onchange="renderMembership()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:13px">
    <option value="active">Active only</option>
-   <option value="expired">Expired only</option>
-   <option value="all">All status</option>
+   <option value="expired">Archived / expired</option>
+   <option value="all">All including archive</option>
   </select>
   <button class="btn ghost" style="margin-left:6px" onclick="openSubsReconcile()" title="Cek ulang jumlah sesi terpakai vs data appointment/invoice">🔍 Reconcile</button>
  </div>
@@ -1950,7 +1950,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   <div id="subs-sessions-summary" style="padding:10px 12px;background:var(--subtle);border-radius:6px;font-size:13px;margin-bottom:1rem"></div>
   <div id="subs-sessions-list" style="max-height:50vh;overflow-y:auto"></div>
   <div style="margin-top:1rem;font-size:11px;color:var(--muted);background:#fef3c7;padding:8px 10px;border-radius:5px;line-height:1.5">
-   <strong>Tip:</strong> Hapus appointment yang batal/tidak jadi untuk mengurangi count.
+   <strong>Tip:</strong> Sesi dengan after-visit invoice dihitung completed. Gunakan Reconcile untuk memperbaiki flag lama; hapus hanya appointment yang benar-benar batal.
   </div>
  </div>
 </div>
@@ -3164,7 +3164,7 @@ function dogsOf(custId){return dogs.filter(d=>d.customer_id===custId)}
 function custSubsStatus(custId){
  const subs=subscriptions.filter(s=>s.customer_id===custId);
  if(!subs.length) return null;
- const active=subs.find(s=>s.status==='active');
+ const active=currentSubscriptionRows().filter(s=>s.customer_id===custId).sort(subscriptionLifecycleSort)[0];
  if(active) return {state:'active',sub:active};
  const expired=subs.slice().sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''))[0];
  return {state:'expired',sub:expired};
@@ -7418,6 +7418,28 @@ function canonicalSubscription(rows){
   String(b.created_at||b.started_at||'').localeCompare(String(a.created_at||a.started_at||''))
  )[0]||null;
 }
+function canonicalSubscriptionRows(){
+ return [...new Map(subscriptions.map(s=>[subscriptionGroupKey(s),subscriptionGroupRows(s)])).values()].map(canonicalSubscription).filter(Boolean);
+}
+function subscriptionLifecycleSort(a,b){
+ return String(b.started_at||b.created_at||'').localeCompare(String(a.started_at||a.created_at||''))||
+  String(b.created_at||'').localeCompare(String(a.created_at||''))||
+  String(b.source_invoice||'').localeCompare(String(a.source_invoice||''),undefined,{numeric:true,sensitivity:'base'});
+}
+// One operational/current package per dog. Older renewals stay archived for
+// invoice/audit history but can never be selected for a new booking.
+function currentSubscriptionRows(){
+ const byDog=new Map();
+ const activeGroups=[...new Map(subscriptions.map(s=>[subscriptionGroupKey(s),subscriptionGroupRows(s)])).values()]
+  .filter(rows=>rows.some(s=>s.status==='active')).map(canonicalSubscription).filter(Boolean);
+ activeGroups.sort(subscriptionLifecycleSort).forEach(s=>{
+  if(!byDog.has(s.dog_id))byDog.set(s.dog_id,s);
+ });
+ return [...byDog.values()];
+}
+function isCurrentSubscription(sub){
+ return !!sub&&currentSubscriptionRows().some(s=>subscriptionGroupKey(s)===subscriptionGroupKey(sub));
+}
 function subscriptionDateContains(sub,date){
  const start=(sub.started_at||sub.created_at||'').slice(0,10);
  return (!start||date>=start)&&(!sub.expires_at||date<=sub.expires_at);
@@ -7486,10 +7508,8 @@ function activeSubscriptionForDog(dogId,date){
  const booked=appts.filter(a=>a.dog_id===dogId&&a.appt_date===targetDate&&a.status!=='cancelled')
   .map(findSubscriptionForAppointment).find(Boolean);
  if(booked)return booked;
- const active=subscriptions.filter(s=>s.dog_id===dogId&&s.status==='active'&&subscriptionDateContains(s,targetDate));
- const unique=[...new Map(active.map(s=>[subscriptionGroupKey(s),canonicalSubscription(subscriptionGroupRows(s))])).values()]
-  .sort((a,b)=>String(b.started_at||b.created_at||'').localeCompare(String(a.started_at||a.created_at||'')));
- return unique.find(s=>subscriptionUsageState(s).available>0)||null;
+ const current=currentSubscriptionRows().filter(s=>s.dog_id===dogId&&subscriptionDateContains(s,targetDate)).sort(subscriptionLifecycleSort);
+ return current.find(s=>subscriptionUsageState(s).available>0)||null;
 }
 
 // Returns 'subscription' | 'advance' | 'none' for whether Basic Grooming is covered.
@@ -8022,7 +8042,7 @@ function renderInvDogServices(){
   </div>`;
  } else {
   // Session E — if there's a subs record for this dog but it's exhausted/expired, warn admin
-  const staleSubs=subscriptions.find(s=>s.dog_id===did && s.status==='active' && (subscriptionUsageState(s).available<=0 || (s.expires_at&&s.expires_at<iso(new Date()))));
+  const staleSubs=currentSubscriptionRows().find(s=>s.dog_id===did && (subscriptionUsageState(s).available<=0 || (s.expires_at&&s.expires_at<iso(new Date()))));
   if(staleSubs){
    const staleState=subscriptionUsageState(staleSubs);
    const reason=staleState.available<=0?'sudah habis/terjadwal penuh':'sudah expired';
@@ -9279,6 +9299,17 @@ async function bindAppointmentsToSubscription(sub){
  return {bound,failed};
 }
 
+async function archiveOldSubscriptionRows(current){
+ if(!current?.id||!current.dog_id)return {archived:0,failed:0};
+ const currentKey=subscriptionGroupKey(current);
+ const old=subscriptions.filter(s=>s.dog_id===current.dog_id&&s.status==='active'&&subscriptionGroupKey(s)!==currentKey);
+ if(!old.length)return {archived:0,failed:0};
+ const {error}=await db.from('subscriptions').update({status:'renewed'}).in('id',old.map(s=>s.id));
+ if(error)return {archived:0,failed:old.length};
+ old.forEach(s=>s.status='renewed');
+ return {archived:old.length,failed:0};
+}
+
 // Package validation is idempotent by invoice + dog. Re-validating cannot
 // create a fresh zero-used subscription or discard the previous usage count.
 async function createSubscriptionsFromInvoice(rec){
@@ -9304,6 +9335,8 @@ async function createSubscriptionsFromInvoice(rec){
     if(dupErr)warnings.push(`${d.name}: ${duplicates.length} duplicate belum ditutup`);
     else duplicates.forEach(s=>s.status='renewed');
    }
+   const archived=await archiveOldSubscriptionRows(canonical);
+   if(archived.failed)warnings.push(`${d.name}: ${archived.failed} subscription lama belum diarsipkan`);
    const bind=await bindAppointmentsToSubscription(canonical);
    if(bind.failed)warnings.push(`${d.name}: ${bind.failed} appointment gagal dilink`);
    continue;
@@ -9317,12 +9350,8 @@ async function createSubscriptionsFromInvoice(rec){
   if(error||!created){warnings.push(`${d.name}: subscription gagal dibuat`);continue;}
   subscriptions.push(created);
   // Supersede only after the replacement was safely inserted.
-  const oldActive=subscriptions.filter(s=>s.id!==created.id&&s.dog_id===d.dog_id&&s.status==='active');
-  if(oldActive.length){
-   const {error:eSup}=await db.from('subscriptions').update({status:'renewed'}).in('id',oldActive.map(s=>s.id));
-   if(eSup)warnings.push(`${d.name}: subscription lama belum ditutup`);
-   else oldActive.forEach(s=>s.status='renewed');
-  }
+  const archived=await archiveOldSubscriptionRows(created);
+  if(archived.failed)warnings.push(`${d.name}: ${archived.failed} subscription lama belum diarsipkan`);
   const bind=await bindAppointmentsToSubscription(created);
   if(bind.failed)warnings.push(`${d.name}: ${bind.failed} appointment gagal dilink`);
  }
@@ -10472,11 +10501,13 @@ function renderMembership(){
    notes:t.notes||''
   };
  });
- // Session E — surface 'renewed' status as 'expired' so old subs don't clutter active view
- const subsRows=subscriptions.map(s=>({
+ // Collapse duplicate rows and expose only the newest lifecycle per dog as
+ // operationally active. Older renewals remain available under archived status.
+ const currentKeys=new Set(currentSubscriptionRows().map(subscriptionGroupKey));
+ const subsRows=canonicalSubscriptionRows().map(s=>({
   ...s,
   _kind:'subscription',
-  status:s.status==='renewed'?'expired':s.status
+  status:currentKeys.has(subscriptionGroupKey(s))?'active':'expired'
  }));
  let rows=[];
  if(kindFilter==='all'||kindFilter==='subscription') rows=rows.concat(subsRows);
@@ -10568,7 +10599,7 @@ function recomputeSubsUsed(sub){
 }
 
 function openSubsReconcile(){
- const activeSubs=[...new Map(subscriptions.filter(s=>s.status==='active').map(s=>[subscriptionGroupKey(s),s])).values()];
+ const activeSubs=currentSubscriptionRows();
  const rows=activeSubs.map(s=>{
   const c=custs.find(x=>x.id===s.customer_id);
   const d=dogs.find(x=>x.id===s.dog_id);
@@ -10617,6 +10648,8 @@ async function applySubsReconcile(subId,newUsed){
   const {error:dupErr}=await db.from('subscriptions').update({status:'renewed'}).in('id',duplicates.map(x=>x.id));
   if(!dupErr)duplicates.forEach(x=>x.status='renewed');
  }
+ const archived=await archiveOldSubscriptionRows(s);
+ if(archived.failed)alert(`${archived.failed} subscription lama belum berhasil diarsipkan. Counter tetap sudah diperbarui.`);
  for(const a of subscriptionAppointments(s).filter(a=>appointmentHasAfterVisitInvoice(a))){
   const note=withApptSubscription(a.admin_note,{id:s.id,source:s.source_invoice||apptSubscriptionMeta(a).source||legacySubscriptionSource(a)});
   const {data:marked}=await db.from('appointments').update({session_source:'subscription',subs_deducted:true,admin_note:note,...editStamp()}).eq('id',a.id).select('id');
@@ -11653,9 +11686,9 @@ function getCustSessionState(custId){
  const todayISO=iso(new Date());
  const selectedDogIds=(wiz.dogSvcs||[]).map(ds=>ds.did);
  // Subscriptions are per-dog. If specific dogs selected, filter to those dogs.
- let subs=subscriptions.filter(s=>s.customer_id===custId);
+ let subs=currentSubscriptionRows().filter(s=>s.customer_id===custId);
  if(selectedDogIds.length) subs=subs.filter(s=>selectedDogIds.includes(s.dog_id));
- const activeSubs=[...new Map(subs.filter(s=>s.status==='active').map(s=>[subscriptionGroupKey(s),canonicalSubscription(subscriptionGroupRows(s))])).values()];
+ const activeSubs=subs;
  const subStates=activeSubs.map(subscriptionUsageState);
  const subsTotal=subStates.reduce((a,s)=>a+s.total,0);
  const subsUsed=subStates.reduce((a,s)=>a+s.used,0);
@@ -13093,11 +13126,16 @@ function openSubsSessions(subId){
    const aDog=dogs.find(d=>d.id===a.dog_id);
    const g=groomers.find(x=>x.id===a.groomer_id);
    const statusColor={pending:'#f59e0b',confirmed:'#3b82f6',done:'#16a34a',cancelled:'var(--muted)'}[a.status]||'var(--muted)';
-   const deducted=a.subs_deducted?'<span style="font-size:10px;color:#15803d">&#10003; deducted</span>':'<span style="font-size:10px;color:#dc2626">not yet</span>';
+   const completed=a.subs_deducted||appointmentHasAfterVisitInvoice(a);
+   const sessionState=completed
+    ? `<span style="font-size:10px;color:#15803d">&#10003; ${a.subs_deducted?'deducted':'completed by invoice'}</span>`
+    : a.appt_date<iso(new Date())
+      ? '<span style="font-size:10px;color:#b45309">&#9888; review: missing after-visit invoice</span>'
+      : '<span style="font-size:10px;color:#2563eb">upcoming</span>';
    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border);gap:8px">
     <div style="flex:1;min-width:0">
      <div style="font-size:13px;font-weight:500">${fmtD(a.appt_date)} ${a.appt_time?a.appt_time.slice(0,5):''}</div>
-     <div style="font-size:11px;color:var(--muted)">${esc(aDog?.name||'?')} · ${esc(g?.name||'?')} · <span style="color:${statusColor};font-weight:600">${esc(a.status||'')}</span> · ${deducted}</div>
+     <div style="font-size:11px;color:var(--muted)">${esc(aDog?.name||'?')} · ${esc(g?.name||'?')} · <span style="color:${statusColor};font-weight:600">${esc(a.status||'')}</span> · ${sessionState}</div>
     </div>
     <button class="btn btn-d btn-sm" onclick="delSubsSession('${a.id}','${subId}')">Hapus</button>
    </div>`;
@@ -14084,7 +14122,7 @@ function c360RenderDogs(c){
  let activeBlock='';
  const activeBits=[];
  list.forEach(d=>{
-  const subs=subscriptions.filter(s=>s.customer_id===c.id&&s.dog_id===d.id&&s.status==='active');
+  const subs=currentSubscriptionRows().filter(s=>s.customer_id===c.id&&s.dog_id===d.id);
   subs.forEach(s=>{
    const st=subscriptionUsageState(s);
    activeBits.push(`<div>\u2022 ${esc(d.name)} (${esc(d.size||'?')}) \u2014 ${esc(tierLabel(s.type))}: ${st.allocated}/${st.total} package slots used \u00B7 ${st.used} completed \u00B7 ${st.scheduled} upcoming${st.unresolved?' \u00B7 '+st.unresolved+' review':''} \u00B7 ${st.available} available</div>`);
@@ -14184,7 +14222,7 @@ function c360RenderInvoices(c){
 }
 
 function c360RenderMembership(c){
- const custSubs=subscriptions.filter(s=>s.customer_id===c.id);
+ const custSubs=currentSubscriptionRows().filter(s=>s.customer_id===c.id);
  const custTokens=tokens.filter(t=>t.customer_id===c.id);
  let html='';
  if(custSubs.length){
