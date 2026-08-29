@@ -3173,9 +3173,10 @@ function subsBadgeHTML(custId){
  const st=custSubsStatus(custId);
  if(!st) return '';
  const s=st.sub;
- const left=Math.max(0,(s.sessions_total||0)-(s.sessions_used||0));
+ const usage=subscriptionUsageState(s);
+ const left=usage.available;
  const exp=s.expires_at?fmtD(s.expires_at):'no expiry';
- const tip=`${(s.type||'').toUpperCase()} subs · ${s.sessions_used||0}/${s.sessions_total||0} used · ${left} left · expires ${exp}`;
+ const tip=`${(s.type||'').toUpperCase()} subs · ${usage.allocated}/${usage.total} package slots used · ${usage.used} completed · ${usage.scheduled} upcoming · ${usage.unresolved} review · ${left} available · expires ${exp}`;
  return `<span class="subs-badge ${st.state}" title="${esc(tip)}">SUBS</span>`;
 }
 
@@ -4446,7 +4447,11 @@ function getApptTransportFee(apptOrNote){
 }
 function cleanApptAdminNote(note){
  APPT_TRANSPORT_FEE_RE.lastIndex=0;
- const clean=(note||'').replace(APPT_TRANSPORT_FEE_RE,'\n').replace(/(?:^|\n)\[\[HP_RECURRENCE:[a-zA-Z0-9-]+:\d+\]\](?=\n|$)/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+ const clean=(note||'').replace(APPT_TRANSPORT_FEE_RE,'\n')
+  .replace(/(?:^|\n)\[\[HP_RECURRENCE:[a-zA-Z0-9-]+:\d+\]\](?=\n|$)/g,'\n')
+  .replace(/(?:^|\n)\[\[HP_SUBSCRIPTION:[^\]\n]+\]\](?=\n|$)/g,'\n')
+  .replace(/(?:^|\n)\[\[HP_SUBS_SOURCE:[^\]\n]+\]\](?=\n|$)/g,'\n')
+  .replace(/\n{3,}/g,'\n\n').trim();
  APPT_TRANSPORT_FEE_RE.lastIndex=0;
  return clean;
 }
@@ -4464,6 +4469,19 @@ function getApptRecurrence(apptOrNote){
 function withApptRecurrence(note,series){
  const clean=(note||'').replace(/(?:^|\n)\[\[HP_RECURRENCE:[a-zA-Z0-9-]+:\d+\]\](?=\n|$)/g,'\n').trim();
  return [clean,series?`[[HP_RECURRENCE:${series.id}:${series.occurrence}]]`:''].filter(Boolean).join('\n')||null;
+}
+function apptSubscriptionMeta(apptOrNote){
+ const note=typeof apptOrNote==='string'?apptOrNote:(apptOrNote?.admin_note||'');
+ const id=/(?:^|\n)\[\[HP_SUBSCRIPTION:([^\]\n]+)\]\](?=\n|$)/.exec(note)?.[1]||null;
+ const rawSource=/(?:^|\n)\[\[HP_SUBS_SOURCE:([^\]\n]+)\]\](?=\n|$)/.exec(note)?.[1]||null;
+ let source=null;try{source=rawSource?decodeURIComponent(rawSource):null}catch(_){source=rawSource}
+ return {id,source};
+}
+function withApptSubscription(note,{id=null,source=null}={}){
+ const clean=(note||'')
+  .replace(/(?:^|\n)\[\[HP_SUBSCRIPTION:[^\]\n]+\]\](?=\n|$)/g,'\n')
+  .replace(/(?:^|\n)\[\[HP_SUBS_SOURCE:[^\]\n]+\]\](?=\n|$)/g,'\n').trim();
+ return [clean,id?`[[HP_SUBSCRIPTION:${id}]]`:'',source?`[[HP_SUBS_SOURCE:${encodeURIComponent(source)}]]`:''].filter(Boolean).join('\n')||null;
 }
 
 function wizDots(n){
@@ -5925,36 +5943,32 @@ async function saveApptImpl(){
  const inserts=[];
  let cursor=wiz.startMins;
  // Batch O.12 — pre-validate: each dog with active subs must have sessions remaining
- // Count: subs.sessions_used (already deducted past) + future scheduled subscription appts not yet deducted
+ // Count every allocated slot: completed + upcoming + past appointments awaiting review.
  const subsDogsThisBooking={}; // dog_id -> count in this booking
+ const bookingSubs={}; // dog_id -> exact lifecycle used by this booking
  wiz.dogSvcs.forEach(ds=>{
   if(!ds.did) return;
   const isFree=wiz.freeDogs?wiz.freeDogs.has(ds.did):!!wiz.isFree;
   if(isFree||wiz.tokenId) return;
-  const hasActiveSubs=subscriptions.some(s=>s.dog_id===ds.did&&s.status==='active');
-  if(hasActiveSubs) subsDogsThisBooking[ds.did]=(subsDogsThisBooking[ds.did]||0)+1;
+  const sub=activeSubscriptionForDog(ds.did,wiz.date)||subscriptions
+   .filter(s=>s.dog_id===ds.did&&s.status==='active')
+   .sort((a,b)=>String(b.started_at||b.created_at||'').localeCompare(String(a.started_at||a.created_at||'')))[0];
+  if(sub){bookingSubs[ds.did]=sub;subsDogsThisBooking[ds.did]=(subsDogsThisBooking[ds.did]||0)+1;}
  });
  const today=iso(new Date());
  for(const dogId of Object.keys(subsDogsThisBooking)){
-  const sub=subscriptions.find(s=>s.dog_id===dogId&&s.status==='active');
+  const sub=bookingSubs[dogId];
   if(!sub) continue;
-  const used=sub.sessions_used||0;
-  const total=sub.sessions_total||0;
-  // Future already-scheduled subs appts for this dog (not yet deducted; not this booking)
-  const futureUndeducted=appts.filter(a=>
-   a.dog_id===dogId
-   && a.session_source==='subscription'
-   && !a.subs_deducted
-   && a.appt_date>=today
-   && a.id!==wiz.editId
-   && a.status!=='cancelled'
-  ).length;
+  const subState=subscriptionUsageState(sub);
+  const used=subState.used,total=subState.total;
+  const futureUndeducted=subState.scheduled;
+  const pastReview=subState.unresolved;
   const inThisBooking=subsDogsThisBooking[dogId];
-  const projectedUsed=used+futureUndeducted+inThisBooking;
-  if(projectedUsed>total){
+  const projectedAllocated=subState.allocated+inThisBooking;
+  if(projectedAllocated>total){
    const dog=dogs.find(d=>d.id===dogId);
-   const remaining=Math.max(0,total-used-futureUndeducted);
-   const proceed=confirm(`Subscription habis untuk ${dog?.name||'?'}\n\n${sub.type||'Subs'} sessions: ${used}/${total} sudah dipakai${futureUndeducted?', '+futureUndeducted+' future appts sudah booked':''}.\nSisa: ${remaining} sesi.\nKamu booking ${inThisBooking} sesi baru — over by ${projectedUsed-total}.\n\nTekan OK untuk override (carry-over ke periode berikutnya).\nTekan Cancel untuk batalkan.`);
+   const remaining=subState.available;
+   const proceed=confirm(`Subscription habis untuk ${dog?.name||'?'}\n\n${sub.type||'Subs'}: ${subState.allocated}/${total} sesi sudah dialokasikan (${used} completed${futureUndeducted?', '+futureUndeducted+' upcoming':''}${pastReview?', '+pastReview+' review':''}).\nSisa yang bisa dibooking: ${remaining} sesi.\nKamu booking ${inThisBooking} sesi baru — over by ${projectedAllocated-total}.\n\nTekan OK untuk override (carry-over ke periode berikutnya).\nTekan Cancel untuk batalkan.`);
    if(!proceed) return;
   }
  }
@@ -5968,8 +5982,7 @@ async function saveApptImpl(){
   if(isThisDogFree) sessSrc='free';
   else if(wiz.tokenId) sessSrc='advance';
   else if(ds.did){
-   const hasActiveSubs=subscriptions.some(s=>s.dog_id===ds.did&&s.status==='active');
-   if(hasActiveSubs) sessSrc='subscription';
+   if(bookingSubs[ds.did]) sessSrc='subscription';
   }
   const dogNote=document.getElementById('appt-note-'+ds.did)?.value.trim()||'';
   // Every selected service has its own discount rule; Percent is the preset.
@@ -5980,7 +5993,10 @@ async function saveApptImpl(){
    appt_time:m2t(cursor)+':00',service_base:ds.svc,duration_mins:dur,
    appt_note:dogNote+(wiz.dogSvcs.length>1?` (${i+1}/${wiz.dogSvcs.length})`:''),
    customer_note:custNote,
-   admin_note:withApptRecurrence(storedAdminNote,newSeries||getApptRecurrence(appts.find(a=>a.id===(ds.apptId||wiz.editId)))),
+   admin_note:withApptSubscription(
+    withApptRecurrence(storedAdminNote,newSeries||getApptRecurrence(appts.find(a=>a.id===(ds.apptId||wiz.editId)))),
+    bookingSubs[ds.did]?{id:bookingSubs[ds.did].id,source:bookingSubs[ds.did].source_invoice||null}:apptSubscriptionMeta(appts.find(a=>a.id===(ds.apptId||wiz.editId)))
+   ),
    session_note:sessionNote,
    appt_disc_type:dogDiscType,
    appt_disc_value:dogDiscValue,
@@ -6060,7 +6076,7 @@ async function saveApptImpl(){
       service_base:ds.svc,duration_mins:getWizDogDur(ds),
       appt_note:dogNote,appt_disc_type:dogDiscType||null,appt_disc_value:dogDiscValue,
       appt_disc_by_category:discByCategory,
-      customer_note:custNote,admin_note:withApptRecurrence(storedAdminNote,getApptRecurrence(oldGroupRec)),session_note:sessionNote,...editStamp()
+      customer_note:custNote,admin_note:withApptSubscription(withApptRecurrence(storedAdminNote,getApptRecurrence(oldGroupRec)),apptSubscriptionMeta(oldGroupRec)),session_note:sessionNote,...editStamp()
      };
      // Only rescheduled dogs move in time
      if(!wiz.rescheduleSet||wiz.rescheduleSet.has(eid)){
@@ -6138,7 +6154,7 @@ async function saveApptImpl(){
      const row={
       dog_id:ds.did,groomer_id:wiz.groomerId,appt_date:wiz.date,
       appt_time:m2t(addCursor)+':00',service_base:ds.svc,duration_mins:dur,
-      appt_note:dogNote,customer_note:custNote,admin_note:storedAdminNote,session_note:sessionNote,
+      appt_note:dogNote,customer_note:custNote,admin_note:withApptSubscription(storedAdminNote,bookingSubs[ds.did]?{id:bookingSubs[ds.did].id,source:bookingSubs[ds.did].source_invoice||null}:{}),session_note:sessionNote,
       appt_disc_type:null,appt_disc_value:0,appt_disc_by_category:discByCategory,
       token_id:wiz.tokenId||null,token_used:false,session_source:sessSrc,
       ...editStamp()
@@ -6414,6 +6430,7 @@ async function confirmApptDelete(){
 async function deleteAppointmentWithVisitCheck(apptId,options={}){
  const oldAppt=options.snapshot||appts.find(a=>a.id===apptId);
  if(!oldAppt)return {deleted:false};
+ const linkedSub=oldAppt.subs_deducted?(findSubscriptionForAppointment(oldAppt)||subscriptions.find(s=>s.id===options.subscriptionId)):null;
  const dogName=dogs.find(d=>d.id===oldAppt.dog_id)?.name||'?';
  const {data:linkedVisits,error:visitReadError}=await db.from('visits').select('*').eq('dog_id',oldAppt.dog_id).eq('visited_at',oldAppt.appt_date);
  if(visitReadError){alert('Delete dibatalkan: '+visitReadError.message);return {deleted:false};}
@@ -6454,7 +6471,7 @@ async function deleteAppointmentWithVisitCheck(apptId,options={}){
   const local=(table==='tokens'?tokens:subscriptions).find(t=>t.id===id);if(local)local.sessions_used=newUsed;
  }
  if(deletedAppt.session_source==='advance'&&deletedAppt.token_id&&deletedAppt.token_used)await refundCounter('tokens',deletedAppt.token_id);
- if(deletedAppt.subs_deducted&&options.subscriptionId)await refundCounter('subscriptions',options.subscriptionId);
+ if(deletedAppt.subs_deducted&&linkedSub)await refundCounter('subscriptions',canonicalSubscription(subscriptionGroupRows(linkedSub)).id);
  }catch(e){warnings.push('Pembersihan/refund berhenti: '+e.message+'. Periksa visit dan saldo sesi sebelum mengubahnya lagi.');}
  if(warnings.length)alert('Appointment sudah dihapus, tetapi perlu pengecekan manual:\n'+warnings.join('\n'));
  return {deleted:true,warning:warnings.length>0};
@@ -7384,14 +7401,88 @@ function applyCfg(){
 function fmtRp(n){return 'Rp '+(n||0).toLocaleString('id-ID')}
 function priceFor(svc,size){const s=size==='Small'?'S':size==='Medium'?'M':size==='Large'?'L':(size||'M'); return PRICING[svc]?.[s]??0}
 
-// Batch O.16 — invoice document mode helpers
-// Returns 'subscription' | 'advance' | 'none' for whether a dog's Basic Grooming
-// is already paid for via subs or prepaid token. Uses live state.
-function getDogCoverage(dogId){
+// Subscription lifecycle helpers. New appointments carry an exact subscription ID;
+// legacy rows are assigned once by source invoice or by their lifecycle date window.
+function subscriptionGroupKey(sub){
+ return sub?.source_invoice?`${sub.dog_id||''}::${sub.source_invoice}`:`id::${sub?.id||''}`;
+}
+function subscriptionGroupRows(sub){
+ if(!sub)return [];
+ const key=subscriptionGroupKey(sub);
+ return subscriptions.filter(s=>subscriptionGroupKey(s)===key);
+}
+function canonicalSubscription(rows){
+ return [...(rows||[])].sort((a,b)=>
+  (Number(b.sessions_used||0)-Number(a.sessions_used||0))||
+  (Number(b.status==='active')-Number(a.status==='active'))||
+  String(b.created_at||b.started_at||'').localeCompare(String(a.created_at||a.started_at||''))
+ )[0]||null;
+}
+function subscriptionDateContains(sub,date){
+ const start=(sub.started_at||sub.created_at||'').slice(0,10);
+ return (!start||date>=start)&&(!sub.expires_at||date<=sub.expires_at);
+}
+function findSubscriptionForAppointment(appt){
+ if(!appt||appt.session_source!=='subscription')return null;
+ const meta=apptSubscriptionMeta(appt);
+ if(meta.id){
+  const exact=subscriptions.find(s=>s.id===meta.id);
+  if(exact)return canonicalSubscription(subscriptionGroupRows(exact));
+ }
+ if(meta.source){
+  const bySource=subscriptions.filter(s=>s.dog_id===appt.dog_id&&s.source_invoice===meta.source);
+  if(bySource.length)return canonicalSubscription(bySource);
+ }
+ const candidates=subscriptions.filter(s=>s.dog_id===appt.dog_id&&subscriptionDateContains(s,appt.appt_date));
+ const unique=[...new Map(candidates.map(s=>[subscriptionGroupKey(s),canonicalSubscription(subscriptionGroupRows(s))])).values()];
+ return unique.sort((a,b)=>
+  String(b.started_at||b.created_at||'').localeCompare(String(a.started_at||a.created_at||''))||
+  Number(b.status==='active')-Number(a.status==='active')
+ )[0]||null;
+}
+function appointmentHasAfterVisitInvoice(appt){
+ return invoices.some(inv=>{
+  if(!isAfterVisitInvoice(inv))return false;
+  return (inv.dogs||[]).some(d=>d.appointment_id===appt.id||(!d.appointment_id&&d.dog_id===appt.dog_id&&(inv.invoice_date||'')===appt.appt_date));
+ });
+}
+function subscriptionAppointments(sub){
+ const groupKey=subscriptionGroupKey(sub);
+ return appts.filter(a=>a.session_source==='subscription'&&a.status!=='cancelled'&&subscriptionGroupKey(findSubscriptionForAppointment(a))===groupKey);
+}
+function subscriptionUsageState(sub){
+ const total=Math.max(0,Number(sub?.sessions_total)||0);
+ const rows=subscriptionGroupRows(sub);
+ const stored=Math.min(total,Math.max(0,...rows.map(s=>Number(s.sessions_used)||0)));
+ const linked=subscriptionAppointments(sub);
+ const consumed=linked.filter(a=>a.subs_deducted||appointmentHasAfterVisitInvoice(a));
+ const computed=Math.min(total,new Set(consumed.map(a=>a.id)).size);
+ const used=Math.max(stored,computed);
+ const today=iso(new Date());
+ const scheduled=linked.filter(a=>!consumed.includes(a)&&a.appt_date>=today).length;
+ const unresolved=linked.filter(a=>!consumed.includes(a)&&a.appt_date<today).length;
+ // A past appointment awaiting its after-visit invoice is not completed, but it
+ // still occupies a purchased slot. Never expose that slot as reusable.
+ const allocated=Math.min(total,used+scheduled+unresolved);
+ const overflow=Math.max(0,used+scheduled+unresolved-total);
+ const available=Math.max(0,total-allocated);
+ return {total,stored,computed,used,scheduled,unresolved,allocated,overflow,available,linked};
+}
+function activeSubscriptionForDog(dogId,date){
+ const targetDate=date||document.getElementById('inv-date')?.value||iso(new Date());
+ const booked=appts.filter(a=>a.dog_id===dogId&&a.appt_date===targetDate&&a.session_source==='subscription'&&a.status!=='cancelled')
+  .map(findSubscriptionForAppointment).find(Boolean);
+ if(booked)return booked;
+ const active=subscriptions.filter(s=>s.dog_id===dogId&&s.status==='active'&&subscriptionDateContains(s,targetDate));
+ const unique=[...new Map(active.map(s=>[subscriptionGroupKey(s),canonicalSubscription(subscriptionGroupRows(s))])).values()]
+  .sort((a,b)=>String(b.started_at||b.created_at||'').localeCompare(String(a.started_at||a.created_at||'')));
+ return unique.find(s=>subscriptionUsageState(s).available>0)||null;
+}
+
+// Returns 'subscription' | 'advance' | 'none' for whether Basic Grooming is covered.
+function getDogCoverage(dogId,apptDate){
  if(!dogId) return 'none';
- // Subscription: any active subs for this dog with sessions remaining
- const activeSub=subscriptions.find(s=>s.dog_id===dogId&&s.status==='active'&&(s.sessions_used||0)<(s.sessions_total||0));
- if(activeSub) return 'subscription';
+ if(activeSubscriptionForDog(dogId,apptDate)) return 'subscription';
  // Token: any active token belonging to this dog's customer with sessions remaining
  // Tokens are scoped per customer (not per dog) so any matching dog_size token applies
  const d=dogs.find(x=>x.id===dogId);
@@ -7441,20 +7532,16 @@ function onDocModeChange(){
 // Returns {current, total, subsType} or null
 function getSubscriptionSessionInfo(dogId,apptDate){
  if(!dogId) return null;
- // Session E — Bug fix (Chloe scenario): pick LATEST valid subs (not first), skip exhausted/expired.
- // Old bug: .find() returned first active subs even if exhausted, and counter used appt-count so
- // it kept incrementing past sessions_total (e.g. showed "Sesi 3/2").
  const checkDate=apptDate||iso(new Date());
- const valid=subscriptions
-  .filter(s=>s.dog_id===dogId
-   && s.status==='active'
-   && (s.sessions_used||0) < (s.sessions_total||0)
-   && (!s.expires_at || s.expires_at >= checkDate))
-  .sort((a,b)=>(b.started_at||'').localeCompare(a.started_at||''));
- if(!valid.length) return null;
- const sub=valid[0];
+ const matchingAppt=appts.filter(a=>a.dog_id===dogId&&a.appt_date===checkDate&&a.session_source==='subscription'&&a.status!=='cancelled')
+  .sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''))[0];
+ const sub=matchingAppt?findSubscriptionForAppointment(matchingAppt):activeSubscriptionForDog(dogId,checkDate);
+ if(!sub)return null;
+ const lifecycle=subscriptionAppointments(sub).sort((a,b)=>(a.appt_date+' '+(a.appt_time||'')).localeCompare(b.appt_date+' '+(b.appt_time||'')));
+ const pos=matchingAppt?lifecycle.findIndex(a=>a.id===matchingAppt.id):-1;
+ const state=subscriptionUsageState(sub);
  return {
-  current:(sub.sessions_used||0)+1,
+  current:Math.min(state.total,pos>=0?pos+1:state.used+1),
   total:sub.sessions_total||0,
   subsType:sub.type||'Subscription',
   subsId:sub.id,
@@ -7922,11 +8009,12 @@ function renderInvDogServices(){
   </div>`;
  } else {
   // Session E — if there's a subs record for this dog but it's exhausted/expired, warn admin
-  const staleSubs=subscriptions.find(s=>s.dog_id===did && s.status==='active' && ((s.sessions_used||0)>=(s.sessions_total||0) || (s.expires_at&&s.expires_at<iso(new Date()))));
+  const staleSubs=subscriptions.find(s=>s.dog_id===did && s.status==='active' && (subscriptionUsageState(s).available<=0 || (s.expires_at&&s.expires_at<iso(new Date()))));
   if(staleSubs){
-   const reason=(staleSubs.sessions_used||0)>=(staleSubs.sessions_total||0)?'sudah habis':'sudah expired';
+   const staleState=subscriptionUsageState(staleSubs);
+   const reason=staleState.available<=0?'sudah habis/terjadwal penuh':'sudah expired';
    coverageBanner=`<div style="background:#fee2e2;border-left:3px solid #dc2626;padding:8px 10px;border-radius:5px;margin-bottom:.6rem;font-size:12px;color:#991b1b">
-    <strong>\u26A0 Subs ${esc((staleSubs.type||'').toUpperCase())} ${reason}</strong> \u00B7 ${staleSubs.sessions_used||0}/${staleSubs.sessions_total||0} sesi (started ${fmtD(staleSubs.started_at)})
+    <strong>\u26A0 Subs ${esc((staleSubs.type||'').toUpperCase())} ${reason}</strong> \u00B7 ${staleState.allocated}/${staleState.total} package slots used (${staleState.used} completed, ${staleState.scheduled} upcoming${staleState.unresolved?', '+staleState.unresolved+' review':''}) (started ${fmtD(staleSubs.started_at)})
     <div style="font-size:11px;margin-top:3px">Sesi ini akan ditagih sebagai grooming normal (bukan subs). Kalau customer sudah bayar renewal, buat invoice paket baru dulu \u2014 subs baru otomatis aktif saat invoice ditandai <strong>Paid</strong>.</div>
    </div>`;
   }
@@ -8492,6 +8580,8 @@ async function createSubsScheduleAppointments(){
  const conflicts=[];
  const alreadyScheduled=[]; // Bug 1 fix: sessions that already exist at the exact same slot
  const DAY_VALS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+ const scheduleRec=buildInvoiceRecord();
+ const scheduleSource=scheduleRec?.invoice_number||null;
 
  for(const did of invSelectedDogs){
   const dog=dogs.find(d=>d.id===did); if(!dog) continue;
@@ -8548,7 +8638,10 @@ async function createSubsScheduleAppointments(){
      d.setDate(d.getDate()+freqDays); continue;
     }
    }
-   toCreate.push({dog_id:did,groomer_id:gid,appt_date:dateISO,appt_time:time+':00',service_base:svcBase,duration_mins:dur,session_source:'subscription',status:'pending',token_used:false,appt_note:`Subs ${subsType} sesi ${i+1}/${sessions}`,...editStamp()});
+   const existingSub=subscriptions.find(s=>s.dog_id===did&&s.source_invoice===scheduleSource);
+   toCreate.push({dog_id:did,groomer_id:gid,appt_date:dateISO,appt_time:time+':00',service_base:svcBase,duration_mins:dur,session_source:'subscription',status:'pending',token_used:false,subs_deducted:false,
+    admin_note:withApptSubscription(null,existingSub?{id:existingSub.id,source:scheduleSource}:{source:scheduleSource}),
+    appt_note:`Subs ${subsType} sesi ${i+1}/${sessions}`,...editStamp()});
    d.setDate(d.getDate()+freqDays);
   }
  }
@@ -9159,49 +9252,68 @@ async function createTokensFromInvoice(rec){
  else console.log(`Created ${rows.length} token row(s)`);
 }
 
-// Item 11: when an invoice with subs_type weekly/biweekly is marked PAID,
-// create subscriptions rows — one per dog, with 1-month expiry from paid date.
+async function bindAppointmentsToSubscription(sub){
+ if(!sub?.id||!sub.source_invoice)return {bound:0,failed:0};
+ let bound=0,failed=0;
+ const rows=appts.filter(a=>a.dog_id===sub.dog_id&&a.session_source==='subscription'&&apptSubscriptionMeta(a).source===sub.source_invoice);
+ for(const a of rows){
+  const note=withApptSubscription(a.admin_note,{id:sub.id,source:sub.source_invoice});
+  if(note===a.admin_note)continue;
+  const {data,error}=await db.from('appointments').update({admin_note:note,...editStamp()}).eq('id',a.id).select('id');
+  if(error||!data?.length){failed++;continue;}
+  a.admin_note=note;bound++;
+ }
+ return {bound,failed};
+}
+
+// Package validation is idempotent by invoice + dog. Re-validating cannot
+// create a fresh zero-used subscription or discard the previous usage count.
 async function createSubscriptionsFromInvoice(rec){
  if(!rec.is_advance||!rec.dogs||invoiceKind(rec)!=='package_sale') return;
  const subsDogs=rec.dogs.filter(d=>d.advance&&['weekly','biweekly','monthly'].includes(d.advance.subs_type)&&d.advance.sessions>0);
  if(!subsDogs.length) return;
- const todayISO=iso(new Date());
- const startISO=rec.invoice_date||todayISO;
- // Session E — expires at END OF MONTH of start date (per owner spec)
- // Old behavior: 1 month from start. Admin can manually extend via Membership edit.
+ const startISO=rec.invoice_date||iso(new Date());
  const startDate=new Date(startISO+'T00:00:00');
- const eom=new Date(startDate.getFullYear(), startDate.getMonth()+1, 0); // last day of start month
- const expISO=iso(eom);
- // Supersede old active subs for each dog (mark as 'renewed' so it hides from active view)
- const dogIdsInSale=subsDogs.map(d=>d.dog_id);
- const oldToSupersede=subscriptions
-  .filter(s=>dogIdsInSale.includes(s.dog_id) && s.status==='active')
-  .map(s=>s.id);
- if(oldToSupersede.length){
-  const {error:eSup}=await db.from('subscriptions').update({status:'renewed'}).in('id',oldToSupersede);
-  if(eSup) console.error('Old subs supersede error:',eSup.message);
-  else console.log(`Superseded ${oldToSupersede.length} old subs (marked as renewed)`);
+ const expISO=iso(new Date(startDate.getFullYear(),startDate.getMonth()+1,0));
+ const warnings=[];
+ for(const d of subsDogs){
+  const sameSource=subscriptions.filter(s=>s.dog_id===d.dog_id&&s.source_invoice===rec.invoice_number);
+  if(sameSource.length){
+   const canonical=canonicalSubscription(sameSource);
+   const patch={status:'active'};
+   if(!(canonical.sessions_used||0))Object.assign(patch,{type:d.advance.subs_type,sessions_total:d.advance.sessions,started_at:startISO,expires_at:expISO});
+   const {data,error}=await db.from('subscriptions').update(patch).eq('id',canonical.id).select('id');
+   if(error||!data?.length){warnings.push(`${d.name}: subscription existing gagal diaktifkan`);continue;}
+   Object.assign(canonical,patch);
+   const duplicates=sameSource.filter(s=>s.id!==canonical.id);
+   if(duplicates.length){
+    const {error:dupErr}=await db.from('subscriptions').update({status:'renewed'}).in('id',duplicates.map(s=>s.id));
+    if(dupErr)warnings.push(`${d.name}: ${duplicates.length} duplicate belum ditutup`);
+    else duplicates.forEach(s=>s.status='renewed');
+   }
+   const bind=await bindAppointmentsToSubscription(canonical);
+   if(bind.failed)warnings.push(`${d.name}: ${bind.failed} appointment gagal dilink`);
+   continue;
+  }
+  const priorCount=new Set(subscriptions.filter(s=>s.dog_id===d.dog_id).map(subscriptionGroupKey)).size;
+  const row={customer_id:rec.customer_id,dog_id:d.dog_id,type:d.advance.subs_type,
+   sessions_total:d.advance.sessions,sessions_used:0,status:'active',started_at:startISO,expires_at:expISO,
+   source_invoice:rec.invoice_number,renewal_number:priorCount+1,
+   notes:`${d.name} \u2013 ${d.advance.sessions} sesi ${d.advance.subs_type} (renewal #${priorCount+1})`};
+  const {data:created,error}=await db.from('subscriptions').insert(row).select().single();
+  if(error||!created){warnings.push(`${d.name}: subscription gagal dibuat`);continue;}
+  subscriptions.push(created);
+  // Supersede only after the replacement was safely inserted.
+  const oldActive=subscriptions.filter(s=>s.id!==created.id&&s.dog_id===d.dog_id&&s.status==='active');
+  if(oldActive.length){
+   const {error:eSup}=await db.from('subscriptions').update({status:'renewed'}).in('id',oldActive.map(s=>s.id));
+   if(eSup)warnings.push(`${d.name}: subscription lama belum ditutup`);
+   else oldActive.forEach(s=>s.status='renewed');
+  }
+  const bind=await bindAppointmentsToSubscription(created);
+  if(bind.failed)warnings.push(`${d.name}: ${bind.failed} appointment gagal dilink`);
  }
- // Compute renewal_number for each new subs = existing subs for that dog + 1
- const rows=subsDogs.map(d=>{
-  const priorCount=subscriptions.filter(s=>s.dog_id===d.dog_id).length;
-  return {
-   customer_id:rec.customer_id,
-   dog_id:d.dog_id,
-   type:d.advance.subs_type,
-   sessions_total:d.advance.sessions,
-   sessions_used:0,
-   status:'active',
-   started_at:startISO,
-   expires_at:expISO,
-   source_invoice:rec.invoice_number,
-   renewal_number:priorCount+1,
-   notes:`${d.name} \u2013 ${d.advance.sessions} sesi ${d.advance.subs_type} (renewal #${priorCount+1})`
-  };
- });
- const {error}=await db.from('subscriptions').insert(rows);
- if(error) console.error('Subscription create error:',error.message);
- else console.log(`Created ${rows.length} subscription row(s) with renewal_number set`);
+ if(warnings.length)alert('Subscription dibuat/diperbarui, tetapi perlu dicek:\n'+warnings.join('\n'));
 }
 
 // Item 11 reversal: if paid→unpaid, delete subs only if untouched (sessions_used=0).
@@ -9312,6 +9424,9 @@ async function saveInvoiceAndAppts(){
       appt_time:`${String(hour).padStart(2,'0')}:00:00`,
       service_base:svcForDog,
       appt_note:`Inv ${rec.invoice_number} sesi ${s+1}/${totalSessions}`,
+      session_source:(dogAdv?.subs_type&&dogAdv.subs_type!=='prepaid')?'subscription':'advance',
+      subs_deducted:false,token_used:false,
+      admin_note:(dogAdv?.subs_type&&dogAdv.subs_type!=='prepaid')?withApptSubscription(null,{source:rec.invoice_number}):null,
       duration_mins:dogDur(svcForDog,(dogs.find(x=>x.id===did)||{}).size)
      });
     });
@@ -10261,7 +10376,7 @@ async function setInvoiceValidated(id,checked){
 function computeRenewalUrgency(sub){
  if(!sub || sub._kind!=='subscription' || sub.status!=='active') return null;
  const today=iso(new Date());
- const remaining=(sub.sessions_total||0)-(sub.sessions_used||0);
+ const remaining=subscriptionUsageState(sub).available;
  const daysToExpiry=sub.expires_at
   ? Math.floor((new Date(sub.expires_at+'T23:59:59')-new Date(today+'T00:00:00'))/86400000)
   : null;
@@ -10396,12 +10511,10 @@ function renderMembership(){
   }
   let sessText;
   if(r._kind==='subscription'){
-   const st=subsSessionState(r);
-   sessText=`<div style="display:flex;gap:5px;flex-wrap:wrap;font-size:11px;line-height:1.3">
-    <span title="Total sesi dibeli" style="background:var(--subtle);padding:1px 6px;border-radius:4px"><strong>${st.total}</strong> total</span>
-    <span title="Sudah dipakai (sudah di-invoice)" style="background:#dcfce7;color:#15803d;padding:1px 6px;border-radius:4px"><strong>${st.used}</strong> used</span>
-    <span title="Sudah di-booking di kalender, hari belum lewat / belum di-invoice" style="background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:4px"><strong>${st.scheduled}</strong> sched</span>
-    <span title="Sisa yang belum dijadwalkan" style="background:${st.available>0?'#fef9c3':'#fee2e2'};color:${st.available>0?'#854d0e':'#991b1b'};padding:1px 6px;border-radius:4px"><strong>${st.available}</strong> avail</span>
+   const st=subscriptionUsageState(r);
+   sessText=`<div style="font-size:12px;line-height:1.45"><strong>${st.allocated} / ${st.total} package slots used</strong> <span style="color:${st.available>0?'#854d0e':'#991b1b'}">\u00B7 ${st.available} available</span>
+    <div style="font-size:11px;color:var(--muted)">${st.used} completed \u00B7 ${st.scheduled} upcoming${st.unresolved?` \u00B7 <span style="color:#991b1b;font-weight:600">${st.unresolved} review</span>`:''}${st.overflow?` \u00B7 <span style="color:#991b1b;font-weight:600">${st.overflow} over</span>`:''}</div>
+    ${st.stored!==st.computed?`<span title="DB ${st.stored}; bukti after-visit ${st.computed}" style="background:#ffedd5;color:#9a3412;padding:1px 6px;border-radius:4px">DB mismatch</span>`:''}
    </div>`;
   } else {
    const left=Math.max(0,(r.sessions_total||0)-(r.sessions_used||0));
@@ -10436,33 +10549,20 @@ function renderMembership(){
 // appointments that have a matching SAVED INVOICE (dog present on that invoice date).
 // This is the value sessions_used SHOULD be under the invoice-triggered model.
 function recomputeSubsUsed(sub){
- const today=iso(new Date());
- const dogAppts=appts.filter(a=>
-  a.dog_id===sub.dog_id
-  && a.session_source==='subscription'
-  && a.status!=='cancelled'
-  && a.appt_date<=today
- );
- let used=0;
- for(const a of dogAppts){
-  const hasInvoice=invoices.some(inv=>
-   (inv.invoice_date||'')===a.appt_date
-   && (inv.dogs||[]).some(d=>d.dog_id===sub.dog_id)
-  );
-  if(hasInvoice) used++;
- }
- // Can't exceed what was purchased
- return Math.min(used,sub.sessions_total||0);
+ const st=subscriptionUsageState(sub);
+ // Reconciliation never silently lowers a manually/historically higher count.
+ return Math.min(st.total,Math.max(st.stored,st.computed));
 }
 
 function openSubsReconcile(){
- const activeSubs=subscriptions.filter(s=>s.status==='active');
+ const activeSubs=[...new Map(subscriptions.filter(s=>s.status==='active').map(s=>[subscriptionGroupKey(s),s])).values()];
  const rows=activeSubs.map(s=>{
   const c=custs.find(x=>x.id===s.customer_id);
   const d=dogs.find(x=>x.id===s.dog_id);
   const current=s.sessions_used||0;
   const recomputed=recomputeSubsUsed(s);
-  return {sub:s,owner:c?c.owner:'?',dogName:d?d.name:'?',current,recomputed,diff:recomputed-current};
+  const state=subscriptionUsageState(s);
+  return {sub:s,owner:c?c.owner:'?',dogName:d?d.name:'?',current,recomputed,diff:recomputed-current,state,duplicates:subscriptionGroupRows(s).length-1};
  });
  const mismatches=rows.filter(r=>r.diff!==0);
  const wrap=document.getElementById('subs-reconcile-list');
@@ -10477,7 +10577,7 @@ function openSubsReconcile(){
   return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border);${same?'opacity:.6':''}">
    <div style="flex:1;min-width:0">
     <div style="font-size:13px;font-weight:600">${esc(r.owner)} <span style="font-weight:400;color:var(--muted)">· ${esc(r.dogName)} · ${esc(tierLabel(r.sub.type))}</span></div>
-    <div style="font-size:11px;color:var(--muted)">Current used: <strong>${r.current}</strong> → Recomputed: <strong>${r.recomputed}</strong> / ${r.sub.sessions_total||0}</div>
+    <div style="font-size:11px;color:var(--muted)">DB active row: <strong>${r.current}</strong> → Verified used: <strong>${r.recomputed}</strong> / ${r.state.total} · ${r.state.scheduled} scheduled · ${r.state.unresolved} review${r.duplicates?` · <strong>${r.duplicates} duplicate row</strong>`:''}</div>
    </div>
    ${badge}
    ${same?'':`<button class="btn ghost" style="font-size:12px;padding:4px 10px" onclick="applySubsReconcile('${r.sub.id}',${r.recomputed})">Apply</button>`}
@@ -10492,9 +10592,23 @@ async function applySubsReconcile(subId,newUsed){
  if(!s) return;
  const c=custs.find(x=>x.id===s.customer_id);
  if(!confirm(`Set "sessions used" untuk ${c?c.owner:'subs ini'} dari ${s.sessions_used||0} → ${newUsed}?\n\nIni mengubah data pemakaian subscription.`)) return;
- const {error}=await db.from('subscriptions').update({sessions_used:newUsed}).eq('id',subId);
- if(error){alert('Error: '+error.message);return}
+ let update=db.from('subscriptions').update({sessions_used:newUsed}).eq('id',subId);
+ update=s.sessions_used==null?update.is('sessions_used',null):update.eq('sessions_used',s.sessions_used);
+ const {data,error}=await update.select('id');
+ if(error||!data?.length){alert('Counter berubah sejak preview. Refresh lalu reconcile ulang.');return}
  s.sessions_used=newUsed;
+ // Link exact lifecycle and repair missing deducted flags only where an after-visit invoice exists.
+ const group=subscriptionGroupRows(s);
+ const duplicates=group.filter(x=>x.id!==s.id);
+ if(duplicates.length){
+  const {error:dupErr}=await db.from('subscriptions').update({status:'renewed'}).in('id',duplicates.map(x=>x.id));
+  if(!dupErr)duplicates.forEach(x=>x.status='renewed');
+ }
+ for(const a of subscriptionAppointments(s).filter(a=>appointmentHasAfterVisitInvoice(a))){
+  const note=withApptSubscription(a.admin_note,{id:s.id,source:s.source_invoice||apptSubscriptionMeta(a).source});
+  const {data:marked}=await db.from('appointments').update({subs_deducted:true,admin_note:note,...editStamp()}).eq('id',a.id).select('id');
+  if(marked?.length){a.subs_deducted=true;a.admin_note=note;}
+ }
  await reloadTables('subscriptions');
  openSubsReconcile();
  renderMembership();
@@ -10748,6 +10862,7 @@ function buildSubscriptionsSheet(){
  return subscriptions.map(s=>{
   const dog=dogs.find(d=>d.id===s.dog_id);
   const cust=dog?custs.find(c=>c.id===dog.customer_id):null;
+  const st=subscriptionUsageState(s);
   return {
    'Type': s.type||'',
    'Dog Name': dog?.name||'',
@@ -10755,9 +10870,13 @@ function buildSubscriptionsSheet(){
    'Owner Name': cust?.owner||'',
    'Customer Code': cust?.customer_code||'',
    'Status': s.status||'',
-   'Sessions Total': s.sessions_total||0,
-   'Sessions Used': s.sessions_used||0,
-   'Sessions Left': Math.max(0,(s.sessions_total||0)-(s.sessions_used||0)),
+   'Sessions Total': st.total,
+   'Sessions Allocated': st.allocated,
+   'Sessions Used (Effective)': st.used,
+   'Sessions Used (DB)': st.stored,
+   'Sessions Scheduled': st.scheduled,
+   'Sessions Review': st.unresolved,
+   'Sessions Available': st.available,
    'Expires At': s.expires_at||'',
    'Created At': s.created_at?new Date(s.created_at).toLocaleDateString('id-ID'):'',
   };
@@ -11523,10 +11642,12 @@ function getCustSessionState(custId){
  // Subscriptions are per-dog. If specific dogs selected, filter to those dogs.
  let subs=subscriptions.filter(s=>s.customer_id===custId);
  if(selectedDogIds.length) subs=subs.filter(s=>selectedDogIds.includes(s.dog_id));
- const activeSubs=subs.filter(s=>s.status==='active');
- const subsTotal=activeSubs.reduce((a,s)=>a+(s.sessions_total||0),0);
- const subsUsed=activeSubs.reduce((a,s)=>a+(s.sessions_used||0),0);
- const subsLeftDB=Math.max(0,subsTotal-subsUsed);
+ const activeSubs=[...new Map(subs.filter(s=>s.status==='active').map(s=>[subscriptionGroupKey(s),canonicalSubscription(subscriptionGroupRows(s))])).values()];
+ const subStates=activeSubs.map(subscriptionUsageState);
+ const subsTotal=subStates.reduce((a,s)=>a+s.total,0);
+ const subsUsed=subStates.reduce((a,s)=>a+s.used,0);
+ const subsAllocated=subStates.reduce((a,s)=>a+s.allocated,0);
+ const subsReview=subStates.reduce((a,s)=>a+s.unresolved,0);
  const custTokens=tokens.filter(t=>t.customer_id===custId);
  const tokTotal=custTokens.reduce((a,t)=>a+(t.sessions_total||0),0);
  const tokUsed=custTokens.reduce((a,t)=>a+(t.sessions_used||0),0);
@@ -11540,10 +11661,10 @@ function getCustSessionState(custId){
   a.status!=='done'&&
   a.id!==wiz.editId
  );
- const bookedSubs=futureBookings.filter(a=>a.session_source==='subscription').length;
+ const bookedSubs=subStates.reduce((a,s)=>a+s.scheduled,0);
  const bookedAdv=futureBookings.filter(a=>a.session_source==='advance').length;
  return {
-  subsTotal,subsUsed,subsLeftDB,subsBooked:bookedSubs,subsAvail:Math.max(0,subsLeftDB-bookedSubs),
+  subsTotal,subsUsed,subsAllocated,subsReview,subsBooked:bookedSubs,subsAvail:subStates.reduce((a,s)=>a+s.available,0),
   tokTotal,tokUsed,tokLeftDB,tokBooked:bookedAdv,tokAvail:Math.max(0,tokLeftDB-bookedAdv),
   hasAny:subsTotal>0||tokTotal>0
  };
@@ -11556,7 +11677,7 @@ function renderWizSessionSummary(){
  if(!st||!st.hasAny){wrap.style.display='none';return}
  const parts=[];
  if(st.subsTotal>0){
-  parts.push(`<div><strong style="color:#92400e">Subscription:</strong> ${st.subsLeftDB} of ${st.subsTotal} left · ${st.subsBooked} booked ahead · <strong>${st.subsAvail} free to use</strong></div>`);
+  parts.push(`<div><strong style="color:#92400e">Subscription:</strong> ${st.subsAllocated}/${st.subsTotal} package slots used · ${st.subsUsed} completed · ${st.subsBooked} upcoming${st.subsReview?` · <span style="color:#991b1b">${st.subsReview} review</span>`:''} · <strong>${st.subsAvail} available</strong></div>`);
  }
  if(st.tokTotal>0){
   parts.push(`<div><strong style="color:#6b21a8">Advance (prepaid):</strong> ${st.tokLeftDB} of ${st.tokTotal} left · ${st.tokBooked} booked ahead · <strong>${st.tokAvail} free to use</strong></div>`);
@@ -11694,19 +11815,8 @@ async function autoLogPastAppointments(){
 // ===== Subscription session-state model (Total / Used / Scheduled / Available) =====
 // Used      = sessions_used in DB (deducted when an invoice was saved for a past/today appt)
 // Scheduled = future/undeducted subscription appointments still holding a slot
-// Available = total - used - scheduled
-function subsSessionState(sub){
- const total=sub.sessions_total||0;
- const used=sub.sessions_used||0;
- const scheduled=appts.filter(a=>
-  a.dog_id===sub.dog_id
-  && a.session_source==='subscription'
-  && !a.subs_deducted
-  && a.status!=='cancelled'
- ).length;
- const available=Math.max(0,total-used-scheduled);
- return {total,used,scheduled,available};
-}
+// Available = total - completed - upcoming - review (every allocated slot)
+function subsSessionState(sub){return subscriptionUsageState(sub)}
 
 // Deduct one credit per past/today subscription appointment covered by this invoice.
 // Idempotent: only appts with subs_deducted=false are touched, and the flag is set
@@ -11716,35 +11826,42 @@ async function deductSubsOnInvoice(rec){
  const invDate=rec.invoice_date||iso(new Date());
  const today=iso(new Date());
  if(invDate>today) return; // future-dated invoice: nothing to consume yet
- const dogIds=rec.dogs.map(d=>d.dog_id).filter(Boolean);
- // Appointments for these dogs, on the invoice date, that are subscription sessions not yet deducted
- const toDeduct=appts.filter(a=>
-  dogIds.includes(a.dog_id)
-  && a.appt_date===invDate
-  && a.appt_date<=today
-  && a.session_source==='subscription'
-  && !a.subs_deducted
-  && a.status!=='cancelled'
- );
+ const toDeduct=[];
+ for(const d of rec.dogs){
+  const exact=d.appointment_id?appts.find(a=>a.id===d.appointment_id):linkedAppointmentForInvoiceDog(rec,d);
+  const matches=exact?[exact]:appts.filter(a=>a.dog_id===d.dog_id&&a.appt_date===invDate&&a.session_source==='subscription');
+  matches.filter(a=>a.appt_date<=today&&a.session_source==='subscription'&&!a.subs_deducted&&a.status!=='cancelled')
+   .forEach(a=>{if(!toDeduct.some(x=>x.id===a.id))toDeduct.push(a)});
+ }
+ const warnings=[];
  for(const a of toDeduct){
-  const sub=subscriptions.find(s=>
-   s.dog_id===a.dog_id
-   && s.status==='active'
-   && (s.sessions_used||0)<(s.sessions_total||0)
-  );
+  const sub=findSubscriptionForAppointment(a)||activeSubscriptionForDog(a.dog_id,a.appt_date);
   if(!sub){
-   console.warn(`No active subscription with sessions left for dog ${a.dog_id} on ${a.appt_date}. Marking appt deducted to skip.`);
-   await db.from('appointments').update({subs_deducted:true}).eq('id',a.id);
-   a.subs_deducted=true;
+   warnings.push(`${dogs.find(d=>d.id===a.dog_id)?.name||'?'} ${a.appt_date}: subscription lifecycle tidak ditemukan; sesi belum dikurangi`);
    continue;
   }
-  const newUsed=Math.min(sub.sessions_total,(sub.sessions_used||0)+1);
-  await db.from('subscriptions').update({sessions_used:newUsed}).eq('id',sub.id);
-  await db.from('appointments').update({subs_deducted:true}).eq('id',a.id);
-  sub.sessions_used=newUsed;
+  const canonical=canonicalSubscription(subscriptionGroupRows(sub));
+  const state=subscriptionUsageState(canonical);
+  // A saved historical invoice may already be visible in the local invoice cache.
+  // Persist that verified evidence instead of merely repairing the appointment flag.
+  const alreadyInComputed=appointmentHasAfterVisitInvoice(a);
+  const targetUsed=Math.min(state.total,Math.max(state.stored,state.computed)+(alreadyInComputed?0:1));
+  if(targetUsed<=state.stored&&!alreadyInComputed){warnings.push(`${dogs.find(d=>d.id===a.dog_id)?.name||'?'}: subscription sudah ${state.stored}/${state.total}; appointment tidak ditandai deducted`);continue;}
+  if(targetUsed>state.stored){
+   const oldUsed=Number(canonical.sessions_used)||0,newUsed=targetUsed;
+   let update=db.from('subscriptions').update({sessions_used:newUsed}).eq('id',canonical.id);
+   update=canonical.sessions_used==null?update.is('sessions_used',null):update.eq('sessions_used',canonical.sessions_used);
+   const {data:changed,error:subErr}=await update.select('id');
+   if(subErr||!changed?.length){warnings.push(`${dogs.find(d=>d.id===a.dog_id)?.name||'?'}: counter berubah bersamaan; refresh dan reconcile`);continue;}
+   canonical.sessions_used=newUsed;
+  }
+  const note=withApptSubscription(a.admin_note,{id:canonical.id,source:canonical.source_invoice||apptSubscriptionMeta(a).source});
+  const {data:marked,error:apptErr}=await db.from('appointments').update({subs_deducted:true,admin_note:note,...editStamp()}).eq('id',a.id).select('id');
+  if(apptErr||!marked?.length){warnings.push(`${dogs.find(d=>d.id===a.dog_id)?.name||'?'}: counter bertambah tetapi appointment flag gagal; reconcile sebelum save ulang`);continue;}
   a.subs_deducted=true;
-  console.log(`Deducted 1 session from sub ${sub.id} (${sub.type}) via invoice ${rec.invoice_number||''}, now ${newUsed}/${sub.sessions_total}`);
+  a.admin_note=note;
  }
+ if(warnings.length)alert('Subscription counter perlu dicek:\n'+warnings.join('\n'));
 }
 
 /* ========== PHOTOS — zones: before / after / issue (Batch L3) ========== */
@@ -13951,8 +14068,8 @@ function c360RenderDogs(c){
  list.forEach(d=>{
   const subs=subscriptions.filter(s=>s.customer_id===c.id&&s.dog_id===d.id&&s.status==='active');
   subs.forEach(s=>{
-   const left=Math.max(0,(s.sessions_total||0)-(s.sessions_used||0));
-   activeBits.push(`<div>\u2022 ${esc(d.name)} (${esc(d.size||'?')}) \u2014 ${esc(tierLabel(s.type))}: ${left}/${s.sessions_total||0} left</div>`);
+   const st=subscriptionUsageState(s);
+   activeBits.push(`<div>\u2022 ${esc(d.name)} (${esc(d.size||'?')}) \u2014 ${esc(tierLabel(s.type))}: ${st.allocated}/${st.total} package slots used \u00B7 ${st.used} completed \u00B7 ${st.scheduled} upcoming${st.unresolved?' \u00B7 '+st.unresolved+' review':''} \u00B7 ${st.available} available</div>`);
   });
  });
  const custTokens=tokens.filter(t=>t.customer_id===c.id);
@@ -14055,10 +14172,10 @@ function c360RenderMembership(c){
  if(custSubs.length){
   html+=`<div class="c360-section-lbl">Subscriptions (${custSubs.length})</div>`+custSubs.map(s=>{
    const d=dogs.find(x=>x.id===s.dog_id);
-   const left=Math.max(0,(s.sessions_total||0)-(s.sessions_used||0));
+   const st=subscriptionUsageState(s);
    return `<div class="c360-card">
     <div class="c360-card-title">${d?esc(d.name):'(dog deleted)'} \u2014 ${esc(tierLabel(s.type))}</div>
-    <div class="c360-card-meta">${left}/${s.sessions_total} left \u00B7 ${esc(s.status||'?')} \u00B7 Expires: ${fmtD(s.expires_at)}</div>
+    <div class="c360-card-meta"><strong>${st.allocated}/${st.total} package slots used</strong> \u00B7 ${st.used} completed \u00B7 ${st.scheduled} upcoming${st.unresolved?' \u00B7 '+st.unresolved+' review':''} \u00B7 ${st.available} available \u00B7 ${esc(s.status||'?')} \u00B7 Expires: ${fmtD(s.expires_at)}</div>
     ${s.source_invoice?`<div class="c360-card-meta">From invoice: ${esc(s.source_invoice)}</div>`:''}
    </div>`;
   }).join('');
