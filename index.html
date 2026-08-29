@@ -7422,17 +7422,30 @@ function subscriptionDateContains(sub,date){
  const start=(sub.started_at||sub.created_at||'').slice(0,10);
  return (!start||date>=start)&&(!sub.expires_at||date<=sub.expires_at);
 }
+// Older package-generated appointments stored their source only in appt_note,
+// e.g. "Inv CUST-067-3 sesi 1/2", and were accidentally left as normal rows.
+function legacySubscriptionSource(appt){
+ if(!appt||typeof appt==='string')return null;
+ const match=/(?:^|\n)Inv\s+([^\s]+)\s+sesi\s+\d+\s*\/\s*\d+(?=\s|$)/i.exec(appt.appt_note||'');
+ if(!match)return null;
+ const source=match[1].trim();
+ return subscriptions.some(s=>s.dog_id===appt.dog_id&&s.source_invoice===source)?source:null;
+}
 function findSubscriptionForAppointment(appt){
- if(!appt||appt.session_source!=='subscription')return null;
+ if(!appt)return null;
  const meta=apptSubscriptionMeta(appt);
  if(meta.id){
   const exact=subscriptions.find(s=>s.id===meta.id);
   if(exact)return canonicalSubscription(subscriptionGroupRows(exact));
  }
- if(meta.source){
-  const bySource=subscriptions.filter(s=>s.dog_id===appt.dog_id&&s.source_invoice===meta.source);
+ const source=meta.source||legacySubscriptionSource(appt);
+ if(source){
+  const bySource=subscriptions.filter(s=>s.dog_id===appt.dog_id&&s.source_invoice===source);
   if(bySource.length)return canonicalSubscription(bySource);
  }
+ // Date-only fallback is reserved for rows explicitly marked as subscription;
+ // ordinary appointments are never guessed into a package.
+ if(appt.session_source!=='subscription')return null;
  const candidates=subscriptions.filter(s=>s.dog_id===appt.dog_id&&subscriptionDateContains(s,appt.appt_date));
  const unique=[...new Map(candidates.map(s=>[subscriptionGroupKey(s),canonicalSubscription(subscriptionGroupRows(s))])).values()];
  return unique.sort((a,b)=>
@@ -7448,7 +7461,7 @@ function appointmentHasAfterVisitInvoice(appt){
 }
 function subscriptionAppointments(sub){
  const groupKey=subscriptionGroupKey(sub);
- return appts.filter(a=>a.session_source==='subscription'&&a.status!=='cancelled'&&subscriptionGroupKey(findSubscriptionForAppointment(a))===groupKey);
+ return appts.filter(a=>a.status!=='cancelled'&&subscriptionGroupKey(findSubscriptionForAppointment(a))===groupKey);
 }
 function subscriptionUsageState(sub){
  const total=Math.max(0,Number(sub?.sessions_total)||0);
@@ -7470,7 +7483,7 @@ function subscriptionUsageState(sub){
 }
 function activeSubscriptionForDog(dogId,date){
  const targetDate=date||document.getElementById('inv-date')?.value||iso(new Date());
- const booked=appts.filter(a=>a.dog_id===dogId&&a.appt_date===targetDate&&a.session_source==='subscription'&&a.status!=='cancelled')
+ const booked=appts.filter(a=>a.dog_id===dogId&&a.appt_date===targetDate&&a.status!=='cancelled')
   .map(findSubscriptionForAppointment).find(Boolean);
  if(booked)return booked;
  const active=subscriptions.filter(s=>s.dog_id===dogId&&s.status==='active'&&subscriptionDateContains(s,targetDate));
@@ -7533,7 +7546,7 @@ function onDocModeChange(){
 function getSubscriptionSessionInfo(dogId,apptDate){
  if(!dogId) return null;
  const checkDate=apptDate||iso(new Date());
- const matchingAppt=appts.filter(a=>a.dog_id===dogId&&a.appt_date===checkDate&&a.session_source==='subscription'&&a.status!=='cancelled')
+ const matchingAppt=appts.filter(a=>a.dog_id===dogId&&a.appt_date===checkDate&&a.status!=='cancelled'&&findSubscriptionForAppointment(a))
   .sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''))[0];
  const sub=matchingAppt?findSubscriptionForAppointment(matchingAppt):activeSubscriptionForDog(dogId,checkDate);
  if(!sub)return null;
@@ -9255,13 +9268,13 @@ async function createTokensFromInvoice(rec){
 async function bindAppointmentsToSubscription(sub){
  if(!sub?.id||!sub.source_invoice)return {bound:0,failed:0};
  let bound=0,failed=0;
- const rows=appts.filter(a=>a.dog_id===sub.dog_id&&a.session_source==='subscription'&&apptSubscriptionMeta(a).source===sub.source_invoice);
+ const rows=appts.filter(a=>a.dog_id===sub.dog_id&&(apptSubscriptionMeta(a).source===sub.source_invoice||legacySubscriptionSource(a)===sub.source_invoice));
  for(const a of rows){
   const note=withApptSubscription(a.admin_note,{id:sub.id,source:sub.source_invoice});
-  if(note===a.admin_note)continue;
-  const {data,error}=await db.from('appointments').update({admin_note:note,...editStamp()}).eq('id',a.id).select('id');
+  if(note===a.admin_note&&a.session_source==='subscription')continue;
+  const {data,error}=await db.from('appointments').update({session_source:'subscription',admin_note:note,...editStamp()}).eq('id',a.id).select('id');
   if(error||!data?.length){failed++;continue;}
-  a.admin_note=note;bound++;
+  a.session_source='subscription';a.admin_note=note;bound++;
  }
  return {bound,failed};
 }
@@ -10605,9 +10618,9 @@ async function applySubsReconcile(subId,newUsed){
   if(!dupErr)duplicates.forEach(x=>x.status='renewed');
  }
  for(const a of subscriptionAppointments(s).filter(a=>appointmentHasAfterVisitInvoice(a))){
-  const note=withApptSubscription(a.admin_note,{id:s.id,source:s.source_invoice||apptSubscriptionMeta(a).source});
-  const {data:marked}=await db.from('appointments').update({subs_deducted:true,admin_note:note,...editStamp()}).eq('id',a.id).select('id');
-  if(marked?.length){a.subs_deducted=true;a.admin_note=note;}
+  const note=withApptSubscription(a.admin_note,{id:s.id,source:s.source_invoice||apptSubscriptionMeta(a).source||legacySubscriptionSource(a)});
+  const {data:marked}=await db.from('appointments').update({session_source:'subscription',subs_deducted:true,admin_note:note,...editStamp()}).eq('id',a.id).select('id');
+  if(marked?.length){a.session_source='subscription';a.subs_deducted=true;a.admin_note=note;}
  }
  await reloadTables('subscriptions');
  openSubsReconcile();
@@ -11829,8 +11842,8 @@ async function deductSubsOnInvoice(rec){
  const toDeduct=[];
  for(const d of rec.dogs){
   const exact=d.appointment_id?appts.find(a=>a.id===d.appointment_id):linkedAppointmentForInvoiceDog(rec,d);
-  const matches=exact?[exact]:appts.filter(a=>a.dog_id===d.dog_id&&a.appt_date===invDate&&a.session_source==='subscription');
-  matches.filter(a=>a.appt_date<=today&&a.session_source==='subscription'&&!a.subs_deducted&&a.status!=='cancelled')
+  const matches=exact?[exact]:appts.filter(a=>a.dog_id===d.dog_id&&a.appt_date===invDate&&findSubscriptionForAppointment(a));
+  matches.filter(a=>a.appt_date<=today&&findSubscriptionForAppointment(a)&&!a.subs_deducted&&a.status!=='cancelled')
    .forEach(a=>{if(!toDeduct.some(x=>x.id===a.id))toDeduct.push(a)});
  }
  const warnings=[];
@@ -11845,8 +11858,19 @@ async function deductSubsOnInvoice(rec){
   // A saved historical invoice may already be visible in the local invoice cache.
   // Persist that verified evidence instead of merely repairing the appointment flag.
   const alreadyInComputed=appointmentHasAfterVisitInvoice(a);
-  const targetUsed=Math.min(state.total,Math.max(state.stored,state.computed)+(alreadyInComputed?0:1));
-  if(targetUsed<=state.stored&&!alreadyInComputed){warnings.push(`${dogs.find(d=>d.id===a.dog_id)?.name||'?'}: subscription sudah ${state.stored}/${state.total}; appointment tidak ditandai deducted`);continue;}
+  const verifiedBefore=Math.min(state.total,Math.max(state.stored,state.computed));
+  // Repair a lagging DB count first, but never spend an extra/overflow appointment
+  // merely because that repair happened in the same save.
+  if(!alreadyInComputed&&verifiedBefore>=state.total){
+   if(verifiedBefore>state.stored){
+    let repair=db.from('subscriptions').update({sessions_used:verifiedBefore}).eq('id',canonical.id);
+    repair=canonical.sessions_used==null?repair.is('sessions_used',null):repair.eq('sessions_used',canonical.sessions_used);
+    const {data:repaired}=await repair.select('id');
+    if(repaired?.length)canonical.sessions_used=verifiedBefore;
+   }
+   warnings.push(`${dogs.find(d=>d.id===a.dog_id)?.name||'?'}: subscription sudah ${verifiedBefore}/${state.total}; appointment tambahan tidak ditandai deducted`);continue;
+  }
+  const targetUsed=Math.min(state.total,verifiedBefore+(alreadyInComputed?0:1));
   if(targetUsed>state.stored){
    const oldUsed=Number(canonical.sessions_used)||0,newUsed=targetUsed;
    let update=db.from('subscriptions').update({sessions_used:newUsed}).eq('id',canonical.id);
@@ -11855,9 +11879,10 @@ async function deductSubsOnInvoice(rec){
    if(subErr||!changed?.length){warnings.push(`${dogs.find(d=>d.id===a.dog_id)?.name||'?'}: counter berubah bersamaan; refresh dan reconcile`);continue;}
    canonical.sessions_used=newUsed;
   }
-  const note=withApptSubscription(a.admin_note,{id:canonical.id,source:canonical.source_invoice||apptSubscriptionMeta(a).source});
-  const {data:marked,error:apptErr}=await db.from('appointments').update({subs_deducted:true,admin_note:note,...editStamp()}).eq('id',a.id).select('id');
+  const note=withApptSubscription(a.admin_note,{id:canonical.id,source:canonical.source_invoice||apptSubscriptionMeta(a).source||legacySubscriptionSource(a)});
+  const {data:marked,error:apptErr}=await db.from('appointments').update({session_source:'subscription',subs_deducted:true,admin_note:note,...editStamp()}).eq('id',a.id).select('id');
   if(apptErr||!marked?.length){warnings.push(`${dogs.find(d=>d.id===a.dog_id)?.name||'?'}: counter bertambah tetapi appointment flag gagal; reconcile sebelum save ulang`);continue;}
+  a.session_source='subscription';
   a.subs_deducted=true;
   a.admin_note=note;
  }
@@ -13052,20 +13077,13 @@ function openSubsSessions(subId){
  const sub=subscriptions.find(s=>s.id===subId); if(!sub){alert('Subscription tidak ditemukan');return}
  const cust=custs.find(c=>c.id===sub.customer_id);
  const dog=sub.dog_id?dogs.find(d=>d.id===sub.dog_id):null;
- const used=sub.sessions_used||0,total=sub.sessions_total||0;
- const startedAt=sub.started_at||'';
- const linkedAppts=appts.filter(a=>{
-  if(a.session_source!=='subscription') return false;
-  if(sub.dog_id&&a.dog_id!==sub.dog_id) return false;
-  const aDog=dogs.find(d=>d.id===a.dog_id);
-  if(!sub.dog_id&&aDog?.customer_id!==sub.customer_id) return false;
-  if(startedAt&&a.appt_date<startedAt) return false;
-  return true;
- }).sort((a,b)=>(b.appt_date||'').localeCompare(a.appt_date||''));
+ const state=subscriptionUsageState(sub);
+ const used=state.used,total=state.total;
+ const linkedAppts=state.linked.slice().sort((a,b)=>(b.appt_date||'').localeCompare(a.appt_date||''));
  document.getElementById('subs-sessions-title').textContent=`Sessions — ${cust?.owner||'?'}${dog?' / '+dog.name:''}`;
  document.getElementById('subs-sessions-summary').innerHTML=`
-  <div><strong>Type:</strong> ${esc(sub.type||'-')} · <strong>Sessions:</strong> ${used}/${total} (DB count)</div>
-  <div style="font-size:12px;color:var(--muted);margin-top:3px">Linked appointments: ${linkedAppts.length} · Future undeducted: ${linkedAppts.filter(a=>a.appt_date>=iso(new Date())&&!a.subs_deducted&&a.status!=='cancelled').length}</div>
+  <div><strong>Type:</strong> ${esc(sub.type||'-')} · <strong>Package slots:</strong> ${state.allocated}/${total} used · <strong>Completed:</strong> ${used}/${total}</div>
+  <div style="font-size:12px;color:var(--muted);margin-top:3px">Linked appointments: ${linkedAppts.length} · ${state.scheduled} upcoming · ${state.unresolved} review · ${state.available} available</div>
  `;
  const listEl=document.getElementById('subs-sessions-list');
  if(!linkedAppts.length){
