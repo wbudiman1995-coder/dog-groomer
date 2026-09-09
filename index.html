@@ -7503,11 +7503,40 @@ function subscriptionUsageState(sub){
  const available=Math.max(0,total-allocated);
  return {total,stored,computed,used,scheduled,unresolved,allocated,overflow,available,linked};
 }
+// Return the purchased slot used by one appointment, or null when that
+// appointment falls outside the package window / allowance.  An explicit
+// legacy link is useful for reconciliation, but must never by itself make an
+// expired or overflow appointment free on an after-visit invoice.
+function subscriptionSlotForAppointment(sub,appt){
+ if(!sub||!appt||appt.status==='cancelled'||!subscriptionDateContains(sub,appt.appt_date))return null;
+ const total=Math.max(0,Number(sub.sessions_total)||0);
+ if(!total)return null;
+ const linked=subscriptionAppointments(sub)
+  .filter(a=>subscriptionDateContains(sub,a.appt_date))
+  .sort((a,b)=>(a.appt_date+' '+(a.appt_time||'')).localeCompare(b.appt_date+' '+(b.appt_time||''))||String(a.id||'').localeCompare(String(b.id||'')));
+ const consumed=linked.filter(a=>a.subs_deducted||appointmentHasAfterVisitInvoice(a));
+ const consumedIds=new Set(consumed.map(a=>a.id));
+ const stored=Math.min(total,Math.max(0,...subscriptionGroupRows(sub).map(s=>Number(s.sessions_used)||0)));
+ const storedOnly=Math.max(0,stored-consumed.length);
+ const consumedPos=consumed.findIndex(a=>a.id===appt.id);
+ if(consumedPos>=0){
+  const slot=storedOnly+consumedPos+1;
+  return slot<=total?slot:null;
+ }
+ const pending=linked.filter(a=>!consumedIds.has(a.id));
+ const pendingPos=pending.findIndex(a=>a.id===appt.id);
+ if(pendingPos<0)return null;
+ const slot=Math.max(stored,consumed.length)+pendingPos+1;
+ return slot<=total?slot:null;
+}
 function activeSubscriptionForDog(dogId,date){
  const targetDate=date||document.getElementById('inv-date')?.value||iso(new Date());
- const booked=appts.filter(a=>a.dog_id===dogId&&a.appt_date===targetDate&&a.status!=='cancelled')
-  .map(findSubscriptionForAppointment).find(Boolean);
- if(booked)return booked;
+ const bookedAppts=appts.filter(a=>a.dog_id===dogId&&a.appt_date===targetDate&&a.status!=='cancelled')
+  .sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
+ for(const appt of bookedAppts){
+  const booked=findSubscriptionForAppointment(appt);
+  if(booked&&subscriptionSlotForAppointment(booked,appt)!=null)return booked;
+ }
  const current=currentSubscriptionRows().filter(s=>s.dog_id===dogId&&subscriptionDateContains(s,targetDate)).sort(subscriptionLifecycleSort);
  return current.find(s=>subscriptionUsageState(s).available>0)||null;
 }
@@ -7566,15 +7595,15 @@ function onDocModeChange(){
 function getSubscriptionSessionInfo(dogId,apptDate){
  if(!dogId) return null;
  const checkDate=apptDate||iso(new Date());
- const matchingAppt=appts.filter(a=>a.dog_id===dogId&&a.appt_date===checkDate&&a.status!=='cancelled'&&findSubscriptionForAppointment(a))
-  .sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''))[0];
- const sub=matchingAppt?findSubscriptionForAppointment(matchingAppt):activeSubscriptionForDog(dogId,checkDate);
+ const sub=activeSubscriptionForDog(dogId,checkDate);
  if(!sub)return null;
- const lifecycle=subscriptionAppointments(sub).sort((a,b)=>(a.appt_date+' '+(a.appt_time||'')).localeCompare(b.appt_date+' '+(b.appt_time||'')));
- const pos=matchingAppt?lifecycle.findIndex(a=>a.id===matchingAppt.id):-1;
+ const matchingAppt=appts.filter(a=>a.dog_id===dogId&&a.appt_date===checkDate&&a.status!=='cancelled'&&subscriptionGroupKey(findSubscriptionForAppointment(a))===subscriptionGroupKey(sub))
+  .sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''))
+  .find(a=>subscriptionSlotForAppointment(sub,a)!=null)||null;
  const state=subscriptionUsageState(sub);
+ const slot=matchingAppt?subscriptionSlotForAppointment(sub,matchingAppt):Math.min(state.total,state.used+1);
  return {
-  current:Math.min(state.total,pos>=0?pos+1:state.used+1),
+  current:slot,
   total:sub.sessions_total||0,
   subsType:sub.type||'Subscription',
   subsId:sub.id,
