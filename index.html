@@ -9212,11 +9212,10 @@ function buildInvoiceRecord(){
   const ex=invoices.find(i=>i.id===invEditId);
   invNum=ex?.invoice_number||`${custCode}-1`;
  } else {
-  const custInvNums=invoices
-   .filter(i=>i.customer_code===invSelectedCust.customer_code&&typeof i.invoice_number==='string')
-   .map(i=>{const m=(i.invoice_number||'').match(/-(\d+)(?:-subs\d+)?$/);return m?parseInt(m[1]):0;})
-   .filter(n=>n>0);
-  const nextN=(custInvNums.length?Math.max(...custInvNums):0)+1;
+  // Scan the globally unique invoice_number column itself.  Filtering only by
+  // stored customer_code misses old rows whose number prefix was attached to
+  // the wrong customer (for example a CUST-108 number on another account).
+  const nextN=nextInvoiceBaseSequence(custCode);
   if(isPackageMode_forNum){
    // Count prior package_sale invoices for this customer to get the renewal number M
    const priorPkgCount=invoices.filter(i=>i.customer_code===invSelectedCust.customer_code&&invoiceKind(i)==='package_sale').length;
@@ -9288,6 +9287,22 @@ function stripRecForDB(rec){
  // Keep groomer_notes and advance.subs_type inside dogs JSON for retrieval on edit.
  r.dogs=(r.dogs||[]).map(d=>{const {...keep}=d;return keep;});
  return r;
+}
+
+// Invoice numbers are globally unique in the database.  Count every number
+// that already uses this customer-code prefix, even when a legacy/mislinked
+// record has a different customer_code.  Otherwise the form can display a
+// seemingly free number that the database correctly rejects as a duplicate.
+function invoiceBaseSequence(invoiceNumber,customerCode){
+ const code=String(customerCode||'').trim();
+ if(!code||typeof invoiceNumber!=='string')return 0;
+ const escaped=code.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+ const match=invoiceNumber.match(new RegExp('^'+escaped+'-(\\d+)(?:-subs\\d+)?$','i'));
+ return match?parseInt(match[1],10)||0:0;
+}
+function nextInvoiceBaseSequence(customerCode){
+ const used=invoices.map(i=>invoiceBaseSequence(i.invoice_number,customerCode)).filter(n=>n>0);
+ return (used.length?Math.max(...used):0)+1;
 }
 
 async function createTokensFromInvoice(rec){
