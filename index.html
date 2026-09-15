@@ -138,6 +138,9 @@ body.auth-blocked .nav,body.auth-blocked .page,body.auth-blocked .overlay{displa
 .modal-close{position:absolute;top:1.25rem;right:1.25rem;width:32px;height:32px;border:none;background:var(--subtle);border-radius:50%;cursor:pointer;font-size:17px;display:flex;align-items:center;justify-content:center;color:var(--muted);line-height:1;transition:background .15s,color .15s}
 .modal-close:hover{background:var(--border);color:var(--text)}
 .modal{position:relative}
+.appt-customer-picker{margin-bottom:.9rem;position:relative}
+.appt-customer-search{width:100%;min-height:50px;padding:13px 15px;border:2px solid var(--primary);border-radius:var(--r);font-size:16px;background:var(--surface);box-shadow:0 2px 6px rgba(224,123,57,.15)}
+.appt-customer-results{display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);height:min(420px,55vh);min-height:220px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;z-index:50;box-shadow:0 6px 18px rgba(0,0,0,.15);margin-top:4px}
 .fg{display:flex;flex-direction:column;gap:6px}
 .fg.full{grid-column:1/-1}
 .fg label{font-size:var(--fs-label);color:var(--text-2);font-weight:600;text-transform:none;letter-spacing:0}
@@ -1586,14 +1589,14 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 
   <!-- Step 1: Customer -->
   <div id="wiz-1">
-   <div class="fg" style="margin-bottom:.9rem;position:relative">
+   <div class="fg appt-customer-picker">
     <label style="font-size:13px;font-weight:600">Customer *</label>
     <input id="appt-cust-search" placeholder="Ketik nama, alamat, atau nama anjing…" autocomplete="off"
     oninput="onWizCustSearch(this.value)"
     onfocus="onWizCustSearch(this.value)"
     onblur="setTimeout(()=>{const dd=document.getElementById('appt-cust-dd');if(dd)dd.style.display='none'},200)"
-    style="width:100%;padding:12px 14px;border:2px solid var(--primary);border-radius:var(--r);font-size:15px;background:var(--surface);box-shadow:0 2px 6px rgba(224,123,57,.15)"/>
-   <div id="appt-cust-dd" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);max-height:380px;overflow-y:auto;z-index:50;box-shadow:0 6px 18px rgba(0,0,0,.15);margin-top:4px"></div>
+    class="appt-customer-search"/>
+   <div id="appt-cust-dd" class="appt-customer-results"></div>
    <input type="hidden" id="appt-cust"/>
    </div>
    <div id="wiz-cust-info" style="display:none;background:var(--green-lt);border-radius:var(--r);padding:8px 12px;font-size:12px;margin-bottom:.9rem"></div>
@@ -1899,7 +1902,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
    <div style="font-size:12px;font-weight:600;margin-bottom:6px">Link siap dikirim:</div>
    <input id="onb-link-url" readonly onclick="this.select()" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--subtle);margin-bottom:.6rem;font-family:monospace;word-break:break-all"/>
    <div class="fg" style="margin-bottom:.6rem"><label>Pesan WhatsApp (bisa diedit)</label>
-    <textarea id="onb-wa-msg" rows="6" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;line-height:1.5"></textarea>
+	    <textarea id="onb-wa-msg" rows="6" oninput="onOnbMessageInput()" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;line-height:1.5"></textarea>
    </div>
    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.5rem">
     <button class="btn btn-g btn-sm" onclick="copyOnb('onb-link-url','Link')">Copy link</button>
@@ -2119,6 +2122,7 @@ function waClosing(){return WA_CLOSING_TPL.replace(/\{biz\}/g,BIZ_NAME)}
 let REM_GREETING='Halo kak {nama}', REM_CLOSING='Sampai jumpa besok ya kak!';
 let WA_TPL_FOLLOWUP='Hai Kak {nama}, sudah lebih dari {inactive_period} nih kami belum bertemu sama {dogs} \uD83D\uDC36\nKalau sudah waktunya grooming lagi, {biz} siap meluncur langsung ke rumah Kakak!\nMau booking sekarang atau ada pertanyaan dulu? Boleh banget chat di sini ya \uD83D\uDE0A';
 let WA_TPL_RENEWAL='Halo kak {nama}, \uD83D\uDC3E\n\nSubscription {tier} untuk {dogs} sudah waktunya diperpanjang untuk bulan depan.\n\nBiaya: {amount}\nMohon konfirmasi & pembayaran sebelum tanggal {due_day} ya kak supaya jadwal grooming tetap lancar.\n\nTerima kasih! {biz}';
+let WA_TPL_ONBOARDING='Halo kak! \uD83D\uDC3E Berikut link pendaftaran {biz}:\n\n{link}\n\nIsi data kamu & anabul di link ini ya (bisa dibuka di HP, cukup diisi satu kali, berlaku 2 hari). Setelah diisi, admin kami akan konfirmasi via WhatsApp. Terima kasih!';
 function applyTpl(tpl,vars){return String(tpl||'').replace(/\{(\w+)\}/g,(m,k)=>vars[k]!=null?vars[k]:'')}
 
 // Emoji fix: pristine defaults snapshot (captured before any CFG override runs).
@@ -2128,7 +2132,8 @@ const _WA_TPL_DEFAULTS={
  waTplDone:WA_TPL_DONE,
  waTplInvoice:WA_TPL_INVOICE,
  waTplFollowup:WA_TPL_FOLLOWUP,
- waTplRenewal:WA_TPL_RENEWAL
+ waTplRenewal:WA_TPL_RENEWAL,
+ waTplOnboarding:WA_TPL_ONBOARDING
 };
 async function resetWaTemplatesToDefault(){
  if(!confirm('Kembalikan semua template WhatsApp ke bawaan?\n\nIni memperbaiki emoji yang rusak. Kalau kamu pernah edit template, perubahan itu akan hilang.')) return;
@@ -2138,6 +2143,7 @@ async function resetWaTemplatesToDefault(){
  WA_TPL_INVOICE=_WA_TPL_DEFAULTS.waTplInvoice;
  WA_TPL_FOLLOWUP=_WA_TPL_DEFAULTS.waTplFollowup;
  WA_TPL_RENEWAL=_WA_TPL_DEFAULTS.waTplRenewal;
+ WA_TPL_ONBOARDING=_WA_TPL_DEFAULTS.waTplOnboarding;
  // Persist to DB: merge clean templates into existing config
  try{
   const cleanCfg={...(CFG||{}),
@@ -2145,7 +2151,8 @@ async function resetWaTemplatesToDefault(){
    waTplDone:WA_TPL_DONE,
    waTplInvoice:WA_TPL_INVOICE,
    waTplFollowup:WA_TPL_FOLLOWUP,
-   waTplRenewal:WA_TPL_RENEWAL};
+   waTplRenewal:WA_TPL_RENEWAL,
+   waTplOnboarding:WA_TPL_ONBOARDING};
   const {error}=await db.from('business_settings').upsert({id:1,config:cleanCfg,updated_at:new Date().toISOString()});
   if(error){alert('Gagal simpan ke server: '+error.message);return}
   CFG=cleanCfg;
@@ -2155,6 +2162,7 @@ async function resetWaTemplatesToDefault(){
   const doneEl=document.getElementById('cfg-wa-done'); if(doneEl) doneEl.value=WA_TPL_DONE;
   const fuEl=document.getElementById('cfg-wa-followup'); if(fuEl) fuEl.value=WA_TPL_FOLLOWUP;
   const renEl=document.getElementById('cfg-wa-renewal'); if(renEl) renEl.value=WA_TPL_RENEWAL;
+  const onbEl=document.getElementById('cfg-wa-onboarding'); if(onbEl) onbEl.value=WA_TPL_ONBOARDING;
   const closeEl=document.getElementById('cfg-wa-closing'); if(closeEl) closeEl.value=WA_CLOSING_TPL;
   alert('Template WhatsApp sudah dikembalikan ke bawaan. Emoji sudah diperbaiki. Coba kirim invoice lagi ya.');
  }catch(e){
@@ -5304,6 +5312,24 @@ function populateWizGroomerOptions(){
   }).join('');
 }
 
+function syncEditAppointmentDate(dateISO){
+ const safeDate=/^\d{4}-\d{2}-\d{2}$/.test(dateISO||'')?dateISO:iso(new Date());
+ wiz.date=safeDate;
+ const wizardDate=document.getElementById('wiz-date');
+ if(wizardDate) wizardDate.value=safeDate;
+ const editDate=document.getElementById('edit-date-inp');
+ if(editDate) editDate.value=safeDate;
+}
+
+function onEditGroomerChange(groomerId){
+ // Keep the appointment's current time when only the groomer changes. The slot
+ // renderer will flag a clash, but a valid reassignment no longer becomes
+ // "incomplete" merely because the groomer dropdown was changed.
+ wiz.groomerId=groomerId||null;
+ wiz.slotConflict=false;
+ renderEditSlots();
+}
+
 function renderWizSummary(){
  const c=custs.find(x=>x.id===wiz.custId)||{};
  const totalDur=wiz.dogSvcs.reduce((s,ds)=>s+getWizDogDur(ds),0);
@@ -5334,11 +5360,11 @@ function renderWizSummary(){
    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
     <div>
      <label style="font-size:11px;color:var(--muted)">Groomer</label>
-     <select id="edit-groomer-sel" onchange="wiz.groomerId=this.value;wiz.startMins=null;wiz.slotConflict=false;renderEditSlots()" style="width:100%;padding:5px 7px;border:1px solid var(--border);border-radius:4px;font-size:12px">${groomerOpts}</select>
+	     <select id="edit-groomer-sel" onchange="onEditGroomerChange(this.value)" style="width:100%;padding:5px 7px;border:1px solid var(--border);border-radius:4px;font-size:12px">${groomerOpts}</select>
     </div>
     <div>
      <label style="font-size:11px;color:var(--muted)">Tanggal</label>
-     <input type="date" id="edit-date-inp" value="${wiz.date||''}" onchange="wiz.date=this.value;wiz.startMins=null;wiz.slotConflict=false;renderEditSlots()" style="width:100%;padding:5px 7px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
+	     <input type="date" id="edit-date-inp" value="${wiz.date||''}" onchange="syncEditAppointmentDate(this.value);wiz.startMins=null;wiz.slotConflict=false;renderEditSlots()" style="width:100%;padding:5px 7px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>
     </div>
    </div>
    <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px">Pilih slot waktu</div>
@@ -5625,6 +5651,7 @@ function openApptEdit(id){
  const a=appts.find(x=>x.id===id);if(!a)return;
  const d=dogs.find(x=>x.id===a.dog_id);
  wiz={step:4,custId:d?.customer_id||null,dogSvcs:d?[{did:d.id,svc:a.service_base||'Basic Grooming',svcs:parseSvcBase(a.service_base),customDur:null,apptId:id}]:[],groomerId:a.groomer_id,date:a.appt_date,startMins:t2m(a.appt_time||'09:00'),editId:id,rescheduleSet:new Set([id]),slotConflict:false,tokenId:a.token_id||null,isFree:a.session_source==='free',freeDogs:a.session_source==='free'&&d?new Set([d.id]):new Set()};
+ syncEditAppointmentDate(a.appt_date);
  document.getElementById('appt-title').textContent='Edit appointment';
  document.getElementById('appt-save-btn').textContent='Update';
  const delBtnSingle=document.getElementById('appt-del-btn');
@@ -5777,6 +5804,7 @@ function openGroupEdit(ids){
   date:firstA.appt_date,startMins:t2m(firstA.appt_time||'09:00'),
   editId:firstA.id,editIds:ids,rescheduleSet:new Set(ids),slotConflict:false,
   tokenId:firstA.token_id||null,isFree:false,freeDogs:new Set()};
+ syncEditAppointmentDate(firstA.appt_date);
  document.getElementById('appt-title').textContent=`Edit group (${ids.length} anjing)`;
  document.getElementById('appt-save-btn').textContent='Update semua';
  const delBtn=document.getElementById('appt-del-btn');
@@ -7351,9 +7379,10 @@ const CFG_DEFAULTS={
  waTplInvoice:WA_TPL_INVOICE,
  remGreeting:REM_GREETING,
  remClosing:REM_CLOSING,
- waTplFollowup:WA_TPL_FOLLOWUP,
- waTplRenewal:WA_TPL_RENEWAL,
- toastMs:3500,
+	 waTplFollowup:WA_TPL_FOLLOWUP,
+	 waTplRenewal:WA_TPL_RENEWAL,
+	 waTplOnboarding:WA_TPL_ONBOARDING,
+	 toastMs:3500,
  autoLog:true,
  dashCards:{invoiced:true,paid:true,unpaid:true,payroll:true}
 };
@@ -7391,6 +7420,7 @@ function applyCfg(){
  if(CFG.remClosing!=null) REM_CLOSING=CFG.remClosing;
  if(_tplOk(CFG.waTplFollowup,_WA_TPL_DEFAULTS.waTplFollowup)) WA_TPL_FOLLOWUP=CFG.waTplFollowup;
  if(_tplOk(CFG.waTplRenewal,_WA_TPL_DEFAULTS.waTplRenewal)) WA_TPL_RENEWAL=CFG.waTplRenewal;
+ if(_tplOk(CFG.waTplOnboarding,_WA_TPL_DEFAULTS.waTplOnboarding)) WA_TPL_ONBOARDING=CFG.waTplOnboarding;
  TOAST_MS=CFG.toastMs>0?CFG.toastMs:3500;
  // Payroll globals (styling tiers + botak incentive) live in business_settings.config
  if(Array.isArray(CFG.stylingTiers)&&CFG.stylingTiers.length) payrollSettings.styling_tiers=normalizeStylingTiers(CFG.stylingTiers);
@@ -12760,7 +12790,8 @@ function renderConfig(){
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Salam reminder customer <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code></span><input id="cfg-rem-greeting" type="text" value="${esc(REM_GREETING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Penutup reminder customer<input id="cfg-rem-closing" type="text" value="${esc(REM_CLOSING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan followup "belum grooming" <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{inactive_period}</code> <code>{days}</code> <code>{biz}</code></span><textarea id="cfg-wa-followup" rows="4" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_FOLLOWUP)}</textarea></label>
-    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan renewal subscription bulanan <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{tier}</code> <code>{amount}</code> <code>{due_day}</code> <code>{biz}</code></span><textarea id="cfg-wa-renewal" rows="8" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_RENEWAL)}</textarea></label>
+	    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan renewal subscription bulanan <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{tier}</code> <code>{amount}</code> <code>{due_day}</code> <code>{biz}</code></span><textarea id="cfg-wa-renewal" rows="8" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_RENEWAL)}</textarea></label>
+	    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan link onboarding customer <span style="font-size:11px;color:var(--muted)">Token: <code>{biz}</code> <code>{link}</code></span><textarea id="cfg-wa-onboarding" rows="7" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_ONBOARDING)}</textarea></label>
     <div style="font-size:11px;color:var(--muted)">Pesan invoice (belum bayar) tetap dihitung otomatis oleh sistem karena ada logika diskon, biaya tambahan, dan rekening bank.</div>
     <button class="btn btn-sm" style="background:#fef3c7;border:1px solid #fbbf24;color:#78350f;align-self:flex-start" onclick="resetWaTemplatesToDefault()" title="Kembalikan semua template WhatsApp ke bawaan (memperbaiki emoji yang rusak)">🔧 Reset template WA ke default (perbaiki emoji)</button>
    </div>`)}
@@ -12817,8 +12848,9 @@ async function saveConfig(){
   waTplInvoice:gv('cfg-wa-invoice')?.value||WA_TPL_INVOICE,
   remGreeting:gv('cfg-rem-greeting')?.value??REM_GREETING,
   remClosing:gv('cfg-rem-closing')?.value??REM_CLOSING,
-  waTplFollowup:gv('cfg-wa-followup')?.value||WA_TPL_FOLLOWUP,
-  waTplRenewal:gv('cfg-wa-renewal')?.value||WA_TPL_RENEWAL};
+	  waTplFollowup:gv('cfg-wa-followup')?.value||WA_TPL_FOLLOWUP,
+	  waTplRenewal:gv('cfg-wa-renewal')?.value||WA_TPL_RENEWAL,
+	  waTplOnboarding:gv('cfg-wa-onboarding')?.value||WA_TPL_ONBOARDING};
  const {error}=await db.from('business_settings').upsert({id:1,config,updated_at:new Date().toISOString()});
  if(error){alert('Gagal simpan: '+error.message);return}
  await reloadTables('business_settings');
@@ -15256,11 +15288,14 @@ function renderOnboarding(){
   }
   const ll=document.getElementById('onb-links-list');
   if(ll){
-   if(!onboardingLinks.length){
+   // Approved customers already live in the main database. Keep old approved
+   // rows for audit compatibility, but do not clutter "Semua link" with them.
+   const visibleLinks=onboardingLinks.filter(l=>l.status!=='approved');
+   if(!visibleLinks.length){
     ll.innerHTML='<div class="empty" style="padding:1.5rem">Belum ada link. Klik "+ Buat link pendaftaran".</div>';
    } else {
     ll.innerHTML='<div class="tbl-wrap"><table><thead><tr><th>Dibuat</th><th>Sumber / catatan</th><th>Status</th><th>Link</th><th></th></tr></thead><tbody>'+
-     onboardingLinks.map(l=>{
+     visibleLinks.map(l=>{
       const expired=onbIsExpired(l);
       const badge=l.status==='approved'?'<span class="badge bs">APPROVED</span>'
        :l.status==='rejected'?'<span class="badge bl">DITOLAK</span>'
@@ -15301,8 +15336,9 @@ async function doCreateOnbLink(){
  await loadOnboarding();
  document.getElementById('onb-create-step1').style.display='none';
  document.getElementById('onb-create-step2').style.display='';
- document.getElementById('onb-link-url').value=onbBuildLink(token);
- document.getElementById('onb-wa-msg').value='Halo kak! \uD83D\uDC3E Berikut link pendaftaran HomePaw:\n\n'+onbBuildLink(token)+'\n\nIsi data kamu & anabul di link ini ya (bisa dibuka di HP, cukup diisi satu kali, berlaku 2 hari). Setelah diisi, admin kami akan konfirmasi via WhatsApp. Terima kasih!';
+ const onboardingUrl=onbBuildLink(token);
+ document.getElementById('onb-link-url').value=onboardingUrl;
+ document.getElementById('onb-wa-msg').value=applyTpl(WA_TPL_ONBOARDING,{biz:BIZ_NAME,link:onboardingUrl});
  document.getElementById('onb-phone').value='';
  const btn=document.getElementById('onb-wa-btn'); btn.removeAttribute('href'); btn.style.pointerEvents='none'; btn.style.opacity='.5';
  renderOnboarding();
@@ -15325,6 +15361,10 @@ function onOnbPhoneInput(el){
   btn.removeAttribute('href'); btn.style.pointerEvents='none'; btn.style.opacity='.5';
   document.getElementById('onb-phone-hint').textContent='Isi nomor dulu, atau copy pesan & tempel manual di chat.';
  }
+}
+function onOnbMessageInput(){
+ const phone=document.getElementById('onb-phone');
+ if(phone) onOnbPhoneInput(phone);
 }
 function onbWaReady(){ return !!document.getElementById('onb-wa-btn')?.href; }
 async function revokeOnbLink(id){
