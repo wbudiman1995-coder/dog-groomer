@@ -1432,6 +1432,11 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  </div>
  <div class="fg"></div>
  <div class="fg full"><label>Preferences / notes</label><textarea id="cf-prefs" placeholder="Customer-level notes, contact preferences, etc."></textarea></div>
+ <div class="fg full" id="cf-complimentary-wrap" style="border:1px solid #fbbf24;background:#fffbeb;border-radius:8px;padding:10px 12px">
+  <label style="display:flex;align-items:center;gap:8px;color:#78350f"><input type="checkbox" id="cf-comp-enabled" onchange="renderComplimentaryDiscountForm()" style="width:16px;height:16px;min-height:0"/> Complimentary discount — next appointment only</label>
+  <div id="cf-comp-body" style="display:none;margin-top:8px"></div>
+  <div style="font-size:10px;color:#92400e;margin-top:6px">Applied automatically to the customer’s next new booking, then removed from the customer profile. Set separate rules for Basic Grooming, Styling, and other add-ons.</div>
+ </div>
  <div id="cf-custom-fields" style="grid-column:1/-1"></div>
  </div>
  <div id="cf-edit-stamp"></div>
@@ -3245,7 +3250,7 @@ function renderCusts(){
  const srcCell=c.source?`<span class="badge ${srcBadge[c.source]||'bs'}">${esc(srcLabel[c.source]||c.source)}</span>`:'<span style="font-size:11px;color:var(--muted)">—</span>';
  return `<tr>
  <td><span class="id-pill">${esc(c.customer_code||'—')}</span></td>
- <td><strong class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner)}</strong>${subsBadgeHTML(c.id)} ${locationBadgeHTML(c)}</td>
+	 <td><strong class="c360-clickable" onclick="openCust360('${c.id}')">${esc(c.owner)}</strong>${subsBadgeHTML(c.id)} ${customerComplimentaryDiscount(c)?'<span class="badge bm" title="Automatically used by the next new appointment">NEXT DISCOUNT</span>':''} ${locationBadgeHTML(c)}</td>
  <td>${c.wa?`<a class="wa-lnk" href="${waLink(c.wa)}" target="_blank">${esc(c.wa)}</a>`:'—'}</td>
  <td>${esc(c.area)||'—'}</td>
  <td>${srcCell}</td>
@@ -3297,7 +3302,7 @@ function renderDogsTable(){
  <td>${calcAge(d.age, d.created_at)||'—'}</td>
  <td>${esc(d.weight)||'—'}</td>
  <td>${esc(d.coat_color)||'—'}</td>
- <td style="max-width:240px;font-size:12px;color:var(--muted)">${esc(d.prefs)||'—'}</td>
+ <td style="max-width:240px;font-size:12px;color:var(--muted)">${esc(d.prefs)||'—'}<div style="margin-top:4px;font-size:10px;color:var(--primary-darker);font-weight:700">${homePawWashLabel(d.id)}</div></td>
  <td><div class="row-actions">
  <button class="icon-btn" onclick="openEditDog('${d.id}')">Edit</button>
  <button class="icon-btn del" onclick="delDog('${d.id}','${esc(d.name).replace(/'/g,"\\'")}')">Del</button>
@@ -3306,6 +3311,89 @@ function renderDogsTable(){
 }
 
 /* CUSTOMER MODAL */
+const COMPLIMENTARY_DISCOUNT_KEY='__homepaw_complimentary_discount';
+const COMPLIMENTARY_CATEGORIES=[
+ ['basic','Basic Grooming'],['styling','Styling'],['others','Other add-ons']
+];
+function customerComplimentaryDiscount(customerOrId){
+ const c=typeof customerOrId==='string'?custs.find(x=>x.id===customerOrId):customerOrId;
+ const raw=c?.custom?.[COMPLIMENTARY_DISCOUNT_KEY];
+ if(!raw||typeof raw!=='object') return null;
+ const rules={};
+ COMPLIMENTARY_CATEGORIES.forEach(([key])=>{
+  const r=raw[key];
+  const value=Math.max(0,Number(r?.value)||0);
+  if(r?.type&&value>0) rules[key]={type:r.type==='fixed'?'fixed':'percent',value};
+ });
+ return Object.keys(rules).length?{version:1,...rules}:null;
+}
+
+// Business-owned wash history. Never filter by groomer: a dog keeps the same
+// HomePaw history when staff assignments change. Dates are de-duplicated across
+// appointments, visits, and after-visit invoices.
+function homePawWashHistory(dogId){
+ const dates=new Set();
+ appts.forEach(a=>{if(a.dog_id===dogId&&a.status==='done'&&a.appt_date) dates.add(a.appt_date)});
+ visits.forEach(v=>{if(v.dog_id===dogId&&v.visited_at) dates.add(v.visited_at)});
+ invoices.forEach(inv=>{
+  if(invoiceKind(inv)!=='after_visit'||!inv.invoice_date) return;
+  if((inv.dogs||[]).some(d=>d.dog_id===dogId)) dates.add(inv.invoice_date);
+ });
+ const sorted=[...dates].sort().reverse();
+ return {count:sorted.length,dates:sorted,last:sorted[0]||null};
+}
+function homePawWashLabel(dogId){
+ const h=homePawWashHistory(dogId);
+ return `${h.count} HomePaw wash${h.count===1?'':'es'}${h.last?' · last '+fmtD(h.last):''}`;
+}
+function renderComplimentaryDiscountForm(value){
+ const enabled=document.getElementById('cf-comp-enabled');
+ const body=document.getElementById('cf-comp-body');
+ if(!enabled||!body) return;
+ if(value!==undefined) enabled.checked=!!value;
+ const data=value===undefined?readComplimentaryDiscountFromForm(true):(value||{});
+ body.style.display=enabled.checked?'block':'none';
+ body.innerHTML=COMPLIMENTARY_CATEGORIES.map(([key,label])=>{
+  const rule=data?.[key]||{type:'percent',value:0};
+  return `<div style="display:grid;grid-template-columns:minmax(125px,1fr) 105px 100px;gap:6px;align-items:center;margin-bottom:6px">
+   <span style="font-size:11px;color:#78350f;font-weight:600">${esc(label)}</span>
+   <select id="cf-comp-${key}-type" style="padding:6px;border:1px solid #fbbf24;border-radius:5px;font-size:11px;background:#fff"><option value="percent" ${rule.type!=='fixed'?'selected':''}>Percent (%)</option><option value="fixed" ${rule.type==='fixed'?'selected':''}>Fixed (Rp)</option></select>
+   <input id="cf-comp-${key}-value" type="number" min="0" value="${Math.max(0,Number(rule.value)||0)}" style="padding:6px;border:1px solid #fbbf24;border-radius:5px;font-size:11px;min-height:32px"/>
+  </div>`;
+ }).join('');
+}
+function readComplimentaryDiscountFromForm(ignoreEnabled=false){
+ const enabled=document.getElementById('cf-comp-enabled');
+ if(!ignoreEnabled&&!enabled?.checked) return null;
+ const out={version:1};
+ COMPLIMENTARY_CATEGORIES.forEach(([key])=>{
+  const type=document.getElementById(`cf-comp-${key}-type`)?.value||'percent';
+  const value=Math.max(0,Number(document.getElementById(`cf-comp-${key}-value`)?.value)||0);
+  if(value>0) out[key]={type:type==='fixed'?'fixed':'percent',value};
+ });
+ return Object.keys(out).length>1?out:null;
+}
+function setComplimentaryDiscountForm(discount){
+ const enabled=document.getElementById('cf-comp-enabled');
+ if(enabled) enabled.checked=!!discount;
+ renderComplimentaryDiscountForm(discount||{});
+}
+async function consumeCustomerComplimentaryDiscount(custId){
+ const c=custs.find(x=>x.id===custId); if(!c?.custom?.[COMPLIMENTARY_DISCOUNT_KEY]) return true;
+ const oldRec={...c,custom:JSON.parse(JSON.stringify(c.custom||{}))};
+ const nextCustom={...(c.custom||{})}; delete nextCustom[COMPLIMENTARY_DISCOUNT_KEY];
+ const payload={custom:nextCustom,...editStamp()};
+ let result=await db.from('customers').update(payload).eq('id',custId);
+ if(result.error) result=await db.from('customers').update(payload).eq('id',custId);
+ if(result.error){
+  alert('Appointment tersimpan, tetapi complimentary discount gagal dihapus. Buka customer dan matikan discount agar tidak terpakai dua kali.\n\n'+result.error.message);
+  return false;
+ }
+ Object.assign(c,payload);
+ await logAudit('customer',custId,'update',{old:oldRec,new:{...c,custom:nextCustom},label:(c.owner||'?')+' complimentary discount consumed'});
+ return true;
+}
+
 function openAddCust(){
  custEditId=null;
  _pastePetQueue=[];
@@ -3319,6 +3407,7 @@ function openAddCust(){
  const manual0=document.getElementById('cf-coords-manual'); if(manual0) manual0.style.display='none';
  refreshCoordsChip();
  const srcEl=document.getElementById('cf-source'); if(srcEl) srcEl.value='';
+ setComplimentaryDiscountForm(null);
  populateKotaSelect(document.getElementById('cf-kota'));
  populateKecSelect(document.getElementById('cf-kec'),'');
  const stampEl=document.getElementById('cf-edit-stamp'); if(stampEl) stampEl.innerHTML='';
@@ -3348,6 +3437,7 @@ function openEditCust(id){
  document.getElementById('cf-kota').value=c.kota||'';
  populateKecSelect(document.getElementById('cf-kec'),c.kota||'');
  document.getElementById('cf-kec').value=c.kecamatan||'';
+ setComplimentaryDiscountForm(customerComplimentaryDiscount(c));
  renderCustomFields('customers','cf-custom-',c.custom||{},'cf-custom-fields');
  const stampEl=document.getElementById('cf-edit-stamp'); if(stampEl) stampEl.innerHTML=editStampHTML(c)+renderAuditFooter('customer',id);
  om('ov-cust');
@@ -3364,7 +3454,14 @@ async function saveCust(){
  const lat=latRaw?parseFloat(latRaw):null;
  const lng=lngRaw?parseFloat(lngRaw):null;
  if((latRaw&&isNaN(lat))||(lngRaw&&isNaN(lng))){alert('Koordinat tidak valid. Isi angka desimal atau kosongkan.');return}
- const p={
+	 // Preserve any non-form metadata already stored in `custom`, while allowing
+	 // the one-use complimentary offer to be explicitly cleared.
+	 const existingCustom=custEditId?(custs.find(c=>c.id===custEditId)?.custom||{}):{};
+	 const customValues={...existingCustom,...readCustomFields('customers','cf-custom-')};
+	 delete customValues[COMPLIMENTARY_DISCOUNT_KEY];
+	 const complimentary=readComplimentaryDiscountFromForm();
+	 if(complimentary) customValues[COMPLIMENTARY_DISCOUNT_KEY]=complimentary;
+	 const p={
  owner,
  wa:document.getElementById('cf-wa').value.trim(),
  address:document.getElementById('cf-addr').value.trim(),
@@ -3376,10 +3473,10 @@ async function saveCust(){
  longitude:lng,
  prefs:document.getElementById('cf-prefs').value.trim(),
  source:source||null,
- custom:readCustomFields('customers','cf-custom-'),
+	 custom:customValues,
  ...editStamp()
  };
- if(!(CUSTOM_FIELDS.customers||[]).length) delete p.custom;
+	 if(!custEditId&&!Object.keys(customValues).length) delete p.custom;
  const btn=document.getElementById('cust-save-btn');
  if(btn&&btn.disabled) return; // double-click guard
  const btnLbl=btn?btn.textContent:'';
@@ -4025,12 +4122,16 @@ function renderCal(){
      const firstDog=dogs.find(x=>x.id===a.dog_id)||{};
      const cust=custs.find(x=>x.id===firstDog.customer_id)||{};
      const dogNames=group.map(x=>dogs.find(d=>d.id===x.dog_id)?.name||'?').join(', ');
-     const groupIds=group.map(x=>`'${x.id}'`).join(',');
+	     const groupIds=group.map(x=>`'${x.id}'`).join(',');
+	     const dragIds=group.map(x=>x.id).join(',');
      const kec=cust.kecamatan||'';
      const kota=cust.kota||cust.area||'';
      const locFull=[kec,kota].filter(Boolean).join(', ');
      const locShort=kec||kota;
-     html+=`<div class="appt-block${isMSel?' mass-selected':''}${srcClass}" role="button" tabindex="0" title="Click to edit appointment"
+	     html+=`<div class="appt-block${isMSel?' mass-selected':''}${srcClass}" role="button" tabindex="0" title="Drag to move all ${group.length} dogs, or click to edit"
+	      draggable="true"
+	      ondragstart="onDragStart(event,'${dragIds}')" ondragend="onDragEnd(event)"
+	      ontouchstart="onApptTouchStart(event,'${dragIds}')"
       onclick="event.stopPropagation();openGroupEdit([${groupIds}])"
       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();openGroupEdit([${groupIds}])}"
       style="top:${top}px;height:${ht}px;background:${bg};border-left:5px solid ${col};color:${textCol};cursor:pointer">
@@ -4173,6 +4274,7 @@ async function massMove(){
 /* ---- DRAG DROP ---- */
 // ─── Drag & Drop — Google Calendar style ───────────────────────────────────
 let draggedId=null;
+let draggedIds=[];
 let _lastApptTouchOpen=0;
 let _dragGhost=null; // floating ghost element that follows cursor
 let _dragOffsetY=0;  // cursor offset within the block when drag started
@@ -4180,7 +4282,8 @@ let _lastDropSlot=null; // {date, gid, m} for drop preview
 let _dropPreviewEl=null;
 
 function onDragStart(e,id){
- draggedId=id;
+ draggedIds=String(id||'').split(',').filter(Boolean);
+ draggedId=draggedIds[0]||null;
  e.dataTransfer.effectAllowed='move';
  e.dataTransfer.setData('text/plain',id);
  // Measure cursor position within block for natural offset
@@ -4220,6 +4323,7 @@ function _buildDragGhost(srcEl,clientX,clientY){
 function onDragEnd(e){
  e.target.classList.remove('dragging');
  draggedId=null;
+ draggedIds=[];
  if(_dragGhost){_dragGhost.remove();_dragGhost=null}
  _clearDropPreview();
  _lastDropSlot=null;
@@ -4245,7 +4349,9 @@ function onDragOver(e){
 function _showDropPreview(slotEl,nd,ng,nm){
  _clearDropPreview();
  const a=appts.find(x=>x.id===draggedId); if(!a) return;
- const dur=a.duration_mins||60;
+ const moving=(draggedIds.length?draggedIds:[a.id]).map(id=>appts.find(x=>x.id===id)).filter(Boolean);
+ const base=Math.min(...moving.map(x=>t2m(x.appt_time||'09:00')));
+ const dur=Math.max(...moving.map(x=>t2m(x.appt_time||'09:00')-base+(x.duration_mins||60)));
  const colEl=slotEl.closest('[style*="position:relative"]');
  if(!colEl) return;
   const ht=Math.max(18,Math.round((dur/SSTEP)*SH));
@@ -4272,7 +4378,7 @@ function _showDropPreview(slotEl,nd,ng,nm){
  _dropPreviewEl.innerHTML=`<span style="font-size:9px;font-weight:700;color:#2563eb">${m2t(nm)} – ${m2t(endM)}</span>`;
  // Check overlap hint
  const aDog=dogs.find(d=>d.id===a.dog_id);
- const conflict=checkApptOverlap(a.id,nd,ng,nm,dur);
+ const conflict=checkMoveCombinationConflict(moving.map(x=>x.id),nd,ng,nm);
  if(conflict){
   _dropPreviewEl.style.background='rgba(220,38,38,.1)';
   _dropPreviewEl.style.border='2px dashed #dc2626';
@@ -4288,32 +4394,77 @@ function _clearDropPreview(){
 async function onDrop(e){
  e.preventDefault();
  if(!draggedId) return;
- const apptId=draggedId;
+	 const moveIds=draggedIds.length?[...draggedIds]:[draggedId];
  const t=e.target.closest('[data-m]'); if(!t) return;
  const nd=t.dataset.date,ng=t.dataset.g,nm=parseInt(t.dataset.m);
- const a=appts.find(x=>x.id===apptId); if(!a) return;
- const newTime=m2t(nm)+':00';
- if(a.appt_date===nd&&a.groomer_id===ng&&a.appt_time?.slice(0,5)===m2t(nm)) return;
- // Overlap check
- const aDog=dogs.find(d=>d.id===a.dog_id);
- const conflict=checkApptOverlap(a.id,nd,ng,nm,a.duration_mins);
- if(conflict){
-  if(!confirmScheduleConflict(a,conflict,nd,nm)) return;
+	 await moveAppointmentCombination(moveIds,nd,ng,nm);
+}
+
+function buildMoveCombination(ids,newDate,newGroomerId,newStartMins){
+ const moving=[...new Set(ids||[])].map(id=>appts.find(a=>a.id===id)).filter(Boolean)
+  .sort((a,b)=>t2m(a.appt_time||'09:00')-t2m(b.appt_time||'09:00'));
+ if(!moving.length) return [];
+ const originalBase=t2m(moving[0].appt_time||'09:00');
+ return moving.map(a=>({
+  appointment:a,
+  start:newStartMins+(t2m(a.appt_time||'09:00')-originalBase),
+  date:newDate,groomerId:newGroomerId
+ }));
+}
+function checkMoveCombinationConflict(ids,newDate,newGroomerId,newStartMins){
+ const plan=buildMoveCombination(ids,newDate,newGroomerId,newStartMins);
+ const movingIds=new Set(plan.map(p=>p.appointment.id));
+ for(const p of plan){
+  const end=p.start+(p.appointment.duration_mins||60);
+  const conflict=appts.find(a=>{
+   if(movingIds.has(a.id)||a.status==='cancelled') return false;
+   if(a.appt_date!==p.date||a.groomer_id!==p.groomerId) return false;
+   const start=t2m(a.appt_time?.slice(0,5)||'00:00');
+   return p.start<start+(a.duration_mins||60)&&end>start;
+  });
+  if(conflict) return {moving:p.appointment,conflict,start:p.start};
  }
- const oldRec={...a};
- const movePayload={appt_date:nd,groomer_id:ng,appt_time:newTime,...editStamp()};
- const {error}=await db.from('appointments').update(movePayload).eq('id',apptId);
- if(error){showToast('Gagal memindahkan appointment','error');return}
- const dogName=dogs.find(d=>d.id===a.dog_id)?.name||'?';
- await logAudit('appointment',apptId,'update',{old:oldRec,new:{...oldRec,...movePayload},label:dogName+' '+nd});
- const idx=appts.findIndex(x=>x.id===apptId);
- if(idx>=0)Object.assign(appts[idx],movePayload);
- showToast('Appointment dipindahkan','success');
+ return null;
+}
+async function moveAppointmentCombination(ids,newDate,newGroomerId,newStartMins){
+ const plan=buildMoveCombination(ids,newDate,newGroomerId,newStartMins);
+ if(!plan.length) return false;
+ if(isDateBlocked(newDate,newGroomerId)){
+  showToast('Tanggal/groomer tujuan sedang di-block. Hapus block dulu.','error');return false;
+ }
+ const unchanged=plan.every(p=>p.appointment.appt_date===p.date&&p.appointment.groomer_id===p.groomerId&&p.appointment.appt_time?.slice(0,5)===m2t(p.start));
+ if(unchanged) return true;
+ const clash=checkMoveCombinationConflict(ids,newDate,newGroomerId,newStartMins);
+ if(clash&&!confirmScheduleConflict(clash.moving,clash.conflict,newDate,clash.start)) return false;
+ const stamp=editStamp();
+ const completed=[];
+ for(const p of plan){
+  const payload={appt_date:p.date,groomer_id:p.groomerId,appt_time:m2t(p.start)+':00',...stamp};
+  const {error}=await db.from('appointments').update(payload).eq('id',p.appointment.id);
+  if(error){
+   // Restore rows already moved so a multi-dog combination never ends half-moved.
+   for(const done of completed){
+    await db.from('appointments').update({appt_date:done.old.appt_date,groomer_id:done.old.groomer_id,appt_time:done.old.appt_time}).eq('id',done.old.id);
+   }
+   showToast('Gagal memindahkan kombinasi; perubahan dibatalkan. '+error.message,'error');
+   return false;
+  }
+  completed.push({old:{...p.appointment},payload});
+ }
+ for(const done of completed){
+  const dogName=dogs.find(d=>d.id===done.old.dog_id)?.name||'?';
+  await logAudit('appointment',done.old.id,'update',{old:done.old,new:{...done.old,...done.payload},label:dogName+' '+newDate});
+  const local=appts.find(a=>a.id===done.old.id); if(local) Object.assign(local,done.payload);
+ }
+ showToast(completed.length>1?`${completed.length} appointment dipindahkan bersama`:'Appointment dipindahkan','success');
  renderCal();
+ return true;
 }
 // Batch O — touch reschedule for mobile (long-press → drag)
 let _touchDragState=null;
 function onApptTouchStart(e,apptId){
+	 const touchIds=String(apptId||'').split(',').filter(Boolean);
+	 const primaryId=touchIds[0];
  if(e.touches.length>1) return; // ignore multi-touch
  const touch=e.touches[0];
  const startX=touch.clientX, startY=touch.clientY;
@@ -4324,7 +4475,8 @@ function onApptTouchStart(e,apptId){
 
  longPressTimer=setTimeout(()=>{
   activated=true;
-  draggedId=apptId;
+	  draggedIds=[...touchIds];
+	  draggedId=primaryId;
   blockEl.classList.add('dragging');
   blockEl.style.opacity='.6';
   if(navigator.vibrate) navigator.vibrate(40);
@@ -4350,7 +4502,7 @@ function onApptTouchStart(e,apptId){
    // Clean tap (no long-press, no drag) — open the editor directly instead of relying on the ghost click
    _lastApptTouchOpen=Date.now();
    cleanup();
-   openApptEdit(apptId);
+	   if(touchIds.length>1) openGroupEdit(touchIds); else openApptEdit(primaryId);
    return;
   }
   // Find drop target under finger
@@ -4361,33 +4513,17 @@ function onApptTouchStart(e,apptId){
   blockEl.style.opacity='';
   if(slot){
    const nd=slot.dataset.date,ng=slot.dataset.g,nm=parseInt(slot.dataset.m);
-   const a=appts.find(x=>x.id===apptId);
-   if(a){
-    const newTime=m2t(nm)+':00';
-    if(!(a.appt_date===nd&&a.groomer_id===ng&&a.appt_time?.slice(0,5)===m2t(nm))){
-     const aDog=dogs.find(d=>d.id===a.dog_id);
-     const conflict=checkApptOverlap(a.id,nd,ng,nm,a.duration_mins);
-     if(conflict){
-      if(!confirmScheduleConflict(a,conflict,nd,nm)){cleanup();return;}
-     }
-     const oldRec={...a};
-     const movePayload={appt_date:nd,groomer_id:ng,appt_time:newTime,...editStamp()};
-     const {error}=await db.from('appointments').update(movePayload).eq('id',apptId);
-     if(error){showToast('Gagal memindahkan appointment','error');cleanup();return}
-     const dogName=dogs.find(d=>d.id===a.dog_id)?.name||'?';
-     await logAudit('appointment',apptId,'update',{old:oldRec,new:{...oldRec,...movePayload},label:dogName+' '+nd});
-     const idx=appts.findIndex(x=>x.id===apptId);
-     if(idx>=0)Object.assign(appts[idx],movePayload);
-     renderCal();
-     showToast('Appointment dipindahkan','success');
-    }
-   }
+	   const a=appts.find(x=>x.id===primaryId);
+	   if(a){
+	    await moveAppointmentCombination(touchIds,nd,ng,nm);
+	   }
   }
   cleanup();
  };
 
  const cleanup=()=>{
-  draggedId=null;
+	  draggedId=null;
+	  draggedIds=[];
   blockEl.classList.remove('dragging');
   blockEl.style.opacity='';
   document.removeEventListener('touchmove',onMove,{passive:false});
@@ -4578,9 +4714,10 @@ function onWizCustChange(){
  wiz.custId=id;wiz.dogSvcs=[];
  const info=document.getElementById('wiz-cust-info');
  const c=custs.find(x=>x.id===id);
+ wiz.complimentaryDiscount=!wiz.editId?customerComplimentaryDiscount(c):null;
  if(c){
   info.style.display='block';
-  info.innerHTML=`<strong>${esc(c.owner)}</strong> · ${esc(c.kota||c.area||'-')} · WA: ${esc(c.wa||'-')}`;
+  info.innerHTML=`<strong>${esc(c.owner)}</strong> · ${esc(c.kota||c.area||'-')} · WA: ${esc(c.wa||'-')}${wiz.complimentaryDiscount?' · <span style="color:#92400e;font-weight:700">Complimentary discount ready (next booking only)</span>':''}`;
  } else {info.style.display='none'}
 }
 
@@ -4598,7 +4735,8 @@ function renderWizDogs(){
  wrap.innerHTML=cdogs.map(d=>{
   const ds=wiz.dogSvcs.find(x=>x.did===d.id);
   const checkedSvcs=ds?.svcs||[];
-  const lastG=d.last_groomed_at?`<div style="font-size:11px;color:${daysSince(d.last_groomed_at)>=14?'#dc2626':'var(--muted)'};margin-top:3px">Last groomed: ${fmtD(d.last_groomed_at)} (${daysSince(d.last_groomed_at)} hari lalu)</div>`:'<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:3px">Belum pernah grooming</div>';
+  const washHistory=homePawWashHistory(d.id);
+  const lastG=washHistory.last?`<div style="font-size:11px;color:${daysSince(washHistory.last)>=14?'#dc2626':'var(--muted)'};margin-top:3px">HomePaw history: ${washHistory.count} wash${washHistory.count===1?'':'es'} · last ${fmtD(washHistory.last)} (${daysSince(washHistory.last)} hari lalu)</div>`:'<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:3px">Belum pernah grooming dengan HomePaw</div>';
   const skinHistory=d.skin_history?`<div style="font-size:11px;color:#92400e;background:#fef3c7;padding:6px 8px;border-radius:5px;margin-top:6px;border-left:3px solid #ca8a04"><strong>Catatan kondisi kulit:</strong><br>${esc(d.skin_history).replace(/\n/g,'<br>')}</div>`:'';
   const stylingCount=(d.styling_refs||[]).filter(r=>!isStyleRefExpired(r)).length;
   const stylingBadge=stylingCount?`<span style="font-size:10px;background:#dcfce7;color:#15803d;padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:600">${stylingCount} styling ref</span>`:'';
@@ -4634,7 +4772,7 @@ function renderWizDogs(){
 }
 
 function onWizDogToggle(did,on){
- if(on){if(!wiz.dogSvcs.find(x=>x.did===did))wiz.dogSvcs.push({did,svc:'Basic Grooming',svcs:['Basic Grooming'],customDur:null})}
+	 if(on){if(!wiz.dogSvcs.find(x=>x.did===did))wiz.dogSvcs.push({did,svc:'Basic Grooming',svcs:['Basic Grooming'],customDur:null,discByCategory:wiz.complimentaryDiscount?JSON.parse(JSON.stringify(wiz.complimentaryDiscount)):null,complimentary:!!wiz.complimentaryDiscount})}
  else{wiz.dogSvcs=wiz.dogSvcs.filter(x=>x.did!==did)}
  renderWizDogs();
 }
@@ -5574,7 +5712,7 @@ function readWizServiceDiscounts(ds){
   const value=Math.max(0,parseFloat(document.getElementById(`appt-disc-svc-value-${ds.did}-${idx}`)?.value??fallback.value)||0);
   services[svc]={type:type==='fixed'?'fixed':'percent',value};
  });
- return {version:2,services};
+	 return {version:2,services,...(ds.complimentary?{source:'complimentary'}:{})};
 }
 function rememberWizDogInputs(did){
  const ds=wiz.dogSvcs.find(d=>d.did===did);if(!ds)return;
@@ -5606,7 +5744,7 @@ function openAppt(dateISO,groomerId,startMins){
   showToast(`Tanggal ${dateISO} di-block (${reasonLbl} \u00B7 ${gName}). Hapus block dulu untuk booking.`,'error');
   return;
  }
- wiz={step:1,custId:null,dogSvcs:[],groomerId:groomerId||null,date:dateISO||iso(new Date()),startMins:startMins??null,editId:null,tokenId:null,isFree:false,freeDogs:new Set()};
+	 wiz={step:1,custId:null,dogSvcs:[],groomerId:groomerId||null,date:dateISO||iso(new Date()),startMins:startMins??null,editId:null,tokenId:null,isFree:false,freeDogs:new Set(),complimentaryDiscount:null};
  document.getElementById('appt-title').textContent='Schedule appointment';
  document.getElementById('appt-save-btn').textContent='Save appointment';
  document.getElementById('appt-del-btn').style.display='none';
@@ -6222,9 +6360,10 @@ async function saveApptImpl(){
  calDay=wiz.date;
  // Instant refresh: patch local appts array, render immediately
  // Edited rows were patched with their exact successful payload above.
- if(!wiz.editId&&insertedAppts?.length){
-  insertedAppts.forEach(a=>appts.push(a));
- }
+	 if(!wiz.editId&&insertedAppts?.length){
+	  insertedAppts.forEach(a=>appts.push(a));
+	  if(wiz.complimentaryDiscount&&wiz.custId) await consumeCustomerComplimentaryDiscount(wiz.custId);
+	 }
  cm('ov-appt');
  renderCal();
  if(wantRepeat&&insertedAppts?.length){
@@ -6269,8 +6408,9 @@ async function createRecurringSeries(firstAppts, freqDays, totalCount){
   // Discount fields carried forward
   appt_disc_type:a.appt_disc_type||null,
   appt_disc_value:a.appt_disc_value||0,
-  appt_disc_base_only:!!a.appt_disc_base_only,
-  appt_disc_by_category:a.appt_disc_by_category?JSON.parse(JSON.stringify(a.appt_disc_by_category)):null
+	  // A customer complimentary discount is strictly one booking. Recurring
+	  // occurrences after the first session must return to normal pricing.
+	  appt_disc_by_category:a.appt_disc_by_category?.source==='complimentary'?null:(a.appt_disc_by_category?JSON.parse(JSON.stringify(a.appt_disc_by_category)):null)
  }));
  // Each occurrence receives an independent copy of the saved first-session rules.
  function occurrenceRow(tpl,occ,date,time){
@@ -7928,7 +8068,7 @@ function loadInvFromToday(){
  todayAppts.forEach(a=>{
   const d=dogs.find(x=>x.id===a.dog_id);if(!d)return;
   const cid=d.customer_id;if(!cid)return;
-  if(!custMap[cid]){custMap[cid]={appts:[],groomer_id:a.groomer_id};custOrder.push(cid);}
+	  if(!custMap[cid]){custMap[cid]={appts:[],groomer_id:a.groomer_id};custOrder.push(cid);}
   custMap[cid].appts.push({...a,_dog:d});
  });
  if(!custOrder.length){alert('Jadwal hari ini tidak terhubung ke customer.');return}
@@ -7939,7 +8079,7 @@ function loadInvFromToday(){
   const c=custs.find(x=>x.id===cid)||{owner:'?',customer_code:'?'};
   const cm_=custMap[cid];
   const dogNames=cm_.appts.map(a=>a._dog.name).join(', ');
-  const g=groomers.find(x=>x.id===cm_.groomer_id);
+	  const groomerNames=[...new Set(cm_.appts.map(a=>groomers.find(x=>x.id===a.groomer_id)?.name).filter(Boolean))];
   const times=cm_.appts.map(a=>(a.appt_time||'').slice(0,5)).join(', ');
   // Session C item 6: check for existing invoice of the CURRENT mode's kind.
   // In package mode, only lock out customers with an existing package invoice for today
@@ -7959,7 +8099,8 @@ function loadInvFromToday(){
     <strong style="font-size:14px">${esc(c.owner)}</strong>
     <span style="font-size:11px;color:#16a34a;font-weight:600">${esc(c.customer_code||'')}</span>
    </div>
-   <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(dogNames)} · ${times}${g?' · '+esc(g.name):''}</div>
+	   <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(dogNames)} · ${times}</div>
+	   <div style="font-size:11px;color:var(--primary-darker);font-weight:700;margin-top:3px">Groomer: ${esc(groomerNames.join(', ')||'-')}</div>
    ${lockedBanner}
   </div>`;
  }).join('');
@@ -8200,7 +8341,7 @@ function renderInvDogServices(){
   <textarea placeholder="e.g. Found flea, kulit sensitif, minta lion cut next time…"
    oninput="onDogNoteChange('${did}',this.value)"
    style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--subtle);min-height:44px;font-family:inherit;resize:vertical">${esc((invDogNotes||{})[did]||'')}</textarea>
-  <div style="font-size:10px;color:var(--muted);margin-top:2px">Past visits: ${visits.filter(v=>v.dog_id===did).length}</div>
+  <div style="font-size:10px;color:var(--muted);margin-top:2px">Business history: ${esc(homePawWashLabel(did))}</div>
   <div class="photo-zones" data-did="${did}" style="margin-top:10px">
    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
     <div class="photo-zone" data-zone="before" data-did="${did}"
@@ -12318,11 +12459,11 @@ function openInvApptPicker(){
    : '';
   return `<div style="padding:10px 14px;border-bottom:1px solid var(--border);${locked?'opacity:.55;cursor:not-allowed;background:var(--subtle)':'cursor:pointer'}"
    ${hoverStyle} ${clickHandler}>
-   <div style="display:flex;justify-content:space-between">
-    <strong>${esc(c.owner||'?')}</strong>
+	   <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">
+	    <div><strong>${esc(c.owner||'?')}</strong><div style="font-size:11px;color:var(--primary-darker);font-weight:700;margin-top:2px">Groomer: ${esc(g.name||'-')}</div></div>
     <span style="font-size:11px;color:${isToday?'#15803d':'var(--muted)'}">${isToday?'Today':fmtD(a.appt_date)}</span>
    </div>
-   <div style="font-size:12px;color:var(--muted)">${esc(d.name||'?')} · ${esc(a.service_base||'Basic Grooming')} · ${(a.appt_time||'').slice(0,5)} · ${esc(g.name||'-')}</div>
+   <div style="font-size:12px;color:var(--muted)">${esc(d.name||'?')} · ${esc(a.service_base||'Basic Grooming')} · ${(a.appt_time||'').slice(0,5)}</div>
    ${lockedBanner}
   </div>`;
  }).join('');
@@ -14229,9 +14370,9 @@ function c360RenderDogs(c){
  // Dog cards
  const dogsBlock=list.length
   ? `<div class="c360-section-lbl">Dogs (${list.length})</div>`+list.map(d=>{
-   const visitCount=visits.filter(v=>v.dog_id===d.id).length;
+   const washHistory=homePawWashHistory(d.id);
    // Batch O.6 — last groomed + skin history + styling refs preview
-   const lastG=d.last_groomed_at?`<div class="c360-card-meta" style="margin-top:4px">Last groomed: ${lastGroomedDisplay(d)}</div>`:'<div class="c360-card-meta" style="margin-top:4px;font-style:italic">Belum pernah grooming</div>';
+   const lastG=washHistory.last?`<div class="c360-card-meta" style="margin-top:4px">Last HomePaw wash: ${fmtD(washHistory.last)}</div>`:'<div class="c360-card-meta" style="margin-top:4px;font-style:italic">Belum pernah grooming dengan HomePaw</div>';
    const skinHist=d.skin_history?`<div style="font-size:11px;color:#92400e;background:#fef3c7;padding:6px 8px;border-radius:5px;margin-top:6px;border-left:3px solid #ca8a04"><strong>Kondisi kulit:</strong> ${esc(d.skin_history).slice(0,140)}${d.skin_history.length>140?'…':''}</div>`:'';
    const stylRefs=(d.styling_refs||[]).filter(r=>!isStyleRefExpired(r));
    const stylBlock=stylRefs.length?`<div style="margin-top:6px"><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Styling refs (${stylRefs.length})</div><div style="display:flex;gap:4px;flex-wrap:wrap">${stylRefs.slice(0,6).map(r=>`<img src="${esc(r.url)}" style="width:50px;height:50px;object-fit:cover;border-radius:4px;border:1px solid var(--border)"/>`).join('')}</div></div>`:'';
@@ -14240,7 +14381,7 @@ function c360RenderDogs(c){
     <div class="c360-card-meta">${esc(d.breed||'?')} \u00B7 ${esc(d.size||'?')}${d.age?' \u00B7 '+esc(d.age):''}${d.weight?' \u00B7 '+esc(d.weight):''}${d.coat?' \u00B7 '+esc(d.coat):''}${d.coat_color?' \u00B7 '+esc(d.coat_color):''}</div>
     ${d.prefs?`<div class="c360-card-meta" style="margin-top:4px;font-style:italic">${esc(d.prefs)}</div>`:''}
     ${lastG}
-    <div class="c360-card-meta">${visitCount} visit${visitCount!==1?'s':''}</div>
+    <div class="c360-card-meta"><strong>${washHistory.count} HomePaw wash${washHistory.count===1?'':'es'}</strong>${washHistory.last?' · last '+fmtD(washHistory.last):''}</div>
     ${skinHist}
     ${stylBlock}
     ${(()=>{const cf=customFieldsDisplay('pets',d.custom);return cf?`<div class="c360-card-meta" style="margin-top:6px;line-height:1.6">${cf}</div>`:''})()}
