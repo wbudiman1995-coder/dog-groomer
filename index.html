@@ -1201,6 +1201,12 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   <div class="card" style="padding:1rem;margin-bottom:1rem;font-size:12px;color:var(--muted)">
    Dog yang belum grooming ≥ <strong id="followup-threshold-label"></strong> hari (atur di Settings → Konfigurasi). Template pesan bisa diedit di Settings → Pesan WhatsApp.
   </div>
+  <div class="card" style="padding:1rem;margin-bottom:1rem">
+   <div class="form-grid">
+    <div class="fg"><label>Kota / Kabupaten</label><select id="fu-kota" onchange="onFollowupKotaChange()"><option value="">Semua kota…</option></select></div>
+    <div class="fg"><label>Kecamatan</label><select id="fu-kec" onchange="renderFollowups()"><option value="">Semua kecamatan…</option></select></div>
+   </div>
+  </div>
   <div id="followup-cards"></div>
  </div>
 
@@ -15216,10 +15222,18 @@ function renderDashboard(){
 }
 
 // Dogs not groomed for STALE_DAYS+ days. WA reminder per customer. (Reminders tab)
+function onFollowupKotaChange(){
+ populateKecSelect(document.getElementById('fu-kec'),document.getElementById('fu-kota').value);
+ renderFollowups();
+}
 function renderFollowups(){
  const el=document.getElementById('followup-cards'); if(!el) return;
  const lbl=document.getElementById('followup-threshold-label'); if(lbl) lbl.textContent=STALE_DAYS;
  const threshold=STALE_DAYS;
+ const kotaSel=document.getElementById('fu-kota');
+ if(kotaSel&&kotaSel.options.length<=1) populateKotaSelect(kotaSel);
+ const fuKota=kotaSel?.value||'';
+ const fuKec=document.getElementById('fu-kec')?.value||'';
  // For each dog: compute days since last_groomed_at (or fall back to most recent visit date)
  const overdue=dogs.map(d=>{
   let lastDate=d.last_groomed_at;
@@ -15232,6 +15246,8 @@ function renderFollowups(){
   if(days<threshold) return null;
   const cust=custs.find(c=>c.id===d.customer_id);
   if(!cust) return null;
+  if(fuKota&&cust.kota!==fuKota) return null;
+  if(fuKec&&cust.kecamatan!==fuKec) return null;
   return {dog:d,cust,days,lastDate};
  }).filter(Boolean).sort((a,b)=>b.days-a.days);
 
