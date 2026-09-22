@@ -1042,6 +1042,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  </div>
 
  <div class="subsec active" id="fsec-invoices">
+ <div id="fin-uninvoiced-banner" style="display:none"></div>
  <div class="filter-bar">
  <select id="fin-status" onchange="renderFinancial()">
  <option value="">All payment stages</option>
@@ -4727,6 +4728,9 @@ function parseSvcBase(svcStr){
  if(svcStr.startsWith('Basic + ')){const a=svcStr.replace('Basic + ','').trim();return ['Basic Grooming',...(PRICING[a]?[a]:[])]}
  return PRICING[svcStr]?[svcStr]:['Basic Grooming'];
 }
+// Tokens/subscriptions only pay for Basic Grooming — a Styling- or Botak-only
+// booking (add-on with no Basic Grooming line) must never consume a session.
+function svcHasBasic(svcStr){return parseSvcBase(svcStr).includes('Basic Grooming')}
 
 function renderWizDogs(){
  const wrap=document.getElementById('wiz-dog-list');
@@ -4895,7 +4899,7 @@ function findBestSlots(custId,totalDur,anchorCustId){
   }
   activeG.forEach(g=>{
    if(!(g.working_days||'Mon,Tue,Wed,Thu,Fri,Sat').split(',').includes(dayMap[d.getDay()])) return;
-   if(groomerBlocks.some(b=>b.block_date===dateISO&&(!b.groomer_id||b.groomer_id===g.id))) return;
+   if(isDateBlocked(dateISO,g.id)) return;
    const dayAppts=appts.filter(a=>a.groomer_id===g.id&&a.appt_date===dateISO&&a.status!=='cancelled'&&!skipIds.has(a.id))
     .map(a=>{const cc=custCoordsOfAppt(a);const st=t2m((a.appt_time||'09:00').slice(0,5));return {a,cc,owner:cc?cc.cust.owner:null,start:st,end:st+(a.duration_mins||60)};});
    const dayCount=dayAppts.length;
@@ -5738,7 +5742,7 @@ function populateWizCustList(){
 function openAppt(dateISO,groomerId,startMins){
  // Batch O.10 — reject if day is blocked
  if(dateISO&&groomerId&&isDateBlocked(dateISO,groomerId)){
-  const block=groomerBlocks.find(b=>b.block_date===dateISO&&(!b.groomer_id||b.groomer_id===groomerId));
+  const block=findGroomerBlock(dateISO,groomerId);
   const reasonLbl={sick:'sakit',holiday:'libur nasional',libur_mingguan:'libur mingguan',leave:'cuti',other:'block'}[block?.reason]||'block';
   const gName=block?.groomer_id?(groomers.find(g=>g.id===block.groomer_id)?.name||'?'):'semua groomer';
   showToast(`Tanggal ${dateISO} di-block (${reasonLbl} \u00B7 ${gName}). Hapus block dulu untuk booking.`,'error');
@@ -6115,7 +6119,7 @@ async function saveApptImpl(){
  wiz.dogSvcs.forEach(ds=>{
   if(!ds.did) return;
   const isFree=wiz.freeDogs?wiz.freeDogs.has(ds.did):!!wiz.isFree;
-  if(isFree||wiz.tokenId) return;
+  if(isFree||wiz.tokenId||!svcHasBasic(ds.svc)) return; // Styling/Botak-only never touches a subscription slot
   const sub=activeSubscriptionForDog(ds.did,wiz.date)||subscriptions
    .filter(s=>s.dog_id===ds.did&&s.status==='active')
    .sort((a,b)=>String(b.started_at||b.created_at||'').localeCompare(String(a.started_at||a.created_at||'')))[0];
@@ -6146,7 +6150,7 @@ async function saveApptImpl(){
   let sessSrc='normal';
   const isThisDogFree = wiz.freeDogs ? wiz.freeDogs.has(ds.did) : !!wiz.isFree;
   if(isThisDogFree) sessSrc='free';
-  else if(wiz.tokenId) sessSrc='advance';
+  else if(wiz.tokenId&&svcHasBasic(ds.svc)) sessSrc='advance';
   else if(ds.did){
    if(bookingSubs[ds.did]) sessSrc='subscription';
   }
@@ -6312,8 +6316,8 @@ async function saveApptImpl(){
      let sessSrc='normal';
      const isThisDogFree=wiz.freeDogs?wiz.freeDogs.has(ds.did):!!wiz.isFree;
      if(isThisDogFree) sessSrc='free';
-     else if(wiz.tokenId) sessSrc='advance';
-     else {
+     else if(wiz.tokenId&&svcHasBasic(ds.svc)) sessSrc='advance';
+     else if(svcHasBasic(ds.svc)){
       const hasActiveSubs=subscriptions.some(s=>s.dog_id===ds.did&&s.status==='active');
       if(hasActiveSubs) sessSrc='subscription';
      }
@@ -6602,12 +6606,10 @@ async function deleteAppointmentWithVisitCheck(apptId,options={}){
  const dogName=dogs.find(d=>d.id===oldAppt.dog_id)?.name||'?';
  const {data:linkedVisits,error:visitReadError}=await db.from('visits').select('*').eq('dog_id',oldAppt.dog_id).eq('visited_at',oldAppt.appt_date);
  if(visitReadError){alert('Delete dibatalkan: '+visitReadError.message);return {deleted:false};}
- let removeVisits=false;
- if(linkedVisits?.length){
-  const choice=prompt(`Ada ${linkedVisits.length} visit untuk ${dogName} pada ${oldAppt.appt_date}.\nKetik "yes" untuk hapus visit tersebut juga, "no" untuk simpan visit, atau Cancel untuk batalkan delete appointment. Invoice tetap disimpan.`,'no');
-  if(!choice||!['yes','no'].includes(choice.trim().toLowerCase()))return {deleted:false};
-  removeVisits=choice.trim().toLowerCase()==='yes';
- }
+ // The visit log is the appointment's own trail (not the invoice's) — always remove it
+ // together with the appointment so History/exports don't keep a session whose booking
+ // is gone. Invoices are untouched and stay saved.
+ const removeVisits=!!linkedVisits?.length;
  let query=db.from('appointments').delete().eq('id',apptId).eq('appt_date',oldAppt.appt_date);
  if(oldAppt.updated_at)query=query.eq('updated_at',oldAppt.updated_at);
  const {data:deletedRows,error}=await query.select('*');
@@ -6737,7 +6739,7 @@ function calcGroomerLateCountForCycle(groomerId,cycleStart,cycleEnd){
  cycleAppts.forEach(a=>{if(!byDate[a.appt_date])byDate[a.appt_date]=[];byDate[a.appt_date].push(a);});
  let late=0;
  Object.entries(byDate).forEach(([date,dayAppts])=>{
-  const blocked=groomerBlocks.some(b=>b.block_date===date&&(!b.groomer_id||b.groomer_id===groomerId));
+  const blocked=isDateBlocked(date,groomerId);
   if(blocked) return;
   const dow=dayMap[new Date(date+'T00:00:00').getDay()];
   if(!workingDays.includes(dow)) return;
@@ -6768,7 +6770,7 @@ function calcGroomerLateCount(groomerId){
  let late=0;
  Object.entries(byDate).forEach(([date,dayAppts])=>{
   // Skip blocked days (for this groomer or all groomers)
-  const blocked=groomerBlocks.some(b=>b.block_date===date&&(!b.groomer_id||b.groomer_id===groomerId));
+  const blocked=isDateBlocked(date,groomerId);
   if(blocked) return;
   // Skip groomer's natural day off (working_days)
   const dow=dayMap[new Date(date+'T00:00:00').getDay()];
@@ -8745,7 +8747,7 @@ function renderSchedAvailability(did){
    return m<e&&s<(m+dur);
   })());
   // Also honor groomer blocks
-  const blocked=(typeof groomerBlocks!=='undefined')&&groomerBlocks.some(b=>b.block_date===dateISO&&(!b.groomer_id||b.groomer_id===chosenGroomer));
+  const blocked=(typeof groomerBlocks!=='undefined')&&isDateBlocked(dateISO,chosenGroomer);
   const status=outOfHours?'outofhours':(blocked?'blocked':(clash?'busy':'free'));
   const isSelected=m===jamMin;
   slots.push({m,status,isSelected});
@@ -8789,7 +8791,7 @@ function autoAssignGroomer(dateISO,timeHHMM,durMins){
   const wd=(g.working_days||'Mon,Tue,Wed,Thu,Fri,Sat').split(',');
   if(!wd.includes(dow)) return false;
   // blocked (this groomer or all)?
-  if(groomerBlocks.some(b=>b.block_date===dateISO&&(!b.groomer_id||b.groomer_id===g.id))) return false;
+  if(isDateBlocked(dateISO,g.id)) return false;
   // time overlap with an existing appt?
   const clash=appts.some(a=>a.groomer_id===g.id&&a.appt_date===dateISO&&a.status!=='cancelled'&&(()=>{
    const s=_toMin((a.appt_time||'').slice(0,5));const e=s+(a.duration_mins||60);
@@ -10484,7 +10486,36 @@ function sendSavedInvoiceToWA(invId, ev){
 }
 
 /* ============ FINANCIAL TAB ============ */
+// Past appointments marked done that have never been invoiced — surfaced at the
+// top of the invoice list so they don't quietly fall through the cracks.
+function findUninvoicedPastAppts(){
+ const today=iso(new Date());
+ return appts.filter(a=>a.status==='done'&&a.appt_date<=today&&!findInvoiceForDogsOnDate([a.dog_id],a.appt_date))
+  .sort((a,b)=>b.appt_date.localeCompare(a.appt_date));
+}
+function renderUninvoicedBanner(){
+ const banner=document.getElementById('fin-uninvoiced-banner');
+ if(!banner) return;
+ const list=findUninvoicedPastAppts();
+ if(!list.length){banner.style.display='none';banner.innerHTML='';return}
+ banner.style.display='block';
+ banner.innerHTML=`<div class="card" style="padding:12px 16px;margin-bottom:1rem;border-left:4px solid var(--red-solid);background:var(--red)">
+  <div style="font-weight:700;color:var(--red-t);margin-bottom:6px;font-size:13px">${list.length} appointment selesai belum di-invoice</div>
+  <div style="display:flex;flex-direction:column;gap:4px">
+   ${list.slice(0,10).map(a=>{
+    const d=dogs.find(x=>x.id===a.dog_id)||{};
+    const c=d.customer_id?custs.find(x=>x.id===d.customer_id)||{}:{};
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;background:#fff;border-radius:6px;padding:6px 10px">
+     <span>${fmtD(a.appt_date)} · ${esc(c.owner||'?')} · ${esc(d.name||'?')}</span>
+     <button class="icon-btn" onclick="sw('invoice');loadInvFromAppointment('${a.id}')">Buat invoice</button>
+    </div>`;
+   }).join('')}
+   ${list.length>10?`<div style="font-size:11px;color:var(--red-t);margin-top:4px">+${list.length-10} lagi…</div>`:''}
+  </div>
+ </div>`;
+}
 function renderFinancial(){
+ renderUninvoicedBanner();
  const st=document.getElementById('fin-status').value;
  const month=document.getElementById('fin-month')?.value||''; // 'YYYY-MM'
  const s=(document.getElementById('fin-search').value||'').toLowerCase();
@@ -11543,14 +11574,23 @@ async function delBlockDay(id){
  renderCal();
 }
 
+// Helper: find the block (if any) affecting a date+groomer.
+// An "all groomers" block (groomer_id null) only applies to groomers who had
+// already joined by that date — a holiday created before a groomer's join_date
+// shouldn't retroactively block days before they existed. Forward-dated blocks
+// still apply to every groomer, including ones added afterward.
+function findGroomerBlock(date,groomerId){
+ return groomerBlocks.find(b=>{
+  if(b.block_date!==date) return false;
+  if(b.groomer_id) return b.groomer_id===groomerId;
+  const g=groomers.find(x=>x.id===groomerId);
+  if(g?.join_date&&date<g.join_date) return false;
+  return true;
+ });
+}
 // Helper: check if a date+groomer is blocked
 function isDateBlocked(date,groomerId){
- return groomerBlocks.some(b=>{
-  if(b.block_date!==date) return false;
-  // null groomer_id = all groomers blocked
-  if(!b.groomer_id) return true;
-  return b.groomer_id===groomerId;
- });
+ return !!findGroomerBlock(date,groomerId);
 }
 
 // Helper: get block info for visual rendering on calendar
@@ -12089,6 +12129,7 @@ async function deductSubsOnInvoice(rec){
  if(invDate>today) return; // future-dated invoice: nothing to consume yet
  const toDeduct=[];
  for(const d of rec.dogs){
+  if(!invoiceDogHasBasic(d)) continue; // Styling/Botak-only line — no Basic Grooming, no session spent
   const exact=d.appointment_id?appts.find(a=>a.id===d.appointment_id):linkedAppointmentForInvoiceDog(rec,d);
   const matches=exact?[exact]:appts.filter(a=>a.dog_id===d.dog_id&&a.appt_date===invDate&&findSubscriptionForAppointment(a));
   matches.filter(a=>a.appt_date<=today&&findSubscriptionForAppointment(a)&&!a.subs_deducted&&a.status!=='cancelled')
@@ -13487,7 +13528,8 @@ function groomerBlockedDays(groomerId,cycle,reasons){
  const dates=new Set();
  (typeof groomerBlocks!=='undefined'?groomerBlocks:[]).forEach(b=>{
   if(!b.block_date||b.block_date<cycle.start||b.block_date>cycle.end||b.block_date>today) return;
-  if(b.groomer_id&&b.groomer_id!==groomerId) return;
+  if(b.groomer_id){ if(b.groomer_id!==groomerId) return; }
+  else if(g?.join_date&&b.block_date<g.join_date) return; // "all groomers" block predates this groomer joining
   if(reasons&&!reasons.includes(b.reason)) return;
   if(!wd.includes(dayMap[new Date(b.block_date+'T00:00:00').getDay()])) return;
   dates.add(b.block_date);
@@ -13502,7 +13544,8 @@ function groomerWeeklyPaidDays(g,cycle){
  const blocked=new Set();
  (typeof groomerBlocks!=='undefined'?groomerBlocks:[]).forEach(b=>{
   if(!b.block_date||b.block_date<cycle.start||b.block_date>cycle.end||b.block_date>today) return;
-  if(b.groomer_id&&b.groomer_id!==g.id) return;
+  if(b.groomer_id){ if(b.groomer_id!==g.id) return; }
+  else if(g?.join_date&&b.block_date<g.join_date) return; // "all groomers" block predates this groomer joining
   if(!['sick','leave','holiday','libur_mingguan','other'].includes(b.reason)) return;
   blocked.add(b.block_date);
  });
@@ -13879,7 +13922,7 @@ function payrollLateDays(gid,cycle){
  cycleAppts.forEach(a=>{if(!byDate[a.appt_date])byDate[a.appt_date]=[];byDate[a.appt_date].push(a);});
  const rows=[];
  Object.entries(byDate).forEach(([date,dayAppts])=>{
-  if(groomerBlocks.some(b=>b.block_date===date&&(!b.groomer_id||b.groomer_id===gid))) return;
+  if(isDateBlocked(date,gid)) return;
   const dow=dayMap[new Date(date+'T00:00:00').getDay()];
   if(!wd.includes(dow)) return;
   const first=dayAppts.sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''))[0];
