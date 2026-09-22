@@ -14304,6 +14304,22 @@ async function delVisit(visitId){
  const v=visits.find(x=>x.id===visitId); if(!v){alert('Visit not found');return}
  const dog=dogs.find(d=>d.id===v.dog_id);
  const label=`${dog?.name||'?'} (${v.visited_at})`;
+ // A visit that still has a live (non-cancelled) calendar appointment on that same
+ // dog+date gets auto-re-logged by autoLogPastAppointments() on the very next page
+ // load — deleting only the visits row is not actually "delete", it just comes
+ // back. Route through the appointment delete flow instead: it already removes
+ // the matching visit AND refunds any token/subscription credit it consumed.
+ const linkedAppt=appts.find(a=>a.dog_id===v.dog_id&&a.appt_date===v.visited_at&&a.status!=='cancelled');
+ if(linkedAppt){
+  if(!confirm(`Visit "${label}" berasal dari appointment kalender yang masih aktif.\n\nMenghapus visit saja tidak cukup — appointment-nya akan otomatis mencatat ulang visit ini setiap refresh. Hapus appointment kalender-nya sekaligus?\n\n(Invoice yang sudah ada tetap aman. Token/subscription yang sudah terpakai untuk appointment ini akan dikembalikan.)`)) return;
+  const result=await deleteAppointmentWithVisitCheck(linkedAppt.id);
+  if(!result.deleted) return;
+  await reloadTables('visits');
+  if(typeof renderVisits==='function') renderVisits();
+  if(typeof renderCust360==='function') renderCust360();
+  showToast('Visit & appointment dihapus','success');
+  return;
+ }
  if(!confirm(`Delete visit "${label}"?\n\nVisit record akan dihapus. Invoice (kalau ada) TIDAK terpengaruh.\nGunakan ini untuk: groomer sick, customer cancel last-minute, atau visit yang seharusnya tidak ter-record.`)) return;
  const {error}=await db.from('visits').delete().eq('id',visitId);
  if(error){alert('Error: '+error.message);return}
