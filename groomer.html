@@ -93,6 +93,27 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .daygrid-block .dg-name{font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .daygrid-block .dg-dogs{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
+/* Kalender tab — full week view, view-only. Full-bleed (cancels .content's side
+   padding) with horizontal scroll so all 8 day-columns are reachable on a phone. */
+.cal-fullbleed{margin:0 -12px}
+.cal-scroll{display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.cal-timecol{position:sticky;left:0;z-index:2;background:var(--surface);flex-shrink:0;width:36px;border-right:1px solid var(--border)}
+.cal-col{flex-shrink:0;width:118px;border-right:1px solid var(--border)}
+.cal-col-hdr{text-align:center;font-size:11px;font-weight:700;padding:6px 2px;border-bottom:1px solid var(--border);background:var(--surface)}
+.cal-col-hdr.today{color:var(--primary-dk);background:#fff3e9}
+.cal-col-body{position:relative}
+.cal-tick{position:absolute;right:4px;font-size:9px;color:var(--muted);transform:translateY(-6px)}
+.cal-block{position:absolute;left:2px;right:2px;border-radius:5px;padding:2px 4px;font-size:9px;line-height:1.25;overflow:hidden;border-left:3px solid var(--primary);background:var(--subtle);cursor:pointer;display:flex;flex-direction:column;-webkit-tap-highlight-color:transparent}
+.cal-block:active{filter:brightness(.96)}
+.cal-block.status-done{border-left-color:var(--green);background:#e9f9ee}
+.cal-block.status-confirmed{border-left-color:#3b82f6;background:#eaf1ff}
+.cal-block .cb-time{font-weight:700;color:var(--primary-dk)}
+.cal-block.status-done .cb-time{color:var(--green)}
+.cal-block.status-confirmed .cb-time{color:#1e40af}
+.cal-block .cb-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-block .cb-dogs{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#cal-detail{margin-top:10px}
+
 .empty{text-align:center;padding:3rem 1rem;color:var(--muted);font-size:13px;font-style:italic}
 
 .gate{max-width:400px;margin:60px auto;padding:0 20px;text-align:center}
@@ -174,7 +195,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
   <button class="tab active" id="tab-today" onclick="switchTab('today')">Hari Ini <span class="count" id="cnt-today">0</span></button>
   <button class="tab" id="tab-tomorrow" onclick="switchTab('tomorrow')">Besok <span class="count" id="cnt-tomorrow">0</span></button>
   <button class="tab" id="tab-later" onclick="switchTab('later')">2-3 Hari <span class="count" id="cnt-later">0</span></button>
-  <button class="tab" id="tab-week" onclick="switchTab('week')">+1 Minggu <span class="count" id="cnt-week">0</span></button>
+  <button class="tab" id="tab-calendar" onclick="switchTab('calendar')">Kalender <span class="count" id="cnt-calendar">0</span></button>
  </div>
 
  <div id="stats-wrap" style="display:none"></div>
@@ -354,19 +375,29 @@ function renderMyPay(){
  </div>`;
 }
 
-// Dogs-groomed / Styling / Botak counters for the current calendar month.
+// Dogs-groomed / Styling / Botak counters for the current pay cycle — same
+// cycle_start_day the admin CRM's Financial > Payroll tab uses (default the
+// 26th, but reads the real configured value so it never drifts out of sync).
 // Counts only (no money) — separate from the admin-published pay card above.
 let monthStats={dogs:0,styling:0,botak:0};
-async function loadMonthStats(){
+let cycleStartDay=26;
+async function loadCycleStartDay(){
+ const {data}=await db.from('payroll_settings').select('cycle_start_day').eq('id',1).maybeSingle();
+ if(data?.cycle_start_day) cycleStartDay=data.cycle_start_day;
+}
+function currentCycleStart(){
  const now=new Date();
- const start=iso(new Date(now.getFullYear(),now.getMonth(),1));
- const end=iso(new Date(now.getFullYear(),now.getMonth()+1,0));
+ const y=now.getFullYear(),m=now.getMonth(),d=now.getDate();
+ return d>=cycleStartDay ? new Date(y,m,cycleStartDay) : new Date(y,m-1,cycleStartDay);
+}
+async function loadMonthStats(){
+ await loadCycleStartDay();
+ const start=iso(currentCycleStart());
  const {data,error}=await db.from('appointments')
   .select('service_base')
   .eq('groomer_id',currentGroomer.id)
   .eq('status','done')
-  .gte('appt_date',start)
-  .lte('appt_date',end);
+  .gte('appt_date',start);
  if(error||!data) return;
  monthStats={
   dogs:data.length,
@@ -377,14 +408,14 @@ async function loadMonthStats(){
 }
 function renderMonthStats(){
  const wrap=document.getElementById('stats-wrap'); if(!wrap) return;
- const monthLabel=new Date().toLocaleDateString('id-ID',{month:'long',year:'numeric'});
+ const cycleLabel=currentCycleStart().toLocaleDateString('id-ID',{day:'numeric',month:'long'})+' – hari ini';
  wrap.style.display='block';
  const tile=(n,lbl)=>`<div style="flex:1;text-align:center;background:var(--subtle);border-radius:8px;padding:8px 4px">
   <div style="font-size:20px;font-weight:700;color:var(--primary-dk)">${n}</div>
   <div style="font-size:10px;color:var(--muted)">${lbl}</div>
  </div>`;
  wrap.innerHTML=`<div style="background:var(--surface);border-radius:10px;padding:12px 14px;margin:12px 12px 0;box-shadow:var(--sh);border:1px solid var(--border)">
-  <div style="font-size:10px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Grooming bulan ini · ${esc(monthLabel)}</div>
+  <div style="font-size:10px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Grooming cycle ini · ${esc(cycleLabel)}</div>
   <div style="display:flex;gap:8px">
    ${tile(monthStats.dogs,'Anjing digroom')}
    ${tile(monthStats.styling,'Styling')}
@@ -470,22 +501,21 @@ function updateCounts(){
  const tmw=new Date();tmw.setDate(tmw.getDate()+1);const tmwISO=iso(tmw);
  const d2=new Date();d2.setDate(d2.getDate()+2);const d2ISO=iso(d2);
  const d3=new Date();d3.setDate(d3.getDate()+3);const d3ISO=iso(d3);
- const c={today:0,tomorrow:0,later:0,week:0};
+ const c={today:0,tomorrow:0,later:0};
  dataCache.appts.forEach(a=>{
   if(a.appt_date===today) c.today++;
   else if(a.appt_date===tmwISO) c.tomorrow++;
   else if(a.appt_date===d2ISO||a.appt_date===d3ISO) c.later++;
-  else if(a.appt_date>d3ISO) c.week++;
  });
  document.getElementById('cnt-today').textContent=c.today;
  document.getElementById('cnt-tomorrow').textContent=c.tomorrow;
  document.getElementById('cnt-later').textContent=c.later;
- document.getElementById('cnt-week').textContent=c.week;
+ document.getElementById('cnt-calendar').textContent=dataCache.appts.length; // whole loaded week
 }
 
 function switchTab(tab){
  currentTab=tab;
- ['today','tomorrow','later','week'].forEach(t=>{
+ ['today','tomorrow','later','calendar'].forEach(t=>{
   document.getElementById('tab-'+t).classList.toggle('active',t===tab);
  });
  renderActiveTab();
@@ -575,26 +605,61 @@ function toggleChecklist(btn){
  btn.textContent=collapsed?'Buka':'Tutup';
 }
 
-// "+1 Minggu" tab — days 4-7 ahead, read-only preview. No photo upload, no
-// groomer-note field, no late/absence tracking: those only make sense day-of.
-function renderWeekView(content,dates){
- const sections=dates.map(date=>({
-  date,
-  appts:dataCache.appts.filter(a=>a.appt_date===date).sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''))
- }));
- if(!sections.some(s=>s.appts.length)){
+// "Kalender" tab — full week (today + next 7 days) time-grid, view-only, like
+// the admin CRM's calendar but a single column per day (a groomer only ever
+// sees their own schedule). No photo upload, no notes here — tap a block to
+// see its details below; editing still only happens in the day tabs.
+let _calGroups={};
+function renderCalendarGrid(content,dates){
+ if(!dataCache.appts.some(a=>dates.includes(a.appt_date))){
   content.innerHTML='<div class="empty">Tidak ada jadwal grooming untuk 1 minggu ke depan.<br><br>Refresh nanti untuk update.</div>';
   return;
  }
- const notice=`<div style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--muted)">Preview jadwal 1 minggu ke depan — lihat saja, upload foto & catatan baru bisa di hari-H.</div>`;
- content.innerHTML=notice+sections.map(({date,appts})=>{
-  if(!appts.length) return '';
-  const groups=groupApptsByCustomer(appts);
-  return `<div class="day-section">
-   <div class="day-header">${esc(fmtDateLong(date))}</div>
-   ${groups.map(group=>renderApptPreview(group)).join('')}
+ const CSTART=8*60,CEND=20*60,CSTEP=30,ROWH=28;
+ const slots=[];for(let m=CSTART;m<CEND;m+=CSTEP)slots.push(m);
+ const totalH=slots.length*ROWH;
+ const today=iso(new Date());
+ _calGroups={};
+ let cols='';
+ dates.forEach(date=>{
+  const dayAppts=dataCache.appts.filter(a=>a.appt_date===date).sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
+  const groups=groupApptsByCustomer(dayAppts);
+  const isToday=date===today;
+  let blocks='';
+  groups.forEach((group,gi)=>{
+   const key=date+'-'+gi;
+   _calGroups[key]=group;
+   const a=group[0];
+   const sm=t2m((a.appt_time||'09:00').slice(0,5));
+   const totalDur=group.reduce((s,x)=>s+(x.duration_mins||60),0);
+   const top=Math.max(0,((sm-CSTART)/CSTEP)*ROWH);
+   const ht=Math.max((totalDur/CSTEP)*ROWH-2,ROWH-2);
+   const cust=dataCache.custs.find(c=>{const d=dataCache.dogs.find(x=>x.id===a.dog_id);return c.id===d?.customer_id;})||{};
+   const dogNames=group.map(x=>dataCache.dogs.find(d=>d.id===x.dog_id)?.name||'?').join(', ');
+   const status=a.status||'pending';
+   blocks+=`<div class="cal-block status-${status}" style="top:${top}px;height:${ht}px" onclick="showCalDetail('${key}')">
+    <span class="cb-time">${m2t(sm)}</span>
+    <span class="cb-name">${esc(cust.owner||'?')}</span>
+    <span class="cb-dogs">${esc(dogNames)}</span>
+   </div>`;
+  });
+  const dLabel=new Date(date+'T00:00:00').toLocaleDateString('id-ID',{weekday:'short',day:'numeric'});
+  cols+=`<div class="cal-col">
+   <div class="cal-col-hdr${isToday?' today':''}">${esc(dLabel)}</div>
+   <div class="cal-col-body" style="height:${totalH}px">${blocks}</div>
   </div>`;
- }).join('');
+ });
+ let timeCol=`<div class="cal-timecol"><div class="cal-col-hdr">&nbsp;</div><div style="position:relative;height:${totalH}px">`;
+ slots.forEach((m,si)=>{if(m%60===0)timeCol+=`<div class="cal-tick" style="top:${si*ROWH}px">${m2t(m)}</div>`;});
+ timeCol+='</div></div>';
+ content.innerHTML=`<div class="cal-fullbleed"><div class="cal-scroll">${timeCol}${cols}</div></div>
+  <div id="cal-detail"></div>`;
+}
+function showCalDetail(key){
+ const group=_calGroups[key]; if(!group) return;
+ const el=document.getElementById('cal-detail'); if(!el) return;
+ el.innerHTML=renderApptPreview(group);
+ el.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 function renderApptPreview(group){
  const firstA=group[0];
@@ -678,9 +743,9 @@ function renderActiveTab(){
  const d2=new Date();d2.setDate(d2.getDate()+2);const d2ISO=iso(d2);
  const d3=new Date();d3.setDate(d3.getDate()+3);const d3ISO=iso(d3);
 
- if(currentTab==='week'){
-  const weekDates=[4,5,6,7].map(n=>{const d=new Date();d.setDate(d.getDate()+n);return iso(d)});
-  renderWeekView(content,weekDates);
+ if(currentTab==='calendar'){
+  const weekDates=[0,1,2,3,4,5,6,7].map(n=>{const d=new Date();d.setDate(d.getDate()+n);return iso(d)});
+  renderCalendarGrid(content,weekDates);
   return;
  }
 
