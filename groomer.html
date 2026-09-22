@@ -393,17 +393,28 @@ function currentCycleStart(){
 async function loadMonthStats(){
  await loadCycleStartDay();
  const start=iso(currentCycleStart());
- const {data,error}=await db.from('appointments')
-  .select('service_base')
+ // Same source the admin CRM's Payroll tab uses (computeGroomerDogsInCycle):
+ // "dogs groomed" = dogs on an after-visit invoice for this groomer this cycle,
+ // not just appointments marked done — the invoice is what payroll actually
+ // counts as completion evidence, so this stays consistent with those numbers.
+ const {data,error}=await db.from('invoices')
+  .select('dogs')
   .eq('groomer_id',currentGroomer.id)
-  .eq('status','done')
-  .gte('appt_date',start);
+  .gte('invoice_date',start);
  if(error||!data) return;
- monthStats={
-  dogs:data.length,
-  styling:data.filter(a=>(a.service_base||'').includes('Styling')).length,
-  botak:data.filter(a=>(a.service_base||'').includes('Botak')).length
- };
+ let dogsCount=0,styling=0,botak=0;
+ data.forEach(inv=>{
+  const lines=inv.dogs||[];
+  const isPackageSale=lines.some(d=>d.advance||d.invoice_kind==='package_sale');
+  if(isPackageSale) return; // package/subscription sale, not a completed grooming session
+  lines.forEach(d=>{
+   const svcs=(d.services||[]).map(s=>String(s.name||'').trim().toLowerCase());
+   if(svcs.includes('basic grooming')) dogsCount++;
+   if(svcs.includes('styling')) styling++;
+   if(svcs.includes('botak')) botak++;
+  });
+ });
+ monthStats={dogs:dogsCount,styling,botak};
  renderMonthStats();
 }
 function renderMonthStats(){
