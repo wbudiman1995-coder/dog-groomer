@@ -4264,6 +4264,7 @@ async function massMove(){
  for(const oldRec of movedAppts){
   const dogName=dogs.find(d=>d.id===oldRec.dog_id)?.name||'?';
   await logAudit('appointment',oldRec.id,'update',{old:oldRec,new:{...oldRec,...massMovePayload},label:dogName+' '+newDate});
+  if(oldRec.appt_date!==newDate) await cleanupStaleVisitOnMove(oldRec.dog_id,oldRec.appt_date,newDate);
  }
  ids.forEach(id=>{const i=appts.findIndex(a=>a.id===id);if(i>=0)Object.assign(appts[i],massMovePayload)});
  massSelected.clear();
@@ -4456,6 +4457,7 @@ async function moveAppointmentCombination(ids,newDate,newGroomerId,newStartMins)
   const dogName=dogs.find(d=>d.id===done.old.dog_id)?.name||'?';
   await logAudit('appointment',done.old.id,'update',{old:done.old,new:{...done.old,...done.payload},label:dogName+' '+newDate});
   const local=appts.find(a=>a.id===done.old.id); if(local) Object.assign(local,done.payload);
+  if(done.old.appt_date!==done.payload.appt_date) await cleanupStaleVisitOnMove(done.old.dog_id,done.old.appt_date,done.payload.appt_date);
  }
  showToast(completed.length>1?`${completed.length} appointment dipindahkan bersama`:'Appointment dipindahkan','success');
  renderCal();
@@ -6257,7 +6259,9 @@ async function saveApptImpl(){
      const {error:groupUpdateError}=await db.from('appointments').update(upd).eq('id',eid);
      if(groupUpdateError){alert('Error: '+groupUpdateError.message);return}
      await logAudit('appointment',eid,'update',{old:oldGroupRec,new:{...oldGroupRec,...upd},label:(dogs.find(d=>d.id===ds.did)?.name||'?')+' '+(upd.appt_date||oldGroupRec?.appt_date||wiz.date)});
+     const prevGroupDate=oldGroupRec?.appt_date;
      if(oldGroupRec) Object.assign(oldGroupRec,upd);
+     if(upd.appt_date&&prevGroupDate&&upd.appt_date!==prevGroupDate) await cleanupStaleVisitOnMove(oldGroupRec.dog_id,prevGroupDate,upd.appt_date);
     }
     // Late/waive/actual-duration fields ride on the group's first appointment
     if(Object.keys(perfFields).length){
@@ -6276,6 +6280,7 @@ async function saveApptImpl(){
     if(singleUpdateError){alert('Error: '+singleUpdateError.message);return;}
     const dogName=dogs.find(d=>d.id===oldRec?.dog_id)?.name||'?';
     await logAudit('appointment',wiz.editId,'update',{old:oldRec,new:{...oldRec,...updatePayload},label:dogName+' '+updatePayload.appt_date});
+    if(oldRec&&updatePayload.appt_date&&oldRec.appt_date!==updatePayload.appt_date) await cleanupStaleVisitOnMove(oldRec.dog_id,oldRec.appt_date,updatePayload.appt_date);
     if(oldRec) Object.assign(oldRec,updatePayload);
    }
    // Session C item 3: INSERT rows for newly-added dogs (apptId=null).
@@ -6645,6 +6650,22 @@ async function deleteAppointmentWithVisitCheck(apptId,options={}){
  }catch(e){warnings.push('Pembersihan/refund berhenti: '+e.message+'. Periksa visit dan saldo sesi sebelum mengubahnya lagi.');}
  if(warnings.length)alert('Appointment sudah dihapus, tetapi perlu pengecekan manual:\n'+warnings.join('\n'));
  return {deleted:true,warning:warnings.length>0};
+}
+
+// A rescheduled appointment leaves its old auto-logged visit behind (visits are
+// matched to appointments only by dog+date, never by id) — clean up the stale
+// one so History/Financial/exports don't keep showing a visit for a date the
+// appointment no longer occupies. Never touches a visit that's already
+// invoiced or manually marked billed — those are real records, not leftovers.
+async function cleanupStaleVisitOnMove(dogId,oldDate,newDate){
+ if(!dogId||!oldDate||oldDate===newDate) return;
+ const stale=visits.filter(v=>v.dog_id===dogId&&v.visited_at===oldDate&&!v.is_billed_manually&&!findInvoiceForDogsOnDate([dogId],oldDate));
+ for(const v of stale){
+  const {error}=await db.from('visits').delete().eq('id',v.id);
+  if(error) continue;
+  const vi=visits.findIndex(x=>x.id===v.id); if(vi>=0) visits.splice(vi,1);
+  await logAudit('visit',v.id,'delete',{old:v,label:'auto-cleanup — appointment moved to '+newDate});
+ }
 }
 /* GROOMERS TAB */
 function swGroomer(sub){
@@ -12080,9 +12101,16 @@ async function autoLogPastAppointments(){
  _lastHistoryCheck=today;
  const pastAppts=appts.filter(a=>a.appt_date<today&&a.status!=='cancelled');
  if(!pastAppts.length)return;
- // Log visits
+ // Log visits. Dedup within this batch too — a dog double-booked twice on the
+ // same past date must still only get ONE visit row, not one per appointment.
  const existingKeys=new Set(visits.map(v=>v.dog_id+'::'+v.visited_at));
- const toLog=pastAppts.filter(a=>!existingKeys.has(a.dog_id+'::'+a.appt_date));
+ const seenKeys=new Set();
+ const toLog=pastAppts.filter(a=>{
+  const key=a.dog_id+'::'+a.appt_date;
+  if(existingKeys.has(key)||seenKeys.has(key)) return false;
+  seenKeys.add(key);
+  return true;
+ });
  if(toLog.length){
   const rows=toLog.map(a=>({dog_id:a.dog_id,visited_at:a.appt_date,service_type:a.service_base||null,note:a.appt_note||null}));
   const {error}=await db.from('visits').insert(rows);
