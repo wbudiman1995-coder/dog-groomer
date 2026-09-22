@@ -177,6 +177,8 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
   <button class="tab" id="tab-week" onclick="switchTab('week')">+1 Minggu <span class="count" id="cnt-week">0</span></button>
  </div>
 
+ <div id="stats-wrap" style="display:none"></div>
+
  <div id="mypay-wrap" style="display:none"></div>
 
  <div class="content" id="content"><div class="loader"><span class="spin"></span>Loading schedule…</div></div>
@@ -347,6 +349,45 @@ function renderMyPay(){
    <span style="font-size:18px;font-weight:700;color:var(--green)">${fmtRp(s.total||0)}</span>
   </div>
   <div style="font-size:10px;color:var(--muted);margin-top:8px">Angka dari admin HomePaw · dihitung dari invoice · update ${esc((s.published_at||'').slice(0,16).replace('T',' '))}</div>
+ </div>`;
+}
+
+// Dogs-groomed / Styling / Botak counters for the current calendar month.
+// Counts only (no money) — separate from the admin-published pay card above.
+let monthStats={dogs:0,styling:0,botak:0};
+async function loadMonthStats(){
+ const now=new Date();
+ const start=iso(new Date(now.getFullYear(),now.getMonth(),1));
+ const end=iso(new Date(now.getFullYear(),now.getMonth()+1,0));
+ const {data,error}=await db.from('appointments')
+  .select('service_base')
+  .eq('groomer_id',currentGroomer.id)
+  .eq('status','done')
+  .gte('appt_date',start)
+  .lte('appt_date',end);
+ if(error||!data) return;
+ monthStats={
+  dogs:data.length,
+  styling:data.filter(a=>(a.service_base||'').includes('Styling')).length,
+  botak:data.filter(a=>(a.service_base||'').includes('Botak')).length
+ };
+ renderMonthStats();
+}
+function renderMonthStats(){
+ const wrap=document.getElementById('stats-wrap'); if(!wrap) return;
+ const monthLabel=new Date().toLocaleDateString('id-ID',{month:'long',year:'numeric'});
+ wrap.style.display='block';
+ const tile=(n,lbl)=>`<div style="flex:1;text-align:center;background:var(--subtle);border-radius:8px;padding:8px 4px">
+  <div style="font-size:20px;font-weight:700;color:var(--primary-dk)">${n}</div>
+  <div style="font-size:10px;color:var(--muted)">${lbl}</div>
+ </div>`;
+ wrap.innerHTML=`<div style="background:var(--surface);border-radius:10px;padding:12px 14px;margin:12px 12px 0;box-shadow:var(--sh);border:1px solid var(--border)">
+  <div style="font-size:10px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Grooming bulan ini · ${esc(monthLabel)}</div>
+  <div style="display:flex;gap:8px">
+   ${tile(monthStats.dogs,'Anjing digroom')}
+   ${tile(monthStats.styling,'Styling')}
+   ${tile(monthStats.botak,'Botak')}
+  </div>
  </div>`;
 }
 
