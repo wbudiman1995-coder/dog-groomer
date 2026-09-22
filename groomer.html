@@ -77,6 +77,22 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .day-header.today{color:var(--primary-dk)}
 .day-header.today::after{content:'HARI INI';margin-left:10px;background:var(--primary);color:#fff;padding:2px 8px;border-radius:10px;font-size:9px}
 
+/* Day time-grid — visual overview like the admin calendar, tap a block to jump to its full card below */
+.daygrid{display:flex;gap:0;margin-bottom:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 6px 8px 0;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.daygrid-time{position:relative;width:34px;flex-shrink:0}
+.daygrid-tick{position:absolute;left:0;right:4px;text-align:right;font-size:9px;color:var(--muted);transform:translateY(-6px)}
+.daygrid-body{position:relative;flex:1;margin-left:4px;border-left:1px solid var(--border)}
+.daygrid-row{position:absolute;left:0;right:0;border-top:1px solid var(--border)}
+.daygrid-block{position:absolute;left:3px;right:3px;border-radius:6px;padding:2px 6px;font-size:10px;line-height:1.3;overflow:hidden;border-left:3px solid var(--primary);background:var(--subtle);cursor:pointer;display:flex;flex-direction:column;-webkit-tap-highlight-color:transparent}
+.daygrid-block:active{filter:brightness(.96)}
+.daygrid-block.status-done{border-left-color:var(--green);background:#e9f9ee}
+.daygrid-block.status-confirmed{border-left-color:#3b82f6;background:#eaf1ff}
+.daygrid-block .dg-time{font-weight:700;color:var(--primary-dk)}
+.daygrid-block.status-done .dg-time{color:var(--green)}
+.daygrid-block.status-confirmed .dg-time{color:#1e40af}
+.daygrid-block .dg-name{font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.daygrid-block .dg-dogs{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
 .empty{text-align:center;padding:3rem 1rem;color:var(--muted);font-size:13px;font-style:italic}
 
 .gate{max-width:400px;margin:60px auto;padding:0 20px;text-align:center}
@@ -569,6 +585,48 @@ function renderApptPreview(group){
   ${dogLines}
  </div>`;
 }
+// Visual time-grid overview for one day, like the admin CRM's calendar (single
+// column since a groomer only ever sees their own schedule). Blocks are placed
+// by start time/duration; tapping one scrolls down to its full editable card
+// below (photo upload / notes stay exactly where they already were).
+function scrollToAppt(id){
+ const el=document.getElementById(id);
+ if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function renderDayTimeGrid(dateISO,dayAppts){
+ if(!dayAppts.length) return '';
+ const groups=groupApptsByCustomer(dayAppts);
+ const GSTEP=30,GSH=26; // 30 min per row, 26px tall
+ const starts=dayAppts.map(a=>t2m((a.appt_time||'09:00').slice(0,5)));
+ const ends=dayAppts.map((a,i)=>starts[i]+(a.duration_mins||60));
+ const gStart=Math.floor(Math.min(...starts)/60)*60;
+ const gEnd=Math.ceil(Math.max(...ends)/60)*60;
+ const slots=[];for(let m=gStart;m<gEnd;m+=GSTEP)slots.push(m);
+ const totalH=slots.length*GSH;
+ let html=`<div class="daygrid">`;
+ html+=`<div class="daygrid-time" style="height:${totalH}px">`;
+ slots.forEach((m,si)=>{if(m%60===0)html+=`<div class="daygrid-tick" style="top:${si*GSH}px">${m2t(m)}</div>`;});
+ html+='</div>';
+ html+=`<div class="daygrid-body" style="height:${totalH}px">`;
+ slots.forEach((m,si)=>{html+=`<div class="daygrid-row" style="top:${si*GSH}px"></div>`;});
+ groups.forEach((group,gi)=>{
+  const a=group[0];
+  const sm=t2m((a.appt_time||'09:00').slice(0,5));
+  const totalDur=group.reduce((s,x)=>s+(x.duration_mins||60),0);
+  const top=((sm-gStart)/GSTEP)*GSH;
+  const ht=Math.max((totalDur/GSTEP)*GSH-2,GSH-2);
+  const cust=dataCache.custs.find(c=>{const d=dataCache.dogs.find(x=>x.id===a.dog_id);return c.id===d?.customer_id;})||{};
+  const dogNames=group.map(x=>dataCache.dogs.find(d=>d.id===x.dog_id)?.name||'?').join(', ');
+  const status=a.status||'pending';
+  html+=`<div class="daygrid-block status-${status}" style="top:${top}px;height:${ht}px" onclick="scrollToAppt('appt-${dateISO}-${gi}')">
+   <span class="dg-time">${m2t(sm)}</span>
+   <span class="dg-name">${esc(cust.owner||'?')}</span>
+   <span class="dg-dogs">${esc(dogNames)}</span>
+  </div>`;
+ });
+ html+='</div></div>';
+ return html;
+}
 function renderActiveTab(){
  const content=document.getElementById('content');
  const today=iso(new Date());
@@ -627,7 +685,8 @@ function renderActiveTab(){
   const groups=groupApptsByCustomer(appts);
   return `<div class="day-section">
    <div class="day-header ${isToday?'today':''}">${esc(fmtDateLong(date))}</div>
-   ${groups.map((group,gi)=>group.length>1?renderGroupedAppt(group,gi===0&&isToday,isToday):renderAppt(group[0],gi===0&&isToday)).join('')}
+   ${renderDayTimeGrid(date,appts)}
+   ${groups.map((group,gi)=>`<div id="appt-${date}-${gi}">${group.length>1?renderGroupedAppt(group,gi===0&&isToday,isToday):renderAppt(group[0],gi===0&&isToday)}</div>`).join('')}
   </div>`;
  }).join('');
 }
