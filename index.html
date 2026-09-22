@@ -15234,14 +15234,18 @@ function renderFollowups(){
  if(kotaSel&&kotaSel.options.length<=1) populateKotaSelect(kotaSel);
  const fuKota=kotaSel?.value||'';
  const fuKec=document.getElementById('fu-kec')?.value||'';
- // For each dog: compute days since last_groomed_at (or fall back to most recent visit date)
+ // For each dog: last groomed = the MOST RECENT of last_groomed_at, its visit log,
+ // and any appointment already marked done. last_groomed_at only updates when an
+ // invoice is saved (bumpDogLastGroomed), so a dog with recent done appointments
+ // that just haven't been invoiced yet would otherwise still look overdue here —
+ // out of sync with the calendar the admin is actually looking at.
  const overdue=dogs.map(d=>{
-  let lastDate=d.last_groomed_at;
-  if(!lastDate){
-   const dogVisits=visits.filter(v=>v.dog_id===d.id).map(v=>v.visited_at).filter(Boolean).sort();
-   if(dogVisits.length) lastDate=dogVisits[dogVisits.length-1];
-  }
-  if(!lastDate) return null; // Never groomed → skip (might be brand new customer)
+  const candidates=[];
+  if(d.last_groomed_at) candidates.push(d.last_groomed_at);
+  visits.filter(v=>v.dog_id===d.id&&v.visited_at).forEach(v=>candidates.push(v.visited_at));
+  appts.filter(a=>a.dog_id===d.id&&a.status==='done'&&a.appt_date).forEach(a=>candidates.push(a.appt_date));
+  if(!candidates.length) return null; // Never groomed → skip (might be brand new customer)
+  const lastDate=candidates.sort().pop();
   const days=daysSince(lastDate);
   if(days<threshold) return null;
   const cust=custs.find(c=>c.id===d.customer_id);
