@@ -277,6 +277,8 @@ function fmtPhotoTS(iso){
 function iso(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${dd}`}
 function fmtTime(t){return (t||'').slice(0,5)}
 function fmtDateLong(d){return new Date(d+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'})}
+function t2m(t){const[h,m]=(t||'09:00').split(':').map(Number);return h*60+m}
+function m2t(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}
 
 function showGate(errMsg){
  document.getElementById('app-wrap').style.display='none';
@@ -421,6 +423,7 @@ async function init(){
  document.getElementById('g-sub').textContent='Jadwal grooming · Read-only';
  showApp();
  await loadSchedule();
+ loadMonthStats();
 }
 
 async function loadSchedule(){
