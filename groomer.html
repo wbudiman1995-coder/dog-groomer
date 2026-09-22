@@ -158,6 +158,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
   <button class="tab active" id="tab-today" onclick="switchTab('today')">Hari Ini <span class="count" id="cnt-today">0</span></button>
   <button class="tab" id="tab-tomorrow" onclick="switchTab('tomorrow')">Besok <span class="count" id="cnt-tomorrow">0</span></button>
   <button class="tab" id="tab-later" onclick="switchTab('later')">2-3 Hari <span class="count" id="cnt-later">0</span></button>
+  <button class="tab" id="tab-week" onclick="switchTab('week')">+1 Minggu <span class="count" id="cnt-week">0</span></button>
  </div>
 
  <div id="mypay-wrap" style="display:none"></div>
@@ -369,10 +370,10 @@ async function loadSchedule(){
  const content=document.getElementById('content');
  content.innerHTML='<div class="loader"><span class="spin"></span>Loading schedule…</div>';
  const today=new Date(); today.setHours(0,0,0,0);
- const end=new Date(today); end.setDate(end.getDate()+3); // 4-day window (today+1+2+3)
+ const end=new Date(today); end.setDate(end.getDate()+7); // 8-day window (today + 1 week ahead)
  const startISO=iso(today), endISO=iso(end);
 
- // Groomer app only loads the active four-day work window.
+ // Groomer app loads today + 1 week ahead. Days 4-7 are shown read-only in the "+1 Minggu" tab.
  const {data:appts,error:e1}=await db.from('appointments')
   .select('*')
   .eq('groomer_id',currentGroomer.id)
@@ -409,20 +410,22 @@ function updateCounts(){
  const tmw=new Date();tmw.setDate(tmw.getDate()+1);const tmwISO=iso(tmw);
  const d2=new Date();d2.setDate(d2.getDate()+2);const d2ISO=iso(d2);
  const d3=new Date();d3.setDate(d3.getDate()+3);const d3ISO=iso(d3);
- const c={today:0,tomorrow:0,later:0};
+ const c={today:0,tomorrow:0,later:0,week:0};
  dataCache.appts.forEach(a=>{
   if(a.appt_date===today) c.today++;
   else if(a.appt_date===tmwISO) c.tomorrow++;
   else if(a.appt_date===d2ISO||a.appt_date===d3ISO) c.later++;
+  else if(a.appt_date>d3ISO) c.week++;
  });
  document.getElementById('cnt-today').textContent=c.today;
  document.getElementById('cnt-tomorrow').textContent=c.tomorrow;
  document.getElementById('cnt-later').textContent=c.later;
+ document.getElementById('cnt-week').textContent=c.week;
 }
 
 function switchTab(tab){
  currentTab=tab;
- ['today','tomorrow','later'].forEach(t=>{
+ ['today','tomorrow','later','week'].forEach(t=>{
   document.getElementById('tab-'+t).classList.toggle('active',t===tab);
  });
  renderActiveTab();
@@ -512,12 +515,72 @@ function toggleChecklist(btn){
  btn.textContent=collapsed?'Buka':'Tutup';
 }
 
+// "+1 Minggu" tab — days 4-7 ahead, read-only preview. No photo upload, no
+// groomer-note field, no late/absence tracking: those only make sense day-of.
+function renderWeekView(content,dates){
+ const sections=dates.map(date=>({
+  date,
+  appts:dataCache.appts.filter(a=>a.appt_date===date).sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''))
+ }));
+ if(!sections.some(s=>s.appts.length)){
+  content.innerHTML='<div class="empty">Tidak ada jadwal grooming untuk 1 minggu ke depan.<br><br>Refresh nanti untuk update.</div>';
+  return;
+ }
+ const notice=`<div style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--muted)">Preview jadwal 1 minggu ke depan — lihat saja, upload foto & catatan baru bisa di hari-H.</div>`;
+ content.innerHTML=notice+sections.map(({date,appts})=>{
+  if(!appts.length) return '';
+  const groups=groupApptsByCustomer(appts);
+  return `<div class="day-section">
+   <div class="day-header">${esc(fmtDateLong(date))}</div>
+   ${groups.map(group=>renderApptPreview(group)).join('')}
+  </div>`;
+ }).join('');
+}
+function renderApptPreview(group){
+ const firstA=group[0];
+ const cust=dataCache.custs.find(c=>{const d=dataCache.dogs.find(x=>x.id===firstA.dog_id);return c.id===d?.customer_id;})||{};
+ const addrParts=[cust.address,cust.kecamatan,cust.kota].filter(Boolean);
+ const addrStr=addrParts.join(', ')||'(alamat tidak tersedia)';
+ const mapsLink=cust.gmaps_link||'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(addrParts.concat(['Jakarta']).join(', '));
+ const startMin=parseInt((firstA.appt_time||'09:00').split(':')[0])*60+parseInt((firstA.appt_time||'09:00').split(':')[1]);
+ const totalDur=group.reduce((s,a)=>s+(a.duration_mins||60),0);
+ const endMin=startMin+totalDur;
+ const fmtM=m=>`${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+ const status=firstA.status||'pending';
+ const dogLines=group.map(a=>{
+  const dog=dataCache.dogs.find(d=>d.id===a.dog_id)||{};
+  const svc=a.service_base||'Basic Grooming';
+  return `<div class="dog-card">
+   <div class="dog-name">${esc(dog.name||'?')}</div>
+   <div class="dog-meta">${esc([dog.breed,dog.size,dog.coat,dog.coat_color].filter(Boolean).join(' · ')||'-')}</div>
+   <div class="dog-svc">${esc(svc)}</div>
+   ${dog.prefs?`<div class="dog-prefs">${esc(dog.prefs)}</div>`:''}
+   ${dog.skin_history?`<div class="dog-skin"><strong>Kondisi kulit</strong>${esc(dog.skin_history)}</div>`:''}
+  </div>`;
+ }).join('');
+ return `<div class="appt ${status}">
+  <div class="appt-time">
+   <span class="appt-time-big">${fmtM(startMin)} – ${fmtM(endMin)}</span>
+   <span class="appt-duration">${totalDur} min${group.length>1?' · '+group.length+' anjing':''}</span>
+   <span class="appt-status ${status}">${esc(status)}</span>
+  </div>
+  <div class="appt-cust">${esc(cust.owner||'?')}</div>
+  <div class="appt-addr">${esc(addrStr)}<br/><a href="${mapsLink}" target="_blank">Buka di Google Maps →</a></div>
+  ${dogLines}
+ </div>`;
+}
 function renderActiveTab(){
  const content=document.getElementById('content');
  const today=iso(new Date());
  const tmw=new Date();tmw.setDate(tmw.getDate()+1);const tmwISO=iso(tmw);
  const d2=new Date();d2.setDate(d2.getDate()+2);const d2ISO=iso(d2);
  const d3=new Date();d3.setDate(d3.getDate()+3);const d3ISO=iso(d3);
+
+ if(currentTab==='week'){
+  const weekDates=[4,5,6,7].map(n=>{const d=new Date();d.setDate(d.getDate()+n);return iso(d)});
+  renderWeekView(content,weekDates);
+  return;
+ }
 
  let dates;
  if(currentTab==='today') dates=[today];
