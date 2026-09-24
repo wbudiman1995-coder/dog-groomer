@@ -10236,6 +10236,16 @@ function buildInvoiceWAMessage(rec, custObj){
   return applyTpl(WA_TPL_DONE,{nama:firstName,dogs:dogNames,layanan:'',biz:BIZ_NAME});
  }
 
+ // Package/subscription purchase ("beli paket") is not a completed grooming visit —
+ // no groomer notes exist yet, so it shouldn't use the after-visit template. Reuse
+ // the same renewal template the Reminders tab sends for subs renewals.
+ if(invoiceKind(rec)==='package_sale'){
+  const subsDogs=(rec.dogs||[]).filter(d=>d.advance);
+  const tier=[...new Set(subsDogs.map(d=>tierLabel(d.advance.subs_type)))].filter(Boolean).join(', ')||'-';
+  const dueDay=rec.due_date?new Date(rec.due_date+'T00:00:00').getDate():DUE_DAY_DEFAULT;
+  return applyTpl(WA_TPL_RENEWAL,{nama:firstName,dogs:dogNames,tier,amount:totalStr,due_day:dueDay,biz:BIZ_NAME});
+ }
+
  // Session E — pull groomer field notes; use "N/A" if all empty (per owner spec)
  const dogIds=(rec.dogs||[]).map(d=>d.dog_id);
  const linkedAppts=appts.filter(a=>dogIds.includes(a.dog_id)&&a.appt_date===rec.invoice_date);
@@ -10650,7 +10660,19 @@ async function setInvoicePaymentSuccessful(id,checked){
   current.successfulAt=''; current.validatedAt='';
  }
  if(!await saveInvoicePaymentMeta(inv,current)) return;
- if(!checked){
+ // Screenshot check is what activates a package/subscription purchase — bank
+ // validation below is bookkeeping only (matching against the account) and no
+ // longer gates whether the subscription can be used.
+ if(checked){
+  const rec={
+   customer_id:inv.customer_id,
+   invoice_number:inv.invoice_number,
+   invoice_date:inv.invoice_date,
+   is_advance:!!(inv.dogs||[]).some(d=>d.advance),
+   dogs:inv.dogs||[]
+  };
+  await createSubscriptionsFromInvoice(rec);
+ } else {
   const r=await deleteSubscriptionsForInvoice(inv.invoice_number);
   if(r.kept>0) alert(`${r.kept} subscription(s) sudah dipakai dan tidak dihapus. ${r.deleted} dihapus.`);
  }
@@ -10666,24 +10688,11 @@ async function setInvoiceValidated(id,checked){
   current.validated=true;
   current.validatedAt=current.validatedAt||new Date().toISOString();
  } else {
-  if(!confirm('Batalkan validasi rekening bank? Invoice akan kembali menjadi belum dibayar.')) return;
+  if(!confirm('Batalkan validasi rekening bank?')) return;
   current.validated=false; current.validatedAt='';
  }
  if(!await saveInvoicePaymentMeta(inv,current)) return;
- if(checked){
-  const rec={
-   customer_id:inv.customer_id,
-   invoice_number:inv.invoice_number,
-   invoice_date:inv.invoice_date,
-   is_advance:!!(inv.dogs||[]).some(d=>d.advance),
-   dogs:inv.dogs||[]
-  };
-  await createSubscriptionsFromInvoice(rec);
- } else {
-  const r=await deleteSubscriptionsForInvoice(inv.invoice_number);
-  if(r.kept>0) alert(`${r.kept} subscription(s) sudah dipakai dan tidak dihapus. ${r.deleted} dihapus.`);
- }
- await reloadTables('invoices','tokens','subscriptions','visits'); renderFinancial();
+ await reloadTables('invoices'); renderFinancial();
 }
 
 /* Session E — Compute renewal urgency for a subs row.
@@ -12753,8 +12762,14 @@ async function checkAuthState(){
   if(uiEl) uiEl.style.display='flex';
   if(emEl) emEl.textContent=row.email||currentUser.email||'';
   // Owner-only tabs: hide for admins
-  const ownerOnlyTabs=['tab-dashboard','tab-financial','tab-access','tab-history','tab-tally','tab-settings'];
+  const ownerOnlyTabs=['tab-dashboard','tab-access','tab-history','tab-tally','tab-settings'];
   ownerOnlyTabs.forEach(id=>{const el=document.getElementById(id); if(el) el.style.display=row.role==='owner'?'':'none';});
+  // Financial tab is shared (admin needs it to check payment screenshots so
+  // subscriptions can activate), but company-level money views inside it —
+  // payroll, expenses, capital, and the cash-on-hand total — stay owner-only.
+  const ownerOnlyFinParts=['fstab-payroll','fstab-expenses','fstab-capital','cash-on-hand-card'];
+  ownerOnlyFinParts.forEach(id=>{const el=document.getElementById(id); if(el) el.style.display=row.role==='owner'?'':'none';});
+  if(row.role!=='owner') swFin('invoices');
   // Landing view honours per-user preference (falls back by role)
   applyPrefsOnBoot(row.role);
   _authReady=true;
