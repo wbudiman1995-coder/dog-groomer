@@ -6734,7 +6734,13 @@ function calcGroomerLateCountForCycle(groomerId,cycleStart,cycleEnd){
  const g=groomers.find(x=>x.id===groomerId);
  const workingDays=(g?.working_days||'Mon,Tue,Wed,Thu,Fri,Sat').split(',');
  const dayMap=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
- const cycleAppts=appts.filter(a=>a.groomer_id===groomerId&&a.appt_date>=cycleStart&&a.appt_date<=cycleEnd&&a.appt_date<todayISO&&a.status!=='cancelled');
+ // Today counts only once it's been invoiced — not merely because the date
+ // arrived. An appointment can sit with no attendance photo yet simply because
+ // its slot hasn't happened yet today; treating "missing" as "late" this early
+ // would wrongly zero the no-late bonus before the day is actually done.
+ // Invoicing is the same completion signal computeGroomerDogsInCycle already
+ // uses for pay, so this stays consistent with how the rest of payroll finalizes.
+ const cycleAppts=appts.filter(a=>a.groomer_id===groomerId&&a.appt_date>=cycleStart&&a.appt_date<=cycleEnd&&a.status!=='cancelled'&&(a.appt_date<todayISO||appointmentHasAfterVisitInvoice(a)));
  const byDate={};
  cycleAppts.forEach(a=>{if(!byDate[a.appt_date])byDate[a.appt_date]=[];byDate[a.appt_date].push(a);});
  let late=0;
@@ -13893,7 +13899,9 @@ function payrollLateDays(gid,cycle){
  const wd=(g?.working_days||'Mon,Tue,Wed,Thu,Fri,Sat').split(',').map(s=>s.trim());
  const dayMap=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
  const todayISO=iso(new Date());
- const cycleAppts=appts.filter(a=>a.groomer_id===gid&&a.appt_date>=cycle.start&&a.appt_date<=cycle.end&&a.appt_date<todayISO&&a.status!=='cancelled');
+ // Today counts only once invoiced — same reasoning as calcGroomerLateCountForCycle:
+ // an un-invoiced same-day appointment may just not have happened yet.
+ const cycleAppts=appts.filter(a=>a.groomer_id===gid&&a.appt_date>=cycle.start&&a.appt_date<=cycle.end&&a.status!=='cancelled'&&(a.appt_date<todayISO||appointmentHasAfterVisitInvoice(a)));
  const byDate={};
  cycleAppts.forEach(a=>{if(!byDate[a.appt_date])byDate[a.appt_date]=[];byDate[a.appt_date].push(a);});
  const rows=[];
