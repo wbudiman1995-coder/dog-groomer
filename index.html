@@ -1212,7 +1212,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 
  <div class="subsec" id="rsec-renewal">
   <div class="card" style="padding:1rem;margin-bottom:1rem;font-size:12px;color:var(--muted)">
-   Semua subscription aktif (weekly / biweekly / monthly) untuk diperpanjang bulan depan. Template pesan bisa diedit di Settings → Pesan WhatsApp.
+   Semua subscription aktif (weekly / biweekly / monthly) untuk diperpanjang bulan depan. Renewal memakai template pelanggan lama; pembelian subscription pertama otomatis memakai template welcome. Keduanya bisa diedit di Settings → Pesan WhatsApp.
   </div>
   <div id="renewal-cards"></div>
  </div>
@@ -2106,9 +2106,41 @@ let _cfgLogoData=null;
 function waClosing(){return WA_CLOSING_TPL.replace(/\{biz\}/g,BIZ_NAME)}
 let REM_GREETING='Halo kak {nama}', REM_CLOSING='Sampai jumpa besok ya kak!';
 let WA_TPL_FOLLOWUP='Hai Kak {nama}, sudah lebih dari {inactive_period} nih kami belum bertemu sama {dogs} \uD83D\uDC36\nKalau sudah waktunya grooming lagi, {biz} siap meluncur langsung ke rumah Kakak!\nMau booking sekarang atau ada pertanyaan dulu? Boleh banget chat di sini ya \uD83D\uDE0A';
-let WA_TPL_RENEWAL='Halo kak {nama}, \uD83D\uDC3E\n\nSubscription {tier} untuk {dogs} sudah waktunya diperpanjang untuk bulan depan.\n\nBiaya: {amount}\nMohon konfirmasi & pembayaran sebelum tanggal {due_day} ya kak supaya jadwal grooming tetap lancar.\n\nTerima kasih! {biz}';
+let WA_TPL_SUBS_FIRST='Halo kak {nama}, \uD83D\uDC3E\n\nTerima kasih sudah memilih *Subscription {tier} {biz}* untuk {dogs}! \uD83C\uDF89\n\nMulai bulan ini, grooming {dogs} akan terjadwal rutin sesuai paket yang dipilih, sehingga perawatannya lebih konsisten dan slot bulanannya lebih terjaga.\n\n\uD83D\uDCB0 *Total: {amount}*\n\uD83D\uDCB3 Transfer {bank}:\n   No. Rek: *{acc}*\n   a/n: {holder}{bank2_block}\n\nSetelah transfer, mohon kirim bukti pembayarannya ya kak. Subscription akan kami aktifkan setelah pembayaran dikonfirmasi.\n\n\uD83D\uDCCE Detail paket dan ketentuan membership tercantum pada invoice.\n\n{closing}';
+let WA_TPL_RENEWAL='Halo kak {nama}, \uD83D\uDC3E\n\nSubscription {tier} untuk {dogs} sudah waktunya diperpanjang untuk bulan depan.\n\n\uD83D\uDCB0 *Total: {amount}*\n\uD83D\uDCB3 Transfer {bank}:\n   No. Rek: *{acc}*\n   a/n: {holder}{bank2_block}\n\nMohon konfirmasi & pembayaran sebelum tanggal {due_day} ya kak supaya jadwal grooming tetap lancar.\n\nTerima kasih! {biz}';
 let WA_TPL_ONBOARDING='Halo kak! \uD83D\uDC3E Berikut link pendaftaran {biz}:\n\n{link}\n\nIsi data kamu & anabul di link ini ya (bisa dibuka di HP, cukup diisi satu kali, berlaku 2 hari). Setelah diisi, admin kami akan konfirmasi via WhatsApp. Terima kasih!';
 function applyTpl(tpl,vars){return String(tpl||'').replace(/\{(\w+)\}/g,(m,k)=>vars[k]!=null?vars[k]:'')}
+
+function subscriptionWABankVars(){
+ const bank=(bankSettings?.bank_name||'BCA').trim();
+ const acc=(bankSettings?.bank_account||'').trim();
+ const holder=(bankSettings?.bank_holder||'').trim();
+ const bank2=(bankSettings?.bank_name2||'').trim();
+ const acc2=bank2?(bankSettings?.bank_account2||'').trim():'';
+ const holder2=bank2?(bankSettings?.bank_holder2||'').trim():'';
+ const bank2Block=bank2?`\n\uD83D\uDCB3 Atau transfer ${bank2}:\n   No. Rek: *${acc2}*\n   a/n: ${holder2}`:'';
+ return {bank,acc,holder,bank2,acc2,holder2,bank2_block:bank2Block};
+}
+
+// Older saved renewal templates used "Biaya" and had no bank placeholders.
+// Upgrade them at render time without overwriting the owner's custom wording.
+function normalizeSubscriptionPaymentTemplate(tpl){
+ let out=String(tpl||'');
+ const totalLine='\uD83D\uDCB0 *Total: {amount}*';
+ out=out.replace(/Biaya:\s*\{amount\}/i,totalLine);
+ if(!out.includes('{amount}')) out+=`\n\n${totalLine}`;
+ if(!/\{(?:bank|acc|holder|bank2_block)\}/.test(out)){
+  const bankBlock='\uD83D\uDCB3 Transfer {bank}:\n   No. Rek: *{acc}*\n   a/n: {holder}{bank2_block}';
+  out=out.includes(totalLine)?out.replace(totalLine,`${totalLine}\n${bankBlock}`):out+`\n${bankBlock}`;
+ }
+ return out;
+}
+
+function buildSubscriptionWAMessage(tpl,vars){
+ return applyTpl(normalizeSubscriptionPaymentTemplate(tpl),{
+  ...(vars||{}),...subscriptionWABankVars(),closing:waClosing()
+ });
+}
 
 // Emoji fix: pristine defaults snapshot (captured before any CFG override runs).
 // Used by resetWaTemplatesToDefault() to repair corrupted stored templates.
@@ -2117,6 +2149,7 @@ const _WA_TPL_DEFAULTS={
  waTplDone:WA_TPL_DONE,
  waTplInvoice:WA_TPL_INVOICE,
  waTplFollowup:WA_TPL_FOLLOWUP,
+ waTplSubsFirst:WA_TPL_SUBS_FIRST,
  waTplRenewal:WA_TPL_RENEWAL,
  waTplOnboarding:WA_TPL_ONBOARDING
 };
@@ -2127,6 +2160,7 @@ async function resetWaTemplatesToDefault(){
  WA_TPL_DONE=_WA_TPL_DEFAULTS.waTplDone;
  WA_TPL_INVOICE=_WA_TPL_DEFAULTS.waTplInvoice;
  WA_TPL_FOLLOWUP=_WA_TPL_DEFAULTS.waTplFollowup;
+ WA_TPL_SUBS_FIRST=_WA_TPL_DEFAULTS.waTplSubsFirst;
  WA_TPL_RENEWAL=_WA_TPL_DEFAULTS.waTplRenewal;
  WA_TPL_ONBOARDING=_WA_TPL_DEFAULTS.waTplOnboarding;
  // Persist to DB: merge clean templates into existing config
@@ -2136,6 +2170,7 @@ async function resetWaTemplatesToDefault(){
    waTplDone:WA_TPL_DONE,
    waTplInvoice:WA_TPL_INVOICE,
    waTplFollowup:WA_TPL_FOLLOWUP,
+   waTplSubsFirst:WA_TPL_SUBS_FIRST,
    waTplRenewal:WA_TPL_RENEWAL,
    waTplOnboarding:WA_TPL_ONBOARDING};
   const {error}=await db.from('business_settings').upsert({id:1,config:cleanCfg,updated_at:new Date().toISOString()});
@@ -2146,6 +2181,7 @@ async function resetWaTemplatesToDefault(){
   const invEl=document.getElementById('cfg-wa-invoice'); if(invEl) invEl.value=WA_TPL_INVOICE;
   const doneEl=document.getElementById('cfg-wa-done'); if(doneEl) doneEl.value=WA_TPL_DONE;
   const fuEl=document.getElementById('cfg-wa-followup'); if(fuEl) fuEl.value=WA_TPL_FOLLOWUP;
+  const firstEl=document.getElementById('cfg-wa-subs-first'); if(firstEl) firstEl.value=WA_TPL_SUBS_FIRST;
   const renEl=document.getElementById('cfg-wa-renewal'); if(renEl) renEl.value=WA_TPL_RENEWAL;
   const onbEl=document.getElementById('cfg-wa-onboarding'); if(onbEl) onbEl.value=WA_TPL_ONBOARDING;
   const closeEl=document.getElementById('cfg-wa-closing'); if(closeEl) closeEl.value=WA_CLOSING_TPL;
@@ -7611,6 +7647,7 @@ const CFG_DEFAULTS={
  remGreeting:REM_GREETING,
  remClosing:REM_CLOSING,
 	 waTplFollowup:WA_TPL_FOLLOWUP,
+	 waTplSubsFirst:WA_TPL_SUBS_FIRST,
 	 waTplRenewal:WA_TPL_RENEWAL,
 	 waTplOnboarding:WA_TPL_ONBOARDING,
 	 toastMs:3500,
@@ -7650,6 +7687,7 @@ function applyCfg(){
  if(CFG.remGreeting!=null) REM_GREETING=CFG.remGreeting;
  if(CFG.remClosing!=null) REM_CLOSING=CFG.remClosing;
  if(_tplOk(CFG.waTplFollowup,_WA_TPL_DEFAULTS.waTplFollowup)) WA_TPL_FOLLOWUP=CFG.waTplFollowup;
+ if(_tplOk(CFG.waTplSubsFirst,_WA_TPL_DEFAULTS.waTplSubsFirst)) WA_TPL_SUBS_FIRST=CFG.waTplSubsFirst;
  if(_tplOk(CFG.waTplRenewal,_WA_TPL_DEFAULTS.waTplRenewal)) WA_TPL_RENEWAL=CFG.waTplRenewal;
  if(_tplOk(CFG.waTplOnboarding,_WA_TPL_DEFAULTS.waTplOnboarding)) WA_TPL_ONBOARDING=CFG.waTplOnboarding;
  TOAST_MS=CFG.toastMs>0?CFG.toastMs:3500;
@@ -10287,6 +10325,33 @@ function downloadInvoicePDF(){
 // Session E — Session E: simplified WA message per owner spec.
 // Just 4 sections: greeting/thanks, groomer notes, total + bank, "detail in image".
 // Session E — now uses editable WA_TPL_INVOICE template with placeholder substitution.
+function invoiceHasRecurringSubscription(inv){
+ return (inv?.dogs||[]).some(d=>d.advance&&['weekly','biweekly','monthly'].includes(d.advance.subs_type));
+}
+
+// Classification is customer-level: once a customer has ever held a recurring
+// HomePaw subscription (for any pet), later package invoices are renewals.
+function isFirstTimeSubscriptionCustomer(rec){
+ if(!rec||!invoiceHasRecurringSubscription(rec)) return false;
+ const currentNumber=rec.invoice_number||'';
+ const priorSub=subscriptions.some(s=>
+  s.customer_id===rec.customer_id&&
+  (s.source_invoice||'')!==currentNumber
+ );
+ if(priorSub) return false;
+ const currentSubIsRenewal=subscriptions.some(s=>
+  s.customer_id===rec.customer_id&&
+  (s.source_invoice||'')===currentNumber&&
+  Number(s.renewal_number||1)>1
+ );
+ if(currentSubIsRenewal) return false;
+ return !invoices.some(inv=>
+  inv.customer_id===rec.customer_id&&
+  (inv.invoice_number||'')!==currentNumber&&
+  invoiceKind(inv)==='package_sale'&&invoiceHasRecurringSubscription(inv)
+ );
+}
+
 function buildInvoiceWAMessage(rec, custObj){
  const docMode=detectInvoiceMode(rec);
  const isReport=docMode==='report';
@@ -10298,14 +10363,15 @@ function buildInvoiceWAMessage(rec, custObj){
   return applyTpl(WA_TPL_DONE,{nama:firstName,dogs:dogNames,layanan:'',biz:BIZ_NAME});
  }
 
- // Package/subscription purchase ("beli paket") is not a completed grooming visit —
- // no groomer notes exist yet, so it shouldn't use the after-visit template. Reuse
- // the same renewal template the Reminders tab sends for subs renewals.
+ // Package/subscription purchase ("beli paket") is not a completed grooming visit.
+ // First-time customers get a welcome explanation; later purchases keep the
+ // existing renewal wording. Both include invoice-format payment details.
  if(invoiceKind(rec)==='package_sale'){
   const subsDogs=(rec.dogs||[]).filter(d=>d.advance);
   const tier=[...new Set(subsDogs.map(d=>tierLabel(d.advance.subs_type)))].filter(Boolean).join(', ')||'-';
   const dueDay=rec.due_date?new Date(rec.due_date+'T00:00:00').getDate():DUE_DAY_DEFAULT;
-  return applyTpl(WA_TPL_RENEWAL,{nama:firstName,dogs:dogNames,tier,amount:totalStr,due_day:dueDay,biz:BIZ_NAME});
+  const tpl=isFirstTimeSubscriptionCustomer(rec)?WA_TPL_SUBS_FIRST:WA_TPL_RENEWAL;
+  return buildSubscriptionWAMessage(tpl,{nama:firstName,dogs:dogNames,tier,amount:totalStr,due_day:dueDay,biz:BIZ_NAME});
  }
 
  // Session E — pull groomer field notes; use "N/A" if all empty (per owner spec)
@@ -13120,7 +13186,8 @@ function renderConfig(){
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Salam reminder customer <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code></span><input id="cfg-rem-greeting" type="text" value="${esc(REM_GREETING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Penutup reminder customer<input id="cfg-rem-closing" type="text" value="${esc(REM_CLOSING)}" style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/></label>
     <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan followup "belum grooming" <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{inactive_period}</code> <code>{days}</code> <code>{biz}</code></span><textarea id="cfg-wa-followup" rows="4" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_FOLLOWUP)}</textarea></label>
-	    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan renewal subscription bulanan <span style="font-size:11px;color:var(--muted)">Token: <code>{nama}</code> <code>{dogs}</code> <code>{tier}</code> <code>{amount}</code> <code>{due_day}</code> <code>{biz}</code></span><textarea id="cfg-wa-renewal" rows="8" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_RENEWAL)}</textarea></label>
+	    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan subscription pertama <span style="font-size:11px;color:var(--muted)">Customer yang belum pernah punya subscription. Token: <code>{nama}</code> <code>{dogs}</code> <code>{tier}</code> <code>{amount}</code> <code>{due_day}</code> <code>{biz}</code> <code>{bank}</code> <code>{acc}</code> <code>{holder}</code> <code>{bank2_block}</code> <code>{closing}</code></span><textarea id="cfg-wa-subs-first" rows="14" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_SUBS_FIRST)}</textarea></label>
+	    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan renewal subscription bulanan <span style="font-size:11px;color:var(--muted)">Customer yang sudah pernah punya subscription. Token: <code>{nama}</code> <code>{dogs}</code> <code>{tier}</code> <code>{amount}</code> <code>{due_day}</code> <code>{biz}</code> <code>{bank}</code> <code>{acc}</code> <code>{holder}</code> <code>{bank2_block}</code></span><textarea id="cfg-wa-renewal" rows="12" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_RENEWAL)}</textarea></label>
 	    <label style="font-size:12px;display:flex;flex-direction:column;gap:3px">Pesan link onboarding customer <span style="font-size:11px;color:var(--muted)">Token: <code>{biz}</code> <code>{link}</code></span><textarea id="cfg-wa-onboarding" rows="7" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;line-height:1.5">${esc(WA_TPL_ONBOARDING)}</textarea></label>
     <div style="font-size:11px;color:var(--muted)">Pesan invoice (belum bayar) tetap dihitung otomatis oleh sistem karena ada logika diskon, biaya tambahan, dan rekening bank.</div>
     <button class="btn btn-sm" style="background:#fef3c7;border:1px solid #fbbf24;color:#78350f;align-self:flex-start" onclick="resetWaTemplatesToDefault()" title="Kembalikan semua template WhatsApp ke bawaan (memperbaiki emoji yang rusak)">🔧 Reset template WA ke default (perbaiki emoji)</button>
@@ -13179,6 +13246,7 @@ async function saveConfig(){
   remGreeting:gv('cfg-rem-greeting')?.value??REM_GREETING,
   remClosing:gv('cfg-rem-closing')?.value??REM_CLOSING,
 	  waTplFollowup:gv('cfg-wa-followup')?.value||WA_TPL_FOLLOWUP,
+	  waTplSubsFirst:gv('cfg-wa-subs-first')?.value||WA_TPL_SUBS_FIRST,
 	  waTplRenewal:gv('cfg-wa-renewal')?.value||WA_TPL_RENEWAL,
 	  waTplOnboarding:gv('cfg-wa-onboarding')?.value||WA_TPL_ONBOARDING};
  const {error}=await db.from('business_settings').upsert({id:1,config,updated_at:new Date().toISOString()});
@@ -15371,7 +15439,7 @@ function renderRenewalReminders(){
     const tierNames=[...new Set(grp.subs.map(s=>tierLabel(s.type)))].join(', ');
     const totalAmount=grp.subs.reduce((sum,s)=>{const d=dogs.find(x=>x.id===s.dog_id);return sum+tierMonthlyPrice(s.type,d?.size)},0);
     const detail=grp.subs.map(s=>{const d=dogs.find(x=>x.id===s.dog_id);return `${d?d.name:'?'} · ${tierLabel(s.type)}`}).join(', ');
-    const msg=applyTpl(WA_TPL_RENEWAL,{nama:firstName,dogs:dogNames,tier:tierNames,amount:fmtRp(totalAmount),due_day:dueDay,biz:BIZ_NAME});
+    const msg=buildSubscriptionWAMessage(WA_TPL_RENEWAL,{nama:firstName,dogs:dogNames,tier:tierNames,amount:fmtRp(totalAmount),due_day:dueDay,biz:BIZ_NAME});
     const waLink=waPhone?`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`:null;
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--subtle);border-radius:5px;flex-wrap:wrap;gap:8px">
      <div style="flex:1;min-width:0">
