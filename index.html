@@ -140,7 +140,7 @@ body.auth-blocked .nav,body.auth-blocked .page,body.auth-blocked .overlay{displa
 .modal{position:relative}
 .appt-customer-picker{margin-bottom:.9rem;position:relative}
 .appt-customer-search{width:100%;min-height:50px;padding:13px 15px;border:2px solid var(--primary);border-radius:var(--r);font-size:16px;background:var(--surface);box-shadow:0 2px 6px rgba(224,123,57,.15)}
-.appt-customer-results{display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);height:min(420px,55vh);min-height:220px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;z-index:50;box-shadow:0 6px 18px rgba(0,0,0,.15);margin-top:4px}
+.appt-customer-results{display:none;position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);min-height:120px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;z-index:1000;box-shadow:0 6px 18px rgba(0,0,0,.15)}
 .fg{display:flex;flex-direction:column;gap:6px}
 .fg.full{grid-column:1/-1}
 .fg label{font-size:var(--fs-label);color:var(--text-2);font-weight:600;text-transform:none;letter-spacing:0}
@@ -4643,10 +4643,37 @@ function wizNext(n){
  }
 }
 
+// Positions the customer-search dropdown as position:fixed against the input's
+// real viewport location, sized to whatever room is actually available (flips
+// to open upward if there isn't room below) — so it's never clipped by the
+// modal's own overflow:auto and behaves the same on phone (full-screen modal)
+// and desktop (centered modal) instead of the two clipping differently.
+function positionApptCustDD(){
+ const input=document.getElementById('appt-cust-search');
+ const dd=document.getElementById('appt-cust-dd');
+ if(!input||!dd) return;
+ const rect=input.getBoundingClientRect();
+ const vh=window.innerHeight;
+ const desired=Math.min(460,vh*0.6);
+ const spaceBelow=vh-rect.bottom-8;
+ const spaceAbove=rect.top-8;
+ dd.style.left=rect.left+'px';
+ dd.style.width=rect.width+'px';
+ if(spaceBelow>=Math.min(220,desired)||spaceBelow>=spaceAbove){
+  dd.style.top=(rect.bottom+4)+'px';
+  dd.style.bottom='auto';
+  dd.style.maxHeight=Math.max(140,Math.min(desired,spaceBelow))+'px';
+ } else {
+  dd.style.bottom=(vh-rect.top+4)+'px';
+  dd.style.top='auto';
+  dd.style.maxHeight=Math.max(140,Math.min(desired,spaceAbove))+'px';
+ }
+}
 function onWizCustSearch(val){
  const q=(val||'').toLowerCase().trim();
  const dd=document.getElementById('appt-cust-dd');
  if(!dd) return;
+ positionApptCustDD();
  // Filter customers — match against owner, kota, kecamatan, address, dog names
  const matches=custs.map(c=>{
   const myDogs=dogs.filter(d=>d.customer_id===c.id);
