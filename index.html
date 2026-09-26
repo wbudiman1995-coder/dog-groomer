@@ -5709,11 +5709,35 @@ function rememberWizDogInputs(did){
  });
 }
 
+// Remove one dog's appointment from a still-open group-edit wizard. Deletes it
+// for real (right away, no nested "pick a scope" overlay — that picker is for
+// whole recurring series, not "drop this one dog from today's booking") and
+// updates the open wizard in place, so the other dog(s) in the group keep
+// their slot untouched and don't need a fresh booking afterward.
 async function deleteApptFromGroup(did){
  const ds=wiz.dogSvcs.find(x=>x.did===did);
  const apptId=ds?.apptId||(wiz.editIds?.find(id=>appts.find(a=>a.id===id)?.dog_id===did));
  if(!apptId){alert('Appointment tidak ditemukan.');return}
- await openApptDelete([apptId]);
+ const dog=dogs.find(d=>d.id===did);
+ if(!confirm(`Hapus ${dog?.name||'anjing ini'} dari appointment ini?\n\nInvoice tetap disimpan. Anjing lain di appointment ini tidak berubah.`)) return;
+ const result=await deleteAppointmentWithVisitCheck(apptId);
+ if(!result.deleted) return;
+ const idx=wiz.dogSvcs.findIndex(x=>x.did===did);
+ if(idx>=0) wiz.dogSvcs.splice(idx,1);
+ if(Array.isArray(wiz.editIds)){
+  const ei=wiz.editIds.indexOf(apptId);
+  if(ei>=0) wiz.editIds.splice(ei,1);
+ }
+ if(wiz.editId===apptId) wiz.editId=wiz.dogSvcs.find(x=>x.apptId)?.apptId||null;
+ renderCal();
+ if(!wiz.dogSvcs.length){
+  cm('ov-appt');
+  showToast('Appointment dihapus','success');
+  return;
+ }
+ renderWizStep4Dogs();
+ if(typeof renderWizSummary==='function') renderWizSummary();
+ showToast('Anjing dihapus dari appointment','success');
 }
 
 function populateWizCustList(){
@@ -11064,12 +11088,37 @@ function buildAppointmentsSheet(){
  });
 }
 
+// Same job-identity rule computeGroomerDogsInCycle uses for payroll: a dog-line
+// is claimed by the first invoice (in fetch order) that has an appointment_id
+// match, or failing that a matching dog+date+groomer. If a second invoice's
+// line claims the same job, payroll silently skips it — this exposes that same
+// verdict per invoice so the export tallies with payroll instead of just
+// listing every invoice row regardless of whether payroll actually counted it.
+function invoiceCountedJobKeys(){
+ const seen=new Set();
+ const perInvoice=new Map();
+ invoices.forEach(inv=>{
+  if(!isAfterVisitInvoice(inv)) return;
+  const countedDogs=[],dupeDogs=[];
+  (inv.dogs||[]).forEach(d=>{
+   const a=linkedAppointmentForInvoiceDog(inv,d);
+   const jobKey=a?.id||`${a?.appt_date||inv.invoice_date}|${d.dog_id}|${a?.groomer_id||''}`;
+   if(seen.has(jobKey)){ dupeDogs.push(d.name||'?'); return; }
+   seen.add(jobKey);
+   countedDogs.push(d.name||'?');
+  });
+  perInvoice.set(inv.id,{countedDogs,dupeDogs});
+ });
+ return perInvoice;
+}
 function buildInvoicesSheet(){
+ const jobKeys=invoiceCountedJobKeys();
  return invoices.map(inv=>{
   const dogs_str=(inv.dogs||[]).map(d=>d.name||'?').join(', ');
   const svcs_str=(inv.dogs||[]).map(d=>(d.services||[]).map(s=>s.name).join('+')).join(' | ');
   const extras=(inv.extra_charges||[]).map(c=>c.label+' Rp'+c.amount).join(', ');
   const payment=invoicePaymentMeta(inv);
+  const jk=jobKeys.get(inv.id);
   return {
    'Invoice Number': inv.invoice_number||'',
    'Invoice Type': invoiceKind(inv)==='package_sale'?'Subscription / Package Sale':'After-Visit',
@@ -11089,6 +11138,8 @@ function buildInvoicesSheet(){
    'Validated At': payment.validatedAt||'',
    'Status': payment.validated?'paid':'unpaid',
    'Doc Mode': inv.doc_mode||'auto',
+   'Dogs Counted In Payroll': jk?jk.countedDogs.join(', '):(isAfterVisitInvoice(inv)?'':'n/a (package sale)'),
+   'Dogs Duplicate (Already Counted Elsewhere)': jk?jk.dupeDogs.join(', '):'',
    'Notes': cleanInvoiceNotes(inv.notes),
    'Created At': inv.created_at?new Date(inv.created_at).toLocaleDateString('id-ID'):'',
   };
@@ -11135,7 +11186,17 @@ function invoiceDogAllocatedAmounts(inv){
 }
 
 function buildVisitsSheet(){
- return visits.map(v=>{
+ // Same dog+date logged twice is the same grooming session recorded twice (a
+ // known artifact of the old auto-logger racing itself) — collapse to one row
+ // so this export doesn't double-count sessions payroll only counts once.
+ const seenVisit=new Set();
+ const dedupedVisits=visits.filter(v=>{
+  const key=v.dog_id+'::'+v.visited_at;
+  if(seenVisit.has(key)) return false;
+  seenVisit.add(key);
+  return true;
+ });
+ return dedupedVisits.map(v=>{
   const dog=dogs.find(d=>d.id===v.dog_id);
   const cust=dog?custs.find(c=>c.id===dog.customer_id):null;
   const linkedAppt=appts.find(a=>a.dog_id===v.dog_id&&a.appt_date===v.visited_at);
