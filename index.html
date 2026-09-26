@@ -848,7 +848,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="subsec active" id="gsec-list">
  <div class="tbl-wrap">
  <table><thead><tr>
- <th>Color</th><th>Name</th><th>Phone</th><th>Status</th><th>Appointments</th><th>Late absen</th><th></th>
+ <th>Color</th><th>Name</th><th>Phone</th><th>Status</th><th>Appointments</th><th>Actual late</th><th></th>
  </tr></thead>
  <tbody id="groomer-body"></tbody></table>
  </div>
@@ -1934,7 +1934,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 <div class="overlay" id="ov-payroll-late">
  <div class="modal" style="max-width:560px">
   <button class="modal-close" onclick="cm('ov-payroll-late')" title="Close">&#x2715;</button>
-  <div class="modal-title">Keterlambatan — cycle ini</div>
+  <div class="modal-title">Absensi per rumah — cycle ini</div>
   <div id="payroll-late-list"></div>
  </div>
 </div>
@@ -3882,6 +3882,35 @@ function groupConsecutiveAppts(dayAppts){
   groups.push([a]);
  });
  return groups;
+}
+
+// Attendance belongs to a household visit, not to an individual pet row.
+// Consecutive appointments for dogs under the same customer are one stop, so a
+// single attendance photo covers every dog in that stop.
+function getHouseholdAttendanceVisit(appt,knownGroup){
+ if(!appt) return {group:[],first:null,photoAppt:null,attendance:null,waiverAppt:null};
+ let group=Array.isArray(knownGroup)&&knownGroup.length?[...knownGroup]:null;
+ if(!group){
+  const sameRun=appts.filter(a=>a.groomer_id===appt.groomer_id&&a.appt_date===appt.appt_date&&a.status!=='cancelled');
+  group=groupConsecutiveAppts(sameRun).find(g=>g.some(x=>x.id===appt.id))||[appt];
+ }
+ group.sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
+ const photoRows=group.filter(a=>a.photos?.absency);
+ photoRows.sort((a,b)=>{
+  const at=photoTS(a.photos?.absency),bt=photoTS(b.photos?.absency);
+  if(at&&bt) return new Date(at)-new Date(bt);
+  if(at) return -1;
+  if(bt) return 1;
+  return (a.appt_time||'').localeCompare(b.appt_time||'');
+ });
+ const photoAppt=photoRows[0]||null;
+ return {
+  group,
+  first:group[0]||appt,
+  photoAppt,
+  attendance:photoAppt?.photos?.absency||null,
+  waiverAppt:group.find(a=>a.late_waived)||null
+ };
 }
 
 function isBlocked(gid,date,start,dur,skipIds){
@@ -6710,6 +6739,31 @@ function swGroomer(sub){
 
 let attendanceCycleAnchor=new Date();
 
+function getGroomerAttendanceVisitResults(groomerId,startDate,endDate,includeFinalizedToday){
+ const todayISO=iso(new Date());
+ const g=groomers.find(x=>x.id===groomerId);
+ const workingDays=(g?.working_days||'Mon,Tue,Wed,Thu,Fri,Sat').split(',').map(x=>x.trim());
+ const dayMap=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+ const eligible=appts.filter(a=>
+  a.groomer_id===groomerId&&a.appt_date>=startDate&&a.appt_date<=endDate&&a.status!=='cancelled'&&
+  (a.appt_date<todayISO||(includeFinalizedToday&&appointmentHasAfterVisitInvoice(a)))
+ );
+ const byDate={};
+ eligible.forEach(a=>{if(!byDate[a.appt_date])byDate[a.appt_date]=[];byDate[a.appt_date].push(a);});
+ const rows=[];
+ Object.entries(byDate).forEach(([date,dayAppts])=>{
+  if(isDateBlocked(date,groomerId)) return;
+  const dow=dayMap[new Date(date+'T00:00:00').getDay()];
+  if(!workingDays.includes(dow)) return;
+  groupConsecutiveAppts(dayAppts).forEach(group=>{
+   const first=[...group].sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''))[0];
+   const result=getAppointmentAttendanceResult(first,group);
+   rows.push({date,time:(first.appt_time||'').slice(0,5),first,group,result});
+  });
+ });
+ return rows.sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||''));
+}
+
 function renderAttendance(){
  const el=document.getElementById('attendance-content'); if(!el) return;
  const cycle=getPayrollCycle(attendanceCycleAnchor);
@@ -6717,31 +6771,51 @@ function renderAttendance(){
  const cutoff=iso(twoMonthsAgo);
  const todayISO=iso(new Date());
  const lateRows=groomers.filter(g=>g.active).map(g=>{
-  const late=calcGroomerLateCountForCycle(g.id,cycle.start,cycle.end);
+  const results=getGroomerAttendanceVisitResults(g.id,cycle.start,cycle.end,true);
+  const late=results.filter(r=>r.result.key==='late').length;
+  const missing=results.filter(r=>r.result.key==='missing').length;
+  const waived=results.filter(r=>r.result.key==='waived').length;
   return `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;border-bottom:1px solid var(--border)">
    <span style="display:flex;align-items:center;gap:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${g.color||'#16a34a'}"></span>${esc(g.name)}</span>
-   <span>${late>0?`<span class="badge bm">${late}x terlambat</span>`:'<span style="color:var(--muted);font-size:11px">Tepat waktu</span>'}</span>
+   <span style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+    ${late>0?`<span class="badge bl">${late}x terlambat</span>`:'<span style="color:#15803d;font-size:11px">Tidak ada yang terlambat</span>'}
+    ${missing>0?`<span class="badge bm">${missing} rumah tanpa foto</span>`:''}
+    ${waived>0?`<span class="badge bs">${waived} waived</span>`:''}
+   </span>
   </div>`;
  }).join('');
  const items=[];
- appts.forEach(a=>{
-  if(a.appt_date<cutoff||a.appt_date>todayISO) return;
-  const absency=a.photos?.absency;
-  if(!absency) return;
-  const g=groomers.find(x=>x.id===a.groomer_id);
-  const d=dogs.find(x=>x.id===a.dog_id);
-  const url=typeof absency==='object'?absency.url:absency;
-  const ts=typeof absency==='object'?absency.timestamp:null;
-  const lat=typeof absency==='object'?absency.lat:null;
-  const lng=typeof absency==='object'?absency.lng:null;
-  items.push({date:a.appt_date,time:a.appt_time,groomer:g?.name||'?',dog:d?.name||'?',url,ts,lat,lng,apptId:a.id,isLate:a.absency_late,waived:!!a.late_waived});
+ const recent=appts.filter(a=>a.appt_date>=cutoff&&a.appt_date<=todayISO&&a.status!=='cancelled');
+ const byGroomerDate={};
+ recent.forEach(a=>{
+  const key=`${a.groomer_id||''}::${a.appt_date}`;
+  if(!byGroomerDate[key]) byGroomerDate[key]=[];
+  byGroomerDate[key].push(a);
+ });
+ Object.values(byGroomerDate).forEach(dayAppts=>{
+  groupConsecutiveAppts(dayAppts).forEach(group=>{
+   const first=[...group].sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''))[0];
+   const result=getAppointmentAttendanceResult(first,group);
+   const visit=result.visit;
+   const absency=visit.attendance;
+   if(!absency) return;
+   const g=groomers.find(x=>x.id===first.groomer_id);
+   const firstDog=dogs.find(x=>x.id===first.dog_id);
+   const customer=custs.find(x=>x.id===firstDog?.customer_id);
+   const dogNames=group.map(x=>dogs.find(d=>d.id===x.dog_id)?.name||'?').join(', ');
+   const url=typeof absency==='object'?absency.url:absency;
+   const ts=typeof absency==='object'?absency.timestamp:null;
+   const lat=typeof absency==='object'?absency.lat:null;
+   const lng=typeof absency==='object'?absency.lng:null;
+   items.push({date:first.appt_date,time:first.appt_time,groomer:g?.name||'?',dogs:dogNames,owner:customer?.owner||'?',url,ts,lat,lng,apptId:first.id,result});
+  });
  });
  const byDate={};
  items.forEach(it=>{if(!byDate[it.date]) byDate[it.date]=[];byDate[it.date].push(it);});
  const sortedDates=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
  el.innerHTML=`<div class="card" style="padding:12px 14px;margin-bottom:1rem">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
-   <div style="font-size:13px;font-weight:600">Keterlambatan absen — ${cycle.start} s/d ${cycle.end}</div>
+   <div style="font-size:13px;font-weight:600">Absensi per rumah — ${cycle.start} s/d ${cycle.end}</div>
    <div style="display:flex;gap:6px">
     <button class="btn btn-g btn-sm" onclick="attendanceCycleAnchor.setDate(attendanceCycleAnchor.getDate()-30);renderAttendance()">‹ Sebelumnya</button>
     <button class="btn btn-g btn-sm" onclick="attendanceCycleAnchor=new Date();renderAttendance()">Sekarang</button>
@@ -6759,18 +6833,14 @@ function renderAttendance(){
    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
     ${dayItems.map(it=>{
      const uploadTime=it.ts?new Date(it.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):'—';
-     let isLate=false;
-     if(it.ts&&it.time){const[ah,am]=it.time.split(':').map(Number);const apptStart=new Date(it.date+'T'+String(ah).padStart(2,'0')+':'+String(am).padStart(2,'0')+':00');isLate=new Date(it.ts).getTime()>=apptStart.getTime()+LATE_GRACE_MINUTES*60*1000;}
-     else isLate=!!it.isLate;
-     if(it.waived) isLate=false; // waived — bukan salah groomer
-     const lateBadge=it.waived
+     const lateBadge=it.result.key==='waived'
       ?'<span style="font-size:10px;background:#dcfce7;color:#15803d;padding:2px 6px;border-radius:4px;font-weight:600;margin-top:3px;display:inline-block" title="Di-waive admin — tidak dihitung telat">WAIVED</span>'
-      :(isLate?'<span style="font-size:10px;background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:4px;font-weight:600;margin-top:3px;display:inline-block">Terlambat</span>':'');
+      :(it.result.key==='late'?'<span style="font-size:10px;background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:4px;font-weight:600;margin-top:3px;display:inline-block">Terlambat</span>':'<span style="font-size:10px;background:#dcfce7;color:#15803d;padding:2px 6px;border-radius:4px;font-weight:600;margin-top:3px;display:inline-block">Tepat waktu</span>');
      const mapsLink=it.lat?`<a href="https://maps.google.com/?q=${it.lat},${it.lng}" target="_blank" style="font-size:11px;color:var(--primary)">Buka Maps</a>`:'<span style="font-size:11px;color:var(--muted)">Lokasi tidak tersedia</span>';
      return `<div class="card" style="padding:10px">
       <a href="${esc(it.url)}" target="_blank"><img src="${esc(it.url)}" style="width:100%;border-radius:6px;aspect-ratio:4/3;object-fit:cover;margin-bottom:8px"/></a>
       <div style="font-weight:600;font-size:13px">${esc(it.groomer)}</div>
-      <div style="font-size:11px;color:var(--muted)">Jadwal: ${it.time?it.time.slice(0,5):'—'} · ${esc(it.dog)}</div>
+      <div style="font-size:11px;color:var(--muted)">Jadwal: ${it.time?it.time.slice(0,5):'—'} · ${esc(it.owner)} · ${esc(it.dogs)}</div>
       <div style="font-size:11px;margin-top:4px">Upload: <strong>${uploadTime}</strong> ${lateBadge}</div>
       <div style="margin-top:4px">${mapsLink}</div>
      </div>`;
@@ -6781,76 +6851,16 @@ function renderAttendance(){
 }
 
 function calcGroomerLateCountForCycle(groomerId,cycleStart,cycleEnd){
- const todayISO=iso(new Date());
- const g=groomers.find(x=>x.id===groomerId);
- const workingDays=(g?.working_days||'Mon,Tue,Wed,Thu,Fri,Sat').split(',');
- const dayMap=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
- // Today counts only once it's been invoiced — not merely because the date
- // arrived. An appointment can sit with no attendance photo yet simply because
- // its slot hasn't happened yet today; treating "missing" as "late" this early
- // would wrongly zero the no-late bonus before the day is actually done.
- // Invoicing is the same completion signal computeGroomerDogsInCycle already
- // uses for pay, so this stays consistent with how the rest of payroll finalizes.
- const cycleAppts=appts.filter(a=>a.groomer_id===groomerId&&a.appt_date>=cycleStart&&a.appt_date<=cycleEnd&&a.status!=='cancelled'&&(a.appt_date<todayISO||appointmentHasAfterVisitInvoice(a)));
- const byDate={};
- cycleAppts.forEach(a=>{if(!byDate[a.appt_date])byDate[a.appt_date]=[];byDate[a.appt_date].push(a);});
- let late=0;
- Object.entries(byDate).forEach(([date,dayAppts])=>{
-  const blocked=isDateBlocked(date,groomerId);
-  if(blocked) return;
-  const dow=dayMap[new Date(date+'T00:00:00').getDay()];
-  if(!workingDays.includes(dow)) return;
-  const first=dayAppts.sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''))[0];
-  if(first.late_waived) return; // waived — bukan salah groomer, skip dari hitungan
-  if(getAppointmentAttendanceResult(first).key!=='on_time') late++;
- });
- return late;
+ return getGroomerAttendanceVisitResults(groomerId,cycleStart,cycleEnd,true)
+  .filter(r=>r.result.key==='late').length;
 }
 
 function calcGroomerLateCount(groomerId){
  const twoMonthsAgo=new Date(); twoMonthsAgo.setMonth(twoMonthsAgo.getMonth()-2);
  const cutoffISO=iso(twoMonthsAgo);
  const todayISO=iso(new Date());
- const g=groomers.find(x=>x.id===groomerId);
- const workingDays=(g?.working_days||'Mon,Tue,Wed,Thu,Fri,Sat').split(',');
- const dayMap=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
- const groomerAppts=appts.filter(a=>
-  a.groomer_id===groomerId&&
-  a.appt_date>=cutoffISO&&
-  a.appt_date<todayISO&&
-  a.status!=='cancelled'
- );
- if(!groomerAppts.length) return 0;
- // Group by date, pick first appt per day
- const byDate={};
- groomerAppts.forEach(a=>{if(!byDate[a.appt_date])byDate[a.appt_date]=[];byDate[a.appt_date].push(a);});
- let late=0;
- Object.entries(byDate).forEach(([date,dayAppts])=>{
-  // Skip blocked days (for this groomer or all groomers)
-  const blocked=isDateBlocked(date,groomerId);
-  if(blocked) return;
-  // Skip groomer's natural day off (working_days)
-  const dow=dayMap[new Date(date+'T00:00:00').getDay()];
-  if(!workingDays.includes(dow)) return;
-  // First appointment of the day
-  const first=dayAppts.sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''))[0];
-  if(first.late_waived) return; // waived — bukan salah groomer
-  const absency=first.photos?.absency;
-  if(!absency){
-   late++; // missing photo
-  } else {
-   const ts=typeof absency==='object'?absency.timestamp:null;
-   if(ts){
-    const uploaded=new Date(ts);
-    const [ah,am]=(first.appt_time||'00:00').split(':').map(Number);
-    const apptStart=new Date(date+'T'+String(ah).padStart(2,'0')+':'+String(am).padStart(2,'0')+':00');
-    if(uploaded.getTime()>=apptStart.getTime()+LATE_GRACE_MINUTES*60*1000) late++;
-   } else if(first.absency_late){
-    late++; // legacy fallback only when no timestamp exists
-   }
-  }
- });
- return late;
+ return getGroomerAttendanceVisitResults(groomerId,cutoffISO,todayISO,false)
+  .filter(r=>r.result.key==='late').length;
 }
 
 function renderGroomers(){ const tb=document.getElementById('groomer-body');
@@ -6866,7 +6876,7 @@ function renderGroomers(){ const tb=document.getElementById('groomer-body');
    ?`<button onclick="toggleGroomerActive('${g.id}',false)" class="icon-btn" style="padding:2px 8px;background:#dcfce7;color:#15803d;border:1px solid #16a34a;font-weight:600;cursor:pointer" title="Klik untuk deactivate — groomer tidak akan muncul di kalender">✓ Active</button>`
    :`<button onclick="toggleGroomerActive('${g.id}',true)" class="icon-btn" style="padding:2px 8px;background:#fee2e2;color:#991b1b;border:1px solid #dc2626;font-weight:600;cursor:pointer" title="Klik untuk activate — groomer akan muncul di kalender lagi">⛔ Inactive</button>`}</td>
  <td>${ac}</td>
- <td>${late>0?`<span class="badge bm" title="Terlambat upload absen (2 bulan terakhir)">${late}x terlambat</span>`:`<span style="font-size:11px;color:var(--muted)">0</span>`}</td>
+ <td>${late>0?`<span class="badge bl" title="Kunjungan rumah yang benar-benar terlambat (2 bulan terakhir)">${late}x terlambat</span>`:`<span style="font-size:11px;color:#15803d">0</span>`}</td>
  <td><div class="row-actions">
  <button class="icon-btn view" onclick="openGSched('${g.id}')">Schedule</button>
  <button class="icon-btn" onclick="openGroomerReport('${g.id}')" title="Performance report card">Report</button>
@@ -6968,8 +6978,14 @@ function calcGroomerMetrics(groomerId, periodStr){
  });
  const avgRevPerSession=totalCompleted>0?Math.round(revenue/totalCompleted):0;
 
- // Phase 2: Lateness
- const lateAppts=inRange.filter(a=>(a.late_minutes||0)>=LATE_GRACE_MINUTES&&!a.late_waived);
+ // Lateness is measured per household visit. Missing documentation is tracked
+ // separately and never converted into a fake late incident.
+ const attendanceVisits=getGroomerAttendanceVisitResults(groomerId,cutoffISO,iso(today),true);
+ const lateAppts=attendanceVisits.filter(v=>v.result.key==='late').map(v=>({
+  ...v.first,
+  late_minutes:v.result.lateMinutes||0,
+  late_reason:v.result.reason||v.group.find(a=>a.late_reason)?.late_reason||''
+ }));
  const totalLateMins=lateAppts.reduce((sum,a)=>sum+(a.late_minutes||0),0);
  const avgLateMins=lateAppts.length>0?Math.round(totalLateMins/lateAppts.length):0;
 
@@ -7056,20 +7072,31 @@ function calcTeamAverage(periodStr){
  };
 }
 
-function getAppointmentAttendanceResult(a){
- if((a.late_minutes||0)>=LATE_GRACE_MINUTES) return {key:'late',label:'Late',color:'#991b1b',bg:'#fee2e2'};
- const attendance=a.photos?.absency;
- if(!attendance) return {key:'missing',label:'No attendance photo',color:'#92400e',bg:'#fef3c7'};
+function getAppointmentAttendanceResult(a,knownGroup){
+ const visit=getHouseholdAttendanceVisit(a,knownGroup);
+ const shared=!!(visit.photoAppt&&visit.photoAppt.id!==a.id);
+ if(visit.waiverAppt){
+  return {key:'waived',label:'Waived',color:'#15803d',bg:'#dcfce7',shared,visit,lateMinutes:0,reason:visit.waiverAppt.late_reason||''};
+ }
+ const manualLate=visit.group.find(x=>(x.late_minutes||0)>=LATE_GRACE_MINUTES);
+ if(manualLate){
+  return {key:'late',label:shared?'Late · house photo':'Late',color:'#991b1b',bg:'#fee2e2',shared,visit,lateMinutes:manualLate.late_minutes||0,reason:manualLate.late_reason||''};
+ }
+ const attendance=visit.attendance;
+ if(!attendance) return {key:'missing',label:'No house attendance photo',color:'#92400e',bg:'#fef3c7',shared:false,visit};
  const uploadedAt=photoTS(attendance);
  if(uploadedAt){
-  const start=new Date(`${a.appt_date}T${(a.appt_time||'00:00').slice(0,5)}:00`);
+  const first=visit.first||a;
+  const start=new Date(`${first.appt_date}T${(first.appt_time||'00:00').slice(0,5)}:00`);
   const uploaded=new Date(uploadedAt);
   if(!isNaN(start.getTime())&&!isNaN(uploaded.getTime())&&uploaded.getTime()>=start.getTime()+LATE_GRACE_MINUTES*60*1000){
-   return {key:'late',label:'Late',color:'#991b1b',bg:'#fee2e2'};
+   return {key:'late',label:shared?'Late · house photo':'Late',color:'#991b1b',bg:'#fee2e2',shared,visit,lateMinutes:Math.max(0,Math.floor((uploaded.getTime()-start.getTime())/60000)),reason:''};
   }
  }
- if(!uploadedAt&&a.absency_late) return {key:'late',label:'Late',color:'#991b1b',bg:'#fee2e2'};
- return {key:'on_time',label:'On time',color:'#15803d',bg:'#dcfce7'};
+ if(!uploadedAt&&visit.group.some(x=>x.absency_late)){
+  return {key:'late',label:shared?'Late · house photo':'Late',color:'#991b1b',bg:'#fee2e2',shared,visit,lateMinutes:0,reason:''};
+ }
+ return {key:'on_time',label:shared?'On time · house photo':'On time',color:'#15803d',bg:'#dcfce7',shared,visit};
 }
 
 function getAppointmentPhotoItems(a){
@@ -7082,6 +7109,12 @@ function getAppointmentPhotoItems(a){
   const value=p[key],url=photoUrl(value);
   if(url) items.push({label,url,timestamp:photoTS(value)});
  });
+ // Reuse the one attendance photo from another dog in this household stop.
+ if(!photoUrl(p.absency)){
+  const visit=getHouseholdAttendanceVisit(a);
+  const sharedUrl=photoUrl(visit.attendance);
+  if(sharedUrl) items.unshift({label:'Attendance (shared household)',url:sharedUrl,timestamp:photoTS(visit.attendance)});
+ }
  [['dematting','Dematting'],['fungal','Fungal'],['injury','Injury'],['other','Other']].forEach(([key,label])=>{
   (Array.isArray(p[key])?p[key]:[]).forEach((value,i)=>{
    const url=photoUrl(value);
@@ -13983,25 +14016,11 @@ function onWaiveToggle(){
 
 /* ----- Payroll: late days list per groomer/cycle ----- */
 function payrollLateDays(gid,cycle){
- const g=groomers.find(x=>x.id===gid);
- const wd=(g?.working_days||'Mon,Tue,Wed,Thu,Fri,Sat').split(',').map(s=>s.trim());
- const dayMap=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
- const todayISO=iso(new Date());
- // Today counts only once invoiced — same reasoning as calcGroomerLateCountForCycle:
- // an un-invoiced same-day appointment may just not have happened yet.
- const cycleAppts=appts.filter(a=>a.groomer_id===gid&&a.appt_date>=cycle.start&&a.appt_date<=cycle.end&&a.status!=='cancelled'&&(a.appt_date<todayISO||appointmentHasAfterVisitInvoice(a)));
- const byDate={};
- cycleAppts.forEach(a=>{if(!byDate[a.appt_date])byDate[a.appt_date]=[];byDate[a.appt_date].push(a);});
- const rows=[];
- Object.entries(byDate).forEach(([date,dayAppts])=>{
-  if(isDateBlocked(date,gid)) return;
-  const dow=dayMap[new Date(date+'T00:00:00').getDay()];
-  if(!wd.includes(dow)) return;
-  const first=dayAppts.sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''))[0];
-  const res=getAppointmentAttendanceResult(first);
-  rows.push({date,time:(first.appt_time||'').slice(0,5),key:res.key,label:first.late_waived?'Waived':res.label,reason:first.late_reason||'',waived:!!first.late_waived,apptId:first.id});
+ return getGroomerAttendanceVisitResults(gid,cycle.start,cycle.end,true).map(row=>{
+  const waiver=row.result.visit?.waiverAppt;
+  const reason=waiver?.late_reason||row.group.find(a=>a.late_reason)?.late_reason||'';
+  return {date:row.date,time:row.time,key:row.result.key,label:row.result.label,reason,waived:row.result.key==='waived',apptId:(waiver||row.first).id};
  });
- return rows.sort((a,b)=>b.date.localeCompare(a.date));
 }
 
 function showPayrollLateList(gid){
@@ -14014,8 +14033,8 @@ function showPayrollLateList(gid){
  const waivedN=days.filter(d=>d.waived).length;
  let html=`<div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">
   <strong style="color:var(--text)">${esc(g.name)}</strong> · ${esc(cycle.label)}<br>
-  Dihitung telat: <strong style="color:${lateN?'#dc2626':'#16a34a'}">${lateN} hari</strong> · Tanpa foto absen: <strong>${noPhotoN}</strong> · Di-waive: <strong>${waivedN}</strong><br>
-  Klik <strong>Open</strong> untuk edit menit/alasan, atau centang "bukan salah groomer" agar tidak mengganggu bonus no-late.
+  Dihitung telat: <strong style="color:${lateN?'#dc2626':'#16a34a'}">${lateN} kunjungan rumah</strong> · Rumah tanpa foto: <strong>${noPhotoN}</strong> · Di-waive: <strong>${waivedN}</strong><br>
+  Satu foto berlaku untuk semua anjing dalam kunjungan rumah yang sama. Klik <strong>Open</strong> untuk edit menit/alasan, atau centang "bukan salah groomer" agar tidak mengganggu bonus no-late.
  </div>`;
  if(!flagged.length){
   html+='<div style="padding:14px;background:#dcfce7;border-radius:8px;color:#15803d;font-size:13px">✓ Tidak ada hari bermasalah di cycle ini.</div>';
