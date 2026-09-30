@@ -1570,11 +1570,11 @@ thead th[onclick]:hover{color:var(--primary-darker)}
      <option value="other">Lainnya</option>
     </select>
    </div>
-   <div class="fg full">
-    <label>Groomer</label>
-    <select id="bf-groomer">
-     <option value="">All groomers (libur nasional / business closed)</option>
-    </select>
+    <div class="fg full">
+     <label>Groomer *</label>
+     <select id="bf-groomer" required>
+      <option value="">Pilih groomer…</option>
+     </select>
    </div>
    <div class="fg full">
     <label>Catatan (opsional)</label>
@@ -2868,6 +2868,13 @@ function om(id){document.getElementById(id).classList.add('open')}
 // Auth metadata keeps preferences consistent across desktop/mobile; localStorage
 // remains an instant/offline fallback for older sessions.
 function prefsStorageKey(){ return currentUser?.id?`hp_prefs_${currentUser.id}`:'hp_prefs'; }
+function navStateStorageKey(){ return currentUser?.id?`hp_nav_state_${currentUser.id}`:'hp_nav_state'; }
+function getNavState(){
+ try{return JSON.parse(sessionStorage.getItem(navStateStorageKey())||'{}')}catch(e){return {}}
+}
+function saveNavState(patch){
+ try{sessionStorage.setItem(navStateStorageKey(),JSON.stringify({...getNavState(),...patch}))}catch(e){}
+}
 function getLocalPrefs(){
  try{
   const scoped=localStorage.getItem(prefsStorageKey());
@@ -2934,16 +2941,19 @@ function runGlobalSearch(){
 }
 function applyPrefsOnBoot(role){
  const p=getPrefs();
+ const nav=getNavState();
  // One-time migration of older browser-only settings to the signed-in account.
  const accountPrefs=currentUser?.user_metadata?.homepaw_preferences;
  if(currentUser&&!accountPrefs&&Object.keys(p).length) savePrefs(p).catch(e=>console.warn('Preference sync:',e.message));
  if(p.lang){ LANG=p.lang; applyI18n(); }
  if(p.calView) calView=p.calView;
  const dp=document.getElementById('dash-period'); if(dp&&p.dashPeriod) dp.value=p.dashPeriod;
- let landing=p.landing||(role==='owner'?'dashboard':'calendar');
+ // A browser refresh returns to the exact tab/subtab that was open. The saved
+ // landing preference is only used when this browser tab has no navigation state.
+ let landing=nav.tab||p.landing||(role==='owner'?'dashboard':'calendar');
  const lt=document.getElementById('tab-'+landing);
  if(!lt||lt.style.display==='none') landing=(role==='owner'?'dashboard':'calendar');
- sw(landing);
+ sw(landing,{restore:true,nav});
 }
 function esc(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
@@ -3053,7 +3063,9 @@ function onKotaChange(){
  populateKecSelect(document.getElementById('cf-kec'),k);
 }
 
-function sw(tab) {
+function sw(tab,options={}) {
+ const nav=options.nav||getNavState();
+ const restoring=!!options.restore;
  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
  document.getElementById('tab-'+tab).classList.add('active');
@@ -3061,7 +3073,10 @@ function sw(tab) {
  // Auto-refresh only on calendar tab
  if(tab==='calendar'){ startCalAutoRefresh(); } else { stopCalAutoRefresh(); }
  if(tab==='dashboard') renderDashboard();
- if(tab==='database') renderCusts();
+ if(tab==='database'){
+  if(restoring) swSub(nav.database||'cust');
+  else renderCusts();
+ }
  if(tab==='calendar'){
   // Batch O.11 — always jump to today when opening calendar
   const today=new Date(); today.setHours(0,0,0,0);
@@ -3071,18 +3086,23 @@ function sw(tab) {
   calDay=iso(today);
   renderCal();
  }
- if(tab==='groomers'){ swGroomer('list'); }
- if(tab==='financial'){ swFin('invoices'); renderCashOnHand(); }
+ if(tab==='groomers'){ swGroomer(restoring?(nav.groomers||'list'):'list'); }
+ if(tab==='financial'){ swFin(restoring?(nav.financial||'invoices'):'invoices'); renderCashOnHand(); }
  if(tab==='invoice') initInvoiceTab();
- if(tab==='settings'){ swSettings('storage'); }
- if(tab==='reminders') initReminders();
+ if(tab==='settings'){ swSettings(restoring?(nav.settings||'storage'):'storage'); }
+ if(tab==='reminders'){
+  initReminders();
+  if(restoring) swRem(nav.reminders||'groomer');
+ }
  if(tab==='membership') renderMembership();
  if(tab==='access') renderAccess();
  if(tab==='history') renderHistoryTab();
  if(tab==='tally') renderTally();
+ saveNavState({tab});
 }
 
 function swSub(sub){
+ if(!document.getElementById('stab-'+sub)||!document.getElementById('ssec-'+sub)) sub='cust';
  if(sub==='dogs' && !currentCustId){
  // open dogs subtab but show empty state
  }
@@ -3093,6 +3113,7 @@ function swSub(sub){
  if(sub==='dogs') renderDogsTable();
  if(sub==='cust') renderCusts();
  if(sub==='onboarding') renderOnboarding();
+ saveNavState({database:sub});
 }
 
 async function loadAll() {
@@ -6809,6 +6830,7 @@ async function cleanupStaleVisitOnMove(dogId,oldDate,newDate){
 }
 /* GROOMERS TAB */
 function swGroomer(sub){
+ if(!document.getElementById('gtab-'+sub)||!document.getElementById('gsec-'+sub)) sub='list';
  document.querySelectorAll('#sec-groomers .subtab').forEach(b=>b.classList.remove('active'));
  const tab=document.getElementById('gtab-'+sub); if(tab) tab.classList.add('active');
  document.querySelectorAll('#sec-groomers .subsec').forEach(s=>s.classList.remove('active'));
@@ -6816,6 +6838,7 @@ function swGroomer(sub){
  if(sub==='list') renderGroomers();
  else if(sub==='attendance') renderAttendance();
  else if(sub==='leaderboard') renderLeaderboard();
+ saveNavState({groomers:sub});
 }
 
 let attendanceCycleAnchor=new Date();
@@ -11755,8 +11778,8 @@ function openBlockDayModal(){
  const noteEl=document.getElementById('bf-note'); if(noteEl) noteEl.value='';
  const gi=document.getElementById('bf-groomer');
  if(gi){
-  gi.innerHTML='<option value="">All groomers (libur nasional / business closed)</option>'+
-   groomers.map(g=>`<option value="${g.id}">${esc(g.name)}${g.active?'':' (inactive)'}</option>`).join('');
+  gi.innerHTML='<option value="">Pilih groomer…</option>'+
+    groomers.map(g=>`<option value="${g.id}">${esc(g.name)}${g.active?'':' (inactive)'}</option>`).join('');
   gi.value='';
  }
  const wrn=document.getElementById('bf-existing-warning'); if(wrn) wrn.style.display='none';
@@ -11771,7 +11794,7 @@ function openBlockDayModal(){
   } else {
    list.innerHTML='<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Recent &amp; upcoming blocks</div>'+
     recent.map(b=>{
-     const gName=b.groomer_id?(groomers.find(g=>g.id===b.groomer_id)?.name||'?'):'All groomers';
+     const gName=b.groomer_id?(groomers.find(g=>g.id===b.groomer_id)?.name||'?'):'Legacy: All groomers';
      const reasonLbl={sick:'Sakit',holiday:'Libur nasional',libur_mingguan:'Libur mingguan',leave:'Cuti',other:'Lainnya'}[b.reason]||b.reason;
      return `<div onclick="openBlockDayEdit('${b.id}')" title="Klik untuk edit" style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--subtle);border-radius:5px;margin-bottom:4px;font-size:12px;cursor:pointer">
       <div>
@@ -11804,17 +11827,18 @@ async function saveBlockDay(){
  const date=document.getElementById('bf-date').value;
  if(!date){alert('Pilih tanggal');return}
  const groomerId=document.getElementById('bf-groomer').value||null;
+ if(!groomerId){alert('Pilih satu groomer. Holiday/block day sekarang harus dibuat per groomer.');return}
  const reason=document.getElementById('bf-reason').value;
  const note=document.getElementById('bf-note').value.trim()||null;
- // Check for existing appointments on that day for that groomer (or all)
+ // Check for existing appointments on that day for the selected groomer.
  const conflictingAppts=appts.filter(a=>{
   if(a.appt_date!==date) return false;
   if(a.status==='done') return false;
-  if(groomerId&&a.groomer_id!==groomerId) return false; // per-groomer block
+  if(a.groomer_id!==groomerId) return false;
   return true;
  });
  if(conflictingAppts.length){
-  const gName=groomerId?(groomers.find(g=>g.id===groomerId)?.name||'?'):'All groomers';
+  const gName=groomers.find(g=>g.id===groomerId)?.name||'?';
   const msg=`${gName} has ${conflictingAppts.length} appointment${conflictingAppts.length!==1?'s':''} on ${date} (${conflictingAppts.map(a=>{
    const d=dogs.find(x=>x.id===a.dog_id);
    return (d?.name||'?')+' '+(a.appt_time||'').slice(0,5);
@@ -11840,7 +11864,7 @@ async function saveBlockDay(){
  }
  if(error){alert('Error: '+error.message);return}
  if(saved&&!editId){
-  const gName=groomerId?(groomers.find(g=>g.id===groomerId)?.name||'?'):'All groomers';
+  const gName=groomers.find(g=>g.id===groomerId)?.name||'?';
   await logAudit('groomer_block',saved.id,'create',{new:payload,label:`${date} \u00B7 ${gName} \u00B7 ${reason}`});
  }
  await reloadTables('groomer_blocks');
@@ -11860,7 +11884,7 @@ async function delBlockDay(id){
  const {error}=await db.from('groomer_blocks').delete().eq('id',id);
  if(error){alert('Error: '+error.message);return}
  if(oldRec){
-  const gName=oldRec.groomer_id?(groomers.find(g=>g.id===oldRec.groomer_id)?.name||'?'):'All groomers';
+  const gName=oldRec.groomer_id?(groomers.find(g=>g.id===oldRec.groomer_id)?.name||'?'):'Legacy: All groomers';
   await logAudit('groomer_block',id,'delete',{old:oldRec,label:`${oldRec.block_date} \u00B7 ${gName}`});
  }
  await reloadTables('groomer_blocks');
@@ -11932,6 +11956,7 @@ function initReminders(){
 
 // Batch O.2 — Customer reminders subtab
 function swRem(sub){
+ if(!document.getElementById('rstab-'+sub)||!document.getElementById('rsec-'+sub)) sub='groomer';
  document.querySelectorAll('#sec-reminders > .subtabs > .subtab').forEach(b=>b.classList.remove('active'));
  const tab=document.getElementById('rstab-'+sub); if(tab) tab.classList.add('active');
  document.querySelectorAll('#sec-reminders > .subsec').forEach(s=>s.classList.remove('active'));
@@ -11940,6 +11965,7 @@ function swRem(sub){
  else if(sub==='customer') generateCustomerReminders();
  else if(sub==='followup') renderFollowups();
  else if(sub==='renewal') renderRenewalReminders();
+ saveNavState({reminders:sub});
 }
 
 function generateCustomerReminders(){
@@ -13149,6 +13175,8 @@ async function delAccess(id,email){
 /* ========== BATCH J — FINANCIAL SUBTABS + PAYROLL ========== */
 
 function swFin(sub){
+ const requestedTab=document.getElementById('fstab-'+sub);
+ if(!requestedTab||requestedTab.style.display==='none'||!document.getElementById('fsec-'+sub)) sub='invoices';
  document.querySelectorAll('#sec-financial > .subtabs > .subtab').forEach(b=>b.classList.remove('active'));
  const tab=document.getElementById('fstab-'+sub); if(tab) tab.classList.add('active');
  document.querySelectorAll('#sec-financial > .subsec').forEach(s=>s.classList.remove('active'));
@@ -13159,6 +13187,7 @@ function swFin(sub){
  else if(sub==='expenses') renderExpenses();
  else if(sub==='capital') renderCapital();
  else if(sub==='bank') renderBankDisplay();
+ saveNavState({financial:sub});
 }
 
 function renderBankDisplay(){
@@ -13173,12 +13202,14 @@ function renderBankDisplay(){
 
 /* ----- Settings tab ----- */
 function swSettings(sub){
+ if(!document.getElementById('stab-'+sub)||!document.getElementById('ssec-'+sub)) sub='storage';
  document.querySelectorAll('#sec-settings .subtab').forEach(b=>b.classList.remove('active'));
  const tab=document.getElementById('stab-'+sub); if(tab) tab.classList.add('active');
  document.querySelectorAll('#sec-settings .subsec').forEach(s=>s.classList.remove('active'));
  const sec=document.getElementById('ssec-'+sub); if(sec) sec.classList.add('active');
  if(sub==='storage') renderSettingsStorage();
  if(sub==='config') renderConfig();
+ saveNavState({settings:sub});
 }
 
 /* ===== CONFIGURATION (Phase 1) ===== */
