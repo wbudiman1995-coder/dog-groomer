@@ -2235,6 +2235,48 @@ function iso(d){
  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
  return `${y}-${m}-${dd}`;
 }
+
+// One-time, idempotent repair for the legacy subscription due-date bug where
+// YYYY-MM-DD was persisted as YYYY-DD-MM. Only exact, rule-derived matches are
+// changed, so genuinely custom/manual due dates are left untouched.
+async function repairLegacySwappedInvoiceDueDates(){
+ const dueDay=Math.min(28,Math.max(1,Number(DUE_DAY_DEFAULT)||5));
+ const repairs=[];
+ invoices.forEach(inv=>{
+  if(!(inv?.is_subscription_billing||invoiceKind(inv)==='package_sale')) return;
+  const m=String(inv.invoice_date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!m||!inv.due_date) return;
+  const invoiceDate=new Date(Number(m[1]),Number(m[2])-1,Number(m[3]));
+  if(Number.isNaN(invoiceDate.getTime())) return;
+  const expected=invoiceDate.getDate()<=dueDay
+   ? new Date(invoiceDate.getFullYear(),invoiceDate.getMonth(),dueDay)
+   : new Date(invoiceDate.getFullYear(),invoiceDate.getMonth()+1,dueDay);
+  const expectedISO=iso(expected);
+  const parts=expectedISO.split('-');
+  const legacySwapped=`${parts[0]}-${parts[2]}-${parts[1]}`;
+  if(inv.due_date===legacySwapped&&inv.due_date!==expectedISO){
+   repairs.push({inv,oldDue:inv.due_date,newDue:expectedISO});
+  }
+ });
+ let repaired=0;
+ for(const item of repairs){
+  const oldRec={...item.inv};
+  const {data:updated,error}=await db.from('invoices')
+   .update({due_date:item.newDue,...editStamp()})
+   .eq('id',item.inv.id)
+   .eq('due_date',item.oldDue)
+   .select('id')
+   .maybeSingle();
+  if(error||!updated){console.warn('Due-date history repair skipped for',item.inv.invoice_number,error?.message||'row changed or not writable');continue}
+  item.inv.due_date=item.newDue;
+  repaired++;
+  await logAudit('invoice',item.inv.id,'update',{
+   old:oldRec,new:{...item.inv},label:(item.inv.invoice_number||'Invoice')+' — due-date format repair'
+  });
+ }
+ if(repaired) console.info(`Corrected ${repaired} historical invoice due date(s) from YYYY-DD-MM to YYYY-MM-DD.`);
+ return repaired;
+}
 function fmtD(d){return new Date(d+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})}
 
 // Batch O.1 — shared helper for cross-surface session_source badges
@@ -3087,6 +3129,9 @@ async function loadAll() {
  if(payrollSettings.botak_incentive==null) payrollSettings.botak_incentive=10000;
  groomerPayouts=gpr.data||[];
  applyCfg();
+ // Repair only legacy subscription dates that exactly match the old
+ // YYYY-DD-MM bug. This is safe to rerun and leaves manual due dates alone.
+ await repairLegacySwappedInvoiceDueDates();
  refreshAccessBadge();
  rebuildDropdowns();
  refreshActiveView();
@@ -11150,6 +11195,55 @@ function setExportStatus(msg, color='var(--muted)'){
  if(el){el.textContent=msg;el.style.color=color}
 }
 
+// Export every date in one unambiguous canonical format. Date-only values stay
+// date-only; timestamps are converted to Jakarta time and include seconds.
+function exportISODate(value){
+ if(value===null||value===undefined||value==='') return '';
+ const s=String(value).trim();
+ const dateOnly=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+ if(dateOnly) return `${dateOnly[1]}-${dateOnly[2]}-${dateOnly[3]}`;
+ const d=value instanceof Date?value:new Date(value);
+ if(Number.isNaN(d.getTime())) return s;
+ const p=new Intl.DateTimeFormat('en-CA',{
+  timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'
+ }).formatToParts(d).reduce((o,x)=>(o[x.type]=x.value,o),{});
+ return `${p.year}-${p.month}-${p.day}`;
+}
+function exportISODateTime(value){
+ if(value===null||value===undefined||value==='') return '';
+ const s=String(value).trim();
+ const d=value instanceof Date?value:new Date(value);
+ if(Number.isNaN(d.getTime())) return s;
+ const p=new Intl.DateTimeFormat('en-CA',{
+  timeZone:'Asia/Jakarta',hourCycle:'h23',year:'numeric',month:'2-digit',day:'2-digit',
+  hour:'2-digit',minute:'2-digit',second:'2-digit'
+ }).formatToParts(d).reduce((o,x)=>(o[x.type]=x.value,o),{});
+ return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
+}
+
+// Keep canonical dates as text cells so Excel/Google Sheets cannot reinterpret
+// them using a machine locale or silently swap month and day.
+const EXPORT_DATE_COLUMNS=new Set([
+ 'Created At','Last Groomed','Appt Date','Invoice Date','Due Date',
+ 'Payment Successful At','Validated At','Visit Date','Expires At','Date','Resolved At'
+]);
+function buildExportWorksheet(data){
+ const ws=XLSX.utils.json_to_sheet(data.length?data:[{}]);
+ if(!data.length) return ws;
+ const headers=Object.keys(data[0]);
+ headers.forEach((header,col)=>{
+  if(!EXPORT_DATE_COLUMNS.has(header)) return;
+  for(let row=1;row<=data.length;row++){
+   const cell=ws[XLSX.utils.encode_cell({r:row,c:col})];
+   if(!cell) continue;
+   cell.t='s';
+   cell.z='@';
+   cell.v=String(cell.v??'');
+  }
+ });
+ return ws;
+}
+
 function buildCustomersSheet(){
  return custs.map(c=>({
   'Customer Code': c.customer_code||'',
@@ -11161,7 +11255,7 @@ function buildCustomersSheet(){
   'Google Maps': c.gmaps_link||'',
   'Source': c.source||'',
   'Preferences/Notes': c.prefs||'',
-  'Created At': c.created_at?new Date(c.created_at).toLocaleDateString('id-ID'):'',
+  'Created At': exportISODateTime(c.created_at),
  }));
 }
 
@@ -11181,8 +11275,8 @@ function buildDogsSheet(){
    'Coat Color': d.coat_color||'',
    'Preferences/Notes': d.prefs||'',
    'Skin History': d.skin_history||'',
-   'Last Groomed': d.last_groomed_at||'',
-   'Created At': d.created_at?new Date(d.created_at).toLocaleDateString('id-ID'):'',
+   'Last Groomed': exportISODate(d.last_groomed_at),
+   'Created At': exportISODateTime(d.created_at),
   };
  });
 }
@@ -11193,7 +11287,7 @@ function buildAppointmentsSheet(){
   const cust=dog?custs.find(c=>c.id===dog.customer_id):null;
   const groomer=groomers.find(g=>g.id===a.groomer_id);
   return {
-   'Appt Date': a.appt_date||'',
+   'Appt Date': exportISODate(a.appt_date),
    'Appt Time': (a.appt_time||'').slice(0,5),
    'Dog Name': dog?.name||'',
    'Dog Code': dog?.dog_code||'',
@@ -11248,8 +11342,8 @@ function buildInvoicesSheet(){
   return {
    'Invoice Number': inv.invoice_number||'',
    'Invoice Type': invoiceKind(inv)==='package_sale'?'Subscription / Package Sale':'After-Visit',
-   'Invoice Date': inv.invoice_date||'',
-   'Due Date': inv.due_date||'',
+   'Invoice Date': exportISODate(inv.invoice_date),
+   'Due Date': exportISODate(inv.due_date),
    'Owner Name': inv.owner_name||'',
    'Groomer': inv.groomer_name||'',
    'Dogs': dogs_str,
@@ -11259,15 +11353,15 @@ function buildInvoicesSheet(){
    'Extra Charges': extras,
    'Total': inv.total||0,
    'Payment Successful': payment.successful?'Yes':'No',
-   'Payment Successful At': payment.successfulAt||'',
+   'Payment Successful At': exportISODateTime(payment.successfulAt),
    'Validated': payment.validated?'Yes':'No',
-   'Validated At': payment.validatedAt||'',
+   'Validated At': exportISODateTime(payment.validatedAt),
    'Status': payment.validated?'paid':'unpaid',
    'Doc Mode': inv.doc_mode||'auto',
    'Dogs Counted In Payroll': jk?jk.countedDogs.join(', '):(isAfterVisitInvoice(inv)?'':'n/a (package sale)'),
    'Dogs Duplicate (Already Counted Elsewhere)': jk?jk.dupeDogs.join(', '):'',
    'Notes': cleanInvoiceNotes(inv.notes),
-   'Created At': inv.created_at?new Date(inv.created_at).toLocaleDateString('id-ID'):'',
+   'Created At': exportISODateTime(inv.created_at),
   };
  });
 }
@@ -11333,7 +11427,7 @@ function buildVisitsSheet(){
   const billedAmount=inv?(allocation.get(v.dog_id)||0):(v.billed_amount||0);
   const payment=inv?invoicePaymentMeta(inv):null;
   return {
-   'Visit Date': v.visited_at||'',
+   'Visit Date': exportISODate(v.visited_at),
    'Dog Name': dog?.name||'',
    'Dog Code': dog?.dog_code||'',
    'Owner Name': cust?.owner||'',
@@ -11370,8 +11464,8 @@ function buildSubscriptionsSheet(){
    'Sessions Scheduled': st.scheduled,
    'Sessions Review': st.unresolved,
    'Sessions Available': st.available,
-   'Expires At': s.expires_at||'',
-   'Created At': s.created_at?new Date(s.created_at).toLocaleDateString('id-ID'):'',
+   'Expires At': exportISODate(s.expires_at),
+   'Created At': exportISODateTime(s.created_at),
   };
  });
 }
@@ -11389,7 +11483,7 @@ function buildTokensSheet(){
    'Sessions Left': Math.max(0,(t.sessions_total||0)-(t.sessions_used||0)),
    'Source Invoice': t.source_invoice||'',
    'Token Used': t.token_used?'Yes':'No',
-   'Created At': t.created_at?new Date(t.created_at).toLocaleDateString('id-ID'):'',
+   'Created At': exportISODateTime(t.created_at),
   };
  });
 }
@@ -11400,7 +11494,7 @@ function buildComplaintsSheet(){
   const dog=dogs.find(x=>x.id===c.dog_id);
   const groomer=groomers.find(x=>x.id===c.groomer_id);
   return {
-   'Date': c.complaint_date||'',
+   'Date': exportISODate(c.complaint_date),
    'Severity': c.severity||'',
    'Customer Name': cust?.owner||'',
    'Customer Code': cust?.customer_code||'',
@@ -11409,8 +11503,8 @@ function buildComplaintsSheet(){
    'Description': c.description||'',
    'Resolution': c.resolution||'',
    'Resolved': c.resolved?'Yes':'No',
-   'Resolved At': c.resolved_at?new Date(c.resolved_at).toLocaleDateString('id-ID'):'',
-   'Created At': c.created_at?new Date(c.created_at).toLocaleDateString('id-ID'):'',
+   'Resolved At': exportISODateTime(c.resolved_at),
+   'Created At': exportISODateTime(c.created_at),
   };
  });
 }
@@ -11433,7 +11527,7 @@ function exportSheet(key){
  try{
   const data=def.fn();
   if(!data.length){setExportStatus(def.label+': tidak ada data.','#ca8a04');return}
-  const ws=XLSX.utils.json_to_sheet(data);
+  const ws=buildExportWorksheet(data);
   // Auto column widths
   const cols=Object.keys(data[0]).map(k=>({wch:Math.max(k.length,14)}));
   ws['!cols']=cols;
@@ -11455,7 +11549,7 @@ function exportAllSheets(){
   let totalRows=0;
   Object.entries(EXPORT_SHEETS).forEach(([key,def])=>{
    const data=def.fn();
-   const ws=XLSX.utils.json_to_sheet(data.length?data:[{}]);
+   const ws=buildExportWorksheet(data);
    if(data.length){
     const cols=Object.keys(data[0]).map(k=>({wch:Math.max(k.length,14)}));
     ws['!cols']=cols;
