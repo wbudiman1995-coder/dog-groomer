@@ -10860,19 +10860,28 @@ async function setInvoicePaymentSuccessful(id,checked){
  // validation below is bookkeeping only (matching against the account) and no
  // longer gates whether the subscription can be used.
  if(checked){
-  const rec={
-   customer_id:inv.customer_id,
-   invoice_number:inv.invoice_number,
-   invoice_date:inv.invoice_date,
-   is_advance:!!(inv.dogs||[]).some(d=>d.advance),
-   dogs:inv.dogs||[]
-  };
-  await createSubscriptionsFromInvoice(rec);
+  await ensureSubscriptionsFromInvoice(inv);
  } else {
   const r=await deleteSubscriptionsForInvoice(inv.invoice_number);
   if(r.kept>0) alert(`${r.kept} subscription(s) sudah dipakai dan tidak dihapus. ${r.deleted} dihapus.`);
  }
  await reloadTables('invoices','tokens','subscriptions','visits'); renderFinancial();
+}
+
+// Rebuild the package/subscription payload from a saved invoice. This is safe
+// to call more than once because createSubscriptionsFromInvoice is idempotent
+// by source invoice + dog. Both payment checks call this helper so a package
+// cannot remain missing merely because its first activation attempt failed.
+async function ensureSubscriptionsFromInvoice(inv){
+ if(!inv)return;
+ const rec={
+  customer_id:inv.customer_id,
+  invoice_number:inv.invoice_number,
+  invoice_date:inv.invoice_date,
+  is_advance:!!(inv.dogs||[]).some(d=>d.advance),
+  dogs:inv.dogs||[]
+ };
+ await createSubscriptionsFromInvoice(rec);
 }
 
 async function setInvoiceValidated(id,checked){
@@ -10888,7 +10897,11 @@ async function setInvoiceValidated(id,checked){
   current.validated=false; current.validatedAt='';
  }
  if(!await saveInvoicePaymentMeta(inv,current)) return;
- await reloadTables('invoices'); renderFinancial();
+ // Validation is also a self-healing checkpoint. Older invoices may already
+ // be Payment Successful while their subscription insert was missed; retrying
+ // here repairs that gap without duplicating an existing entitlement.
+ if(checked) await ensureSubscriptionsFromInvoice(inv);
+ await reloadTables('invoices','subscriptions'); renderFinancial();
 }
 
 /* Session E — Compute renewal urgency for a subs row.
