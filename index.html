@@ -7560,15 +7560,34 @@ async function delGroomer(id,name){
 async function toggleGroomerActive(id,newActive){
  const g=groomers.find(x=>x.id===id);
  if(!g) return;
- const action=newActive?'activate':'deactivate';
- // If deactivating, warn about future appointments
+ // Deactivation is blocked until every upcoming appointment is cleared.
+ // Query the database at click time rather than trusting the local cache, so
+ // appointments created from another device/session are also caught.
  if(!newActive){
-  const now=new Date(); now.setHours(0,0,0,0);
-  const futureAppts=appts.filter(a=>a.groomer_id===id && new Date(a.appt_date)>=now && a.status!=='cancelled');
-  const msg=futureAppts.length
-   ?`Deactivate "${g.name}"?\n\n⚠️ Ada ${futureAppts.length} appointment ke depan untuk groomer ini. Setelah deactivate, appointment tersebut TETAP ada di database tapi kolom groomer tidak muncul di kalender. Reschedule dulu jika perlu.\n\nLanjutkan?`
-   :`Deactivate "${g.name}"?\n\nGroomer tidak akan muncul di kalender, wizard, atau leaderboard. Bisa di-activate kembali kapan saja.`;
-  if(!confirm(msg)) return;
+  const todayISO=iso(new Date());
+  const {data:liveRows,error:checkError}=await db.from('appointments')
+   .select('id,appt_date,appt_time,dog_id,status')
+   .eq('groomer_id',id)
+   .gte('appt_date',todayISO)
+   .order('appt_date')
+   .order('appt_time');
+  if(checkError){
+   alert('Tidak bisa memastikan jadwal groomer saat ini. Deactivation dibatalkan.\n\nCoba refresh lalu ulangi. Error: '+checkError.message);
+   return;
+  }
+  const futureAppts=(liveRows||[]).filter(a=>a.status!=='cancelled'&&a.status!=='done');
+  if(futureAppts.length){
+   const details=futureAppts.slice(0,12).map(a=>{
+    const dog=dogs.find(d=>d.id===a.dog_id);
+    const cust=dog?custs.find(c=>c.id===dog.customer_id):null;
+    const who=[cust?.owner,dog?.name].filter(Boolean).join(' / ')||'Appointment '+a.id;
+    return `• ${a.appt_date} ${(a.appt_time||'').slice(0,5)} — ${who}`;
+   }).join('\n');
+   const extra=futureAppts.length>12?`\n• +${futureAppts.length-12} appointment lainnya`:'';
+   alert(`Tidak bisa deactivate ${g.name}.\n\nMasih ada ${futureAppts.length} upcoming appointment:\n${details}${extra}\n\nReschedule atau cancel semua appointment tersebut terlebih dahulu.`);
+   return;
+  }
+  if(!confirm(`Deactivate "${g.name}"?\n\nTidak ada upcoming appointment. Groomer akan disembunyikan dari kalender, booking, dan leaderboard.`)) return;
  } else {
   if(!confirm(`Activate "${g.name}"?\n\nGroomer akan muncul kembali di kalender + bisa di-assign appointment baru.`)) return;
  }
