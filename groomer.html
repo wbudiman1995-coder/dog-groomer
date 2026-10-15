@@ -114,6 +114,15 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .cal-block .cb-dogs{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #cal-detail{margin-top:10px}
 
+.blk-banner{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;margin:0 0 12px;border-radius:10px;background:#fdecec;border:1px solid #f5b5b5;color:#7f1d1d}
+.blk-banner b{display:block;font-size:14px}
+.blk-banner span{font-size:12px;color:#991b1b}
+.blk-banner .blk-ic{font-size:20px;line-height:1}
+.blk-banner.warn{background:#fff7e0;border-color:#f3d48a;color:#78350f}
+.blk-banner.warn span{color:#92400e}
+.cal-blk{position:absolute;left:0;right:0;top:0;bottom:0;cursor:pointer;background:repeating-linear-gradient(135deg,rgba(220,38,38,.10) 0 6px,rgba(220,38,38,.20) 6px 12px);border-left:3px solid #dc2626;text-align:center;padding-top:8px}
+.cal-blk span{display:inline-block;max-width:92%;font-size:9px;font-weight:800;letter-spacing:.5px;line-height:1.2;color:#991b1b;background:rgba(255,255,255,.92);padding:3px 5px;border-radius:4px}
+.cal-col-hdr.blocked{color:#991b1b;background:#fdecec}
 .empty{text-align:center;padding:3rem 1rem;color:var(--muted);font-size:13px;font-style:italic}
 
 .gate{max-width:400px;margin:60px auto;padding:0 20px;text-align:center}
@@ -238,7 +247,7 @@ const db=supabase.createClient(SUPABASE_URL,SUPABASE_ANON);
 let currentGroomer=null;
 const SHOW_MY_PAY=false; // flip true setelah admin publish + angka diverifikasi
 let currentTab='today';
-let dataCache={appts:[],dogs:[],custs:[]};
+let dataCache={appts:[],dogs:[],custs:[],blocks:[]};
 
 // Parse URL: ?name=irgih&token=abc123
 function parseURL(){
@@ -452,7 +461,7 @@ async function init(){
  if(!name||!token){showGate();return}
  // Look up groomer by name (case-insensitive) AND token
  const {data,error}=await db.from('groomers')
-  .select('id,name,active,access_token,pay_snapshot')
+  .select('*')
   .ilike('name',name)
   .limit(1)
   .maybeSingle();
@@ -475,6 +484,10 @@ async function loadSchedule(){
  const end=new Date(today); end.setDate(end.getDate()+7); // 8-day window (today + 1 week ahead)
  const startISO=iso(today), endISO=iso(end);
 
+ // Holiday / leave blocks set by the admin (per groomer, or all groomers when groomer_id is null).
+ // Failure here must never hide the schedule, so errors only log.
+ const blocks=await loadBlocks(startISO,endISO);
+
  // Groomer app loads today + 1 week ahead. Days 4-7 are shown read-only in the "+1 Minggu" tab.
  const {data:appts,error:e1}=await db.from('appointments')
   .select('*')
@@ -486,7 +499,8 @@ async function loadSchedule(){
  if(e1){content.innerHTML='<div class="empty">Error loading: '+esc(e1.message)+'</div>';return}
 
  if(!appts||!appts.length){
-  dataCache={appts:[],dogs:[],custs:[]};
+  dataCache={appts:[],dogs:[],custs:[],blocks};
+  updateCounts();
   renderActiveTab();
   return;
  }
@@ -502,11 +516,38 @@ async function loadSchedule(){
  const cr=custIds.length
   ?await db.from('customers').select('id,owner,address,kecamatan,kota,gmaps_link').in('id',custIds)
   :{data:[]};
- dataCache={appts,dogs:allDogs,custs:cr.data||[]};
+ dataCache={appts,dogs:allDogs,custs:cr.data||[],blocks};
  updateCounts();
  renderActiveTab();
 }
 
+const BLOCK_LABELS={sick:'Sakit',holiday:'Libur nasional',libur_mingguan:'Libur mingguan',leave:'Cuti',other:'Libur'};
+const BLOCK_SHORT={sick:'SAKIT',holiday:'LIBUR NAS.',libur_mingguan:'LIBUR',leave:'CUTI',other:'LIBUR'};
+async function loadBlocks(startISO,endISO){
+ try{
+  const {data,error}=await db.from('groomer_blocks').select('*')
+   .gte('block_date',startISO).lte('block_date',endISO)
+   .or('groomer_id.eq.'+currentGroomer.id+',groomer_id.is.null');
+  if(error){console.warn('groomer_blocks',error.message);return [];}
+  // Same rule as the admin calendar: an "all groomers" block does not apply before this groomer joined.
+  const jd=currentGroomer.join_date;
+  return (data||[]).filter(b=>b.groomer_id||!(jd&&b.block_date<jd));
+ }catch(e){console.warn('groomer_blocks',e);return [];}
+}
+function blockOn(date){
+ const list=(dataCache.blocks||[]).filter(b=>b.block_date===date);
+ return list.find(b=>b.groomer_id)||list[0]||null;
+}
+function blockLabel(b){return BLOCK_LABELS[b.reason]||'Libur';}
+function renderBlockBanner(date,apptCount){
+ const b=blockOn(date); if(!b) return '';
+ const warn=apptCount>0;
+ return `<div class="blk-banner${warn?' warn':''}" role="note">
+  <div class="blk-ic">${warn?'&#9888;':'&#128683;'}</div>
+  <div><b>${esc(blockLabel(b))} — tidak ada jadwal</b>
+  <span>${esc(b.note||'')}${warn?(b.note?' · ':'')+'Ada '+apptCount+' jadwal di hari ini, konfirmasi ke admin.':''}</span></div>
+ </div>`;
+}
 function updateCounts(){
  const today=iso(new Date());
  const tmw=new Date();tmw.setDate(tmw.getDate()+1);const tmwISO=iso(tmw);
@@ -622,7 +663,7 @@ function toggleChecklist(btn){
 // see its details below; editing still only happens in the day tabs.
 let _calGroups={};
 function renderCalendarGrid(content,dates){
- if(!dataCache.appts.some(a=>dates.includes(a.appt_date))){
+ if(!dataCache.appts.some(a=>dates.includes(a.appt_date))&&!dates.some(d=>blockOn(d))){
   content.innerHTML='<div class="empty">Tidak ada jadwal grooming untuk 1 minggu ke depan.<br><br>Refresh nanti untuk update.</div>';
   return;
  }
@@ -655,9 +696,11 @@ function renderCalendarGrid(content,dates){
    </div>`;
   });
   const dLabel=new Date(date+'T00:00:00').toLocaleDateString('id-ID',{weekday:'short',day:'numeric'});
+  const blk=blockOn(date);
+  const blkOv=blk?`<div class="cal-blk" onclick="showBlockDetail('${date}')" title="${esc(blockLabel(blk))}"><span>${esc(BLOCK_SHORT[blk.reason]||'LIBUR')}</span></div>`:'';
   cols+=`<div class="cal-col">
-   <div class="cal-col-hdr${isToday?' today':''}">${esc(dLabel)}</div>
-   <div class="cal-col-body" style="height:${totalH}px">${blocks}</div>
+   <div class="cal-col-hdr${isToday?' today':''}${blk?' blocked':''}">${esc(dLabel)}</div>
+   <div class="cal-col-body" style="height:${totalH}px">${blkOv}${blocks}</div>
   </div>`;
  });
  let timeCol=`<div class="cal-timecol"><div class="cal-col-hdr">&nbsp;</div><div style="position:relative;height:${totalH}px">`;
@@ -665,6 +708,12 @@ function renderCalendarGrid(content,dates){
  timeCol+='</div></div>';
  content.innerHTML=`<div class="cal-fullbleed"><div class="cal-scroll">${timeCol}${cols}</div></div>
   <div id="cal-detail"></div>`;
+}
+function showBlockDetail(date){
+ const el=document.getElementById('cal-detail'); if(!el) return;
+ const n=dataCache.appts.filter(a=>a.appt_date===date).length;
+ el.innerHTML=`<div style="margin-top:12px"><div class="day-header">${esc(fmtDateLong(date))}</div>${renderBlockBanner(date,n)}</div>`;
+ el.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 function showCalDetail(key){
  const group=_calGroups[key]; if(!group) return;
@@ -772,7 +821,7 @@ function renderActiveTab(){
   return {date,isToday,appts:dayAppts};
  });
 
- const hasAny=sections.some(s=>s.appts.length>0);
+ const hasAny=sections.some(s=>s.appts.length>0||blockOn(s.date));
  if(!hasAny){
   content.innerHTML='<div class="empty">Tidak ada jadwal grooming untuk periode ini.<br><br>Refresh nanti untuk update.</div>';
   return;
@@ -800,11 +849,12 @@ function renderActiveTab(){
   }
  }
 
- content.innerHTML=globalLateBanner+renderToolChecklist(dates)+sections.map(({date,isToday,appts})=>{
-  if(!appts.length) return '';
+ content.innerHTML=(dates.length===1?renderBlockBanner(dates[0],sections[0].appts.length):'')+globalLateBanner+renderToolChecklist(dates)+sections.map(({date,isToday,appts})=>{
+  if(!appts.length&&!blockOn(date)) return '';
   const groups=groupApptsByCustomer(appts);
   return `<div class="day-section">
    <div class="day-header ${isToday?'today':''}">${esc(fmtDateLong(date))}</div>
+   ${dates.length>1?renderBlockBanner(date,appts.length):''}
    ${renderDayTimeGrid(date,appts)}
    ${groups.map((group,gi)=>`<div id="appt-${date}-${gi}">${group.length>1?renderGroupedAppt(group,gi===0&&isToday,isToday):renderAppt(group[0],gi===0&&isToday)}</div>`).join('')}
   </div>`;
