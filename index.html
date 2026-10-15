@@ -1655,6 +1655,10 @@ thead th[onclick]:hover{color:var(--primary-darker)}
    <div class="modal-title" id="appt-title" style="margin:0">Schedule appointment</div>
    <div style="display:flex;gap:4px" id="wiz-dots"></div>
   </div>
+  <div id="appt-remind-bar" style="display:none;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:-.4rem 0 1rem;padding:10px 12px;background:var(--primary-tint);border:1px solid var(--primary-lt);border-radius:var(--r)">
+   <span style="font-size:12px;color:var(--text-2)">Kirim reminder WhatsApp + link tambah ke kalender (memakai data yang sudah tersimpan)</span>
+   <button class="btn btn-p btn-sm" id="appt-remind-btn" type="button" onclick="sendApptReminder()" style="min-height:40px">Kirim reminder</button>
+  </div>
 
   <!-- Step 1: Customer -->
   <div id="wiz-1">
@@ -1817,7 +1821,6 @@ thead th[onclick]:hover{color:var(--primary-darker)}
    </div>
    <div class="form-actions">
     <button class="btn btn-p" onclick="saveAppt()" id="appt-save-btn">Save appointment</button>
-    <button class="btn btn-g btn-sm" id="appt-remind-btn" style="display:none" onclick="sendApptReminder()" title="Kirim reminder WhatsApp + link tambah ke kalender (memakai data yang sudah tersimpan)">Kirim reminder</button>
     <button class="btn btn-b btn-sm" id="appt-confirm-btn" style="display:none" onclick="confirmApptFromModal()">Mark confirmed</button>
     <button class="btn btn-g btn-sm" id="appt-invoice-btn" style="display:none" onclick="invoiceFromApptModal()"></button>
     <button class="btn btn-d btn-sm" id="appt-complaint-btn" style="display:none;background:#fff7ed;color:#92400e;border:1px solid #fbbf24" onclick="logComplaintFromAppt()" title="Log a customer complaint for this appointment">Log complaint</button>
@@ -6036,7 +6039,7 @@ function openAppt(dateISO,groomerId,startMins){
  document.getElementById('appt-save-btn').textContent='Save appointment';
  document.getElementById('appt-del-btn').style.display='none';
  const compBtnNew=document.getElementById('appt-complaint-btn'); if(compBtnNew) compBtnNew.style.display='none';
- _remindApptIds=[]; const remBtnNew=document.getElementById('appt-remind-btn'); if(remBtnNew) remBtnNew.style.display='none';
+ _remindApptIds=[]; const remBtnNew=document.getElementById('appt-remind-bar'); if(remBtnNew) remBtnNew.style.display='none';
  const invBtnNew=document.getElementById('appt-invoice-btn');
  if(invBtnNew) invBtnNew.style.display='none';
  document.getElementById('appt-note')&&(document.getElementById('appt-note').value=''); // legacy reset
@@ -6086,7 +6089,7 @@ function openApptEdit(id){
  const repOnE=document.getElementById('appt-repeat-on'); if(repOnE) repOnE.checked=false;
  if(delBtnSingle){delBtnSingle.style.display='inline-flex';delBtnSingle.textContent='Delete';}
  const compBtn=document.getElementById('appt-complaint-btn'); if(compBtn) compBtn.style.display='inline-flex';
- _remindApptIds=[id]; const remBtnE=document.getElementById('appt-remind-btn'); if(remBtnE) remBtnE.style.display='inline-flex';
+ _remindApptIds=[id]; const remBtnE=document.getElementById('appt-remind-bar'); if(remBtnE) remBtnE.style.display='flex';
  const confirmBtn=document.getElementById('appt-confirm-btn');
  if(confirmBtn){
   if(a.status==='pending'){confirmBtn.style.display='inline-flex';confirmBtn.textContent='Mark confirmed';}
@@ -6233,7 +6236,7 @@ function openGroupEdit(ids){
   tokenId:firstA.token_id||null,isFree:false,freeDogs:new Set()};
  syncEditAppointmentDate(firstA.appt_date);
  document.getElementById('appt-title').textContent=`Edit group (${ids.length} anjing)`;
- _remindApptIds=[...ids]; const remBtnG=document.getElementById('appt-remind-btn'); if(remBtnG) remBtnG.style.display='inline-flex';
+ _remindApptIds=[...ids]; const remBtnG=document.getElementById('appt-remind-bar'); if(remBtnG) remBtnG.style.display='flex';
  document.getElementById('appt-save-btn').textContent='Update semua';
  const delBtn=document.getElementById('appt-del-btn');
  if(delBtn){delBtn.style.display='inline-flex';delBtn.textContent='Delete…';}
