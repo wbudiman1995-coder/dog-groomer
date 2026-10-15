@@ -367,6 +367,13 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 .empty-icon{font-size:36px;display:block;margin-bottom:12px;opacity:.85}
 .skeleton{background:linear-gradient(90deg,var(--subtle) 25%,var(--subtle-2) 37%,var(--subtle) 63%);background-size:400% 100%;animation:shimmer 1.4s ease infinite;border-radius:var(--rs)}
 @keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+.slot-menu{position:fixed;z-index:350;min-width:220px;max-width:280px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(61,31,13,.18);padding:6px;font-family:var(--font)}
+.slot-menu .sm-h{padding:8px 10px 6px;font-size:12px;color:var(--text-2);border-bottom:1px solid var(--border);margin-bottom:4px}
+.slot-menu .sm-h b{display:block;font-size:14px;color:var(--text)}
+.slot-menu button{display:flex;align-items:center;gap:8px;width:100%;min-height:44px;padding:0 10px;border:0;background:transparent;border-radius:8px;font:inherit;font-size:14px;font-weight:600;color:var(--text);text-align:left;cursor:pointer}
+.slot-menu button:hover,.slot-menu button:focus-visible{background:var(--primary-tint);outline:none}
+.slot-menu button.sm-block{color:#b42318}
+.slot-menu button.sm-block:hover,.slot-menu button.sm-block:focus-visible{background:#fde8e8}
 .toast{position:fixed;top:74px;right:20px;z-index:400;background:var(--surface);border:1px solid var(--border-subtle);border-left:4px solid var(--green);border-radius:var(--r);box-shadow:var(--sh-lg);padding:12px 16px;font-size:var(--fs-body);font-weight:500;color:var(--text);animation:toastIn .2s ease-out}
 .toast.err{border-left-color:var(--red-solid)}
 @keyframes toastIn{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
@@ -885,7 +892,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   <button class="btn btn-g btn-sm" onclick="clearMassSelect()">Cancel</button>
  </div>
  <div class="cal-legend" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px;padding:8px 12px;background:var(--subtle);border:1px solid var(--border-subtle);border-radius:var(--r);font-size:var(--fs-micro);color:var(--muted)">
-  <span class="cal-help-line" style="color:var(--text-2);font-weight:500">Klik slot untuk booking · Geser untuk reschedule · Klik blok untuk edit · Shift+klik untuk pilih banyak</span>
+  <span class="cal-help-line" style="color:var(--text-2);font-weight:500">Klik slot untuk booking atau block · Geser untuk reschedule · Klik blok untuk edit · Shift+klik untuk pilih banyak</span>
   <span style="display:flex;align-items:center;gap:3px"><span class="ab-badge ab-badge-S">S</span> Subscription</span>
   <span style="display:flex;align-items:center;gap:3px"><span class="ab-badge ab-badge-A">A</span> Advance (token)</span>
   <span style="display:flex;align-items:center;gap:3px"><span class="ab-badge ab-badge-F">F</span> Free session</span>
@@ -4329,7 +4336,7 @@ function renderCal(){
     html+=`<div data-date="${w.iso_}" data-g="${g.id}" data-m="${m}"
      ondragover="onDragOver(event)" ondrop="onDrop(event)"
      style="position:absolute;top:${top}px;height:${SH}px;width:100%;border-top:1px solid ${m%60?'transparent':'var(--border)'};box-sizing:border-box;cursor:pointer"
-     onclick="openAppt('${w.iso_}','${g.id}',${m})"></div>`;
+     onclick="openSlotMenu(event,'${w.iso_}','${g.id}',${m})"></div>`;
    });
    // Appointments — group same-customer consecutive appts into merged blocks
    const groups=dgOf(w.iso_,g.id).groups;
@@ -11925,6 +11932,61 @@ async function delComplaint(){
  if(typeof renderGroomerReport==='function'&&_grptCurrentId) renderGroomerReport();
 }
 
+/* ============ SLOT MENU (click a calendar slot: book or block) ============ */
+function _slotMenuClose(){
+ const m=document.getElementById('slot-menu'); if(m) m.remove();
+ document.removeEventListener('mousedown',_slotMenuOut,true);
+ document.removeEventListener('keydown',_slotMenuKey,true);
+ window.removeEventListener('scroll',_slotMenuClose,true);
+}
+function _slotMenuOut(e){const m=document.getElementById('slot-menu'); if(m&&!m.contains(e.target)) _slotMenuClose();}
+function _slotMenuKey(e){if(e.key==='Escape') _slotMenuClose();}
+// Bookings that make a day un-blockable for one groomer (cancelled ones do not count).
+function apptsOnDayFor(date,groomerId){
+ return appts.filter(a=>a.appt_date===date&&a.groomer_id===groomerId&&a.status!=='cancelled');
+}
+function blockDeclineMsg(list,date,groomerId){
+ const gName=groomers.find(g=>g.id===groomerId)?.name||'?';
+ const names=list.slice(0,5).map(a=>{const d=dogs.find(x=>x.id===a.dog_id);return (d?.name||'?')+' '+(a.appt_time||'').slice(0,5)}).join(', ')+(list.length>5?'...':'');
+ return `Tidak bisa block ${date}.\n${gName} sudah punya ${list.length} booking (${names}).\n\nPindahkan atau batalkan booking dulu.`;
+}
+function openSlotMenu(ev,date,groomerId,mins){
+ _slotMenuClose();
+ const g=groomers.find(x=>x.id===groomerId)||{};
+ const blk=findGroomerBlock(date,groomerId);
+ const dLbl=new Date(date+'T00:00:00').toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short'});
+ const m=document.createElement('div'); m.id='slot-menu'; m.className='slot-menu'; m.setAttribute('role','menu');
+ const head=`<div class="sm-h"><b>${esc(g.name||'?')} · ${esc(dLbl)}</b>${blk?'Hari ini di-block':esc(m2t(mins))}</div>`;
+ const btns=blk
+  ?`<button type="button" role="menuitem" data-act="editblock">Edit / hapus block</button>`
+  :`<button type="button" role="menuitem" data-act="book">Buat booking · ${esc(m2t(mins))}</button><button type="button" role="menuitem" class="sm-block" data-act="block">Block calendar (libur / cuti)</button>`;
+ m.innerHTML=head+btns;
+ m.addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  const act=b.dataset.act; _slotMenuClose();
+  if(act==='book') openAppt(date,groomerId,mins);
+  else if(act==='block') blockDayFromSlot(date,groomerId);
+  else if(act==='editblock'&&blk) openBlockDayEdit(blk.id);
+ });
+ document.body.appendChild(m);
+ const r=m.getBoundingClientRect(), pad=8;
+ let x=(ev&&ev.clientX!=null?ev.clientX:window.innerWidth/2)+4, y=(ev&&ev.clientY!=null?ev.clientY:window.innerHeight/2)+4;
+ x=Math.max(pad,Math.min(x,window.innerWidth-r.width-pad));
+ y=Math.max(pad,Math.min(y,window.innerHeight-r.height-pad));
+ m.style.left=x+'px'; m.style.top=y+'px';
+ document.addEventListener('mousedown',_slotMenuOut,true);
+ document.addEventListener('keydown',_slotMenuKey,true);
+ window.addEventListener('scroll',_slotMenuClose,true);
+ const first=m.querySelector('button'); if(first) first.focus();
+}
+function blockDayFromSlot(date,groomerId){
+ const list=apptsOnDayFor(date,groomerId);
+ if(list.length){alert(blockDeclineMsg(list,date,groomerId));return}
+ openBlockDayModal();
+ document.getElementById('bf-date').value=date;
+ document.getElementById('bf-groomer').value=groomerId;
+}
+
 function openBlockDayModal(){
  // Reset to create mode. Weekly leave is the most common block type.
  const idEl=document.getElementById('bf-id'); if(idEl) idEl.value='';
@@ -11989,20 +12051,11 @@ async function saveBlockDay(){
  if(!groomerId){alert('Pilih satu groomer. Holiday/block day sekarang harus dibuat per groomer.');return}
  const reason=document.getElementById('bf-reason').value;
  const note=document.getElementById('bf-note').value.trim()||null;
- // Check for existing appointments on that day for the selected groomer.
- const conflictingAppts=appts.filter(a=>{
-  if(a.appt_date!==date) return false;
-  if(a.status==='done') return false;
-  if(a.groomer_id!==groomerId) return false;
-  return true;
- });
- if(conflictingAppts.length){
-  const gName=groomers.find(g=>g.id===groomerId)?.name||'?';
-  const msg=`${gName} has ${conflictingAppts.length} appointment${conflictingAppts.length!==1?'s':''} on ${date} (${conflictingAppts.map(a=>{
-   const d=dogs.find(x=>x.id===a.dog_id);
-   return (d?.name||'?')+' '+(a.appt_time||'').slice(0,5);
-  }).slice(0,5).join(', ')}${conflictingAppts.length>5?'...':''}).\n\nReschedule them first or delete them manually. The block will still be saved but those appointments remain.`;
-  if(!confirm(msg+'\n\nContinue and save block anyway?')) return;
+ // A day with bookings cannot be blocked (new block, or a block moved to another date/groomer).
+ const _old=editId?groomerBlocks.find(b=>b.id===editId):null;
+ if(!(_old&&_old.block_date===date&&_old.groomer_id===groomerId)){
+  const conflictingAppts=apptsOnDayFor(date,groomerId);
+  if(conflictingAppts.length){alert(blockDeclineMsg(conflictingAppts,date,groomerId));return}
  }
  const payload={
   block_date:date,
