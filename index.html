@@ -1817,6 +1817,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
    </div>
    <div class="form-actions">
     <button class="btn btn-p" onclick="saveAppt()" id="appt-save-btn">Save appointment</button>
+    <button class="btn btn-g btn-sm" id="appt-remind-btn" style="display:none" onclick="sendApptReminder()" title="Kirim reminder WhatsApp + link tambah ke kalender (memakai data yang sudah tersimpan)">Kirim reminder</button>
     <button class="btn btn-b btn-sm" id="appt-confirm-btn" style="display:none" onclick="confirmApptFromModal()">Mark confirmed</button>
     <button class="btn btn-g btn-sm" id="appt-invoice-btn" style="display:none" onclick="invoiceFromApptModal()"></button>
     <button class="btn btn-d btn-sm" id="appt-complaint-btn" style="display:none;background:#fff7ed;color:#92400e;border:1px solid #fbbf24" onclick="logComplaintFromAppt()" title="Log a customer complaint for this appointment">Log complaint</button>
@@ -6035,6 +6036,7 @@ function openAppt(dateISO,groomerId,startMins){
  document.getElementById('appt-save-btn').textContent='Save appointment';
  document.getElementById('appt-del-btn').style.display='none';
  const compBtnNew=document.getElementById('appt-complaint-btn'); if(compBtnNew) compBtnNew.style.display='none';
+ _remindApptIds=[]; const remBtnNew=document.getElementById('appt-remind-btn'); if(remBtnNew) remBtnNew.style.display='none';
  const invBtnNew=document.getElementById('appt-invoice-btn');
  if(invBtnNew) invBtnNew.style.display='none';
  document.getElementById('appt-note')&&(document.getElementById('appt-note').value=''); // legacy reset
@@ -6084,6 +6086,7 @@ function openApptEdit(id){
  const repOnE=document.getElementById('appt-repeat-on'); if(repOnE) repOnE.checked=false;
  if(delBtnSingle){delBtnSingle.style.display='inline-flex';delBtnSingle.textContent='Delete';}
  const compBtn=document.getElementById('appt-complaint-btn'); if(compBtn) compBtn.style.display='inline-flex';
+ _remindApptIds=[id]; const remBtnE=document.getElementById('appt-remind-btn'); if(remBtnE) remBtnE.style.display='inline-flex';
  const confirmBtn=document.getElementById('appt-confirm-btn');
  if(confirmBtn){
   if(a.status==='pending'){confirmBtn.style.display='inline-flex';confirmBtn.textContent='Mark confirmed';}
@@ -6230,6 +6233,7 @@ function openGroupEdit(ids){
   tokenId:firstA.token_id||null,isFree:false,freeDogs:new Set()};
  syncEditAppointmentDate(firstA.appt_date);
  document.getElementById('appt-title').textContent=`Edit group (${ids.length} anjing)`;
+ _remindApptIds=[...ids]; const remBtnG=document.getElementById('appt-remind-btn'); if(remBtnG) remBtnG.style.display='inline-flex';
  document.getElementById('appt-save-btn').textContent='Update semua';
  const delBtn=document.getElementById('appt-del-btn');
  if(delBtn){delBtn.style.display='inline-flex';delBtn.textContent='Delete…';}
@@ -12093,6 +12097,95 @@ async function saveBankSettings(){
  cm('ov-bank'); await reloadTables('business_settings');
 }
 
+/* ============ CALENDAR LINKS (Google Calendar / .ics via cal.html) ============ */
+// Times are WIB (UTC+7, no DST). Fixed offset math so the browser time zone never shifts an event.
+function calUtcStamp(dateIso,mins){
+ const p=dateIso.split('-').map(Number);
+ const t=new Date(Date.UTC(p[0],p[1]-1,p[2],0,0,0)+(mins-7*60)*60000);
+ const z=n=>String(n).padStart(2,'0');
+ return t.getUTCFullYear()+z(t.getUTCMonth()+1)+z(t.getUTCDate())+'T'+z(t.getUTCHours())+z(t.getUTCMinutes())+z(t.getUTCSeconds())+'Z';
+}
+function calEventFor(apptList){
+ const list=[...apptList].filter(a=>a&&a.status!=='cancelled').sort((a,b)=>t2m(a.appt_time||'09:00')-t2m(b.appt_time||'09:00'));
+ if(!list.length) return null;
+ const first=list[0];
+ const dogOf=a=>dogs.find(d=>d.id===a.dog_id)||a.dogs||{};
+ const dog0=dogOf(first);
+ const c=custs.find(x=>x.id===(dog0.customer_id||first.customer_id))||{};
+ const start=t2m((first.appt_time||'09:00').slice(0,5));
+ const end=Math.max(...list.map(a=>t2m((a.appt_time||'09:00').slice(0,5))+(a.duration_mins||60)));
+ const names=[...new Set(list.map(a=>dogOf(a).name).filter(Boolean))];
+ const g=groomers.find(x=>x.id===first.groomer_id);
+ const svcs=[...new Set(list.map(a=>a.service_base).filter(Boolean))];
+ const loc=[c.address,c.kecamatan,c.kota||c.area].filter(Boolean).join(', ');
+ const desc=[g?'Groomer: '+g.name:'',svcs.length?'Layanan: '+svcs.join(', '):'','Jam: '+m2t(start)+'-'+m2t(end)+' WIB',BIZ_NAME].filter(Boolean).join('\n');
+ return {
+  title:'Grooming '+(names.join(' & ')||'anjing')+' – '+BIZ_NAME,
+  loc,desc,
+  s:calUtcStamp(first.appt_date,start),e:calUtcStamp(first.appt_date,end),
+  uid:'appt-'+first.id,
+  q:Math.max(0,Math.floor((Date.now()-Date.UTC(2026,0,1))/60000)) // grows on every send, so a resent link replaces the old event
+ };
+}
+function calGoogleUrl(ev){
+ const q=(k,v)=>k+'='+encodeURIComponent(v);
+ return 'https://calendar.google.com/calendar/render?action=TEMPLATE&'+[q('text',ev.title),'dates='+ev.s+'/'+ev.e,q('details',ev.desc),q('location',ev.loc),'ctz=Asia%2FJakarta'].join('&');
+}
+function calPageUrl(ev){
+ // cal.html must sit next to index.html. If the app is not served over http(s), fall back to the Google link only.
+ if(!/^https?:$/.test(location.protocol)) return null;
+ const q=(k,v)=>k+'='+encodeURIComponent(v);
+ const base=new URL('cal.html',location.href).href;
+ return base+'?'+[q('t',ev.title),'s='+ev.s,'e='+ev.e,q('l',ev.loc),q('d',ev.desc),q('u',ev.uid),'q='+ev.q].join('&');
+}
+// Returns the message lines that carry the "add to calendar" link(s). Never throws: reminders must still work if this fails.
+function calLinkLines(apptList){
+ try{
+  const sorted=[...apptList].filter(a=>a&&a.status!=='cancelled');
+  const groups=groupConsecutiveAppts(sorted);
+  const lines=groups.map(gr=>{
+   const ev=calEventFor(gr); if(!ev) return '';
+   const url=calPageUrl(ev)||calGoogleUrl(ev);
+   const label=groups.length>1?`Tambah ke kalender (${m2t(t2m((gr[0].appt_time||'09:00').slice(0,5)))}):`:'Tambah ke kalender kakak:';
+   return label+'\n'+url;
+  }).filter(Boolean);
+  return lines.join('\n\n');
+ }catch(e){ console.warn('calLinkLines',e); return ''; }
+}
+function buildApptReminderMsg(list,c){
+ const ownerFirst=(c.owner||'').split(' ')[0]||c.owner||'';
+ const greeting=REM_GREETING?applyTpl(REM_GREETING,{nama:ownerFirst,biz:BIZ_NAME}):'Halo kak '+ownerFirst;
+ const first=list[0];
+ const todayIso=iso(new Date());
+ const tm=new Date();tm.setDate(tm.getDate()+1);
+ const isTomorrow=first.appt_date===iso(tm);
+ const label=first.appt_date===todayIso?'hari ini':isTomorrow?'besok':fmtIDlong(first.appt_date);
+ const sorted=[...list].sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
+ let msg=greeting+',\n\nIzin reminder untuk appointment '+label+':\n';
+ sorted.forEach(a=>{
+  const dog=dogs.find(d=>d.id===a.dog_id)||a.dogs||{};
+  const st=(a.appt_time||'').slice(0,5);
+  const en=m2t(t2m(st)+(a.duration_mins||60));
+  const notes=[a.customer_note&&a.customer_note.trim(),dog.prefs&&dog.prefs.trim()].filter(Boolean).join(' · ')||'(no notes)';
+  msg+='\nNama: '+(dog.name||'?')+'\nJam: '+st+' - '+en+'\nService: '+(a.service_base||'Basic Grooming')+'\nSpecial note: '+notes+'\n';
+ });
+ const cal=calLinkLines(sorted);
+ if(cal) msg+='\n'+cal+'\n';
+ msg+='\n'+(isTomorrow?(REM_CLOSING||'Sampai jumpa besok ya kak!'):'Sampai jumpa ya kak!');
+ return msg;
+}
+let _remindApptIds=[];
+function sendApptReminder(){
+ const list=_remindApptIds.map(id=>appts.find(a=>a.id===id)).filter(Boolean);
+ if(!list.length){alert('Appointment tidak ditemukan. Simpan dulu, lalu coba lagi.');return}
+ const dog=dogs.find(d=>d.id===list[0].dog_id)||list[0].dogs||{};
+ const c=custs.find(x=>x.id===(dog.customer_id||list[0].customer_id));
+ if(!c){alert('Customer tidak ditemukan.');return}
+ const wa=c.wa?normalizeWA(c.wa):null;
+ if(!wa){alert('Customer ini belum punya nomor WhatsApp.');return}
+ window.open('https://wa.me/'+wa+'?text='+encodeURIComponent(buildApptReminderMsg(list,c)),'_blank');
+}
+
 /* ============ REMINDERS ============ */
 function initReminders(){
  const di=document.getElementById('rem-date');
@@ -12177,6 +12270,7 @@ function generateCustomerReminders(){
     msg+=`\nNama: ${dog.name||'?'}\nJam: ${startT} - ${endT}\nService: ${svc}\nSpecial note: ${buildNoteLine(a,dog)}\n`;
    });
   }
+  { const _cal=calLinkLines(sortedAppts); if(_cal) msg+=`\n${_cal}\n`; }
   msg+=`\n${closingTpl}`;
 
   // Time range header for card display
