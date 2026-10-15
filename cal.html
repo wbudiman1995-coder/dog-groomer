@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Tambah ke kalender</title>
+<style>
+:root{--primary:#e07b39;--cta:#b5541c;--bg:#faf6f0;--surface:#fff;--border:#ece0d0;--text:#2e2116;--text-2:#5b4a3a;--muted:#6b5a49}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:1.45;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px}
+.card{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 1px 3px rgba(61,31,13,.08);padding:22px 20px}
+h1{margin:0 0 4px;font-size:20px}
+.sub{margin:0 0 16px;color:var(--text-2);font-size:14px}
+.ev{border:1px solid var(--border);border-radius:12px;background:#fdf3e9;padding:14px 16px;margin-bottom:18px}
+.ev b{display:block;font-size:17px;margin-bottom:6px}
+.ev div{font-size:14px;color:var(--text-2);margin-top:3px}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:52px;border-radius:14px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:700;text-decoration:none;cursor:pointer;margin-bottom:10px}
+.btn.p{background:var(--cta);border-color:var(--cta);color:#fff}
+.hint{font-size:13px;color:var(--muted);margin:6px 0 0}
+.err{color:#b42318;font-weight:600}
+</style>
+</head>
+<body>
+<main class="card" id="app" aria-live="polite">
+ <h1>Tambah ke kalender</h1>
+ <p class="sub" id="sub">Memuat…</p>
+ <div id="body"></div>
+</main>
+<script>
+/*PURE-START*/
+function parseStamp(v){
+ if(!/^\d{8}T\d{6}Z$/.test(v||'')) return null;
+ const n=(a,b)=>+v.slice(a,b);
+ return new Date(Date.UTC(n(0,4),n(4,6)-1,n(6,8),n(9,11),n(11,13),n(13,15)));
+}
+function clip(s,max){return String(s==null?'':s).slice(0,max)}
+function readEvent(search){
+ const p=new URLSearchParams(search);
+ const ev={title:clip(p.get('t'),120),s:p.get('s'),e:p.get('e'),loc:clip(p.get('l'),240),desc:clip(p.get('d'),600),uid:clip(p.get('u'),80).replace(/[^\w.@-]/g,''),q:parseInt(p.get('q')||'0',10)||0};
+ const a=parseStamp(ev.s),b=parseStamp(ev.e);
+ if(!ev.title||!a||!b||b<=a||b-a>24*3600*1000) return null;
+ if(!ev.uid) ev.uid='appt-'+ev.s;
+ return ev;
+}
+function googleUrl(ev){
+ const q=(k,v)=>k+'='+encodeURIComponent(v);
+ return 'https://calendar.google.com/calendar/render?action=TEMPLATE&'+[q('text',ev.title),'dates='+ev.s+'/'+ev.e,q('details',ev.desc),q('location',ev.loc),'ctz=Asia%2FJakarta'].join('&');
+}
+function icsEscape(s){return String(s).replace(/\\/g,'\\\\').replace(/;/g,'\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n')}
+function icsFold(line){
+ // fold at 75 octets (UTF-8), continuation lines start with one space
+ const enc=new TextEncoder?new TextEncoder():null;
+ const len=c=>enc?enc.encode(c).length:c.length;
+ const out=[];let cur='',curLen=0,limit=75;
+ for(const ch of line){
+  const l=len(ch);
+  if(curLen+l>limit){out.push(cur);cur=' ';curLen=1;limit=75}
+  cur+=ch;curLen+=l;
+ }
+ out.push(cur);
+ return out.join('\r\n');
+}
+function buildIcs(ev,nowDate){
+ const now=nowDate||new Date();
+ const p=n=>String(n).padStart(2,'0');
+ const stamp=now.getUTCFullYear()+p(now.getUTCMonth()+1)+p(now.getUTCDate())+'T'+p(now.getUTCHours())+p(now.getUTCMinutes())+p(now.getUTCSeconds())+'Z';
+ const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//HomePaw//Grooming appointment//ID','CALSCALE:GREGORIAN','METHOD:PUBLISH',
+  'BEGIN:VEVENT','UID:'+ev.uid+'@homepaw','DTSTAMP:'+stamp,'DTSTART:'+ev.s,'DTEND:'+ev.e,'SEQUENCE:'+ev.q,
+  'SUMMARY:'+icsEscape(ev.title)];
+ if(ev.loc) L.push('LOCATION:'+icsEscape(ev.loc));
+ if(ev.desc) L.push('DESCRIPTION:'+icsEscape(ev.desc));
+ L.push('STATUS:CONFIRMED','TRANSP:OPAQUE','BEGIN:VALARM','TRIGGER:-PT1H','ACTION:DISPLAY','DESCRIPTION:'+icsEscape('Pengingat: '+ev.title),'END:VALARM','END:VEVENT','END:VCALENDAR');
+ return L.map(icsFold).join('\r\n')+'\r\n';
+}
+/*PURE-END*/
+(function(){
+ const sub=document.getElementById('sub'),body=document.getElementById('body');
+ const ev=readEvent(location.search);
+ if(!ev){sub.textContent='';body.innerHTML='';const e=document.createElement('p');e.className='err';e.textContent='Link kalender tidak valid atau sudah rusak. Minta link baru ke HomePaw ya kak.';body.appendChild(e);return}
+ const a=parseStamp(ev.s),b=parseStamp(ev.e);
+ const tz={timeZone:'Asia/Jakarta'};
+ const dStr=a.toLocaleDateString('id-ID',{...tz,weekday:'long',day:'numeric',month:'long',year:'numeric'});
+ const tf=d=>d.toLocaleTimeString('id-ID',{...tz,hour:'2-digit',minute:'2-digit',hour12:false}).replace('.',':');
+ sub.textContent='Pilih kalender kakak. Jadwal akan tersimpan lengkap dengan jam dan alamat.';
+ const box=document.createElement('div');box.className='ev';
+ const t=document.createElement('b');t.textContent=ev.title;box.appendChild(t);
+ const d1=document.createElement('div');d1.textContent=dStr+' · '+tf(a)+'–'+tf(b)+' WIB';box.appendChild(d1);
+ if(ev.loc){const d2=document.createElement('div');d2.textContent=ev.loc;box.appendChild(d2)}
+ body.appendChild(box);
+ const g=document.createElement('a');g.className='btn p';g.href=googleUrl(ev);g.target='_blank';g.rel='noopener';g.textContent='Google Calendar';body.appendChild(g);
+ const i=document.createElement('button');i.type='button';i.className='btn';i.textContent='Kalender HP (iPhone / Android / Outlook)';
+ i.onclick=function(){
+  try{
+   const blob=new Blob([buildIcs(ev)],{type:'text/calendar;charset=utf-8'});
+   const url=URL.createObjectURL(blob);
+   const x=document.createElement('a');x.href=url;x.download='homepaw-grooming.ics';document.body.appendChild(x);x.click();x.remove();
+   setTimeout(function(){URL.revokeObjectURL(url)},60000);
+  }catch(err){alert('Gagal membuat file kalender. Coba tombol Google Calendar.')}
+ };
+ body.appendChild(i);
+ const h=document.createElement('p');h.className='hint';h.textContent='iPhone: tekan “Tambah ke Kalender” setelah file terbuka. Jika jadwal berubah, kami kirim link baru.';body.appendChild(h);
+})();
+</script>
+</body>
+</html>
