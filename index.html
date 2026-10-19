@@ -3,8 +3,11 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-<script>(function(){try{if(new URLSearchParams(location.search).get("cal")==="1"){var h="<!doctype html>\n<html lang=\"id\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<meta name=\"robots\" content=\"noindex\">\n<title>Tambah ke kalender<\/title>\n<style>\n:root{--primary:#e07b39;--cta:#b5541c;--bg:#faf6f0;--surface:#fff;--border:#ece0d0;--text:#2e2116;--text-2:#5b4a3a;--muted:#6b5a49}\n*{box-sizing:border-box}\nbody{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:1.45;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px}\n.card{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 1px 3px rgba(61,31,13,.08);padding:22px 20px}\nh1{margin:0 0 4px;font-size:20px}\n.sub{margin:0 0 16px;color:var(--text-2);font-size:14px}\n.ev{border:1px solid var(--border);border-radius:12px;background:#fdf3e9;padding:14px 16px;margin-bottom:18px}\n.ev b{display:block;font-size:17px;margin-bottom:6px}\n.ev div{font-size:14px;color:var(--text-2);margin-top:3px}\n.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:52px;border-radius:14px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:700;text-decoration:none;cursor:pointer;margin-bottom:10px}\n.btn.p{background:var(--cta);border-color:var(--cta);color:#fff}\n.hint{font-size:13px;color:var(--muted);margin:6px 0 0}\n.err{color:#b42318;font-weight:600}\n<\/style>\n<\/head>\n<body>\n<main class=\"card\" id=\"app\" aria-live=\"polite\">\n <h1>Tambah ke kalender<\/h1>\n <p class=\"sub\" id=\"sub\">Memuat\u2026<\/p>\n <div id=\"body\"><\/div>\n<\/main>\n<script>\n/*PURE-START*/\nfunction parseStamp(v){\n if(!/^\\d{8}T\\d{6}Z$/.test(v||'')) return null;\n const n=(a,b)=>+v.slice(a,b);\n return new Date(Date.UTC(n(0,4),n(4,6)-1,n(6,8),n(9,11),n(11,13),n(13,15)));\n}\nfunction clip(s,max){return String(s==null?'':s).slice(0,max)}\nfunction stampWIB(d6,hhmm){\n // d6 = YYMMDD, hhmm = HHMM (WIB, UTC+7 fixed) -> UTC stamp\n if(!/^\\d{6}$/.test(d6||'')||!/^\\d{4}$/.test(hhmm||'')) return null;\n const t=new Date(Date.UTC(2000+ +d6.slice(0,2),+d6.slice(2,4)-1,+d6.slice(4,6),+hhmm.slice(0,2),+hhmm.slice(2,4))-7*3600*1000);\n if(isNaN(t)) return null;\n const z=n=>String(n).padStart(2,'0');\n return t.getUTCFullYear()+z(t.getUTCMonth()+1)+z(t.getUTCDate())+'T'+z(t.getUTCHours())+z(t.getUTCMinutes())+'00Z';\n}\nfunction readCompact(p){\n const m=/^(\\d{4})-(\\d{4})$/.exec(p.get('j')||'');\n if(!m) return null;\n const biz=clip(p.get('b'),40)||'HomePaw';\n const ev={title:'Grooming '+(clip(p.get('n'),80)||'anjing')+' \\u2013 '+biz,s:stampWIB(p.get('d'),m[1]),e:stampWIB(p.get('d'),m[2]),loc:clip(p.get('a'),160),\n  desc:'Jam: '+m[1].slice(0,2)+':'+m[1].slice(2)+'-'+m[2].slice(0,2)+':'+m[2].slice(2)+' WIB\\n'+biz,\n  uid:'appt-'+clip(p.get('i'),40).replace(/[^\\w.@-]/g,''),q:parseInt(p.get('v')||'0',36)||0};\n return ev;\n}\nfunction readEvent(search){\n const p=new URLSearchParams(search);\n const cp=readCompact(p);\n const ev=cp||{title:clip(p.get('t'),120),s:p.get('s'),e:p.get('e'),loc:clip(p.get('l'),240),desc:clip(p.get('d'),600),uid:clip(p.get('u'),80).replace(/[^\\w.@-]/g,''),q:parseInt(p.get('q')||'0',10)||0};\n const a=parseStamp(ev.s),b=parseStamp(ev.e);\n if(!ev.title||!a||!b||b<=a||b-a>24*3600*1000) return null;\n if(!ev.uid) ev.uid='appt-'+ev.s;\n return ev;\n}\nfunction googleUrl(ev){\n const q=(k,v)=>k+'='+encodeURIComponent(v);\n return 'https://calendar.google.com/calendar/render?action=TEMPLATE&'+[q('text',ev.title),'dates='+ev.s+'/'+ev.e,q('details',ev.desc),q('location',ev.loc),'ctz=Asia%2FJakarta'].join('&');\n}\nfunction icsEscape(s){return String(s).replace(/\\\\/g,'\\\\\\\\').replace(/;/g,'\\;').replace(/,/g,'\\\\,').replace(/\\r?\\n/g,'\\\\n')}\nfunction icsFold(line){\n // fold at 75 octets (UTF-8), continuation lines start with one space\n const enc=new TextEncoder?new TextEncoder():null;\n const len=c=>enc?enc.encode(c).length:c.length;\n const out=[];let cur='',curLen=0,limit=75;\n for(const ch of line){\n  const l=len(ch);\n  if(curLen+l>limit){out.push(cur);cur=' ';curLen=1;limit=75}\n  cur+=ch;curLen+=l;\n }\n out.push(cur);\n return out.join('\\r\\n');\n}\nfunction buildIcs(ev,nowDate){\n const now=nowDate||new Date();\n const p=n=>String(n).padStart(2,'0');\n const stamp=now.getUTCFullYear()+p(now.getUTCMonth()+1)+p(now.getUTCDate())+'T'+p(now.getUTCHours())+p(now.getUTCMinutes())+p(now.getUTCSeconds())+'Z';\n const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//HomePaw//Grooming appointment//ID','CALSCALE:GREGORIAN','METHOD:PUBLISH',\n  'BEGIN:VEVENT','UID:'+ev.uid+'@homepaw','DTSTAMP:'+stamp,'DTSTART:'+ev.s,'DTEND:'+ev.e,'SEQUENCE:'+ev.q,\n  'SUMMARY:'+icsEscape(ev.title)];\n if(ev.loc) L.push('LOCATION:'+icsEscape(ev.loc));\n if(ev.desc) L.push('DESCRIPTION:'+icsEscape(ev.desc));\n L.push('STATUS:CONFIRMED','TRANSP:OPAQUE','BEGIN:VALARM','TRIGGER:-PT1H','ACTION:DISPLAY','DESCRIPTION:'+icsEscape('Pengingat: '+ev.title),'END:VALARM','END:VEVENT','END:VCALENDAR');\n return L.map(icsFold).join('\\r\\n')+'\\r\\n';\n}\n/*PURE-END*/\n(function(){\n const sub=document.getElementById('sub'),body=document.getElementById('body');\n const ev=readEvent(location.search);\n if(!ev){sub.textContent='';body.innerHTML='';const e=document.createElement('p');e.className='err';e.textContent='Link kalender tidak valid atau sudah rusak. Minta link baru ke HomePaw ya kak.';body.appendChild(e);return}\n const a=parseStamp(ev.s),b=parseStamp(ev.e);\n const tz={timeZone:'Asia/Jakarta'};\n const dStr=a.toLocaleDateString('id-ID',{...tz,weekday:'long',day:'numeric',month:'long',year:'numeric'});\n const tf=d=>d.toLocaleTimeString('id-ID',{...tz,hour:'2-digit',minute:'2-digit',hour12:false}).replace('.',':');\n sub.textContent='Pilih kalender kakak. Jadwal akan tersimpan lengkap dengan jam dan alamat.';\n const box=document.createElement('div');box.className='ev';\n const t=document.createElement('b');t.textContent=ev.title;box.appendChild(t);\n const d1=document.createElement('div');d1.textContent=dStr+' \u00b7 '+tf(a)+'\u2013'+tf(b)+' WIB';box.appendChild(d1);\n if(ev.loc){const d2=document.createElement('div');d2.textContent=ev.loc;box.appendChild(d2)}\n body.appendChild(box);\n const g=document.createElement('a');g.className='btn p';g.href=googleUrl(ev);g.target='_blank';g.rel='noopener';g.textContent='Google Calendar';body.appendChild(g);\n const i=document.createElement('button');i.type='button';i.className='btn';i.textContent='Kalender HP (iPhone / Android / Outlook)';\n i.onclick=function(){\n  try{\n   const blob=new Blob([buildIcs(ev)],{type:'text/calendar;charset=utf-8'});\n   const url=URL.createObjectURL(blob);\n   const x=document.createElement('a');x.href=url;x.download='homepaw-grooming.ics';document.body.appendChild(x);x.click();x.remove();\n   setTimeout(function(){URL.revokeObjectURL(url)},60000);\n  }catch(err){alert('Gagal membuat file kalender. Coba tombol Google Calendar.')}\n };\n body.appendChild(i);\n const h=document.createElement('p');h.className='hint';h.textContent='iPhone: tekan \u201cTambah ke Kalender\u201d setelah file terbuka. Jika jadwal berubah, kami kirim link baru.';body.appendChild(h);\n})();\n<\/script>\n<\/body>\n<\/html>\n";document.documentElement.style.visibility="hidden";setTimeout(function(){document.open();document.write(h);document.close();},0);}}catch(e){}})();</script>
 <title>Dog Groomer CRM</title>
+<meta property="og:title" content="Tambah ke kalender"/>
+<meta property="og:description" content="Klik untuk menambahkan jadwal grooming ke kalender kakak."/>
+<meta name="description" content="Jadwal grooming dan pengingat appointment."/>
+<script>(function(){try{if(new URLSearchParams(location.search).get("cal")==="1"){var h="\u003c!doctype html>\n\u003chtml lang=\"id\">\n\u003chead>\n\u003cmeta charset=\"utf-8\">\n\u003cmeta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n\u003cmeta name=\"robots\" content=\"noindex\">\n\u003ctitle>Tambah ke kalender\u003c/title>\n\u003cstyle>\n:root{--primary:#e07b39;--cta:#b5541c;--bg:#faf6f0;--surface:#fff;--border:#ece0d0;--text:#2e2116;--text-2:#5b4a3a;--muted:#6b5a49}\n*{box-sizing:border-box}\nbody{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:1.45;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px}\n.card{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 1px 3px rgba(61,31,13,.08);padding:22px 20px}\nh1{margin:0 0 4px;font-size:20px}\n.sub{margin:0 0 16px;color:var(--text-2);font-size:14px}\n.ev{border:1px solid var(--border);border-radius:12px;background:#fdf3e9;padding:14px 16px;margin-bottom:18px}\n.ev b{display:block;font-size:17px;margin-bottom:6px}\n.ev div{font-size:14px;color:var(--text-2);margin-top:3px}\n.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:52px;border-radius:14px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:700;text-decoration:none;cursor:pointer;margin-bottom:10px}\n.btn.p{background:var(--cta);border-color:var(--cta);color:#fff}\n.hint{font-size:13px;color:var(--muted);margin:6px 0 0}\n.err{color:#b42318;font-weight:600}\n\u003c/style>\n\u003c/head>\n\u003cbody>\n\u003cmain class=\"card\" id=\"app\" aria-live=\"polite\">\n \u003ch1>Tambah ke kalender\u003c/h1>\n \u003cp class=\"sub\" id=\"sub\">Memuat\u2026\u003c/p>\n \u003cdiv id=\"body\">\u003c/div>\n\u003c/main>\n\u003cscript>\n/*PURE-START*/\nfunction parseStamp(v){\n if(!/^\\d{8}T\\d{6}Z$/.test(v||'')) return null;\n const n=(a,b)=>+v.slice(a,b);\n return new Date(Date.UTC(n(0,4),n(4,6)-1,n(6,8),n(9,11),n(11,13),n(13,15)));\n}\nfunction clip(s,max){return String(s==null?'':s).slice(0,max)}\nfunction stampWIB(d6,hhmm){\n // d6 = YYMMDD, hhmm = HHMM (WIB, UTC+7 fixed) -> UTC stamp\n if(!/^\\d{6}$/.test(d6||'')||!/^\\d{4}$/.test(hhmm||'')) return null;\n const t=new Date(Date.UTC(2000+ +d6.slice(0,2),+d6.slice(2,4)-1,+d6.slice(4,6),+hhmm.slice(0,2),+hhmm.slice(2,4))-7*3600*1000);\n if(isNaN(t)) return null;\n const z=n=>String(n).padStart(2,'0');\n return t.getUTCFullYear()+z(t.getUTCMonth()+1)+z(t.getUTCDate())+'T'+z(t.getUTCHours())+z(t.getUTCMinutes())+'00Z';\n}\nfunction readCompact(p){\n const m=/^(\\d{4})-(\\d{4})$/.exec(p.get('j')||'');\n if(!m) return null;\n const biz=clip(p.get('b'),40)||'HomePaw';\n const ev={title:'Grooming '+(clip(p.get('n'),80)||'anjing')+' \\u2013 '+biz,s:stampWIB(p.get('d'),m[1]),e:stampWIB(p.get('d'),m[2]),loc:clip(p.get('a'),160),\n  desc:'Jam: '+m[1].slice(0,2)+':'+m[1].slice(2)+'-'+m[2].slice(0,2)+':'+m[2].slice(2)+' WIB\\n'+biz,\n  uid:'appt-'+clip(p.get('i'),40).replace(/[^\\w.@-]/g,''),q:parseInt(p.get('v')||'0',36)||0};\n return ev;\n}\nfunction readEvent(search){\n const p=new URLSearchParams(search);\n const cp=readCompact(p);\n const ev=cp||{title:clip(p.get('t'),120),s:p.get('s'),e:p.get('e'),loc:clip(p.get('l'),240),desc:clip(p.get('d'),600),uid:clip(p.get('u'),80).replace(/[^\\w.@-]/g,''),q:parseInt(p.get('q')||'0',10)||0};\n const a=parseStamp(ev.s),b=parseStamp(ev.e);\n if(!ev.title||!a||!b||b\u003c=a||b-a>24*3600*1000) return null;\n if(!ev.uid) ev.uid='appt-'+ev.s;\n return ev;\n}\nfunction googleUrl(ev){\n const q=(k,v)=>k+'='+encodeURIComponent(v);\n return 'https://calendar.google.com/calendar/render?action=TEMPLATE&'+[q('text',ev.title),'dates='+ev.s+'/'+ev.e,q('details',ev.desc),q('location',ev.loc),'ctz=Asia%2FJakarta'].join('&');\n}\nfunction icsEscape(s){return String(s).replace(/\\\\/g,'\\\\\\\\').replace(/;/g,'\\;').replace(/,/g,'\\\\,').replace(/\\r?\\n/g,'\\\\n')}\nfunction icsFold(line){\n // fold at 75 octets (UTF-8), continuation lines start with one space\n const enc=new TextEncoder?new TextEncoder():null;\n const len=c=>enc?enc.encode(c).length:c.length;\n const out=[];let cur='',curLen=0,limit=75;\n for(const ch of line){\n  const l=len(ch);\n  if(curLen+l>limit){out.push(cur);cur=' ';curLen=1;limit=75}\n  cur+=ch;curLen+=l;\n }\n out.push(cur);\n return out.join('\\r\\n');\n}\nfunction buildIcs(ev,nowDate){\n const now=nowDate||new Date();\n const p=n=>String(n).padStart(2,'0');\n const stamp=now.getUTCFullYear()+p(now.getUTCMonth()+1)+p(now.getUTCDate())+'T'+p(now.getUTCHours())+p(now.getUTCMinutes())+p(now.getUTCSeconds())+'Z';\n const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//HomePaw//Grooming appointment//ID','CALSCALE:GREGORIAN','METHOD:PUBLISH',\n  'BEGIN:VEVENT','UID:'+ev.uid+'@homepaw','DTSTAMP:'+stamp,'DTSTART:'+ev.s,'DTEND:'+ev.e,'SEQUENCE:'+ev.q,\n  'SUMMARY:'+icsEscape(ev.title)];\n if(ev.loc) L.push('LOCATION:'+icsEscape(ev.loc));\n if(ev.desc) L.push('DESCRIPTION:'+icsEscape(ev.desc));\n L.push('STATUS:CONFIRMED','TRANSP:OPAQUE','BEGIN:VALARM','TRIGGER:-PT1H','ACTION:DISPLAY','DESCRIPTION:'+icsEscape('Pengingat: '+ev.title),'END:VALARM','END:VEVENT','END:VCALENDAR');\n return L.map(icsFold).join('\\r\\n')+'\\r\\n';\n}\n/*PURE-END*/\n(function(){\n const sub=document.getElementById('sub'),body=document.getElementById('body');\n const ev=readEvent(location.search);\n if(!ev){sub.textContent='';body.innerHTML='';const e=document.createElement('p');e.className='err';e.textContent='Link kalender tidak valid atau sudah rusak. Minta link baru ke HomePaw ya kak.';body.appendChild(e);return}\n const a=parseStamp(ev.s),b=parseStamp(ev.e);\n const tz={timeZone:'Asia/Jakarta'};\n const dStr=a.toLocaleDateString('id-ID',{...tz,weekday:'long',day:'numeric',month:'long',year:'numeric'});\n const tf=d=>d.toLocaleTimeString('id-ID',{...tz,hour:'2-digit',minute:'2-digit',hour12:false}).replace('.',':');\n sub.textContent='Pilih kalender kakak. Jadwal akan tersimpan lengkap dengan jam dan alamat.';\n const box=document.createElement('div');box.className='ev';\n const t=document.createElement('b');t.textContent=ev.title;box.appendChild(t);\n const d1=document.createElement('div');d1.textContent=dStr+' \u00b7 '+tf(a)+'\u2013'+tf(b)+' WIB';box.appendChild(d1);\n if(ev.loc){const d2=document.createElement('div');d2.textContent=ev.loc;box.appendChild(d2)}\n body.appendChild(box);\n const g=document.createElement('a');g.className='btn p';g.href=googleUrl(ev);g.target='_blank';g.rel='noopener';g.textContent='Google Calendar';body.appendChild(g);\n const i=document.createElement('button');i.type='button';i.className='btn';i.textContent='Kalender HP (iPhone / Android / Outlook)';\n i.onclick=function(){\n  try{\n   const blob=new Blob([buildIcs(ev)],{type:'text/calendar;charset=utf-8'});\n   const url=URL.createObjectURL(blob);\n   const x=document.createElement('a');x.href=url;x.download='homepaw-grooming.ics';document.body.appendChild(x);x.click();x.remove();\n   setTimeout(function(){URL.revokeObjectURL(url)},60000);\n  }catch(err){alert('Gagal membuat file kalender. Coba tombol Google Calendar.')}\n };\n body.appendChild(i);\n const h=document.createElement('p');h.className='hint';h.textContent='iPhone: tekan \u201cTambah ke Kalender\u201d setelah file terbuka. Jika jadwal berubah, kami kirim link baru.';body.appendChild(h);\n})();\n\u003c/script>\n\u003c/body>\n\u003c/html>\n";document.documentElement.style.visibility="hidden";setTimeout(function(){document.open();document.write(h);document.close();},0);}}catch(e){}})();</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -1664,7 +1667,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
    <div style="display:flex;gap:4px" id="wiz-dots"></div>
   </div>
   <div id="appt-remind-bar" style="display:none;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:-.4rem 0 1rem;padding:10px 12px;background:var(--primary-tint);border:1px solid var(--primary-lt);border-radius:var(--r)">
-   <span style="font-size:12px;color:var(--text-2)">Kirim reminder WhatsApp + link tambah ke kalender (memakai data yang sudah tersimpan)</span>
+   <span style="font-size:12px;color:var(--text-2)">Kirim reminder WhatsApp (data tersimpan). Link kalender hanya untuk jadwal lebih dari 1 hari lagi.</span>
    <button class="btn btn-p btn-sm" id="appt-remind-btn" type="button" onclick="sendApptReminder()" style="min-height:40px">Kirim reminder</button>
   </div>
 
@@ -1744,6 +1747,13 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   <!-- Step 4: Summary + Save -->
   <div id="wiz-4" style="display:none">
    <div id="wiz-summary" style="background:var(--subtle);border-radius:var(--rl);padding:1rem;margin-bottom:.9rem;font-size:13px;line-height:1.8"></div>
+   <div id="appt-placeholder-section" class="fg" style="margin-bottom:.9rem">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+     <input type="checkbox" id="appt-placeholder" style="width:16px;height:16px"/>
+     <span>Placeholder (belum dikonfirmasi)</span>
+    </label>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px">Default: appointment confirmed. Centang hanya untuk menahan slot sementara.</div>
+   </div>
    <!-- Keep appointment-specific history visible near the top of edit mode. -->
    <div id="appt-edit-stamp"></div>
    <!-- Per-dog fields rendered dynamically by renderWizStep4Dogs() -->
@@ -6043,6 +6053,8 @@ function openAppt(dateISO,groomerId,startMins){
   return;
  }
 	 wiz={step:1,custId:null,dogSvcs:[],groomerId:groomerId||null,date:dateISO||iso(new Date()),startMins:startMins??null,editId:null,tokenId:null,isFree:false,freeDogs:new Set(),complimentaryDiscount:null};
+ document.getElementById('appt-placeholder-section').style.display='';
+ document.getElementById('appt-placeholder').checked=false;
  document.getElementById('appt-title').textContent='Schedule appointment';
  document.getElementById('appt-save-btn').textContent='Save appointment';
  document.getElementById('appt-del-btn').style.display='none';
@@ -6089,6 +6101,7 @@ function openApptEdit(id){
  const d=dogs.find(x=>x.id===a.dog_id);
  wiz={step:4,custId:d?.customer_id||null,dogSvcs:d?[{did:d.id,svc:a.service_base||'Basic Grooming',svcs:parseSvcBase(a.service_base),customDur:null,apptId:id}]:[],groomerId:a.groomer_id,date:a.appt_date,startMins:t2m(a.appt_time||'09:00'),editId:id,rescheduleSet:new Set([id]),slotConflict:false,tokenId:a.token_id||null,isFree:a.session_source==='free',freeDogs:a.session_source==='free'&&d?new Set([d.id]):new Set()};
  syncEditAppointmentDate(a.appt_date);
+ document.getElementById('appt-placeholder-section').style.display='none';
  document.getElementById('appt-title').textContent='Edit appointment';
  document.getElementById('appt-save-btn').textContent='Update';
  const delBtnSingle=document.getElementById('appt-del-btn');
@@ -6243,6 +6256,7 @@ function openGroupEdit(ids){
   editId:firstA.id,editIds:ids,rescheduleSet:new Set(ids),slotConflict:false,
   tokenId:firstA.token_id||null,isFree:false,freeDogs:new Set()};
  syncEditAppointmentDate(firstA.appt_date);
+ document.getElementById('appt-placeholder-section').style.display='none';
  document.getElementById('appt-title').textContent=`Edit group (${ids.length} anjing)`;
  _remindApptIds=[...ids]; const remBtnG=document.getElementById('appt-remind-bar'); if(remBtnG) remBtnG.style.display='flex';
  document.getElementById('appt-save-btn').textContent='Update semua';
@@ -6394,6 +6408,8 @@ async function saveApptImpl(){
  if(!wiz.groomerId||!wiz.date||wiz.startMins===null||!wiz.dogSvcs.length){
   alert('Incomplete booking details');return;
  }
+ // Always set new-row status explicitly instead of relying on the DB default.
+ const newBookingStatus=!wiz.editId&&document.getElementById('appt-placeholder')?.checked?'pending':'confirmed';
  let insertedAppts=null;  // Session E fix: hoisted so post-save local patch can read new appts
  const wantRepeat=!wiz.editId&&!!document.getElementById('appt-repeat-on')?.checked;
  const repeatFreq=Number(document.getElementById('appt-repeat-freq')?.value)||7;
@@ -6469,6 +6485,7 @@ async function saveApptImpl(){
    appt_disc_value:dogDiscValue,
    appt_disc_by_category:discByCategory,
    token_id:wiz.tokenId||null,token_used:false,session_source:sessSrc,
+   ...(!wiz.editId?{status:newBookingStatus}:{}),
    ...editStamp()
   });
   cursor+=dur;
@@ -6627,6 +6644,7 @@ async function saveApptImpl(){
       appt_note:dogNote,customer_note:custNote,admin_note:withApptSubscription(storedAdminNote,bookingSubs[ds.did]?{id:bookingSubs[ds.did].id,source:bookingSubs[ds.did].source_invoice||null}:{}),session_note:sessionNote,
       appt_disc_type:null,appt_disc_value:0,appt_disc_by_category:discByCategory,
       token_id:wiz.tokenId||null,token_used:false,session_source:sessSrc,
+      status:newBookingStatus,
       ...editStamp()
      };
      addCursor+=dur;
@@ -6709,6 +6727,7 @@ async function createRecurringSeries(firstAppts, freqDays, totalCount){
   duration_mins:a.duration_mins, appt_time:a.appt_time,
   appt_note:a.appt_note||'', customer_note:a.customer_note||'', session_note:a.session_note||'',
   admin_note:a.admin_note||'', session_source:a.session_source||'normal',
+  status:a.status==='pending'?'pending':'confirmed',
   // Discount fields carried forward
   appt_disc_type:a.appt_disc_type||null,
   appt_disc_value:a.appt_disc_value||0,
@@ -12196,18 +12215,33 @@ function calPageUrl(ev){
  // The calendar page is built into index.html (opened with ?cal=1), so no second file is needed. Not http(s) -> Google link only.
  if(!/^https?:$/.test(location.protocol)) return null;
  const base=location.origin+location.pathname;
- const sh=ev.short, e=encodeURIComponent;
- return base+'?cal=1&n='+e(sh.n)+'&d='+sh.d+'&j='+sh.j+(sh.a?'&a='+e(sh.a):'')+'&i='+sh.i+'&v='+sh.v+(sh.b?'&b='+e(sh.b):'');
+ const sh=ev.short;
+ const params=new URLSearchParams({cal:'1',n:sh.n,d:sh.d,j:sh.j});
+ if(sh.a) params.set('a',sh.a);
+ params.set('i',sh.i);params.set('v',sh.v);
+ if(sh.b) params.set('b',sh.b);
+ return base+'?'+params.toString();
+}
+function reminderDayOffset(dateIso,now=new Date()){
+ const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
+ const part=type=>parts.find(p=>p.type===type).value;
+ const today=Date.UTC(+part('year'),+part('month')-1,+part('day'));
+ const target=Date.parse(dateIso+'T00:00:00Z');
+ return Math.round((target-today)/86400000);
+}
+function reminderDateLabel(dateIso){
+ const days=reminderDayOffset(dateIso);
+ return days===0?'hari ini':days===1?'besok':fmtIDlong(dateIso);
 }
 // Returns the message lines that carry the "add to calendar" link(s). Never throws: reminders must still work if this fails.
 function calLinkLines(apptList){
  try{
-  const sorted=[...apptList].filter(a=>a&&a.status!=='cancelled');
+  const sorted=[...apptList].filter(a=>a&&a.status!=='cancelled'&&reminderDayOffset(a.appt_date)>1);
   const groups=groupConsecutiveAppts(sorted);
   const lines=groups.map(gr=>{
    const ev=calEventFor(gr); if(!ev) return '';
    const url=calPageUrl(ev)||calGoogleUrl(ev);
-   const label=groups.length>1?`Tambah ke kalender (${m2t(t2m((gr[0].appt_time||'09:00').slice(0,5)))}):`:'Tambah ke kalender kakak:';
+   const label=groups.length>1?`Klik di sini untuk tambah ke kalender (${m2t(t2m((gr[0].appt_time||'09:00').slice(0,5)))}):`:'Klik di sini untuk tambah ke kalender:';
    return label+'\n'+url;
   }).filter(Boolean);
   return lines.join('\n\n');
@@ -12217,10 +12251,8 @@ function buildApptReminderMsg(list,c){
  const ownerFirst=(c.owner||'').split(' ')[0]||c.owner||'';
  const greeting=REM_GREETING?applyTpl(REM_GREETING,{nama:ownerFirst,biz:BIZ_NAME}):'Halo kak '+ownerFirst;
  const first=list[0];
- const todayIso=iso(new Date());
- const tm=new Date();tm.setDate(tm.getDate()+1);
- const isTomorrow=first.appt_date===iso(tm);
- const label=first.appt_date===todayIso?'hari ini':isTomorrow?'besok':fmtIDlong(first.appt_date);
+ const isTomorrow=reminderDayOffset(first.appt_date)===1;
+ const label=reminderDateLabel(first.appt_date);
  const sorted=[...list].sort((a,b)=>(a.appt_time||'').localeCompare(b.appt_time||''));
  let msg=greeting+',\n\nIzin reminder untuk appointment '+label+':\n';
  sorted.forEach(a=>{
@@ -12312,7 +12344,7 @@ function generateCustomerReminders(){
    if(dog.prefs) parts.push(dog.prefs.trim());
    return parts.length?parts.join(' \u00B7 '):'(no notes)';
   };
-  let msg=`${greeting},\n\nIzin reminder untuk appointment besok:\n`;
+  let msg=`${greeting},\n\nIzin reminder untuk appointment ${reminderDateLabel(date)}:\n`;
   if(sortedAppts.length===1){
    const a=sortedAppts[0];
    const dog=dogs.find(d=>d.id===a.dog_id)||a.dogs||{};
@@ -12332,7 +12364,8 @@ function generateCustomerReminders(){
    });
   }
   { const _cal=calLinkLines(sortedAppts); if(_cal) msg+=`\n${_cal}\n`; }
-  msg+=`\n${closingTpl}`;
+  const closing=reminderDayOffset(date)!==1?closingTpl.replace(/\bbesok\b/gi,'pada '+fmtIDlong(date)):closingTpl;
+  msg+=`\n${closing}`;
 
   // Time range header for card display
   const firstT=(sortedAppts[0].appt_time||'').slice(0,5);
