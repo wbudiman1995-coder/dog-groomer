@@ -65,13 +65,13 @@ body.auth-blocked .nav,body.auth-blocked .page,body.auth-blocked .overlay{displa
 .auth-success{background:var(--green-lt);color:var(--green-dk);border:1px solid var(--green-md);border-radius:var(--r);padding:10px 14px;font-size:var(--fs-label);margin-bottom:1rem;display:none}
 .auth-success.show{display:block}
 .auth-pending{background:var(--amber);color:var(--amb-t);border:1px solid #f2ddb0;border-radius:var(--r);padding:16px;text-align:center}
-.nav-user{display:flex;align-items:center;gap:10px;font-size:var(--fs-label);color:var(--muted);padding-left:16px;border-left:1px solid var(--border)}
+.nav-user{flex-shrink:0;display:flex;align-items:center;gap:10px;font-size:var(--fs-label);color:var(--muted);padding-left:16px;border-left:1px solid var(--border)}
 .nav-user-email{font-weight:500;color:var(--text-2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .access-badge{display:inline-block;margin-left:6px;background:var(--red);color:var(--red-t);padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700}
 .nav{background:var(--surface);border-bottom:1px solid var(--border-subtle);height:58px;display:flex;align-items:center;padding:0;position:sticky;top:0;z-index:100;box-shadow:0 1px 0 rgba(61,31,13,.04),var(--sh)}
-.nav-brand{font-weight:700;font-size:16px;letter-spacing:-.01em;color:var(--text);display:inline-flex;align-items:center;gap:7px}
-.nav-tabs{display:flex;gap:2px;background:var(--subtle);border:1px solid var(--border-subtle);border-radius:var(--r);padding:4px}
-.nav-tab{padding:8px 15px;border-radius:7px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted);transition:all .15s;white-space:nowrap;min-height:36px}
+.nav-brand{flex-shrink:0;font-weight:700;font-size:16px;letter-spacing:-.01em;color:var(--text);display:inline-flex;align-items:center;gap:7px}
+.nav-tabs{display:flex;gap:2px;min-width:0;overflow-x:auto;flex:1;background:var(--subtle);border:1px solid var(--border-subtle);border-radius:var(--r);padding:4px}
+.nav-tab{flex-shrink:0;padding:8px 15px;border-radius:7px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted);transition:all .15s;white-space:nowrap;min-height:36px}
 .nav-tab:hover{color:var(--text);background:rgba(255,255,255,.55)}
 .nav-tab.active{background:var(--surface);color:var(--primary-darker);box-shadow:var(--sh);font-weight:600}
 .page{max-width:1120px;margin:0 auto;padding:1.75rem 1.5rem}
@@ -641,6 +641,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div class="nav-brand">Groomer CRM</div>
  <div class="nav-tabs">
  <button class="nav-tab active" onclick="sw('dashboard')" id="tab-dashboard" data-i18n="nav.dashboard">Dashboard</button>
+ <button class="nav-tab" onclick="sw('tasks')" id="tab-tasks" data-i18n="nav.tasks">Tasks</button>
  <button class="nav-tab" onclick="sw('database')" id="tab-database" data-i18n="nav.database">Database</button>
  <button class="nav-tab" onclick="sw('calendar')" id="tab-calendar" data-i18n="nav.calendar">Calendar</button>
  <button class="nav-tab" onclick="sw('groomers')" id="tab-groomers" data-i18n="nav.groomers">Groomers</button>
@@ -725,6 +726,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
     </select>
    </div>
   </div>
+  <div id="dash-tasks" aria-live="polite"></div>
   <div id="dash-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:1.5rem"></div>
   <div id="dash-actions" style="margin-bottom:1.2rem"></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px">
@@ -737,6 +739,25 @@ thead th[onclick]:hover{color:var(--primary-darker)}
     <div id="dash-comparison"></div>
    </div>
   </div>
+ </div>
+
+ <div class="sec" id="sec-tasks">
+  <div class="toolbar">
+   <span class="toolbar-title" data-i18n="nav.tasks">Tasks</span>
+   <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button type="button" class="btn btn-g btn-sm" onclick="loadTasks()">Refresh</button>
+    <button type="button" class="btn btn-p" onclick="openTaskEditor()">+ Add task</button>
+   </div>
+  </div>
+  <div class="filter-bar" style="flex-wrap:wrap">
+   <input id="task-search" type="search" placeholder="Search task or assignee…" oninput="renderTasks()" style="flex:1;min-width:180px"/>
+   <select id="task-status-filter" onchange="renderTasks()" aria-label="Task status">
+    <option value="open">Open tasks</option><option value="due">Due soon / overdue</option><option value="done">Completed</option><option value="all">All tasks</option>
+   </select>
+   <input id="task-assignee-filter" list="task-assignee-options" placeholder="Filter by assignee…" oninput="renderTasks()" aria-label="Filter by assignee"/>
+  </div>
+  <p style="font-size:12px;color:var(--muted);margin:0 0 16px">Open tasks appear on the dashboard 3 days before their due date and remain there until completed. Dates use WIB.</p>
+  <div id="tasks-list" aria-live="polite"></div>
  </div>
 
  <div class="sec" id="sec-database">
@@ -1358,6 +1379,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
       <option value="invoice">Invoice</option>
       <option value="visit">Visit</option>
       <option value="subscription">Subscription</option>
+      <option value="task">Task</option>
       <option value="groomer_block">Sick/Holiday block</option>
      </select>
     </div>
@@ -1658,6 +1680,29 @@ thead th[onclick]:hover{color:var(--primary-darker)}
   <div id="bf-existing-list" style="margin-top:1rem"></div>
  </div>
 </div>
+
+<div class="overlay" id="ov-task">
+ <div class="modal" style="max-width:560px">
+  <button class="modal-close" type="button" onclick="closeTaskEditor()" aria-label="Close">&#x2715;</button>
+  <div class="modal-title" id="task-editor-title">Add task</div>
+  <form id="task-form" onsubmit="event.preventDefault();saveTask()">
+   <div class="fg" style="margin-bottom:14px">
+    <label for="task-text">Task *</label>
+    <textarea id="task-text" required maxlength="5000" placeholder="What needs to be done?" rows="5" style="width:100%;resize:vertical;min-height:120px"></textarea>
+   </div>
+   <div class="form-grid">
+    <div class="fg"><label for="task-due">Due date *</label><input id="task-due" type="date" required/></div>
+    <div class="fg"><label for="task-assignee">Assigned to *</label><input id="task-assignee" list="task-assignee-options" required maxlength="120" placeholder="Winston, Xavier, or another name" autocomplete="off"/></div>
+   </div>
+   <p id="task-editor-error" role="alert" style="color:var(--red-t);font-size:12px"></p>
+   <div class="form-actions">
+    <button class="btn btn-p" type="submit" id="task-save-btn">Save task</button>
+    <button class="btn btn-g" type="button" onclick="closeTaskEditor()">Cancel</button>
+   </div>
+  </form>
+ </div>
+</div>
+<datalist id="task-assignee-options"></datalist>
 
 <div class="overlay" id="ov-appt">
  <div class="modal" style="max-width:640px">
@@ -2270,17 +2315,183 @@ async function resetWaTemplatesToDefault(){
  }
 }
 
+/* ============ SHARED TASKS ============ */
+let crmTasks=[],tasksLoaded=false,tasksLoadError='',tasksLoadPromise=null;
+let taskEditId=null,taskEditVersion=null,taskSaveBusy=false,tasksMutationVersion=0;
+const taskRowBusy=new Set();
+function taskTodayIso(now=new Date()){
+ const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
+ const part=type=>parts.find(p=>p.type===type).value;
+ return part('year')+'-'+part('month')+'-'+part('day');
+}
+function taskDaysUntil(dateIso,now=new Date()){
+ return Math.round((Date.parse(dateIso+'T00:00:00Z')-Date.parse(taskTodayIso(now)+'T00:00:00Z'))/86400000);
+}
+function taskIsDueSoon(task){return !task.completed_at&&taskDaysUntil(task.due_date)<=3;}
+function taskDueLabel(task){
+ if(task.completed_at)return 'Completed';
+ const days=taskDaysUntil(task.due_date);
+ return days<0?'Overdue by '+(-days)+' day'+(days===-1?'':'s'):days===0?'Due today':days===1?'Due tomorrow':'Due in '+days+' days';
+}
+function taskSort(a,b){return a.due_date.localeCompare(b.due_date)||(a.created_at||'').localeCompare(b.created_at||'');}
+function populateTaskAssignees(){
+ const el=document.getElementById('task-assignee-options');if(!el)return;
+ const names=['Winston','Xavier',...adminUsers.filter(u=>u.status==='approved').map(u=>u.name||u.email),...crmTasks.map(t=>t.assignee)];
+ const unique=new Map();
+ names.forEach(n=>{const name=String(n||'').trim();if(name&&!unique.has(name.toLowerCase()))unique.set(name.toLowerCase(),name)});
+ el.innerHTML=[...unique.values()].sort((a,b)=>a.localeCompare(b)).map(n=>'<option value="'+esc(n)+'"></option>').join('');
+}
+async function loadTasks(){
+ if(tasksLoadPromise)return tasksLoadPromise;
+ if(taskSaveBusy||taskRowBusy.size)return;
+ const mutationVersion=tasksMutationVersion;
+ tasksLoadPromise=(async()=>{
+  try{
+   // Page through the table so completed tasks cannot crowd open tasks out of
+   // Supabase's per-request row limit.
+   const rows=[];
+   for(let offset=0;;offset+=500){
+    const {data,error}=await db.from('crm_tasks').select('*').order('due_date').order('id').range(offset,offset+499);
+    if(error)throw error;
+    rows.push(...(data||[]));
+    if((data||[]).length<500)break;
+   }
+   if(mutationVersion===tasksMutationVersion){crmTasks=rows;tasksLoaded=true;tasksLoadError='';}
+  }catch(e){tasksLoadError='Tasks could not be refreshed. Please retry or contact your administrator.';console.warn('Task load:',e.message)}
+  finally{tasksLoadPromise=null;renderTaskSurfaces();}
+ })();
+ return tasksLoadPromise;
+}
+function renderTaskSurfaces(){populateTaskAssignees();renderTasks();renderDashboardTasks();}
+function taskStateMessage(){
+ if(tasksLoadError)return '<div class="card" style="border-left:4px solid var(--red-solid);margin-bottom:12px" role="alert">'+esc(tasksLoadError)+' <button type="button" class="btn btn-g btn-sm" onclick="loadTasks()">Retry</button></div>';
+ return !tasksLoaded?'<p style="color:var(--muted)">Loading tasks…</p>':'';
+}
+function taskCard(task,compact=false){
+ const done=!!task.completed_at,days=taskDaysUntil(task.due_date);
+ const color=done?'var(--green-dk)':days<0?'var(--red-t)':days<=3?'var(--amb-t)':'var(--muted)';
+ const busy=taskRowBusy.has(task.id)?' disabled':'';
+ return `<article class="card task-card" style="padding:${compact?'12px 14px':'16px'};margin-bottom:10px;border-left:4px solid ${color}">
+  <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+   <div style="flex:1;min-width:160px">
+    <div style="font-size:11px;font-weight:700;color:${color};margin-bottom:5px">${esc(taskDueLabel(task))} · ${esc(fmtD(task.due_date))}</div>
+    <div style="white-space:pre-wrap;overflow-wrap:anywhere;font-weight:600;${done?'text-decoration:line-through;color:var(--muted)':''}">${esc(task.body)}</div>
+    <div style="font-size:12px;color:var(--text-2);margin-top:8px;overflow-wrap:anywhere">Assigned to <strong>${esc(task.assignee)}</strong></div>
+   </div>
+   <div style="display:flex;gap:6px;flex-wrap:wrap">
+    <button type="button" class="btn btn-g btn-sm" onclick="toggleTaskCompleted('${esc(task.id)}')"${busy}>${done?'Reopen':'Mark done'}</button>
+    <button type="button" class="btn btn-g btn-sm" onclick="openTaskEditor('${esc(task.id)}')"${busy}>Edit</button>
+    ${compact?'':`<button type="button" class="btn btn-d btn-sm" onclick="deleteTask('${esc(task.id)}')"${busy}>Delete</button>`}
+   </div>
+  </div>
+ </article>`;
+}
+function renderTasks(){
+ const el=document.getElementById('tasks-list');if(!el)return;
+ const search=(document.getElementById('task-search')?.value||'').trim().toLowerCase();
+ const assignee=(document.getElementById('task-assignee-filter')?.value||'').trim().toLowerCase();
+ const status=document.getElementById('task-status-filter')?.value||'open';
+ const list=crmTasks.filter(t=>{
+  if(status==='open'&&t.completed_at||status==='done'&&!t.completed_at||status==='due'&&!taskIsDueSoon(t))return false;
+  return (!assignee||t.assignee.toLowerCase().includes(assignee))&&(!search||(t.body+' '+t.assignee).toLowerCase().includes(search));
+ }).sort(taskSort);
+ el.innerHTML=taskStateMessage()+(tasksLoaded?(list.length?'<p style="font-size:12px;color:var(--muted)">'+list.length+' task'+(list.length===1?'':'s')+'</p>'+list.map(t=>taskCard(t)).join(''):'<div class="empty">No tasks match these filters.</div>'):'');
+}
+function renderDashboardTasks(){
+ const el=document.getElementById('dash-tasks');if(!el)return;
+ const due=crmTasks.filter(taskIsDueSoon).sort(taskSort);
+ if(!due.length&&!tasksLoadError){el.innerHTML='';return;}
+ el.innerHTML=`<div style="margin-bottom:20px;padding:16px;background:var(--primary-tint);border:1px solid var(--primary-lt);border-radius:var(--rl)">
+  <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:12px"><strong>Tasks needing attention${due.length?' · '+due.length:''}</strong><button type="button" class="btn btn-g btn-sm" onclick="sw('tasks')">View all tasks</button></div>
+  ${taskStateMessage()}${due.map(t=>taskCard(t,true)).join('')}
+ </div>`;
+}
+function openTaskEditor(id){
+ if(taskSaveBusy)return;
+ const task=id?crmTasks.find(t=>t.id===id):null;
+ if(id&&!task){showToast('Task not found. Refresh the list.');return;}
+ if(task&&taskRowBusy.has(id))return;
+ taskEditId=task?.id||null;taskEditVersion=task?.updated_at||null;
+ document.getElementById('task-editor-title').textContent=task?'Edit task':'Add task';
+ document.getElementById('task-text').value=task?.body||'';
+ document.getElementById('task-due').value=task?.due_date||taskTodayIso();
+ document.getElementById('task-assignee').value=task?.assignee||'';
+ document.getElementById('task-editor-error').textContent='';
+ populateTaskAssignees();om('ov-task');document.getElementById('task-text').focus();
+}
+function closeTaskEditor(){if(!taskSaveBusy)cm('ov-task');}
+function taskChangedMessage(){return 'This task changed or was deleted by another user. Refresh the list, then try again.';}
+async function saveTask(){
+ if(taskSaveBusy)return;
+ const body=document.getElementById('task-text').value.trim();
+ const due_date=document.getElementById('task-due').value;
+ const assignee=document.getElementById('task-assignee').value.trim();
+ const errorEl=document.getElementById('task-editor-error');
+ if(!body||body.length>5000||!assignee||assignee.length>120||!/^\d{4}-\d{2}-\d{2}$/.test(due_date)||!Number.isFinite(Date.parse(due_date+'T00:00:00Z'))){errorEl.textContent='Enter task text, a valid due date, and an assignee.';return;}
+ const editing=taskEditId,old=editing?crmTasks.find(t=>t.id===editing):null;
+ if(editing&&(!old||old.updated_at!==taskEditVersion||taskRowBusy.has(editing))){errorEl.textContent=taskChangedMessage();return;}
+ const btn=document.getElementById('task-save-btn');
+ taskSaveBusy=true;tasksMutationVersion++;btn.disabled=true;errorEl.textContent='';
+ if(editing)taskRowBusy.add(editing);
+ try{
+  const payload={body,due_date,assignee};
+  const query=editing?db.from('crm_tasks').update(payload).eq('id',editing).eq('updated_at',taskEditVersion):db.from('crm_tasks').insert(payload);
+  const {data,error}=await query.select('*').maybeSingle();
+  if(error)throw error;
+  if(!data)throw new Error(taskChangedMessage());
+  if(editing)crmTasks=crmTasks.map(t=>t.id===editing?data:t);else crmTasks.push(data);
+  tasksLoaded=true;
+  await logAudit('task',data.id,editing?'update':'create',{old,new:data,label:data.body.slice(0,100)});
+  cm('ov-task');showToast('Task saved.','success');
+ }catch(e){errorEl.textContent=e.message;}
+ finally{taskSaveBusy=false;btn.disabled=false;if(editing)taskRowBusy.delete(editing);renderTaskSurfaces();}
+}
+async function toggleTaskCompleted(id){
+ const old=crmTasks.find(t=>t.id===id);if(!old||taskRowBusy.has(id)||taskSaveBusy&&taskEditId===id)return;
+ tasksMutationVersion++;taskRowBusy.add(id);renderTaskSurfaces();
+ try{
+  const {data,error}=await db.from('crm_tasks').update({completed_at:old.completed_at?null:new Date().toISOString()}).eq('id',id).eq('updated_at',old.updated_at).select('*').maybeSingle();
+  if(error)throw error;if(!data)throw new Error(taskChangedMessage());
+  crmTasks=crmTasks.map(t=>t.id===id?data:t);
+  await logAudit('task',id,'update',{old,new:data,label:data.body.slice(0,100)});
+  showToast(data.completed_at?'Task completed.':'Task reopened.','success');
+ }catch(e){showToast(e.message);}
+ finally{taskRowBusy.delete(id);renderTaskSurfaces();}
+}
+async function deleteTask(id){
+ const old=crmTasks.find(t=>t.id===id);if(!old||taskRowBusy.has(id)||taskSaveBusy&&taskEditId===id)return;
+ if(!confirm('Delete this task?\n\n'+old.body.slice(0,160)))return;
+ tasksMutationVersion++;taskRowBusy.add(id);renderTaskSurfaces();
+ try{
+  const {data,error}=await db.from('crm_tasks').delete().eq('id',id).eq('updated_at',old.updated_at).select('id');
+  if(error)throw error;if(!data?.length)throw new Error(taskChangedMessage());
+  crmTasks=crmTasks.filter(t=>t.id!==id);
+  await logAudit('task',id,'delete',{old,label:old.body.slice(0,100)});
+  showToast('Task deleted.','success');
+ }catch(e){showToast(e.message);}
+ finally{taskRowBusy.delete(id);renderTaskSurfaces();}
+}
+function refreshTasksIfVisible(){
+ if(!_authReady||document.hidden)return;
+ const tab=document.querySelector('.nav-tab.active')?.id;
+ if(tab==='tab-tasks'||tab==='tab-dashboard')loadTasks();
+}
+setInterval(refreshTasksIfVisible,60000);
+window.addEventListener('focus',refreshTasksIfVisible);
+document.addEventListener('visibilitychange',refreshTasksIfVisible);
+
+
 // ===== i18n (translation layer) =====
 // Default 'en' keeps the current on-screen text unchanged. Untranslated keys fall back to the element's existing text.
 let LANG='en';
 const I18N={
- en:{'nav.dashboard':'Dashboard','nav.database':'Database','nav.calendar':'Calendar','nav.groomers':'Groomers','nav.invoice':'Invoice','nav.financial':'Financial','nav.reminders':'Reminders','nav.membership':'Membership','nav.access':'Access','nav.history':'History','nav.tally':'Tally','nav.settings':'Settings','ui.signout':'Sign out','ui.search':'Search','ui.prefs':'Preferences',
+ en:{'nav.tasks':'Tasks','nav.dashboard':'Dashboard','nav.database':'Database','nav.calendar':'Calendar','nav.groomers':'Groomers','nav.invoice':'Invoice','nav.financial':'Financial','nav.reminders':'Reminders','nav.membership':'Membership','nav.access':'Access','nav.history':'History','nav.tally':'Tally','nav.settings':'Settings','ui.signout':'Sign out','ui.search':'Search','ui.prefs':'Preferences',
   'tb.dashboard':'Dashboard','tb.database':'Database','tb.calendar':'Calendar','tb.groomers':'Groomers','tb.financial':'Financial','tb.reminders':'Reminders','tb.membership':'Membership','tb.settings':'Settings',
   'btn.add':'Add','btn.save':'Save','btn.cancel':'Cancel','btn.delete':'Delete','btn.edit':'Edit','btn.export':'Export','btn.today':'Today','btn.reset':'Reset',
   'st.customers':'Customers','st.dogs':'Dogs','st.invoices':'Invoices','st.visits':'Visits','st.payroll':'Payroll','st.expenses':'Expenses','st.capital':'Capital','st.bank':'Bank',
   'tt.database':'Database','tt.groomers':'Groomers','tt.invoice':'Create invoice','tt.financial':'Financial','tt.reminders':'Reminders','tt.membership':'Membership & Tokens','tt.access':'Admin access','tt.history':'History','tt.settings':'Settings','tt.tally':'Tally / Reconcile',
   'sub.cust':'Customers','sub.pets':'Pets','sub.export':'Export','sub.back':'Back','sub.groomerlist':'Groomer list','sub.attendance':'Attendance','sub.leaderboard':'Leaderboard','sub.invoices':'Invoices','sub.visits':'Visits','sub.payroll':'Payroll','sub.expenses':'Expenses','sub.capital':'Capital','sub.bank':'Bank','sub.groomerrem':'Groomer reminders','sub.custrem':'Customer reminders','sub.followup':'Followup (not yet groomed)','sub.renewal':'Renewal subs','sub.storage':'Storage','sub.data':'Data','sub.roadmap':'Roadmap','sub.config':'Configuration'},
- id:{'nav.dashboard':'Dasbor','nav.database':'Data','nav.calendar':'Kalender','nav.groomers':'Groomer','nav.invoice':'Invoice','nav.financial':'Keuangan','nav.reminders':'Pengingat','nav.membership':'Keanggotaan','nav.access':'Akses','nav.history':'Riwayat','nav.tally':'Rekonsiliasi','nav.settings':'Pengaturan','ui.signout':'Keluar','ui.search':'Cari','ui.prefs':'Preferensi',
+ id:{'nav.tasks':'Tugas','nav.dashboard':'Dasbor','nav.database':'Data','nav.calendar':'Kalender','nav.groomers':'Groomer','nav.invoice':'Invoice','nav.financial':'Keuangan','nav.reminders':'Pengingat','nav.membership':'Keanggotaan','nav.access':'Akses','nav.history':'Riwayat','nav.tally':'Rekonsiliasi','nav.settings':'Pengaturan','ui.signout':'Keluar','ui.search':'Cari','ui.prefs':'Preferensi',
   'tb.dashboard':'Dasbor','tb.database':'Data','tb.calendar':'Kalender','tb.groomers':'Groomer','tb.financial':'Keuangan','tb.reminders':'Pengingat','tb.membership':'Keanggotaan','tb.settings':'Pengaturan',
   'btn.add':'Tambah','btn.save':'Simpan','btn.cancel':'Batal','btn.delete':'Hapus','btn.edit':'Ubah','btn.export':'Ekspor','btn.today':'Hari ini','btn.reset':'Reset',
   'st.customers':'Pelanggan','st.dogs':'Anjing','st.invoices':'Invoice','st.visits':'Kunjungan','st.payroll':'Gaji','st.expenses':'Pengeluaran','st.capital':'Modal','st.bank':'Bank',
@@ -2382,6 +2593,7 @@ const AUDIT_TRACKED_FIELDS={
  subscription:['type','status','sessions_total','sessions_used','expires_at'],
  visit:['visited_at','service_type','is_billed_manually','billed_amount','billed_note','note'],
  groomer_block:['block_date','groomer_id','reason','note'],
+ task:['body','due_date','assignee','completed_at'],
  complaint:['complaint_date','severity','description','resolution','resolved','groomer_id','customer_id','dog_id']
 };
 
@@ -2440,6 +2652,7 @@ async function logAudit(entity_type, entity_id, action, opts){
 // Human-readable label for a field name
 function auditFieldLabel(field){
  const labels={
+  body:'Task',due_date:'Due date',assignee:'Assigned to',completed_at:'Completed at',
   owner:'Owner',wa:'WhatsApp',address:'Address',kota:'Kota',kecamatan:'Kecamatan',
   source:'Source',prefs:'Preferences',gmaps_link:'Maps link',latitude:'Latitude',longitude:'Longitude',
   name:'Name',breed:'Breed',size:'Size',age:'Age',weight:'Weight',coat:'Coat',
@@ -2486,20 +2699,31 @@ function auditFieldValue(field, val){
  return String(val);
 }
 
+function historyActorEmail(userId,recordedEmail,emptyLabel){
+ const admin=adminUsers.find(u=>String(u.id)===String(userId));
+ const current=window._currentAuthUser;
+ const candidates=[recordedEmail,admin?.email,window._adminEmails?.[userId],current?.id===userId?current.email:null];
+ for(const value of candidates){
+  const email=String(value||'').trim();
+  if(/^[^\s@]+@[^\s@]+$/.test(email))return email;
+ }
+ return emptyLabel||(!userId&&!recordedEmail?'System':'Email not recorded');
+}
+
 function editStampHTML(rec){
  if(!rec||!rec.updated_at) return '';
  const when=new Date(rec.updated_at).toLocaleString('id-ID',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
- const who=rec.updated_by?(window._adminEmails?.[rec.updated_by]||'admin'):'';
+ const who=rec.updated_by?historyActorEmail(rec.updated_by):'';
  return `<div style="font-size:10px;color:var(--muted);margin-top:8px;padding-top:6px;border-top:1px dashed var(--border)">Last edit${who?' by '+esc(who):''} on ${esc(when)}</div>`;
 }
 
 // Batch O.10 — render audit history block (single audit entry)
 function renderAuditEntry(e){
  const when=new Date(e.created_at).toLocaleString('id-ID',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
- const who=e.user_email||(e.user_id?(window._adminEmails?.[e.user_id]||'admin'):'system');
+ const who=historyActorEmail(e.user_id,e.user_email);
  const actionLabel={create:'created',update:'edited',delete:'deleted'}[e.action]||e.action;
  const actionColor={create:'#16a34a',update:'#0369a1',delete:'#dc2626'}[e.action]||'var(--muted)';
- const entityLabel={customer:'Customer',dog:'Dog',appointment:'Appointment',invoice:'Invoice',subscription:'Subscription',visit:'Visit',groomer_block:'Block'}[e.entity_type]||e.entity_type;
+ const entityLabel={customer:'Customer',dog:'Dog',appointment:'Appointment',invoice:'Invoice',subscription:'Subscription',visit:'Visit',groomer_block:'Block',task:'Task'}[e.entity_type]||e.entity_type;
  let changesHTML='';
  if(e.action==='update'&&e.changes&&Object.keys(e.changes).length>0){
   const rows=Object.entries(e.changes).map(([field,c])=>{
@@ -2542,16 +2766,12 @@ function renderAuditFooter(entity_type, entity_id){
 
 function appointmentAuditActor(e){
  if(e?._actorLabel) return e._actorLabel;
- const admin=adminUsers.find(function(u){
-  return u.id===e?.user_id||String(u.email||'').toLowerCase()===String(e?.user_email||'').toLowerCase();
- });
- return admin?.name||admin?.email||e?.user_email||(e?.user_id?(window._adminEmails?.[e.user_id]||'Admin'):'System');
+ return historyActorEmail(e?.user_id,e?.user_email);
 }
 
 function appointmentActorFromUserId(userId,emptyLabel){
  if(!userId) return emptyLabel||'Not recorded';
- const admin=adminUsers.find(function(u){return String(u.id)===String(userId)});
- return admin?.name||admin?.email||window._adminEmails?.[userId]||'Admin';
+ return historyActorEmail(userId);
 }
 
 function appointmentAuditKey(apptIds){
@@ -3152,6 +3372,8 @@ function sw(tab,options={}) {
  // Auto-refresh only on calendar tab
  if(tab==='calendar'){ startCalAutoRefresh(); } else { stopCalAutoRefresh(); }
  if(tab==='dashboard') renderDashboard();
+ if(tab==='tasks') renderTasks();
+ if(_authReady&&(tab==='tasks'||tab==='dashboard'))loadTasks();
  if(tab==='database'){
   if(restoring) swSub(nav.database||'cust');
   else renderCusts();
@@ -3220,9 +3442,10 @@ async function loadAll() {
  complaints=cmr.data||[];
  capitalInjections=cir.data||[];
  expenses=expr.data||[];
+ await loadTasks();
  // Batch O.6 — admin email lookup cache for edit-history display
  window._adminEmails={};
- adminUsers.forEach(a=>{window._adminEmails[a.id]=a.email||a.name||'admin'});
+ adminUsers.forEach(a=>{window._adminEmails[a.id]=a.email||'Email not recorded'});
  if(psr.data) payrollSettings={...payrollSettings,...psr.data};
  // Backfill defaults for rows created before styling/botak incentives existed
  if(payrollSettings.styling_incentive==null) payrollSettings.styling_incentive=20000;
@@ -3257,6 +3480,7 @@ function rebuildDropdowns(){
 
 // ===== Perf: targeted refetch — only the tables a save touched (was: full 17-table loadAll) =====
 const TABLE_FETCHERS={
+ crm_tasks:async function(){await loadTasks();},
  customers:async function(){const r=await db.from('customers').select('*').order('created_at',{ascending:false});custs=r.data||[];},
  dogs:async function(){const r=await db.from('dogs').select('*').order('created_at',{ascending:false});dogs=r.data||[];},
  visits:async function(){const r=await db.from('visits').select('*,dogs(name,size)').order('visited_at',{ascending:false});visits=r.data||[];},
@@ -3266,7 +3490,7 @@ const TABLE_FETCHERS={
  business_settings:async function(){const r=await db.from('business_settings').select('*').eq('id',1).single();bankSettings=r.data||{};applyCfg();},
  tokens:async function(){const r=await db.from('tokens').select('*').order('created_at',{ascending:false});tokens=r.data||[];},
  subscriptions:async function(){const r=await db.from('subscriptions').select('*').order('created_at',{ascending:false});subscriptions=r.data||[];},
- admin_users:async function(){const r=await db.from('admin_users').select('*').order('created_at',{ascending:false});adminUsers=r.data||[];window._adminEmails={};adminUsers.forEach(function(a){window._adminEmails[a.id]=a.email||a.name||'admin'});},
+ admin_users:async function(){const r=await db.from('admin_users').select('*').order('created_at',{ascending:false});adminUsers=r.data||[];window._adminEmails={};adminUsers.forEach(function(a){window._adminEmails[a.id]=a.email||'Email not recorded'});},
  audit_log:async function(){const r=await db.from('audit_log').select('*').order('created_at',{ascending:false}).limit(500);auditEntries=r.data||[];},
  groomer_blocks:async function(){const r=await db.from('groomer_blocks').select('*').order('block_date',{ascending:false});groomerBlocks=r.data||[];},
  complaints:async function(){const r=await db.from('complaints').select('*').order('complaint_date',{ascending:false});complaints=r.data||[];},
@@ -3300,6 +3524,7 @@ function refreshActiveView(){
   const subActive=(scope,prefix)=>document.querySelector(scope+' .subtab.active')?.id?.replace(prefix,'');
   if(activeTab==='dashboard') renderDashboard();
   else if(activeTab==='database'){ const dbsub=subActive('#sec-database','stab-'); if(dbsub==='dogs') renderDogsTable(); else if(dbsub==='onboarding') renderOnboarding(); else renderCusts(); }
+  else if(activeTab==='tasks') renderTasks();
   else if(activeTab==='calendar') renderCal();
   else if(activeTab==='groomers'){ 
    const sub=subActive('#sec-groomers','gtab-');
@@ -15224,7 +15449,7 @@ function renderHistoryTab(){
   if(entityFilter&&e.entity_type!==entityFilter) return false;
   if(actionFilter&&e.action!==actionFilter) return false;
   if(search){
-   const blob=`${e.entity_label||''} ${e.user_email||''} ${e.entity_type} ${e.action}`.toLowerCase();
+   const blob=`${e.entity_label||''} ${historyActorEmail(e.user_id,e.user_email)} ${e.entity_type} ${e.action}`.toLowerCase();
    if(!blob.includes(search)) return false;
   }
   return true;
@@ -15691,6 +15916,7 @@ function dashboardSourceROI(period){
 }
 
 function renderDashboard(){
+ renderDashboardTasks();
  const period=getDashboardPeriod();
  const lbl=document.getElementById('dash-period-lbl');
  if(lbl) lbl.textContent=`${period.label} \u00B7 ${fmtD(period.start)} \u2014 ${fmtD(period.end)}`;
