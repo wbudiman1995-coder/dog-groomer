@@ -89,7 +89,7 @@ body.auth-blocked .nav,body.auth-blocked .page,body.auth-blocked .overlay{displa
 .btn-d:hover{background:#f9d7d3}
 .btn-b{background:var(--blue-t);color:#fff}.btn-b:hover{background:#1740b8}
 .appt-status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle}
-.dot-pending{background:#dc2626}.dot-confirmed{background:#3b82f6}.dot-done{background:var(--green)}
+.dot-pending{background:var(--primary)}.dot-confirmed{background:#3b82f6}.dot-done{background:var(--green)}
 .btn-sm{min-height:34px;padding:0 12px;font-size:var(--fs-label);font-weight:600;border-radius:8px}
 .card{background:var(--surface);border:1px solid var(--border-subtle);border-radius:var(--rl);box-shadow:var(--sh);padding:1.25rem}
 .toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border-subtle)}
@@ -208,6 +208,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 .appt-block.src-free{background:#d1fae5!important;border-left-color:#059669!important;color:#065f46!important}
 /* Placeholder status takes priority over groomer and session-source colors. */
 .appt-block.appt-placeholder{background:#fee2e2!important;border-left-color:#dc2626!important;color:#991b1b!important}
+.appt-block.appt-placeholder .dot-pending{background:#dc2626}
 .ab-placeholder-label{display:inline-block;font-size:9px;line-height:1.2;font-weight:700;margin-left:4px;color:#991b1b}
 .appt-block.mass-selected{outline:2px solid var(--primary);outline-offset:1px;z-index:3}
 .cal-groomer-tab{padding:7px 15px;border-radius:20px;border:1.5px solid var(--border);font-size:var(--fs-label);font-weight:600;cursor:pointer;transition:all .12s;background:var(--surface);color:var(--text);min-height:36px}
@@ -4454,14 +4455,14 @@ function apptAreaOf(a){
 let calKotaHi=''; // highlighted kota ('' = none)
 function setKotaHi(k){ calKotaHi=(!k||calKotaHi===k)?'':k; renderCal(); }
 
-// Keep placeholder/confirmed/done runs separate in calendar blocks, while
+// Keep explicitly marked placeholder runs separate in calendar blocks, while
 // preserving household grouping elsewhere (reminders, attendance, etc.).
 function calendarAppointmentGroups(list){
  const result=[];
  groupConsecutiveAppts(list).forEach(group=>{
   let run=[];
   group.forEach(a=>{
-   if(run.length&&run[0].status!==a.status){result.push(run);run=[];}
+   if(run.length&&isApptPlaceholder(run[0])!==isApptPlaceholder(a)){result.push(run);run=[];}
    run.push(a);
   });
   if(run.length)result.push(run);
@@ -4599,7 +4600,7 @@ function renderCal(){
     const totalDur=group.reduce((s,x)=>s+(x.duration_mins||60),0);
     const top=Math.max(0,((sm-SSTART)/SSTEP)*SH);
     const ht=Math.max((totalDur/SSTEP)*SH-2,22);
-    const isPlaceholder=a.status==='pending';
+    const isPlaceholder=isApptPlaceholder(a);
     const placeholderClass=isPlaceholder?' appt-placeholder':'';
     const placeholderLabel=isPlaceholder?'<span class="ab-placeholder-label">Placeholder</span>':'';
     const col=isPlaceholder?'#dc2626':a.status==='confirmed'?'#3b82f6':a.status==='done'?'#16a34a':(g.color||'#16a34a');
@@ -5089,9 +5090,17 @@ function getApptTransportFee(apptOrNote){
  APPT_TRANSPORT_FEE_RE.lastIndex=0;
  return fee;
 }
+function isApptPlaceholder(appt){
+ return !!appt&&appt.status==='pending'&&/(?:^|\n)\[\[HP_PLACEHOLDER:1\]\](?=\n|$)/.test(appt.admin_note||'');
+}
+function withApptPlaceholder(note,marked){
+ const clean=String(note||'').replace(/(?:^|\n)\[\[HP_PLACEHOLDER:1\]\](?=\n|$)/g,'\n').trim();
+ return [clean,marked?'[[HP_PLACEHOLDER:1]]':''].filter(Boolean).join('\n')||null;
+}
 function cleanApptAdminNote(note){
  APPT_TRANSPORT_FEE_RE.lastIndex=0;
  const clean=(note||'').replace(APPT_TRANSPORT_FEE_RE,'\n')
+  .replace(/(?:^|\n)\[\[HP_PLACEHOLDER:1\]\](?=\n|$)/g,'\n')
   .replace(/(?:^|\n)\[\[HP_RECURRENCE:[a-zA-Z0-9-]+:\d+\]\](?=\n|$)/g,'\n')
   .replace(/(?:^|\n)\[\[HP_SUBSCRIPTION:[^\]\n]+\]\](?=\n|$)/g,'\n')
   .replace(/(?:^|\n)\[\[HP_SUBS_SOURCE:[^\]\n]+\]\](?=\n|$)/g,'\n')
@@ -6722,10 +6731,10 @@ async function saveApptImpl(){
    appt_time:m2t(cursor)+':00',service_base:ds.svc,duration_mins:dur,
    appt_note:dogNote+(wiz.dogSvcs.length>1?` (${i+1}/${wiz.dogSvcs.length})`:''),
    customer_note:custNote,
-   admin_note:withApptSubscription(
+   admin_note:withApptPlaceholder(withApptSubscription(
     withApptRecurrence(storedAdminNote,newSeries||getApptRecurrence(appts.find(a=>a.id===(ds.apptId||wiz.editId)))),
     bookingSubs[ds.did]?{id:bookingSubs[ds.did].id,source:bookingSubs[ds.did].source_invoice||null}:apptSubscriptionMeta(appts.find(a=>a.id===(ds.apptId||wiz.editId)))
-   ),
+   ),wiz.editId?isApptPlaceholder(appts.find(a=>a.id===(ds.apptId||wiz.editId))):newBookingStatus==='pending'),
    session_note:sessionNote,
    appt_disc_type:dogDiscType,
    appt_disc_value:dogDiscValue,
@@ -6806,7 +6815,7 @@ async function saveApptImpl(){
       service_base:ds.svc,duration_mins:getWizDogDur(ds),
       appt_note:dogNote,appt_disc_type:dogDiscType||null,appt_disc_value:dogDiscValue,
       appt_disc_by_category:discByCategory,
-      customer_note:custNote,admin_note:withApptSubscription(withApptRecurrence(storedAdminNote,getApptRecurrence(oldGroupRec)),apptSubscriptionMeta(oldGroupRec)),session_note:sessionNote,...editStamp()
+      customer_note:custNote,admin_note:withApptPlaceholder(withApptSubscription(withApptRecurrence(storedAdminNote,getApptRecurrence(oldGroupRec)),apptSubscriptionMeta(oldGroupRec)),isApptPlaceholder(oldGroupRec)),session_note:sessionNote,...editStamp()
      };
      // Only rescheduled dogs move in time
      if(!wiz.rescheduleSet||wiz.rescheduleSet.has(eid)){
