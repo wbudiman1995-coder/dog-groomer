@@ -212,7 +212,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 
  <div class="content" id="content"><div class="loader"><span class="spin"></span>Loading schedule…</div></div>
 
- <div class="footer">HomePaw — Jadwal grooming, read-only.<br/>Bookmark this page on your phone. Refresh untuk update.</div>
+ <div class="footer">HomePaw — Jadwal grooming, read-only.<br/>Bookmark this page on your phone. Refresh untuk update.<br/>Versi 2026.10.24-work-v1</div>
 </div>
 
 <div id="gate" class="gate" style="display:none">
@@ -241,7 +241,10 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 <script>
 const SUPABASE_URL="https://cwqrpslypcjgjuxagglc.supabase.co";
 const SUPABASE_ANON="sb_publishable_z7OIHRFpPcFic3udtI_BKA_9eam1nvv";
-const db=supabase.createClient(SUPABASE_URL,SUPABASE_ANON);
+// Groomer links authenticate with their own token, independently of CRM browser sessions.
+const db=supabase.createClient(SUPABASE_URL,SUPABASE_ANON,{
+ auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}
+});
 
 let currentGroomer=null;
 const SHOW_MY_PAY=false; // flip true setelah admin publish + angka diverifikasi
@@ -388,7 +391,6 @@ function renderMyPay(){
 // 26th, but reads the real configured value so it never drifts out of sync).
 // Counts only (no money) — separate from the admin-published pay card above.
 let monthStats={dogs:0,styling:0,botak:0};
-let cycleStartDay=26;
 let monthStatsState={loading:false,loaded:false,error:'',updatedAt:'',groomerId:null,start:'',end:''};
 let monthStatsRequest=null,monthStatsRequestGroomer=null,monthStatsRequestSeq=0;
 let groomerRefreshRequest=null,lastGroomerRefreshAt=0;
@@ -413,18 +415,6 @@ async function counterRequest(makeQuery,timeoutMs=12000){
   return await Promise.race([Promise.resolve(query),deadline]);
  }finally{clearTimeout(timer);}
 }
-async function loadCycleStartDay(){
- const {data,error}=await counterRequest(()=>db.from('payroll_settings').select('cycle_start_day').eq('id',1).maybeSingle());
- if(error)throw error;
- const configured=data?.cycle_start_day;
- const day=configured==null?26:Number(configured);
- if(!Number.isInteger(day)||day<1||day>28)throw new Error('Invalid payroll cycle setting');
- cycleStartDay=day;
-}
-function currentCycleStart(){
- const [y,m,d]=statsTodayIso().split('-').map(Number);
- return d>=cycleStartDay?new Date(y,m-1,cycleStartDay):new Date(y,m-2,cycleStartDay);
-}
 function counterErrorText(error){
  if(error?.code==='COUNTER_TIMEOUT')return 'Koneksi terlalu lama. Coba lagi.';
  if(error?.code==='42501'||error?.status===401||error?.status===403)return 'Akses data belum berhasil. Hubungi admin jika tetap terjadi.';
@@ -433,65 +423,39 @@ function counterErrorText(error){
 async function loadMonthStats(){
  const gid=currentGroomer?.id;if(!gid)return;
  if(monthStatsRequest&&monthStatsRequestGroomer===gid)return monthStatsRequest;
- const seq=++monthStatsRequestSeq;
- monthStatsRequestGroomer=gid;
- if(monthStatsState.groomerId!==gid){
-  monthStats={dogs:0,styling:0,botak:0};
-  monthStatsState={loading:true,loaded:false,error:'',updatedAt:'',groomerId:gid,start:'',end:''};
- }else{monthStatsState.loading=true;monthStatsState.error='';}
+ const seq=++monthStatsRequestSeq;monthStatsRequestGroomer=gid;
+ if(monthStatsState.groomerId!==gid){monthStats={dogs:0,styling:0,botak:0};monthStatsState={loading:true,loaded:false,error:'',updatedAt:'',groomerId:gid,start:'',end:''};}
+ else{monthStatsState.loading=true;monthStatsState.error='';}
  renderMonthStats();
  const request=(async()=>{
   try{
-   await loadCycleStartDay();
-   const start=iso(currentCycleStart()),end=statsTodayIso();
-   const allInvoices=[];
-   // Keep the existing invoice-header assignment rule pending the approved
-   // multi-groomer attribution design. Page results rather than truncating.
-   for(let offset=0;;offset+=500){
-    const {data,error}=await counterRequest(()=>db.from('invoices').select('id,dogs')
-     .eq('groomer_id',gid).gte('invoice_date',start).lte('invoice_date',end)
-     .order('id').range(offset,offset+499));
-    if(error)throw error;
-    if(!Array.isArray(data))throw new Error('Invalid counter response');
-    allInvoices.push(...data);
-    if(data.length<500)break;
-   }
-   const counts={dogs:0,styling:0,botak:0};
-   allInvoices.forEach(inv=>{
-    const lines=Array.isArray(inv.dogs)?inv.dogs:[];
-    if(lines.some(d=>d&&(d.advance||d.invoice_kind==='package_sale')))return;
-    lines.forEach(d=>{
-     const svcs=(Array.isArray(d?.services)?d.services:[]).map(s=>String(s?.name||'').trim().toLowerCase());
-     if(svcs.includes('basic grooming'))counts.dogs++;
-     if(svcs.includes('styling'))counts.styling++;
-     if(svcs.includes('botak'))counts.botak++;
-    });
-   });
+   const token=parseURL().token;
+   const {data,error}=await counterRequest(()=>db.rpc('hp_groomer_work_counts',{p_groomer_id:gid,p_token:token}));
+   if(error)throw error;
+   if(!data||!['dogs','dog_units','styling','botak'].every(k=>Number.isFinite(Number(data[k]))&&Number(data[k])>=0)||!data.cycle_start||!data.cycle_end)throw new Error('Invalid verified-work response');
    if(seq!==monthStatsRequestSeq||currentGroomer?.id!==gid)return;
-   monthStats=counts;
-   monthStatsState={loading:false,loaded:true,error:'',updatedAt:new Date().toISOString(),groomerId:gid,start,end};
+   monthStats={dogs:Number(data.dogs),styling:Number(data.styling),botak:Number(data.botak)};
+   monthStatsState={loading:false,loaded:true,error:'',updatedAt:new Date().toISOString(),groomerId:gid,start:data.cycle_start,end:data.cycle_end,dogUnits:Number(data.dog_units),reviewPending:!!data.review_pending};
   }catch(error){
    if(seq!==monthStatsRequestSeq||currentGroomer?.id!==gid)return;
    monthStatsState.loading=false;monthStatsState.error=counterErrorText(error);
-   console.warn('HomePaw dog counter:',error?.code||'COUNT_LOAD_FAILED',error?.message||'Request failed');
-  }finally{
-   if(seq===monthStatsRequestSeq){monthStatsRequest=null;renderMonthStats();}
-  }
+   console.warn('HomePaw verified-work counter:',error?.code||'COUNT_LOAD_FAILED',error?.message||'Request failed');
+  }finally{if(seq===monthStatsRequestSeq){monthStatsRequest=null;renderMonthStats();}}
  })();
- monthStatsRequest=request;
- return request;
+ monthStatsRequest=request;return request;
 }
 function renderMonthStats(){
  const wrap=document.getElementById('stats-wrap');if(!wrap)return;
  const s=monthStatsState;
- const currentPeriod=iso(currentCycleStart())+'|'+statsTodayIso();
- const valuesCurrent=s.loaded&&s.start+'|'+s.end===currentPeriod;
+ const valuesCurrent=s.loaded&&s.end===statsTodayIso();
  const label=s.loaded?new Date(s.start+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric',month:'long'})+' – '+new Date(s.end+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric',month:'long'}):'cycle ini';
  const tile=(n,name)=>`<div style="flex:1;text-align:center;background:var(--subtle);border-radius:8px;padding:8px 4px"><div style="font-size:20px;font-weight:700;color:var(--primary-dk)">${s.loaded?n:'—'}</div><div style="font-size:10px;color:var(--muted)">${name}</div></div>`;
  wrap.style.display='block';
  wrap.innerHTML=`<section style="background:var(--surface);border-radius:10px;padding:12px 14px;margin:12px 12px 0;box-shadow:var(--sh);border:1px solid var(--border)" aria-live="polite" aria-busy="${s.loading}">
   <div style="font-size:10px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Grooming · ${esc(label)}</div>
   <div style="display:flex;gap:8px">${tile(monthStats.dogs,'Anjing digroom')}${tile(monthStats.styling,'Styling')}${tile(monthStats.botak,'Botak')}</div>
+  ${s.loaded?`<p style="font-size:11px;color:var(--muted);margin:8px 0 0">Unit bagi hasil Basic: ${Number(s.dogUnits||0)} · berdasarkan visit + invoice terverifikasi</p>`:''}
+  ${s.reviewPending?'<p role="status" style="font-size:11px;color:var(--yellow);margin:8px 0 0">Sebagian invoice masih menunggu verifikasi admin. Angka ini hanya mencakup pekerjaan yang sudah terverifikasi.</p>':''}
   ${s.loading?'<p style="font-size:11px;color:var(--muted);margin:8px 0 0">Memperbarui jumlah grooming…</p>':''}
   ${s.error?`<div role="alert" style="font-size:12px;color:var(--red);margin-top:8px">${esc(s.error)}${s.loaded?' Angka di atas adalah hasil terakhir'+(valuesCurrent?'.':' dari periode sebelumnya.') :''}<button type="button" onclick="loadMonthStats()" style="display:block;margin-top:8px;border:1px solid var(--border);background:var(--subtle);border-radius:6px;padding:8px 12px;font:inherit;min-height:36px">Coba lagi</button></div>`:''}
   ${s.updatedAt&&!s.loading&&!s.error?`<div style="font-size:10px;color:var(--muted);margin-top:8px">Diperbarui ${esc(new Date(s.updatedAt).toLocaleTimeString('id-ID',{timeZone:'Asia/Jakarta',hour:'2-digit',minute:'2-digit'}))} WIB</div>`:''}
