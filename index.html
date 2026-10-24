@@ -1003,6 +1003,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  </div>
 
  <div id="inv-dogs-services"></div>
+<div id="inv-work-wrap"></div>
 
  <div class="card" style="padding:1rem;margin-bottom:1rem">
  <div class="det-lbl">3. Groomer & tanggal</div>
@@ -1194,7 +1195,8 @@ thead th[onclick]:hover{color:var(--primary-darker)}
     <button class="btn btn-g btn-sm" onclick="openPayrollSettings()">Settings</button>
    </div>
   </div>
-  <div id="payroll-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px"></div>
+  <div id="work-review-queue"></div>
+<div id="payroll-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px"></div>
  </div>
 
  <div class="subsec" id="fsec-expenses">
@@ -1708,6 +1710,13 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 </div>
 <datalist id="task-assignee-options"></datalist>
 
+<div class="overlay" id="ov-work-review"><div class="modal" style="max-width:850px">
+ <button type="button" class="modal-close" onclick="cm('ov-work-review')">×</button>
+ <div class="modal-title" id="work-review-title">Review work</div>
+ <p style="font-size:12px;color:var(--muted)">Review completed visits and groomer shares. Customer charges remain as saved. Paid payroll cannot be rewritten.</p>
+ <div id="work-review-body"></div><p id="work-review-error" role="alert" style="color:var(--red-t);white-space:pre-wrap"></p>
+ <div class="form-actions"><button type="button" class="btn btn-p" id="work-review-save" onclick="saveWorkReview()">Verify assignments</button><button class="btn btn-g" onclick="cm('ov-work-review')">Cancel</button></div>
+</div></div>
 <div class="overlay" id="ov-appt">
  <div class="modal" style="max-width:640px">
   <button class="modal-close" onclick="cm('ov-appt')" title="Close">&#x2715;</button>
@@ -2593,7 +2602,7 @@ const AUDIT_TRACKED_FIELDS={
  customer:['owner','wa','address','kota','kecamatan','source','prefs','gmaps_link','latitude','longitude'],
  dog:['name','breed','size','age','weight','coat','coat_color','prefs','skin_history','customer_id'],
  appointment:['appt_date','appt_time','groomer_id','dog_id','service_base','status','appt_note','groomer_field_note','customer_note','admin_note','session_note','duration_mins','session_source','late_minutes','late_reason','late_waived','actual_duration_mins','appt_disc_type','appt_disc_value','appt_disc_by_category'],
- invoice:['total','subtotal','status','discount_value','discount_amount','is_subscription_billing','due_date','notes'],
+ invoice:['dogs','work_transport_allocations','total','subtotal','status','discount_value','discount_amount','is_subscription_billing','due_date','notes'],
  subscription:['type','status','sessions_total','sessions_used','expires_at'],
  visit:['visited_at','service_type','is_billed_manually','billed_amount','billed_note','note'],
  groomer_block:['block_date','groomer_id','reason','note'],
@@ -3447,6 +3456,7 @@ async function loadAll() {
  capitalInjections=cir.data||[];
  expenses=expr.data||[];
  await loadTasks();
+ await loadWorkLedger();
  // Batch O.6 — admin email lookup cache for edit-history display
  window._adminEmails={};
  adminUsers.forEach(a=>{window._adminEmails[a.id]=a.email||'Email not recorded'});
@@ -3490,7 +3500,7 @@ const TABLE_FETCHERS={
  visits:async function(){const r=await db.from('visits').select('*,dogs(name,size)').order('visited_at',{ascending:false});visits=r.data||[];},
  appointments:async function(){const r=await db.from('appointments').select('*,dogs(name,breed,size,prefs)').order('appt_date').order('appt_time');appts=r.data||[];},
  groomers:async function(){const r=await db.from('groomers').select('*').order('created_at');groomers=r.data||[];},
- invoices:async function(){const r=await db.from('invoices').select('*').order('created_at',{ascending:false});invoices=r.data||[];},
+ invoices:async function(){const r=await db.from('invoices').select('*').order('created_at',{ascending:false});invoices=r.data||[];await loadWorkLedger();},
  business_settings:async function(){const r=await db.from('business_settings').select('*').eq('id',1).single();bankSettings=r.data||{};applyCfg();},
  tokens:async function(){const r=await db.from('tokens').select('*').order('created_at',{ascending:false});tokens=r.data||[];},
  subscriptions:async function(){const r=await db.from('subscriptions').select('*').order('created_at',{ascending:false});subscriptions=r.data||[];},
@@ -4623,9 +4633,8 @@ function renderCal(){
      const locFull=[kec,kota].filter(Boolean).join(', ');
      const locShort=kec||kota;
 	     html+=`<div class="appt-block${placeholderClass}${isMSel?' mass-selected':''}${srcClass}${calKotaHi&&kota!==calKotaHi?' ab-dim':''}" role="button" tabindex="0" title="Drag to move all ${group.length} dogs, or click to edit"
-	      draggable="true"
+	      draggable="${calendarDragEnabled()}"
 	      ondragstart="onDragStart(event,'${dragIds}')" ondragend="onDragEnd(event)"
-	      ontouchstart="onApptTouchStart(event,'${dragIds}')"
       onclick="event.stopPropagation();openGroupEdit([${groupIds}])"
       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();openGroupEdit([${groupIds}])}"
       style="top:${top}px;height:${ht}px;background:${bg};border-left:5px solid ${col};color:${textCol};cursor:pointer">
@@ -4645,9 +4654,8 @@ function renderCal(){
      const locFull=[kec,kota].filter(Boolean).join(', ');
      const locShort=kec||kota;
      html+=`<div class="appt-block${placeholderClass}${isMSel?' mass-selected':''}${srcClass}${calKotaHi&&kota!==calKotaHi?' ab-dim':''}" role="button" tabindex="0" title="Click to edit appointment"
-      draggable="true"
+      draggable="${calendarDragEnabled()}"
       ondragstart="onDragStart(event,'${a.id}')" ondragend="onDragEnd(event)"
-      ontouchstart="onApptTouchStart(event,'${a.id}')"
       onclick="event.stopPropagation();handleApptClick(event,'${a.id}')"
       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();openApptEdit('${a.id}')}"
       style="top:${top}px;height:${ht}px;background:${bg};border-left-color:${col};color:${textCol}">
@@ -4782,6 +4790,7 @@ let _lastDropSlot=null; // {date, gid, m} for drop preview
 let _dropPreviewEl=null;
 
 function onDragStart(e,id){
+ if(!calendarDragEnabled()){e.preventDefault();return;}
  draggedIds=String(id||'').split(',').filter(Boolean);
  draggedId=draggedIds[0]||null;
  e.dataTransfer.effectAllowed='move';
@@ -4830,6 +4839,7 @@ function onDragEnd(e){
 }
 
 function onDragOver(e){
+ if(!calendarDragEnabled())return;
  e.preventDefault();
  e.dataTransfer.dropEffect='move';
  // Move ghost
@@ -4892,6 +4902,7 @@ function _clearDropPreview(){
 }
 
 async function onDrop(e){
+ if(!calendarDragEnabled()){e.preventDefault();return;}
  e.preventDefault();
  if(!draggedId) return;
 	 const moveIds=draggedIds.length?[...draggedIds]:[draggedId];
@@ -4963,79 +4974,7 @@ async function moveAppointmentCombination(ids,newDate,newGroomerId,newStartMins)
 }
 // Batch O — touch reschedule for mobile (long-press → drag)
 let _touchDragState=null;
-function onApptTouchStart(e,apptId){
-	 const touchIds=String(apptId||'').split(',').filter(Boolean);
-	 const primaryId=touchIds[0];
- if(e.touches.length>1) return; // ignore multi-touch
- const touch=e.touches[0];
- const startX=touch.clientX, startY=touch.clientY;
- let longPressTimer=null;
- let activated=false;
- const blockEl=e.target.closest('.appt-block');
- if(!blockEl) return;
-
- longPressTimer=setTimeout(()=>{
-  activated=true;
-	  draggedIds=[...touchIds];
-	  draggedId=primaryId;
-  blockEl.classList.add('dragging');
-  blockEl.style.opacity='.6';
-  if(navigator.vibrate) navigator.vibrate(40);
- },350);
-
- const onMove=(ev)=>{
-  if(!activated){
-   // Cancel long-press if user moved before 350ms (probably scrolling)
-   const t=ev.touches[0];
-   if(Math.abs(t.clientX-startX)>10||Math.abs(t.clientY-startY)>10){
-    clearTimeout(longPressTimer);
-    cleanup();
-   }
-   return;
-  }
-  // While dragging, prevent default scrolling
-  ev.preventDefault();
- };
-
- const onEnd=async(ev)=>{
-  clearTimeout(longPressTimer);
-  if(!activated){
-   // Clean tap (no long-press, no drag) — open the editor directly instead of relying on the ghost click
-   _lastApptTouchOpen=Date.now();
-   cleanup();
-	   if(touchIds.length>1) openGroupEdit(touchIds); else openApptEdit(primaryId);
-   return;
-  }
-  // Find drop target under finger
-  const t=ev.changedTouches[0];
-  const target=document.elementFromPoint(t.clientX,t.clientY);
-  const slot=target?.closest?.('[data-m]');
-  blockEl.classList.remove('dragging');
-  blockEl.style.opacity='';
-  if(slot){
-   const nd=slot.dataset.date,ng=slot.dataset.g,nm=parseInt(slot.dataset.m);
-	   const a=appts.find(x=>x.id===primaryId);
-	   if(a){
-	    await moveAppointmentCombination(touchIds,nd,ng,nm);
-	   }
-  }
-  cleanup();
- };
-
- const cleanup=()=>{
-	  draggedId=null;
-	  draggedIds=[];
-  blockEl.classList.remove('dragging');
-  blockEl.style.opacity='';
-  document.removeEventListener('touchmove',onMove,{passive:false});
-  document.removeEventListener('touchend',onEnd);
-  document.removeEventListener('touchcancel',cleanup);
- };
-
- document.addEventListener('touchmove',onMove,{passive:false});
- document.addEventListener('touchend',onEnd);
- document.addEventListener('touchcancel',cleanup);
-}
+function onApptTouchStart(){return;}
 // Batch O — overlap check helper (used by drag-drop, wizard, mass-move)
 function checkApptOverlap(apptId, newDate, newGroomerId, newStartMins, durationMins){
  const newEnd = newStartMins + (durationMins||60);
@@ -7176,6 +7115,7 @@ async function confirmApptDelete(){
 async function deleteAppointmentWithVisitCheck(apptId,options={}){
  const oldAppt=options.snapshot||appts.find(a=>a.id===apptId);
  if(!oldAppt)return {deleted:false};
+ if(workInvoiceReferencesAppt(oldAppt).length){alert('Appointment/visit ini sudah memiliki invoice dan tidak bisa dihapus.');return {deleted:false};}
  const linkedSub=oldAppt.subs_deducted?(findSubscriptionForAppointment(oldAppt)||subscriptions.find(s=>s.id===options.subscriptionId)):null;
  const dogName=dogs.find(d=>d.id===oldAppt.dog_id)?.name||'?';
  const {data:linkedVisits,error:visitReadError}=await db.from('visits').select('*').eq('dog_id',oldAppt.dog_id).eq('visited_at',oldAppt.appt_date);
@@ -7429,7 +7369,7 @@ function calcGroomerMetrics(groomerId, periodStr){
  const cutoffISO=cutoff?iso(cutoff):'0000-01-01';
  // Filter appts
  const inRange=appts.filter(a=>a.groomer_id===groomerId&&a.appt_date>=cutoffISO&&a.appt_date<=iso(today));
- const completed=inRange.filter(a=>a.appt_date<iso(today)||a.status==='done');
+ const completed=verifiedWorkRows(groomerId,{start:cutoffISO,end:iso(today)}).filter(r=>['basic_share','styling_share','botak_share','other_share'].some(k=>Number(r[k])>0)).map(r=>({...appts.find(a=>a.id===r.job.appointment_id),id:r.job.appointment_id,dog_id:r.job.dog_id,appt_date:r.job.service_date,service_base:(r.job.services||[]).filter(s=>Number(r[({"basic grooming":"basic",styling: "styling",botak: "botak"}[String(s.name).trim().toLowerCase()]||'other')+'_share'])>0).map(s=>s.name).join(' + ')}));
  // Filter blocks
  const allBlocks=groomerBlocks.filter(b=>{
   // Either targeted at this groomer, or null (all-groomers block)
@@ -7480,14 +7420,7 @@ function calcGroomerMetrics(groomerId, periodStr){
  const basicPct=totalCompleted>0?Math.round((svcCount['Basic Grooming']||0)/totalCompleted*100):0;
  const addonsPct=100-basicPct;
 
- // Revenue (sum invoices where groomer_id matches AND invoice_date in range AND status=paid)
- let revenue=0;
- invoices.forEach(inv=>{
-  if(inv.groomer_id!==groomerId) return;
-  if(inv.invoice_date<cutoffISO) return;
-  if(inv.status!=='paid') return;
-  revenue+=inv.total||0;
- });
+ const revenue=verifiedWorkRows(groomerId,{start:cutoffISO,end:iso(today)}).filter(r=>invoices.find(i=>i.id===r.job.invoice_id)?.status==='paid').reduce((n,r)=>n+Number(r.revenue_amount||0),0);
  const avgRevPerSession=totalCompleted>0?Math.round(revenue/totalCompleted):0;
 
  // Lateness is measured per household visit. Missing documentation is tracked
@@ -7524,10 +7457,14 @@ function calcGroomerMetrics(groomerId, periodStr){
 
  // Batch O.15 — documentation rate (proxy for "did groomer document properly")
  // Count invoices linked to this groomer's completed appts where groomer_notes were filled
- const invoicesByGroomer=invoices.filter(inv=>inv.groomer_id===groomerId&&inv.invoice_date>=cutoffISO);
+ const myWork=verifiedWorkRows(groomerId,{start:cutoffISO,end:iso(today)});
+ const invoiceIds=new Set(myWork.map(r=>r.job.invoice_id));
+ const petKeys=new Set(myWork.map(r=>r.job.invoice_id+'|'+r.job.dog_id));
+ const invoicesByGroomer=invoices.filter(inv=>invoiceIds.has(inv.id));
  let invDogsTotal=0,invDogsDocumented=0;
  invoicesByGroomer.forEach(inv=>{
   (inv.dogs||[]).forEach(d=>{
+   if(!petKeys.has(inv.id+'|'+d.dog_id))return;
    invDogsTotal++;
    if(d.groomer_notes&&d.groomer_notes.trim().length>0) invDogsDocumented++;
   });
@@ -7677,6 +7614,7 @@ function renderGroomerReport(){
  const m=calcGroomerMetrics(_grptCurrentId,period);
  const teamAvg=calcTeamAverage(period);
  const body=document.getElementById('grpt-body');
+ if(!workLedgerReady){body.innerHTML='<div role="alert" style="padding:12px">'+esc(workLedgerError||'Verified work is not available. Refresh and retry.')+'</div>';return;}
 
  const cmpHTML=(val,teamVal,suffix='',inverted=false)=>{
   if(teamVal==null) return '';
@@ -7737,8 +7675,9 @@ function renderGroomerReport(){
  </div>`:'<div style="font-size:11px;color:var(--muted);font-style:italic">No completed sessions yet.</div>';
 
  body.innerHTML=`
-  <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${period==='all'?'All time':'Last '+period+' days'} \u00B7 ${m.totalCompleted} completed session${m.totalCompleted!==1?'s':''}</div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${period==='all'?'All time':'Last '+period+' days'} \u00B7 ${m.totalCompleted} verified completed session${m.totalCompleted!==1?'s':''}</div>
 
+  <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Verified work records also supply payroll. Payroll uses its selected cycle and service shares. Unreviewed work is excluded from this report; review it in Financial → Payroll.</div>
   <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:14px 0 8px">Reliability</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
    ${card('Attendance', m.attendancePct+'%', `Available ${m.availDays}d \u00B7 Blocked ${m.blockedDays}d`, cmpHTML(m.attendancePct, teamAvg?.attendancePct, '%'))}
@@ -8525,6 +8464,7 @@ function formatPaymentCheckTime(value){
 }
 
 function resetInvoice(){
+ workFormState={lines:{},transport:null};
  const bnr=document.getElementById('inv-admin-notes-banner'); if(bnr) bnr.style.display='none';
  const sched=document.getElementById('inv-subs-schedule-card'); if(sched) sched.style.display='none';
  invSelectedCust=null; invSelectedDogs=[]; invDogServices={}; invDogNotes={}; invPhotos={}; invAdvanceDogs={}; invEditId=null;
@@ -9688,6 +9628,173 @@ let INV_MODE='visit';
 
 // Business document kind is separate from doc_mode (Invoice vs Service Report).
 // It is stored per dog line to remain compatible with the current JSONB schema.
+/* HomePaw verified work: one household invoice, explicit pet/service ownership. */
+let workJobs=[],workAllocations=[],workReview=[],workGaps=[],workLedgerReady=false,workLedgerError='',workLedgerVersion='';
+let workFormState={lines:{},transport:null},workReviewState=null,workReviewInvoice=null;
+const workVisitBusy=new Set();
+let lastInvoiceGuardError='';
+const WORK_COMPONENTS=['basic','styling','botak','other'];
+function workComponents(services){
+ const names=(services||[]).map(s=>String(s.name||'').trim().toLowerCase());
+ return {basic:names.includes('basic grooming'),styling:names.includes('styling'),botak:names.includes('botak'),other:names.some(n=>!['basic grooming','styling','botak'].includes(n))};
+}
+async function loadWorkLedger(){
+ try{
+  const {data,error}=await db.rpc('hp_admin_work_snapshot');if(error)throw error;
+  if(!data||!['jobs','allocations','review','gaps'].every(k=>Array.isArray(data[k])))throw new Error('Invalid verified-work snapshot');
+  workJobs=data.jobs;workAllocations=data.allocations;workReview=data.review;workGaps=data.gaps;workLedgerVersion=data.version||'';workLedgerReady=true;workLedgerError='';
+ }catch(e){workLedgerReady=false;workLedgerError='Verified work could not be loaded. Ask the owner to check setup, then retry.';console.warn('Work ledger:',e.message);}
+}
+function verifiedWorkRows(gid,cycle){
+ if(!workLedgerReady)return [];
+ const map=new Map(workJobs.filter(j=>j.service_date>=cycle.start&&j.service_date<=cycle.end).map(j=>[j.id,j]));
+ return workAllocations.filter(a=>(!gid||a.groomer_id===gid)&&map.has(a.job_id)).map(a=>({...a,job:map.get(a.job_id)}));
+}
+function verifiedWorkTotals(gid,cycle){
+ const rows=verifiedWorkRows(gid,cycle),sum=k=>rows.reduce((n,a)=>n+Number(a[k]||0),0);
+ return {rows,perDog:sum('basic_amount'),styling:sum('styling_amount'),botak:sum('botak_amount'),transport:sum('transport_amount'),revenue:sum('revenue_amount'),dogUnits:sum('basic_share')/100,stylingUnits:sum('styling_share')/100,botakUnits:sum('botak_share')/100};
+}
+function verifiedWorkItems(gid,cycle){
+ return verifiedWorkRows(gid,cycle).map(r=>{
+  const j=r.job,invoice=invoices.find(i=>i.id===j.invoice_id)||{},dog={...(dogs.find(d=>d.id===j.dog_id)||{}),...((invoice.dogs||[]).find(d=>d.dog_id===j.dog_id)||{}),size:j.dog_size};
+  const appointment={...(appts.find(a=>a.id===j.appointment_id)||{}),id:j.appointment_id,appt_date:j.service_date,groomer_id:gid,dog_id:j.dog_id};
+  return {invoice,dog,appointment,jobKey:j.id,services:(j.services||[]).map(s=>s.name),amount:Number(r.basic_amount),units:Number(r.basic_share)/100,stylingAmount:Number(r.styling_amount),botakAmount:Number(r.botak_amount),transportAmount:Number(r.transport_amount)};
+ });
+}
+function workInvoiceReferencesVisit(v){return invoices.filter(i=>isAfterVisitInvoice(i)&&(i.dogs||[]).some(d=>d.visit_id===v.id||(d.dog_id===v.dog_id&&i.invoice_date===v.visited_at)));}
+function workInvoiceReferencesAppt(a){return invoices.filter(i=>isAfterVisitInvoice(i)&&(i.dogs||[]).some(d=>d.appointment_id===a.id||(d.dog_id===a.dog_id&&i.invoice_date===a.appt_date)));}
+function calendarDragEnabled(){return !(window.matchMedia&&window.matchMedia('(any-pointer: coarse), (max-width: 768px)').matches);}
+function workState(ctx){return ctx==='review'?workReviewState:workFormState;}
+function workSource(ctx){return ctx==='review'?workReviewInvoice:buildInvoiceRecordRaw();}
+function workSeed(rec,state){
+ const saved=invEditId?invoices.find(i=>i.id===invEditId):null;
+ (rec.dogs||[]).forEach(d=>{
+  let current=state.lines[d.dog_id];
+  if(!current||current.date!==rec.invoice_date){
+   const old=rec===workReviewInvoice?d:(saved?.invoice_date===rec.invoice_date?(saved.dogs||[]).find(x=>x.dog_id===d.dog_id):null);
+   const candidates=appts.filter(a=>a.dog_id===d.dog_id&&a.appt_date===rec.invoice_date&&a.status!=='cancelled'&&!isApptPlaceholder(a));
+   const v=visits.filter(v=>v.dog_id===d.dog_id&&v.visited_at===rec.invoice_date);
+   const a=old?.appointment_id?candidates.find(a=>a.id===old.appointment_id):candidates.length===1?candidates[0]:null;
+   const flags=workComponents(d.services);
+   current={date:rec.invoice_date,appointment_id:a?.id||'',visit_id:old?.visit_id|| (v.length===1?v[0].id:''),work_completed:old?.work_completed===true,work_allocations:old?.work_allocations?JSON.parse(JSON.stringify(old.work_allocations)):[{groomer_id:a?.groomer_id||'',...Object.fromEntries(WORK_COMPONENTS.map(k=>[k,flags[k]?100:0]))}]};
+   state.lines[d.dog_id]=current;
+  }
+  const flags=workComponents(d.services);
+  current.work_allocations.forEach(a=>WORK_COMPONENTS.forEach(k=>{if(!flags[k])a[k]=0;else if(current.work_allocations.length===1)a[k]=100;}));
+ });
+ if(state.transport===null){const prior=rec.work_transport_allocations||(saved&&saved.id===rec.id?saved.work_transport_allocations:null);state.transport=prior?JSON.parse(JSON.stringify(prior)):[];}
+}
+function workSet(ctx,did,key,value){
+ const state=workState(ctx);if(!state?.lines[did])return;
+ state.lines[did][key]=value;
+ if(key==='appointment_id')state.lines[did].work_completed=false;
+ if(ctx==='form')renderInvoicePreview();
+}
+function workSetAllocation(ctx,did,index,key,value){const a=workState(ctx)?.lines[did]?.work_allocations[index];if(a)a[key]=key==='groomer_id'?value:Number(value);if(ctx==='form')renderInvoicePreview();}
+function workAddGroomer(ctx,did){workState(ctx).lines[did].work_allocations.push({groomer_id:'',basic:0,styling:0,botak:0,other:0});renderWorkEditor(ctx);}
+function workRemoveGroomer(ctx,did,index){const list=workState(ctx).lines[did].work_allocations;if(list.length>1)list.splice(index,1);renderWorkEditor(ctx);}
+function workTransportSet(ctx,index,key,value){const a=workState(ctx)?.transport[index];if(a)a[key]=key==='groomer_id'?value:Number(value);if(ctx==='form')renderInvoicePreview();}
+async function workRecordVisit(ctx,did){
+ const key=ctx+'|'+did;if(workVisitBusy.has(key))return;
+ const rec=workSource(ctx),d=rec?.dogs.find(d=>d.dog_id===did);if(!rec||!d)return;
+ if(rec.invoice_date>taskTodayIso()){alert('Only record grooming that has actually happened.');return;}
+ if(!d.services?.length){alert('Select the services actually performed before recording the visit.');return;}
+ if(!confirm('Confirm grooming for '+d.name+' was actually completed on '+rec.invoice_date+'?\nThis records completion evidence. A calendar booking alone is not a visit.'))return;
+ workVisitBusy.add(key);
+ try{
+ const {data,error}=await db.from('visits').insert({dog_id:did,visited_at:rec.invoice_date,service_type:(d.services||[]).map(s=>s.name).join(', '),note:'Completion explicitly confirmed by admin before invoice'}).select().single();
+ if(error)throw error;if(!data)throw new Error('Visit was not saved. Refresh and try again.');visits.push(data);
+ const w=workState(ctx).lines[did];w.visit_id=data?.id||'';w.work_completed=true;
+ await logAudit('visit',data?.id,'create',{new:data,label:d.name+' completed '+rec.invoice_date});renderWorkEditor(ctx);
+ }catch(e){alert(e.message);}finally{workVisitBusy.delete(key);}
+}
+function workGroomerOptions(selected){return '<option value="">Select groomer…</option>'+groomers.map(g=>`<option value="${esc(g.id)}" ${g.id===selected?'selected':''}>${esc(g.name)}${g.active?'':' (inactive)'}</option>`).join('');}
+function renderWorkEditor(ctx='form'){
+ const el=document.getElementById(ctx==='review'?'work-review-body':'inv-work-wrap');if(!el)return;
+ const rec=workSource(ctx);if(!rec||invoiceKind(rec)==='package_sale'){el.innerHTML='';return;}
+ const state=workState(ctx);workSeed(rec,state);
+ const rows=rec.dogs.map(d=>{
+  const w=state.lines[d.dog_id],flags=workComponents(d.services);
+  const aps=appts.filter(a=>a.dog_id===d.dog_id&&a.appt_date===rec.invoice_date&&a.status!=='cancelled'&&!isApptPlaceholder(a));
+  const vs=visits.filter(v=>v.dog_id===d.dog_id&&v.visited_at===rec.invoice_date);
+  return `<div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-top:10px"><strong>${esc(d.name||'?')}</strong> · ${esc(rec.invoice_date)}
+   <div class="form-grid" style="margin-top:8px"><div class="fg"><label>Completed visit *</label><select onchange="workSet('${ctx}','${d.dog_id}','visit_id',this.value)"><option value="">Select visit…</option>${vs.map(v=>`<option value="${v.id}" ${w.visit_id===v.id?'selected':''}>${esc(v.visited_at)} · ${esc(v.service_type||'Recorded visit')} · ${esc(v.id.slice(0,8))}</option>`).join('')}</select>${vs.length?'':`<small style="color:var(--red-t)">No visit recorded.</small><button type="button" class="btn btn-g btn-sm" onclick="workRecordVisit('${ctx}','${d.dog_id}')">Record completed visit</button>`}</div>
+   <div class="fg"><label>Exact appointment *</label><select onchange="workSet('${ctx}','${d.dog_id}','appointment_id',this.value)"><option value="">Select appointment…</option>${aps.map(a=>`<option value="${a.id}" ${w.appointment_id===a.id?'selected':''}>${esc((a.appt_time||'').slice(0,5))} · ${esc(groomers.find(g=>g.id===a.groomer_id)?.name||'?')}</option>`).join('')}</select></div></div>
+   <label style="display:flex;gap:8px;align-items:center;margin:10px 0;font-size:12px"><input type="checkbox" ${w.work_completed?'checked':''} onchange="workSet('${ctx}','${d.dog_id}','work_completed',this.checked)"/>I confirm this grooming visit was completed.</label>
+   <div style="overflow:auto"><table style="width:100%;min-width:450px"><thead><tr><th>Groomer</th>${WORK_COMPONENTS.map(k=>`<th>${k==='other'?'Other services':k} %</th>`).join('')}<th></th></tr></thead><tbody>${w.work_allocations.map((a,i)=>`<tr><td><select style="min-width:130px" onchange="workSetAllocation('${ctx}','${d.dog_id}',${i},'groomer_id',this.value)">${workGroomerOptions(a.groomer_id)}</select></td>${WORK_COMPONENTS.map(k=>`<td><input type="number" aria-label="${k} share" min="0" max="100" step="0.01" value="${Number(a[k]||0)}" ${flags[k]?'':'disabled'} style="width:65px" onchange="workSetAllocation('${ctx}','${d.dog_id}',${i},'${k}',this.value)"/></td>`).join('')}<td><button type="button" class="btn btn-g btn-sm" onclick="workRemoveGroomer('${ctx}','${d.dog_id}',${i})">×</button></td></tr>`).join('')}</tbody></table></div>
+   <button type="button" class="btn btn-g btn-sm" style="margin-top:8px" onclick="workAddGroomer('${ctx}','${d.dog_id}')">+ Split with another groomer</button>
+  </div>`;
+ }).join('');
+ const fee=(rec.extra_charges||[]).filter(c=>['transport fee','transport','biaya transport'].includes(String(c.label||'').trim().toLowerCase())).reduce((n,c)=>n+Number(c.amount||0),0);
+ const ids=[...new Set(rec.dogs.flatMap(d=>state.lines[d.dog_id].work_allocations.map(a=>a.groomer_id)).filter(Boolean))];
+ if(!state.transport.length&&ids.length)state.transport=ids.map((id,i)=>({groomer_id:id,share:i===ids.length-1?Number((100-Math.floor(10000/ids.length)/100*(ids.length-1)).toFixed(2)):Math.floor(10000/ids.length)/100}));
+ state.transport=state.transport.filter(a=>ids.includes(a.groomer_id));
+ ids.forEach(id=>{if(!state.transport.some(a=>a.groomer_id===id))state.transport.push({groomer_id:id,share:0});});
+ const summary=ids.map(id=>{const parts={basic:0,styling:0,botak:0};rec.dogs.forEach(d=>state.lines[d.dog_id].work_allocations.filter(a=>a.groomer_id===id).forEach(a=>Object.keys(parts).forEach(k=>parts[k]+=Number(a[k]||0)/100)));return `<div>${esc(groomers.find(g=>g.id===id)?.name||'?')}: ${parts.basic} Basic · ${parts.styling} Styling · ${parts.botak} Botak pay unit(s)</div>`;}).join('');
+ el.innerHTML=`<div class="card" style="margin:12px 0;border-left:4px solid var(--primary)"><strong>Completed work & groomer credit</strong><p style="font-size:12px;color:var(--muted)">One customer invoice. Assign each pet's work to the actual groomer(s). Shares total 100% for each performed service. Basic/Styling/Botak pay uses saved rates; zero-priced covered visits still earn work credit.</p>${rows}<div style="padding:10px;margin-top:10px;background:var(--subtle);font-size:12px"><strong>Credit summary</strong>${summary}</div>${fee>0?`<div style="margin-top:12px"><strong>Staff transport pool: ${fmtRp(Math.round(fee/2))}</strong><p style="font-size:12px">One pool per invoice, shared once. Default shares are equal; check before saving.</p>${state.transport.map((a,i)=>`<div style="display:flex;gap:8px;margin-top:6px"><span style="flex:1">${esc(groomers.find(g=>g.id===a.groomer_id)?.name||'?')}</span><input aria-label="Transport share" type="number" min="0" max="100" step="0.01" value="${a.share}" style="width:80px" onchange="workTransportSet('${ctx}',${i},'share',this.value)"/>%</div>`).join('')}</div>`:''}</div>`;
+}
+function decorateInvoiceWork(rec,state){
+ const errors=[];lastInvoiceGuardError='';
+ const c=custs.find(c=>c.id===rec.customer_id);
+ if(!c?.owner?.trim()||!c?.wa?.trim()||!c?.address?.trim())errors.push('Complete customer name, WhatsApp and address.');
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(rec.invoice_date||'')||!Number.isFinite(Number(rec.total))||Number(rec.total)<0)errors.push('Set a valid invoice date and total.');
+ if((rec.extra_charges||[]).some(x=>!Number.isFinite(Number(x.amount))||Number(x.amount)<0))errors.push('Extra charges must be valid nonnegative amounts.');
+ rec.dogs.forEach(d=>{const pet=dogs.find(p=>p.id===d.dog_id);if(!pet?.name||!pet?.size||pet.customer_id!==rec.customer_id)errors.push('Complete every pet name, size and owner.');});
+ if(invoiceKind(rec)==='package_sale'){
+  if(rec.dogs.some(d=>!d.advance||!Number.isInteger(Number(d.advance.sessions))||Number(d.advance.sessions)<=0))errors.push('Each package pet needs a valid positive number of sessions.');
+ }else{
+  if(rec.invoice_date>taskTodayIso())errors.push('An after-visit invoice cannot be future dated.');
+  workSeed(rec,state);
+  rec.dogs=rec.dogs.map(d=>{
+   const w=state.lines[d.dog_id],flags=workComponents(d.services),pet=dogs.find(x=>x.id===d.dog_id);
+   if(!pet?.size||!pet?.name||pet.customer_id!==rec.customer_id)errors.push(`${d.name}: complete pet name, size and owner.`);
+   const v=visits.find(v=>v.id===w.visit_id&&v.dog_id===d.dog_id&&v.visited_at===rec.invoice_date);
+   const a=appts.find(a=>a.id===w.appointment_id&&a.dog_id===d.dog_id&&a.appt_date===rec.invoice_date&&a.status!=='cancelled'&&!isApptPlaceholder(a));
+   if(!v||!a||!w.work_completed)errors.push(`${d.name}: choose a recorded visit, exact appointment, and confirm grooming completed.`);
+   if(!d.services?.length||d.services.some(s=>!Number.isFinite(Number(s.price))||Number(s.price)<0))errors.push(`${d.name}: select valid services and prices.`);
+   if(!w.work_allocations.length||new Set(w.work_allocations.map(x=>x.groomer_id)).size!==w.work_allocations.length||w.work_allocations.some(x=>!groomers.some(g=>g.id===x.groomer_id)))errors.push(`${d.name}: choose distinct registered groomers.`);
+   WORK_COMPONENTS.forEach(k=>{const vals=w.work_allocations.map(x=>Number(x[k]||0)),sum=vals.reduce((a,b)=>a+b,0);if(vals.some(n=>!Number.isFinite(n)||n<0||n>100||Math.abs(n*100-Math.round(n*100))>.00001)||Math.abs(sum-(flags[k]?100:0))>.00001)errors.push(`${d.name}: ${k} shares must total ${flags[k]?100:0}%.`);});
+   const duplicate=invoices.find(i=>i.id!==rec.id&&isAfterVisitInvoice(i)&&(i.dogs||[]).some(x=>x.visit_id===w.visit_id||x.appointment_id===w.appointment_id||(x.dog_id===d.dog_id&&i.invoice_date===rec.invoice_date)));
+   if(duplicate)errors.push(`${d.name}: already invoiced in ${duplicate.invoice_number}.`);
+   return {...d,...w,work_allocations:w.work_allocations.map(a=>({...a}))};
+  });
+  const fee=(rec.extra_charges||[]).filter(c=>['transport fee','transport','biaya transport'].includes(String(c.label||'').trim().toLowerCase())).reduce((n,c)=>n+Number(c.amount||0),0);
+  const ids=new Set(rec.dogs.flatMap(d=>d.work_allocations.map(a=>a.groomer_id)));
+  if(fee>0&&(Math.abs((state.transport||[]).reduce((n,a)=>n+Number(a.share),0)-100)>.00001||new Set((state.transport||[]).map(a=>a.groomer_id)).size!==state.transport.length||(state.transport||[]).some(a=>!ids.has(a.groomer_id)||!Number.isFinite(Number(a.share))||Number(a.share)<0)))errors.push('Allocate the one transport pool to working groomers; shares total 100%.');
+  rec.work_schema_version=1;rec.work_transport_allocations=fee>0?state.transport:[];
+  rec.groomer_name=[...ids].map(id=>groomers.find(g=>g.id===id)?.name).filter(Boolean).join(', ');
+ }
+ lastInvoiceGuardError=[...new Set(errors)].join('\n');return errors.length?null:rec;
+}
+function buildInvoiceRecord(options={}){
+ const rec=buildInvoiceRecordRaw();if(!rec)return null;
+ const checked=decorateInvoiceWork(rec,workFormState);
+ if(!checked&&!options.preview)alert('Invoice belum bisa dibuat:\n\n'+lastInvoiceGuardError);
+ return checked;
+}
+function openWorkReview(id){
+ const inv=invoices.find(i=>i.id===id);if(!inv)return;
+ workReviewInvoice=JSON.parse(JSON.stringify(inv));workReviewState={lines:{},transport:null};
+ document.getElementById('work-review-title').textContent='Review work · '+inv.invoice_number;
+ document.getElementById('work-review-error').textContent='';renderWorkEditor('review');om('ov-work-review');
+}
+async function saveWorkReview(){
+ const button=document.getElementById('work-review-save');if(button.disabled)return;
+ const rec=decorateInvoiceWork(JSON.parse(JSON.stringify(workReviewInvoice)),workReviewState);
+ if(!rec){document.getElementById('work-review-error').textContent=lastInvoiceGuardError;return;}
+ button.disabled=true;
+ try{
+  const {error}=await db.rpc('hp_review_invoice_work',{p_invoice_id:rec.id,p_lines:rec.dogs,p_transport:rec.work_transport_allocations});if(error)throw error;
+  await reloadTables('invoices');cm('ov-work-review');renderPayroll();showToast('Work assignments verified.','success');
+ }catch(e){document.getElementById('work-review-error').textContent=e.message;}finally{button.disabled=false;}
+}
+function renderWorkReviewQueue(cycle){
+ const el=document.getElementById('work-review-queue');if(!el)return;
+ const pending=workReview.filter(r=>r.invoice_date>=cycle.start&&r.invoice_date<=cycle.end);
+ const gaps=workGaps.filter(g=>g.service_date>=cycle.start&&g.service_date<=cycle.end);
+ el.innerHTML=!workLedgerReady?`<div class="card" role="alert">${esc(workLedgerError||'Loading verified work…')}<button class="btn btn-g" onclick="loadWorkLedger().then(renderPayroll)">Retry</button></div>`:pending.length||gaps.length?`<div class="card" style="border-left:4px solid var(--red-solid);margin-bottom:16px"><strong>${pending.length} invoice(s) need review; ${gaps.length} recorded/completed appointment(s) lack verified invoice work. Reconcile before payout.</strong><p>Totals below include verified work only. Check actual visits and invoice assignments; do not guess from the calendar or invoice header.</p>${pending.map(r=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0"><span>${esc(r.invoice_number)} · ${esc(r.owner_name||'')} · ${esc(r.invoice_date)}</span><button class="btn btn-g btn-sm" onclick="openWorkReview('${r.invoice_id}')">Review work</button></div>`).join('')}${gaps.map(g=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0"><span>${esc(g.service_date)} · ${esc(dogs.find(d=>d.id===g.dog_id)?.name||'?')} · ${esc(groomers.find(x=>x.id===g.groomer_id)?.name||'?')}</span><button class="btn btn-g btn-sm" onclick="openApptEdit('${g.appointment_id}')">Open booking</button></div>`).join('')}</div>`:'<p style="font-size:12px;color:var(--green-dk)">Work reconciled for this cycle. Job pay uses verified visits + invoice allocations; calendar bookings alone are excluded.</p>';
+}
+
 function invoiceKind(inv){
  const lines=inv?.dogs||[];
  const explicit=lines.find(d=>d.invoice_kind)?.invoice_kind;
@@ -9699,17 +9806,9 @@ function invoiceKind(inv){
 function isAfterVisitInvoice(inv){return invoiceKind(inv)==='after_visit'}
 function invoiceDogHasBasic(d){return (d?.services||[]).some(s=>String(s.name||'').trim().toLowerCase()==='basic grooming')}
 function linkedAppointmentForInvoiceDog(inv,d){
- if(d?.appointment_id){
-  const exact=appts.find(a=>a.id===d.appointment_id);
-  if(exact) return exact;
- }
- const candidates=appts.filter(a=>a.dog_id===d?.dog_id&&a.appt_date===inv?.invoice_date);
- return candidates.sort((a,b)=>{
-  const aGr=inv?.groomer_id&&a.groomer_id===inv.groomer_id?1:0;
-  const bGr=inv?.groomer_id&&b.groomer_id===inv.groomer_id?1:0;
-  const aDone=a.status==='done'?1:0, bDone=b.status==='done'?1:0;
-  return (bGr+bDone)-(aGr+aDone);
- })[0]||null;
+ if(d?.appointment_id)return appts.find(a=>a.id===d.appointment_id&&a.dog_id===d.dog_id&&a.appt_date===inv.invoice_date)||null;
+ const candidates=appts.filter(a=>a.dog_id===d?.dog_id&&a.appt_date===inv?.invoice_date&&a.status!=='cancelled');
+ return candidates.length===1?candidates[0]:null;
 }
 function setInvMode(mode){
  INV_MODE=mode;
@@ -9946,7 +10045,7 @@ function recalcInvoice(){
  renderInvoicePreview();
 }
 
-function buildInvoiceRecord(){
+function buildInvoiceRecordRaw(){
  if(!invSelectedCust){alert('Pilih customer dulu');return null}
  if(!invSelectedDogs.length){alert('Pilih minimal 1 dog');return null}
  // Session E — Package mode: strip services (no basic-grooming line items on package invoices)
@@ -10052,29 +10151,8 @@ function buildInvoiceRecord(){
 }
 
 async function saveVisitsFromInvoice(rec){
- // A package/subscription sale is payment for future work, never a completed visit.
- if(!rec.dogs?.length||!isAfterVisitInvoice(rec)) return;
- const date=rec.invoice_date||iso(new Date());
- const existingKeys=new Set(visits.map(v=>v.dog_id+'::'+v.visited_at));
- const rows=rec.dogs
-  .filter(d=>{
-   const a=linkedAppointmentForInvoiceDog(rec,d);
-   return d.dog_id&&a?.status==='done'&&!existingKeys.has(d.dog_id+'::'+date);
-  })
-  .map(d=>({
-   dog_id:d.dog_id,
-   visited_at:date,
-   service_type:d.services?.map(s=>s.name).join(', ')||null,
-   note:d.groomer_notes||null
-  }));
- // Batch O.6 — also bump last_groomed_at for each dog
- for(const d of rec.dogs){
-  const a=linkedAppointmentForInvoiceDog(rec,d);
-  if(d.dog_id&&a?.status==='done') await bumpDogLastGroomed(d.dog_id,date);
- }
- if(!rows.length) return;
- const {error}=await db.from('visits').insert(rows);
- if(error) console.error('Visit log error:',error.message);
+ // Visits must pre-exist. The database validates and locks their exact IDs.
+ return;
 }
 
 function stripRecForDB(rec){
@@ -10264,6 +10342,7 @@ async function saveInvoice(){
 }
 
 async function saveInvoiceAndAppts(){
+ if(invEditId){await saveInvoice();return;}
  // Session C item 5: disable buttons during save + flip to edit mode after CREATE
  const btn1=document.getElementById('inv-save-btn');
  const btn2=document.getElementById('inv-save-appts-btn');
@@ -10784,8 +10863,9 @@ function _renderInvoicePreviewNow(){
   const hint=document.getElementById('inv-doc-mode-hint'); if(hint) hint.textContent='';
   return;
  }
- const rec=buildInvoiceRecord();
- if(!rec){el.innerHTML='';return}
+ renderWorkEditor('form');
+ const rec=buildInvoiceRecord({preview:true});
+ if(!rec){el.innerHTML='<div role="status" style="padding:16px;color:var(--red-t);white-space:pre-wrap">'+esc(lastInvoiceGuardError)+'</div>';return}
  // Batch O.16 — show detected mode hint
  const mode=detectInvoiceMode(rec);
  const explicit=rec.doc_mode&&rec.doc_mode!=='auto';
@@ -11647,7 +11727,8 @@ async function delInvoice(id,num){
  }
  if(!confirm(`Delete invoice ${num}?`)) return;
  const oldRec=invoices.find(i=>i.id===id);
- await db.from('invoices').delete().eq('id',id);
+ const {data:deletedInvoice,error:invoiceDeleteError}=await db.from('invoices').delete().eq('id',id).select('id');
+ if(invoiceDeleteError||!deletedInvoice?.length){alert(invoiceDeleteError?.message||'Invoice was not deleted. Refresh and review.');return;}
  await logAudit('invoice',id,'delete',{old:oldRec,label:num+' — '+(oldRec?.owner_name||'')});
  await reloadTables('invoices','tokens','subscriptions','visits'); renderFinancial();
 }
@@ -13004,7 +13085,7 @@ async function autoLogPastAppointments(){
  const today=iso(new Date());
  if(_lastHistoryCheck===today)return;
  _lastHistoryCheck=today;
- const pastAppts=appts.filter(a=>a.appt_date<today&&a.status!=='cancelled');
+ const pastAppts=appts.filter(a=>a.appt_date<today&&a.status==='done'&&!isApptPlaceholder(a));
  if(!pastAppts.length)return;
  // Log visits. Dedup within this batch too — a dog double-booked twice on the
  // same past date must still only get ONE visit row, not one per appointment.
@@ -14390,54 +14471,14 @@ function payrollNextCycle(){
 }
 
 function computeGroomerDogsInCycle(groomerId,cycle){
- const sizes={XS:0,Small:0,Medium:0,Large:0,XL:0,Cat:0,Unknown:0};
- let totalAmount=0;
- let botakCount=0; // jobs whose services include Botak (basic or botak-only)
- let transportTotal=0, transportCount=0; // ½ of transport fee, once per invoice
- const counted=[];
- const countedJobs=new Set();
- const rate=payrollSettings.rate_per_dog||20000;
- // The after-visit invoice is the completion evidence for payroll. Appointment
- // status is not required because legacy/admin flows often leave it pending or
- // confirmed even after the invoice is issued. Package/subscription-sale
- // invoices never enter this calculation; cancelled appointments stay excluded.
- // Non-basic jobs (no Basic Grooming) are NOT paid per-dog — only their Botak
- // incentive applies; everything else about them is out of payroll.
- invoices.forEach(inv=>{
-  if(!isAfterVisitInvoice(inv)) return;
-  let invHasJob=false, invTransport=0;
-  (inv.dogs||[]).forEach(d=>{
-   const a=linkedAppointmentForInvoiceDog(inv,d);
-   if(!a||a.status==='cancelled'||a.groomer_id!==groomerId) return;
-   const jobDate=a.appt_date||inv.invoice_date;
-   if(!jobDate||jobDate<cycle.start||jobDate>cycle.end) return;
-   const jobKey=a.id||jobDate+'|'+d.dog_id+'|'+groomerId;
-   if(countedJobs.has(jobKey)) return;
-   countedJobs.add(jobKey);
-   const services=(d.services||[]).map(s=>s.name).filter(Boolean);
-   const item={invoice:inv,dog:d,appointment:a,jobKey,services};
-   const hasBotak=services.includes('Botak');
-   if(invoiceDogHasBasic(d)){
-    const sz=d.size||dogs.find(x=>x.id===d.dog_id)?.size||'Unknown';
-    sizes[sz]=(sizes[sz]||0)+1;
-    totalAmount+=rate;
-    counted.push(item);
-    if(hasBotak) botakCount++;
-   } else if(hasBotak){
-    // Botak-only job: incentive only, no per-dog rate
-    botakCount++;
-   }
-   invHasJob=true;
-   invTransport=Math.max(invTransport,getApptTransportFee(a));
-  });
-  // Transport fee is per booking, not per dog — count ½ once per invoice
-  if(invHasJob&&invTransport>0){
-   transportCount++;
-   transportTotal+=Math.round(invTransport/2);
-  }
+ const t=verifiedWorkTotals(groomerId,cycle),sizes={XS:0,Small:0,Medium:0,Large:0,XL:0,Cat:0,Unknown:0};
+ const counted=t.rows.filter(r=>Number(r.basic_share)>0).map(r=>{
+  const j=r.job,invoice=invoices.find(i=>i.id===j.invoice_id)||{},dog=(invoice.dogs||[]).find(d=>d.dog_id===j.dog_id)||dogs.find(d=>d.id===j.dog_id)||{};
+  const appointment={...(appts.find(a=>a.id===j.appointment_id)||{}),id:j.appointment_id,appt_date:j.service_date,groomer_id:groomerId,dog_id:j.dog_id};
+  const units=Number(r.basic_share)/100;sizes[j.dog_size||'Unknown']=(sizes[j.dog_size||'Unknown']||0)+units;
+  return {invoice,dog,appointment,jobKey:j.id,services:(j.services||[]).map(s=>s.name),amount:Number(r.basic_amount),units};
  });
- const total=Object.values(sizes).reduce((s,n)=>s+n,0);
- return {sizes,total,totalAmount,counted,rate,botakCount,transportTotal,transportCount};
+ return {sizes,total:t.dogUnits,totalAmount:t.perDog,counted,allItems:verifiedWorkItems(groomerId,cycle),rate:payrollSettings.rate_per_dog||20000,botakCount:t.botakUnits,botakAmount:t.botak,transportTotal:t.transport,transportCount:new Set(t.rows.filter(r=>Number(r.transport_amount)>0).map(r=>r.job.invoice_id)).size};
 }
 
 // ===== Compensation engine (per-worker) =====
@@ -14508,19 +14549,8 @@ function groomerWeeklyPaidDays(g,cycle){
  return Object.values(workedByWeek).reduce((sum,n)=>sum+Math.min(6,n),0);
 }
 function groomerStylingStats(groomerId,cycle){
- let rev=0,count=0;
- invoices.forEach(inv=>{
-  if(!isAfterVisitInvoice(inv)) return;
-  (inv.dogs||[]).forEach(d=>{
-   const a=linkedAppointmentForInvoiceDog(inv,d);
-   if(!a||a.status==='cancelled'||a.groomer_id!==groomerId||a.appt_date<cycle.start||a.appt_date>cycle.end) return;
-   const hasStyling=(d.services||[]).some(s=>s.name==='Styling');
-   if(!hasStyling) return;
-   count++;
-   (d.services||[]).forEach(s=>{ if(s.name==='Styling') rev+=(s.price||0); });
-  });
- });
- return {rev,count};
+ const t=verifiedWorkTotals(groomerId,cycle);
+ return {rev:t.rows.reduce((n,r)=>n+(r.job.services||[]).filter(s=>s.name==='Styling').reduce((a,s)=>a+Number(s.price||0)*Number(r.styling_share)/100,0),0),count:t.stylingUnits,amount:t.styling};
 }
 function computeGroomerPay(g,cycle){
  const c=groomerComp(g);
@@ -14541,8 +14571,8 @@ function computeGroomerPay(g,cycle){
   weekly: c.weekly.on?Math.round((c.weekly.amount/wdPerWeek)*weeklyPaidDays):0,
   noLate: c.noLate.on?(lateCount===0?c.noLate.amount:0):0,
   noSick: c.noSick.on?(sickDays===0?c.noSick.amount:0):0,
-  styling: (c.styling.on&&styStats.count>0)?stylingRate*styStats.count:0,
-  botak: (c.botak.on&&dogPay.botakCount>0)?botakRate*dogPay.botakCount:0,
+  styling: styStats.amount,
+  botak: dogPay.botakAmount,
   transport: dogPay.transportTotal||0,
   perDog: basicDogAmount,
   daily: c.daily.on?c.daily.amount*daysWorked:0
@@ -14551,7 +14581,7 @@ function computeGroomerPay(g,cycle){
  const ten=tenureMonths(g);
  let retBalance=0,retPayable=false,retMonths=0;
  if(c.retention.on&&ten!=null){ retMonths=Math.min(c.retention.months,ten); retBalance=retMonths*c.retention.amount; retPayable=ten>=c.retention.months; }
- return {c,comp,takeHome,meta:{scheduled,daysWorked,weeklyPaidDays,sickDays,lateCount,dogCount,stylingRev:styStats.rev,stylingCount:styStats.count,stylingRate,botakCount:dogPay.botakCount,botakRate,transportTotal:dogPay.transportTotal,transportCount:dogPay.transportCount,countedJobs:dogPay.counted,wdPerWeek,sizeCounts,dogRate:dogPay.rate},retention:{on:c.retention.on,balance:retBalance,payable:retPayable,months:retMonths,target:c.retention.months,per:c.retention.amount,tenure:ten}};
+ return {c,comp,takeHome,meta:{scheduled,daysWorked,weeklyPaidDays,sickDays,lateCount,dogCount,stylingRev:styStats.rev,stylingCount:styStats.count,stylingRate,botakCount:dogPay.botakCount,botakRate,transportTotal:dogPay.transportTotal,transportCount:dogPay.transportCount,countedJobs:dogPay.counted,workItems:dogPay.allItems,wdPerWeek,sizeCounts,dogRate:dogPay.rate},retention:{on:c.retention.on,balance:retBalance,payable:retPayable,months:retMonths,target:c.retention.months,per:c.retention.amount,tenure:ten}};
 }
 const COMP_LINES=[['basic','Gaji pokok'],['weekly','Gaji mingguan'],['noLate','Bonus no-late'],['noSick','Bonus no-sakit'],['styling','Komisi styling'],['botak','Insentif Botak'],['transport','Transport fee ½'],['perDog','Basic Grooming per dog'],['daily','Uang harian']];
 function payrollCustomKey(gid,cycleStart){return `${gid}::${cycleStart}`}
@@ -14599,6 +14629,8 @@ function recalcPayCard(gid,cycleStart){
 }
 
 function renderPayroll(){
+ const workCycle=getPayrollCycle(payrollCycleAnchor);renderWorkReviewQueue(workCycle);
+ if(!workLedgerReady){const w=document.getElementById('payroll-cards');if(w)w.innerHTML='';return;}
  const tgl=document.getElementById('pay-publish-toggle'); if(tgl) tgl.checked=GROOMER_PAY_PUBLISH;
  const cycle=getPayrollCycle(payrollCycleAnchor);
  const lbl=document.getElementById('payroll-cycle-lbl');
@@ -14613,12 +14645,13 @@ function renderPayroll(){
   const isPaid=payout&&payout.status==='paid';
   const pay=computeGroomerPay(g,cycle);
   const m=pay.meta;
-  const notes={basic:'',weekly:`${m.weeklyPaidDays} hari dibayar · ÷6/minggu`,noLate:`<button type="button" onclick="showPayrollLateList('${g.id}')" title="Lihat hari terlambat cycle ini" style="background:none;border:none;color:inherit;font:inherit;cursor:pointer;text-decoration:underline;padding:0">late: ${m.lateCount}</button>`,noSick:`sakit: ${m.sickDays} hari`,styling:`${m.stylingCount} × ${fmtRp(m.stylingRate)}`,botak:`${m.botakCount} × ${fmtRp(m.botakRate)}`,transport:`${m.transportCount} invoice × ½`,perDog:`${m.dogCount} dog × ${fmtRp(m.dogRate)}`,daily:`${m.daysWorked} hari × ${fmtRp(pay.c.daily.amount)}`};
+  const notes={basic:'',weekly:`${m.weeklyPaidDays} hari dibayar · ÷6/minggu`,noLate:`<button type="button" onclick="showPayrollLateList('${g.id}')" title="Lihat hari terlambat cycle ini" style="background:none;border:none;color:inherit;font:inherit;cursor:pointer;text-decoration:underline;padding:0">late: ${m.lateCount}</button>`,noSick:`sakit: ${m.sickDays} hari`,styling:`${m.stylingCount} verified units · saved rates`,botak:`${m.botakCount} verified units · saved rates`,transport:`${m.transportCount} shared pool(s)`,perDog:`${m.dogCount} verified units · saved rates`,daily:`${m.daysWorked} hari × ${fmtRp(pay.c.daily.amount)}`};
+  if(isPaid)Object.keys(notes).forEach(k=>notes[k]='saved paid snapshot');
   const stored=isPaid?(payout.breakdown||{}):null;
   const val=k=>stored?(stored[k]||0):pay.comp[k];
   const rows=COMP_LINES.map(([k,label])=>{
    const auto=pay.comp[k];
-   const input=isPaid?`<strong style="font-size:12px">${fmtRp(val(k))}</strong>`:`<input type="number" id="pay-${g.id}-${k}" value="${auto}" oninput="recalcPayCard('${g.id}')" style="width:110px;text-align:right;padding:2px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>`;
+   const input=isPaid?`<strong style="font-size:12px">${fmtRp(val(k))}</strong>`:`<input type="number" id="pay-${g.id}-${k}" value="${auto}" ${['perDog','styling','botak','transport'].includes(k)?'readonly title="Verified work amount; use named additional pay for adjustments"':''} oninput="recalcPayCard('${g.id}')" style="width:110px;text-align:right;padding:2px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>`;
    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0"><span style="font-size:11px;color:var(--muted)">${label}${notes[k]?` <span style="opacity:.65">(${notes[k]})</span>`:''}</span>${input}</div>`;
   }).join('');
   const customRows=getPayrollCustomRows(g.id,cycle.start,payout);
@@ -14652,7 +14685,7 @@ function renderPayroll(){
     ${isPaid?`<span class="badge bs" title="Paid ${payout.paid_at?fmtD(payout.paid_at.slice(0,10)):''}">PAID</span>`:`<span class="badge bm">PENDING</span>`}
    </div>
     <div style="border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px 0;margin-bottom:8px">${rows}${customBlock}</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px;color:var(--muted);margin:8px 0">${Object.entries(m.sizeCounts||{}).filter(([,n])=>n>0).map(([s,n])=>`<span style="background:var(--subtle);padding:1px 6px;border-radius:8px">${esc(s)}: <strong>${n}</strong></span>`).join('')||'<span>Belum ada Basic Grooming yang eligible</span>'}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px;color:var(--muted);margin:8px 0">${Object.entries((isPaid?payout.dogs_counted:m.sizeCounts)||{}).filter(([,n])=>n>0).map(([s,n])=>`<span style="background:var(--subtle);padding:1px 6px;border-radius:8px">${esc(s)}: <strong>${n}</strong></span>`).join('')||'<span>Belum ada Basic Grooming yang eligible</span>'}</div>
    <div style="display:flex;justify-content:space-between;align-items:baseline">
     <span style="font-size:11px;color:var(--muted)">Take-home</span>
     <strong style="font-size:16px;color:#16a34a" id="pay-total-${g.id}">${fmtRp(total)}</strong>
@@ -14660,7 +14693,7 @@ function renderPayroll(){
    ${retBlock}
    ${GROOMER_PAY_PUBLISH?`<button class="btn btn-g btn-sm" style="width:100%;margin-top:8px" onclick="publishPaySnapshot('${g.id}')">Publish gaji ke groomer</button>`:''}
    <button class="btn btn-g btn-sm" style="width:100%;margin-top:8px" onclick="showPayrollDetail('${g.id}')">Detail (appointment &amp; invoice)</button>
-   ${isPaid?`<button class="btn btn-g btn-sm" style="width:100%;margin-top:8px" onclick="unmarkGroomerPaid('${g.id}','${cycle.start}')">Undo payment</button>`:`<button class="btn btn-p btn-sm" style="width:100%;margin-top:8px" onclick="markGroomerPaid('${g.id}','${cycle.start}','${cycle.end}')">Mark as paid</button>`}
+   ${isPaid?`<button class="btn btn-g btn-sm" style="width:100%;margin-top:8px" disabled title="Preserve the paid record; use a named adjustment in an unpaid cycle">Paid record locked</button>`:`<button class="btn btn-p btn-sm" style="width:100%;margin-top:8px" onclick="markGroomerPaid('${g.id}','${cycle.start}','${cycle.end}')">Mark as paid</button>`}
   </div>`;
  }).join('');
  wrap.innerHTML=cards;
@@ -14670,6 +14703,13 @@ function renderPayroll(){
 
 async function markGroomerPaid(groomerId,cycleStart,cycleEnd){
  const g=groomers.find(x=>x.id===groomerId); if(!g){alert('Groomer not found');return}
+ const displayedWorkVersion=workLedgerVersion;
+ await loadWorkLedger();
+ if(!workLedgerReady){alert(workLedgerError);return;}
+ if(displayedWorkVersion!==workLedgerVersion){alert('Verified work changed since these payroll cards were shown. Review the refreshed payroll before paying.');renderPayroll();return;}
+ const {data:workCheck,error:workCheckError}=await db.rpc('hp_work_preview',{p_groomer_id:groomerId,p_start:cycleStart,p_end:cycleEnd});
+ if(workCheckError){alert(workCheckError.message);return;}
+ if(workCheck.unresolved||workCheck.missing_evidence){alert('Reconcile unverified invoices and completed visits missing verified invoice work before paying.');renderPayroll();return;}
  const cycle={start:cycleStart,end:cycleEnd};
  const {sizes}=computeGroomerDogsInCycle(groomerId,cycle);
  const breakdown={}; let amount=0;
@@ -14677,6 +14717,10 @@ async function markGroomerPaid(groomerId,cycleStart,cycleEnd){
  const customRows=cleanPayrollCustomRows(getPayrollCustomRows(groomerId,cycleStart)).filter(r=>r.label.trim()||r.amount>0);
  const invalid=customRows.find(r=>r.amount>0&&!r.label.trim());
  if(invalid){alert('Isi nama untuk setiap additional pay yang memiliki nominal.');return}
+ for(const key of ['perDog','styling','botak','transport']){
+  if(Number(breakdown[key])!==Number(workCheck[key])){alert('Verified work changed. Refresh payroll and review again.');renderPayroll();return;}
+ }
+ breakdown.work_digest=workCheck.work_digest;
  breakdown.custom_rows=customRows.map(r=>({label:r.label.trim(),amount:r.amount}));
  amount+=customRows.reduce((sum,r)=>sum+r.amount,0);
  const standardLines=COMP_LINES.filter(([k])=>breakdown[k]).map(([k,l])=>`${l}: ${fmtRp(breakdown[k])}`);
@@ -14702,22 +14746,15 @@ async function payGroomerRetention(groomerId,cycleStart,cycleEnd,balance){
  renderPayroll();
 }
 
-async function unmarkGroomerPaid(groomerId,cycleStart){
- const existing=groomerPayouts.find(p=>p.groomer_id===groomerId&&p.cycle_start===cycleStart&&(p.payout_type||'salary')==='salary');
- if(!existing){alert('Payout record not found');return}
- if(!confirm(`Undo payment for this cycle?\n\nDelete the paid record? Numbers will recalculate live.`)) return;
- const restoredRows=cleanPayrollCustomRows(existing.breakdown?.custom_rows||[]);
- const {error}=await db.from('groomer_payouts').delete().eq('id',existing.id);
- if(error){alert('Error: '+error.message);return}
- payrollCustomRows[payrollCustomKey(groomerId,cycleStart)]=restoredRows;
- savePayrollCustomDraft(groomerId,cycleStart);
- await reloadTables('groomer_payouts');
- renderPayroll();
-}
+function unmarkGroomerPaid(){alert('Paid payroll is locked. Use a clearly named additional-pay adjustment in an unpaid cycle; preserve the original payout.');}
 
 /* ----- Publish payroll snapshot to groomer page (feature C — master toggle di tab Payroll) ----- */
 let GROOMER_PAY_PUBLISH=false; // diset dari toggle di tab Payroll (tersimpan di business_settings)
 async function publishPaySnapshot(gid){
+ await loadWorkLedger();
+ if(!workLedgerReady){alert(workLedgerError);return;}
+ const workCycle=getPayrollCycle(payrollCycleAnchor);
+ if(workReview.some(r=>r.invoice_date>=workCycle.start&&r.invoice_date<=workCycle.end)){alert('Review incomplete invoice assignments before publishing payroll.');return;}
  const g=groomers.find(x=>x.id===gid); if(!g) return;
  const cycle=getPayrollCycle(payrollCycleAnchor);
  const payout=groomerPayouts.find(p=>p.groomer_id===gid&&p.cycle_start===cycle.start&&(p.payout_type||'salary')==='salary');
@@ -14881,7 +14918,7 @@ function showPayrollDetail(gid){
   ${body||'<div style="font-size:12px;color:#16a34a;padding:4px 0">&#10003; Tidak ada.</div>'}
  </div>`;
  // A. Jobs yang masuk hitungan (basic + handled), dengan invoice sumbernya
- const jobs=m.countedJobs.map(it=>({it,type:'basic'}))
+ const jobs=m.workItems.map(it=>({it,type:'work'}))
   .sort((x,y)=>(y.it.appointment.appt_date||'').localeCompare(x.it.appointment.appt_date||''));
  const jobTable=jobs.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;background:var(--surface)">${th(['Tanggal','Owner','Dog','Size','Layanan','Invoice','Dasar bayar'])}<tbody>${jobs.map(({it,type,amount,note})=>{
   const c=custs.find(cc=>cc.id===it.dog.customer_id);
@@ -14892,7 +14929,7 @@ function showPayrollDetail(gid){
    <td style="padding:6px 8px;font-size:12px">${esc(it.dog.size||'')}</td>
    <td style="padding:6px 8px;font-size:11px;color:var(--muted)">${esc(it.services.join(', ')||'-')}</td>
    <td style="padding:6px 8px;font-size:12px"><a href="#" onclick="event.preventDefault();cm('ov-payroll-detail');openInvoiceForEdit('${it.invoice.id}')" style="color:var(--green-dk);font-weight:600">${esc(it.invoice.invoice_number||'?')}</a></td>
-   <td style="padding:6px 8px;font-size:11px">${fmtRp(m.dogRate)} /dog${it.services.includes('Botak')?' + Botak':''}</td>
+   <td style="padding:6px 8px;font-size:11px">${it.units} Basic unit(s): ${fmtRp(it.amount)}<br>Styling: ${fmtRp(it.stylingAmount)} · Botak: ${fmtRp(it.botakAmount)}<br>Transport: ${fmtRp(it.transportAmount)}</td>
   </tr>`;}).join('')}</tbody></table></div>`:'';
  // B. Done tanpa invoice (tidak masuk payroll sama sekali)
  const miss=payrollMissingDone(gid,cycle);
@@ -14909,7 +14946,7 @@ function showPayrollDetail(gid){
  document.getElementById('payroll-detail-title').textContent=g.name+' — detail '+cycle.label;
  document.getElementById('payroll-detail-body').innerHTML=
   `<div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:8px 10px;background:var(--subtle);border-radius:6px;line-height:1.6">
-   Take-home cycle: <strong style="color:#16a34a">${fmtRp(pay.takeHome)}</strong> · ${m.dogCount} basic job · ${m.stylingCount} styling job (${fmtRp(m.stylingRate)}/job) · ${m.botakCount} botak · late: ${m.lateCount}
+   Take-home cycle: <strong style="color:#16a34a">${fmtRp(pay.takeHome)}</strong> · ${m.dogCount} basic job · ${m.stylingCount} styling pay unit(s) · saved rate snapshots · ${m.botakCount} botak · late: ${m.lateCount}
   </div>`
   +sec('Job dihitung (appointment + invoice sumber)',jobs.length,jobTable,'Semua baris di sini adalah sumber uang: klik nomor invoice untuk buka invoice-nya.')
   +sec('Done tapi tanpa invoice (hilang dari payroll)',miss.length,missTable,'Appointment done di cycle ini yang belum punya invoice — buat invoice-nya agar terhitung.');
@@ -14955,7 +14992,7 @@ function exportPayrollCycle(){
    'Dogs dihitung':m.dogCount,
    'Paid at':payout?.paid_at||''
   });
-  m.countedJobs.forEach(it=>{
+  m.workItems.forEach(it=>{
    const c=custs.find(cc=>cc.id===it.dog.customer_id);
    detail.push({
     'Tanggal':it.appointment.appt_date,
@@ -14965,10 +15002,14 @@ function exportPayrollCycle(){
     'Dog':it.dog.name||'',
     'Size':it.dog.size||'',
     'Services':it.services.join(', '),
-    'Jenis bayar':'Basic Grooming',
-    'Nominal':m.dogRate,
+    'Jenis bayar':'Verified work allocation',
+    'Basic':it.amount,
+    'Styling':it.stylingAmount,
+    'Botak':it.botakAmount,
+    'Transport':it.transportAmount,
+    'Nominal':it.amount+it.stylingAmount+it.botakAmount+it.transportAmount,
     'Invoice #':it.invoice.invoice_number||'',
-    'Catatan':''
+    'Catatan':it.units+' paid dog unit(s)'
    });
   });
   payrollMissingDone(g.id,cycle).forEach(a=>{
@@ -15044,7 +15085,7 @@ function renderVisits(){
  const rows=visits.map(v=>{
   const dog=dogs.find(x=>x.id===v.dog_id)||v.dogs||{};
   const cust=dog.customer_id?custs.find(x=>x.id===dog.customer_id)||{}:{};
-  const inv=v.visited_at?findInvoiceForDogsOnDate([v.dog_id],v.visited_at):null;
+  const inv=workInvoiceReferencesVisit(v)[0]||null;
   // Batch O.1 — find linked appointment for session_source
   const linkedAppt=appts.find(a=>a.dog_id===v.dog_id&&a.appt_date===v.visited_at);
   return {visit:v,dog,cust,inv,manualBilled:!!v.is_billed_manually,sessionSrc:linkedAppt?.session_source,photos:linkedAppt?.photos||{}};
@@ -15162,6 +15203,7 @@ async function unmarkVisitBilled(visitId){
 // Batch O.10 — delete a visit (admin tool for orphaned visits, e.g. groomer sick)
 async function delVisit(visitId){
  const v=visits.find(x=>x.id===visitId); if(!v){alert('Visit not found');return}
+ if(workInvoiceReferencesVisit(v).length){alert('Visit ini sudah memiliki invoice dan tidak bisa dihapus. Review invoice terlebih dahulu.');return;}
  const dog=dogs.find(d=>d.id===v.dog_id);
  const label=`${dog?.name||'?'} (${v.visited_at})`;
  // A visit that still has a live (non-cancelled) calendar appointment on that same
@@ -15530,13 +15572,8 @@ function renderLeaderboard(){
  const activeG=groomers.filter(g=>g.active);
  if(!activeG.length){wrap.innerHTML='<div style="color:var(--muted);padding:1rem">Belum ada groomer aktif.</div>';return}
 
- // Revenue per groomer this cycle (sum of grand_total for invoices where groomer_id matches)
  const revByG={};
- invoices.forEach(inv=>{
-  if(!inv.invoice_date||inv.invoice_date<cycle.start||inv.invoice_date>cycle.end) return;
-  if(!inv.groomer_id) return;
-  revByG[inv.groomer_id]=(revByG[inv.groomer_id]||0)+(inv.grand_total||0);
- });
+ activeG.forEach(g=>{revByG[g.id]=verifiedWorkTotals(g.id,cycle).revenue;});
 
  const rows=activeG.map(g=>{
   const p=computeGroomerPay(g,cycle);
@@ -15614,7 +15651,7 @@ function renderLeaderboard(){
    </table>
   </div>
   <div style="margin-top:14px;font-size:11px;color:var(--muted);padding:8px 12px;background:var(--subtle);border-radius:6px">
-   Metrik: <strong>Dogs</strong> dari job yang punya after-visit invoice (package sale tidak dihitung). <strong>Revenue</strong> = sum grand_total invoice dengan groomer_id match. <strong>Take-home</strong> dari <code>computeGroomerPay</code> (basic + weekly + bonus + per-dog + styling %). Klik "Detail" untuk breakdown per groomer.
+   Metrik: <strong>Dogs</strong> = verified paid work units; shared work is fractional. Unreviewed invoices and package sales are excluded. <strong>Revenue</strong> = allocated after-visit invoice revenue from verified work. <strong>Take-home</strong> dari <code>computeGroomerPay</code> (basic + weekly + bonus + per-dog + styling %). Klik "Detail" untuk breakdown per groomer.
   </div>
  `;
 }
@@ -15684,13 +15721,7 @@ function tallyCheck4_visitsApptsMismatch(cycle){
 function tallyCheck5_dogCountMismatch(cycle){
  const byGroomer={};
  groomers.forEach(g=>{if(g.active)byGroomer[g.id]={id:g.id,name:g.name,invoiced:0,done:0}});
- invoices.forEach(inv=>{
-  if(!isAfterVisitInvoice(inv)) return;
-  if(!inv.invoice_date) return;
-  if(inv.invoice_date<cycle.start||inv.invoice_date>cycle.end) return;
-  if(!inv.groomer_id||!byGroomer[inv.groomer_id]) return;
-  byGroomer[inv.groomer_id].invoiced+=(inv.dogs||[]).length;
- });
+ Object.values(byGroomer).forEach(g=>{g.invoiced=verifiedWorkTotals(g.id,cycle).dogUnits;});
  appts.forEach(a=>{
   if(a.status!=='done') return;
   if(a.appt_date<cycle.start||a.appt_date>cycle.end) return;
