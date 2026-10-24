@@ -178,7 +178,6 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .photo-multi .photo-slot{width:calc(50% - 3px);flex:none}
 .photo-multi .photo-add{width:calc(50% - 3px);flex:none}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -196,7 +195,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
     <div class="hdr-name" id="g-name">HomePaw Groomer</div>
     <div class="hdr-sub" id="g-sub">Loading…</div>
    </div>
-   <button class="hdr-refresh" onclick="loadSchedule()">Refresh</button>
+   <button class="hdr-refresh" id="g-refresh-btn" onclick="refreshGroomerApp()">Refresh</button>
   </div>
  </div>
 
@@ -390,58 +389,126 @@ function renderMyPay(){
 // Counts only (no money) — separate from the admin-published pay card above.
 let monthStats={dogs:0,styling:0,botak:0};
 let cycleStartDay=26;
+let monthStatsState={loading:false,loaded:false,error:'',updatedAt:'',groomerId:null,start:'',end:''};
+let monthStatsRequest=null,monthStatsRequestGroomer=null,monthStatsRequestSeq=0;
+let groomerRefreshRequest=null,lastGroomerRefreshAt=0;
+
+function statsTodayIso(now=new Date()){
+ const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
+ const get=key=>parts.find(p=>p.type===key).value;
+ return get('year')+'-'+get('month')+'-'+get('day');
+}
+async function counterRequest(makeQuery,timeoutMs=12000){
+ const controller=typeof AbortController==='function'?new AbortController():null;
+ let timer;
+ const deadline=new Promise((_,reject)=>{
+  timer=setTimeout(()=>{
+   const error=new Error('Counter request timed out');error.code='COUNTER_TIMEOUT';
+   reject(error);if(controller)controller.abort();
+  },timeoutMs);
+ });
+ try{
+  let query=makeQuery();
+  if(controller&&typeof query.abortSignal==='function')query=query.abortSignal(controller.signal);
+  return await Promise.race([Promise.resolve(query),deadline]);
+ }finally{clearTimeout(timer);}
+}
 async function loadCycleStartDay(){
- const {data}=await db.from('payroll_settings').select('cycle_start_day').eq('id',1).maybeSingle();
- if(data?.cycle_start_day) cycleStartDay=data.cycle_start_day;
+ const {data,error}=await counterRequest(()=>db.from('payroll_settings').select('cycle_start_day').eq('id',1).maybeSingle());
+ if(error)throw error;
+ const configured=data?.cycle_start_day;
+ const day=configured==null?26:Number(configured);
+ if(!Number.isInteger(day)||day<1||day>28)throw new Error('Invalid payroll cycle setting');
+ cycleStartDay=day;
 }
 function currentCycleStart(){
- const now=new Date();
- const y=now.getFullYear(),m=now.getMonth(),d=now.getDate();
- return d>=cycleStartDay ? new Date(y,m,cycleStartDay) : new Date(y,m-1,cycleStartDay);
+ const [y,m,d]=statsTodayIso().split('-').map(Number);
+ return d>=cycleStartDay?new Date(y,m-1,cycleStartDay):new Date(y,m-2,cycleStartDay);
+}
+function counterErrorText(error){
+ if(error?.code==='COUNTER_TIMEOUT')return 'Koneksi terlalu lama. Coba lagi.';
+ if(error?.code==='42501'||error?.status===401||error?.status===403)return 'Akses data belum berhasil. Hubungi admin jika tetap terjadi.';
+ return 'Jumlah grooming belum berhasil dimuat. Periksa koneksi lalu coba lagi.';
 }
 async function loadMonthStats(){
- await loadCycleStartDay();
- const start=iso(currentCycleStart());
- // Same source the admin CRM's Payroll tab uses (computeGroomerDogsInCycle):
- // "dogs groomed" = dogs on an after-visit invoice for this groomer this cycle,
- // not just appointments marked done — the invoice is what payroll actually
- // counts as completion evidence, so this stays consistent with those numbers.
- const {data,error}=await db.from('invoices')
-  .select('dogs')
-  .eq('groomer_id',currentGroomer.id)
-  .gte('invoice_date',start);
- if(error||!data) return;
- let dogsCount=0,styling=0,botak=0;
- data.forEach(inv=>{
-  const lines=inv.dogs||[];
-  const isPackageSale=lines.some(d=>d.advance||d.invoice_kind==='package_sale');
-  if(isPackageSale) return; // package/subscription sale, not a completed grooming session
-  lines.forEach(d=>{
-   const svcs=(d.services||[]).map(s=>String(s.name||'').trim().toLowerCase());
-   if(svcs.includes('basic grooming')) dogsCount++;
-   if(svcs.includes('styling')) styling++;
-   if(svcs.includes('botak')) botak++;
-  });
- });
- monthStats={dogs:dogsCount,styling,botak};
+ const gid=currentGroomer?.id;if(!gid)return;
+ if(monthStatsRequest&&monthStatsRequestGroomer===gid)return monthStatsRequest;
+ const seq=++monthStatsRequestSeq;
+ monthStatsRequestGroomer=gid;
+ if(monthStatsState.groomerId!==gid){
+  monthStats={dogs:0,styling:0,botak:0};
+  monthStatsState={loading:true,loaded:false,error:'',updatedAt:'',groomerId:gid,start:'',end:''};
+ }else{monthStatsState.loading=true;monthStatsState.error='';}
  renderMonthStats();
+ const request=(async()=>{
+  try{
+   await loadCycleStartDay();
+   const start=iso(currentCycleStart()),end=statsTodayIso();
+   const allInvoices=[];
+   // Keep the existing invoice-header assignment rule pending the approved
+   // multi-groomer attribution design. Page results rather than truncating.
+   for(let offset=0;;offset+=500){
+    const {data,error}=await counterRequest(()=>db.from('invoices').select('id,dogs')
+     .eq('groomer_id',gid).gte('invoice_date',start).lte('invoice_date',end)
+     .order('id').range(offset,offset+499));
+    if(error)throw error;
+    if(!Array.isArray(data))throw new Error('Invalid counter response');
+    allInvoices.push(...data);
+    if(data.length<500)break;
+   }
+   const counts={dogs:0,styling:0,botak:0};
+   allInvoices.forEach(inv=>{
+    const lines=Array.isArray(inv.dogs)?inv.dogs:[];
+    if(lines.some(d=>d&&(d.advance||d.invoice_kind==='package_sale')))return;
+    lines.forEach(d=>{
+     const svcs=(Array.isArray(d?.services)?d.services:[]).map(s=>String(s?.name||'').trim().toLowerCase());
+     if(svcs.includes('basic grooming'))counts.dogs++;
+     if(svcs.includes('styling'))counts.styling++;
+     if(svcs.includes('botak'))counts.botak++;
+    });
+   });
+   if(seq!==monthStatsRequestSeq||currentGroomer?.id!==gid)return;
+   monthStats=counts;
+   monthStatsState={loading:false,loaded:true,error:'',updatedAt:new Date().toISOString(),groomerId:gid,start,end};
+  }catch(error){
+   if(seq!==monthStatsRequestSeq||currentGroomer?.id!==gid)return;
+   monthStatsState.loading=false;monthStatsState.error=counterErrorText(error);
+   console.warn('HomePaw dog counter:',error?.code||'COUNT_LOAD_FAILED',error?.message||'Request failed');
+  }finally{
+   if(seq===monthStatsRequestSeq){monthStatsRequest=null;renderMonthStats();}
+  }
+ })();
+ monthStatsRequest=request;
+ return request;
 }
 function renderMonthStats(){
- const wrap=document.getElementById('stats-wrap'); if(!wrap) return;
- const cycleLabel=currentCycleStart().toLocaleDateString('id-ID',{day:'numeric',month:'long'})+' – hari ini';
+ const wrap=document.getElementById('stats-wrap');if(!wrap)return;
+ const s=monthStatsState;
+ const currentPeriod=iso(currentCycleStart())+'|'+statsTodayIso();
+ const valuesCurrent=s.loaded&&s.start+'|'+s.end===currentPeriod;
+ const label=s.loaded?new Date(s.start+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric',month:'long'})+' – '+new Date(s.end+'T00:00:00').toLocaleDateString('id-ID',{day:'numeric',month:'long'}):'cycle ini';
+ const tile=(n,name)=>`<div style="flex:1;text-align:center;background:var(--subtle);border-radius:8px;padding:8px 4px"><div style="font-size:20px;font-weight:700;color:var(--primary-dk)">${s.loaded?n:'—'}</div><div style="font-size:10px;color:var(--muted)">${name}</div></div>`;
  wrap.style.display='block';
- const tile=(n,lbl)=>`<div style="flex:1;text-align:center;background:var(--subtle);border-radius:8px;padding:8px 4px">
-  <div style="font-size:20px;font-weight:700;color:var(--primary-dk)">${n}</div>
-  <div style="font-size:10px;color:var(--muted)">${lbl}</div>
- </div>`;
- wrap.innerHTML=`<div style="background:var(--surface);border-radius:10px;padding:12px 14px;margin:12px 12px 0;box-shadow:var(--sh);border:1px solid var(--border)">
-  <div style="font-size:10px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Grooming cycle ini · ${esc(cycleLabel)}</div>
-  <div style="display:flex;gap:8px">
-   ${tile(monthStats.dogs,'Anjing digroom')}
-   ${tile(monthStats.styling,'Styling')}
-   ${tile(monthStats.botak,'Botak')}
-  </div>
- </div>`;
+ wrap.innerHTML=`<section style="background:var(--surface);border-radius:10px;padding:12px 14px;margin:12px 12px 0;box-shadow:var(--sh);border:1px solid var(--border)" aria-live="polite" aria-busy="${s.loading}">
+  <div style="font-size:10px;font-weight:700;color:var(--primary-dk);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Grooming · ${esc(label)}</div>
+  <div style="display:flex;gap:8px">${tile(monthStats.dogs,'Anjing digroom')}${tile(monthStats.styling,'Styling')}${tile(monthStats.botak,'Botak')}</div>
+  ${s.loading?'<p style="font-size:11px;color:var(--muted);margin:8px 0 0">Memperbarui jumlah grooming…</p>':''}
+  ${s.error?`<div role="alert" style="font-size:12px;color:var(--red);margin-top:8px">${esc(s.error)}${s.loaded?' Angka di atas adalah hasil terakhir'+(valuesCurrent?'.':' dari periode sebelumnya.') :''}<button type="button" onclick="loadMonthStats()" style="display:block;margin-top:8px;border:1px solid var(--border);background:var(--subtle);border-radius:6px;padding:8px 12px;font:inherit;min-height:36px">Coba lagi</button></div>`:''}
+  ${s.updatedAt&&!s.loading&&!s.error?`<div style="font-size:10px;color:var(--muted);margin-top:8px">Diperbarui ${esc(new Date(s.updatedAt).toLocaleTimeString('id-ID',{timeZone:'Asia/Jakarta',hour:'2-digit',minute:'2-digit'}))} WIB</div>`:''}
+ </section>`;
+}
+async function refreshGroomerApp(){
+ if(!currentGroomer)return;
+ if(groomerRefreshRequest)return groomerRefreshRequest;
+ lastGroomerRefreshAt=Date.now();
+ const btn=document.getElementById('g-refresh-btn');if(btn){btn.disabled=true;btn.textContent='Memuat…';}
+ groomerRefreshRequest=Promise.allSettled([loadSchedule(),loadMonthStats()]).then(results=>{
+  if(results[0].status==='rejected'){
+   document.getElementById('content').innerHTML='<div class="empty">Jadwal belum berhasil dimuat. Tekan Refresh untuk mencoba lagi.</div>';
+   console.warn('HomePaw schedule refresh failed');
+  }
+ }).finally(()=>{groomerRefreshRequest=null;if(btn){btn.disabled=false;btn.textContent='Refresh';}});
+ return groomerRefreshRequest;
 }
 
 async function tryLogin(){
@@ -473,8 +540,7 @@ async function init(){
  document.getElementById('g-name').textContent=data.name;
  document.getElementById('g-sub').textContent='Jadwal grooming · Read-only';
  showApp();
- await loadSchedule();
- loadMonthStats();
+ await refreshGroomerApp();
 }
 
 async function loadSchedule(){
@@ -1324,7 +1390,11 @@ function compressImage(file,maxW=1200){
 }
 
 // Auto-refresh every 5 minutes
-setInterval(()=>{if(currentGroomer)loadSchedule()},5*60*1000);
+setInterval(()=>{if(currentGroomer&&!document.hidden)refreshGroomerApp()},5*60*1000);
+document.addEventListener('visibilitychange',()=>{
+ if(!document.hidden&&currentGroomer&&Date.now()-lastGroomerRefreshAt>60000)refreshGroomerApp();
+});
+window.addEventListener('online',()=>{if(currentGroomer)refreshGroomerApp()});
 
 // Init on load
 init();
