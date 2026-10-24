@@ -3498,7 +3498,7 @@ const TABLE_FETCHERS={
  customers:async function(){const r=await db.from('customers').select('*').order('created_at',{ascending:false});custs=r.data||[];},
  dogs:async function(){const r=await db.from('dogs').select('*').order('created_at',{ascending:false});dogs=r.data||[];},
  visits:async function(){const r=await db.from('visits').select('*,dogs(name,size)').order('visited_at',{ascending:false});visits=r.data||[];},
- appointments:async function(){const r=await db.from('appointments').select('*,dogs(name,breed,size,prefs)').order('appt_date').order('appt_time');appts=r.data||[];},
+ appointments:async function(){const r=await db.from('appointments').select('*,dogs(name,breed,size,prefs)').order('appt_date').order('appt_time');appts=r.data||[];await loadWorkLedger();},
  groomers:async function(){const r=await db.from('groomers').select('*').order('created_at');groomers=r.data||[];},
  invoices:async function(){const r=await db.from('invoices').select('*').order('created_at',{ascending:false});invoices=r.data||[];await loadWorkLedger();},
  business_settings:async function(){const r=await db.from('business_settings').select('*').eq('id',1).single();bankSettings=r.data||{};applyCfg();},
@@ -7369,7 +7369,7 @@ function calcGroomerMetrics(groomerId, periodStr){
  const cutoffISO=cutoff?iso(cutoff):'0000-01-01';
  // Filter appts
  const inRange=appts.filter(a=>a.groomer_id===groomerId&&a.appt_date>=cutoffISO&&a.appt_date<=iso(today));
- const completed=verifiedWorkRows(groomerId,{start:cutoffISO,end:iso(today)}).filter(r=>['basic_share','styling_share','botak_share','other_share'].some(k=>Number(r[k])>0)).map(r=>({...appts.find(a=>a.id===r.job.appointment_id),id:r.job.appointment_id,dog_id:r.job.dog_id,appt_date:r.job.service_date,service_base:(r.job.services||[]).filter(s=>Number(r[({"basic grooming":"basic",styling: "styling",botak: "botak"}[String(s.name).trim().toLowerCase()]||'other')+'_share'])>0).map(s=>s.name).join(' + ')}));
+ const completed=calendarWorkRows(groomerId,{start:cutoffISO,end:iso(today)}).map(j=>({...appts.find(a=>a.id===j.id),id:j.id,dog_id:j.dog_id,appt_date:j.service_date,service_base:j.service_base}));
  // Filter blocks
  const allBlocks=groomerBlocks.filter(b=>{
   // Either targeted at this groomer, or null (all-groomers block)
@@ -7675,9 +7675,9 @@ function renderGroomerReport(){
  </div>`:'<div style="font-size:11px;color:var(--muted);font-style:italic">No completed sessions yet.</div>';
 
  body.innerHTML=`
-  <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${period==='all'?'All time':'Last '+period+' days'} \u00B7 ${m.totalCompleted} verified completed session${m.totalCompleted!==1?'s':''}</div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${period==='all'?'All time':'Last '+period+' days'} \u00B7 ${m.totalCompleted} calendar session${m.totalCompleted!==1?'s':''}</div>
 
-  <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Verified work records also supply payroll. Payroll uses its selected cycle and service shares. Unreviewed work is excluded from this report; review it in Financial → Payroll.</div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Dog counts follow past/done calendar appointments. Invoice revenue and add-ons match each pet to its booking automatically. Only missing or ambiguous invoice matches need correction in Financial → Payroll.</div>
   <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:14px 0 8px">Reliability</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
    ${card('Attendance', m.attendancePct+'%', `Available ${m.availDays}d \u00B7 Blocked ${m.blockedDays}d`, cmpHTML(m.attendancePct, teamAvg?.attendancePct, '%'))}
@@ -9629,7 +9629,8 @@ let INV_MODE='visit';
 // Business document kind is separate from doc_mode (Invoice vs Service Report).
 // It is stored per dog line to remain compatible with the current JSONB schema.
 /* HomePaw verified work: one household invoice, explicit pet/service ownership. */
-let workJobs=[],workAllocations=[],workReview=[],workGaps=[],workLedgerReady=false,workLedgerError='',workLedgerVersion='';
+let workJobs=[],workAllocations=[],workReview=[],workGaps=[],workCalendarJobs=[],workLedgerReady=false,workLedgerError='',workLedgerVersion='';
+const workBulkDraft=new Map(),workBulkSelected=new Set();let workBulkBusy=false;
 let workFormState={lines:{},transport:null},workReviewState=null,workReviewInvoice=null;
 const workVisitBusy=new Set();
 let lastInvoiceGuardError='';
@@ -9641,10 +9642,11 @@ function workComponents(services){
 async function loadWorkLedger(){
  try{
   const {data,error}=await db.rpc('hp_admin_work_snapshot');if(error)throw error;
-  if(!data||!['jobs','allocations','review','gaps'].every(k=>Array.isArray(data[k])))throw new Error('Invalid verified-work snapshot');
-  workJobs=data.jobs;workAllocations=data.allocations;workReview=data.review;workGaps=data.gaps;workLedgerVersion=data.version||'';workLedgerReady=true;workLedgerError='';
- }catch(e){workLedgerReady=false;workLedgerError='Verified work could not be loaded. Ask the owner to check setup, then retry.';console.warn('Work ledger:',e.message);}
+  if(!data||data.schema_version!==2||!['jobs','allocations','review','gaps','calendar_jobs'].every(k=>Array.isArray(data[k])))throw new Error('Run the 25 October SQL update before using this page.');
+  workJobs=data.jobs;workAllocations=data.allocations;workReview=data.review;workGaps=data.gaps;workCalendarJobs=data.calendar_jobs;workLedgerVersion=data.version||'';workLedgerReady=true;workLedgerError='';
+ }catch(e){workLedgerReady=false;workLedgerError='Payroll data could not be loaded. Run the 25 October SQL update, then retry.';console.warn('Work ledger:',e.message);}
 }
+function calendarWorkRows(gid,cycle){return workCalendarJobs.filter(a=>(!gid||a.groomer_id===gid)&&a.service_date>=cycle.start&&a.service_date<=cycle.end);}
 function verifiedWorkRows(gid,cycle){
  if(!workLedgerReady)return [];
  const map=new Map(workJobs.filter(j=>j.service_date>=cycle.start&&j.service_date<=cycle.end).map(j=>[j.id,j]));
@@ -9652,7 +9654,8 @@ function verifiedWorkRows(gid,cycle){
 }
 function verifiedWorkTotals(gid,cycle){
  const rows=verifiedWorkRows(gid,cycle),sum=k=>rows.reduce((n,a)=>n+Number(a[k]||0),0);
- return {rows,perDog:sum('basic_amount'),styling:sum('styling_amount'),botak:sum('botak_amount'),transport:sum('transport_amount'),revenue:sum('revenue_amount'),dogUnits:sum('basic_share')/100,stylingUnits:sum('styling_share')/100,botakUnits:sum('botak_share')/100};
+ const calendar=calendarWorkRows(gid,cycle);
+ return {rows,calendar,perDog:calendar.reduce((n,a)=>n+Number(a.basic_amount||0),0),styling:sum('styling_amount'),botak:sum('botak_amount'),transport:sum('transport_amount'),revenue:sum('revenue_amount'),dogUnits:calendar.length,stylingUnits:sum('styling_share')/100,botakUnits:sum('botak_share')/100};
 }
 function verifiedWorkItems(gid,cycle){
  return verifiedWorkRows(gid,cycle).map(r=>{
@@ -9676,7 +9679,7 @@ function workSeed(rec,state){
    const v=visits.filter(v=>v.dog_id===d.dog_id&&v.visited_at===rec.invoice_date);
    const a=old?.appointment_id?candidates.find(a=>a.id===old.appointment_id):candidates.length===1?candidates[0]:null;
    const flags=workComponents(d.services);
-   current={date:rec.invoice_date,appointment_id:a?.id||'',visit_id:old?.visit_id|| (v.length===1?v[0].id:''),work_completed:old?.work_completed===true,work_allocations:old?.work_allocations?JSON.parse(JSON.stringify(old.work_allocations)):[{groomer_id:a?.groomer_id||'',...Object.fromEntries(WORK_COMPONENTS.map(k=>[k,flags[k]?100:0]))}]};
+   current={date:rec.invoice_date,appointment_id:a?.id||'',visit_id:old?.visit_id|| (v.length===1?v[0].id:''),work_completed:old?.work_completed===true||!!(a&&v.length===1),work_allocations:old?.work_allocations?JSON.parse(JSON.stringify(old.work_allocations)):[{groomer_id:a?.groomer_id||'',...Object.fromEntries(WORK_COMPONENTS.map(k=>[k,flags[k]?100:0]))}]};
    state.lines[d.dog_id]=current;
   }
   const flags=workComponents(d.services);
@@ -9687,7 +9690,12 @@ function workSeed(rec,state){
 function workSet(ctx,did,key,value){
  const state=workState(ctx);if(!state?.lines[did])return;
  state.lines[did][key]=value;
- if(key==='appointment_id')state.lines[did].work_completed=false;
+ if(key==='appointment_id'){
+  const a=appts.find(a=>a.id===value),line=state.lines[did];
+  line.work_completed=!!(a&&line.visit_id);
+  if(a&&line.work_allocations.length===1)line.work_allocations[0].groomer_id=a.groomer_id||'';
+ }
+ if(key==='visit_id')state.lines[did].work_completed=!!(value&&state.lines[did].appointment_id);
  if(ctx==='form')renderInvoicePreview();
 }
 function workSetAllocation(ctx,did,index,key,value){const a=workState(ctx)?.lines[did]?.work_allocations[index];if(a)a[key]=key==='groomer_id'?value:Number(value);if(ctx==='form')renderInvoicePreview();}
@@ -9717,13 +9725,14 @@ function renderWorkEditor(ctx='form'){
   const w=state.lines[d.dog_id],flags=workComponents(d.services);
   const aps=appts.filter(a=>a.dog_id===d.dog_id&&a.appt_date===rec.invoice_date&&a.status!=='cancelled'&&!isApptPlaceholder(a));
   const vs=visits.filter(v=>v.dog_id===d.dog_id&&v.visited_at===rec.invoice_date);
-  return `<div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-top:10px"><strong>${esc(d.name||'?')}</strong> · ${esc(rec.invoice_date)}
+  const matched=w.appointment_id&&w.visit_id&&w.work_completed&&w.work_allocations.length===1&&w.work_allocations[0].groomer_id;
+  return `<details ${matched?'':'open'} style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-top:10px"><summary style="cursor:pointer"><strong>${esc(d.name||'?')}</strong> · ${matched?'Matched automatically: '+esc(groomers.find(g=>g.id===w.work_allocations[0].groomer_id)?.name||'?'):'Choose missing booking / visit / groomer'} · ${esc(rec.invoice_date)}</summary>
    <div class="form-grid" style="margin-top:8px"><div class="fg"><label>Completed visit *</label><select onchange="workSet('${ctx}','${d.dog_id}','visit_id',this.value)"><option value="">Select visit…</option>${vs.map(v=>`<option value="${v.id}" ${w.visit_id===v.id?'selected':''}>${esc(v.visited_at)} · ${esc(v.service_type||'Recorded visit')} · ${esc(v.id.slice(0,8))}</option>`).join('')}</select>${vs.length?'':`<small style="color:var(--red-t)">No visit recorded.</small><button type="button" class="btn btn-g btn-sm" onclick="workRecordVisit('${ctx}','${d.dog_id}')">Record completed visit</button>`}</div>
    <div class="fg"><label>Exact appointment *</label><select onchange="workSet('${ctx}','${d.dog_id}','appointment_id',this.value)"><option value="">Select appointment…</option>${aps.map(a=>`<option value="${a.id}" ${w.appointment_id===a.id?'selected':''}>${esc((a.appt_time||'').slice(0,5))} · ${esc(groomers.find(g=>g.id===a.groomer_id)?.name||'?')}</option>`).join('')}</select></div></div>
-   <label style="display:flex;gap:8px;align-items:center;margin:10px 0;font-size:12px"><input type="checkbox" ${w.work_completed?'checked':''} onchange="workSet('${ctx}','${d.dog_id}','work_completed',this.checked)"/>I confirm this grooming visit was completed.</label>
+   <p style="font-size:12px;color:var(--muted)">Existing visits match automatically. Use Record completed visit only when the visit is genuinely missing.</p>
    <div style="overflow:auto"><table style="width:100%;min-width:450px"><thead><tr><th>Groomer</th>${WORK_COMPONENTS.map(k=>`<th>${k==='other'?'Other services':k} %</th>`).join('')}<th></th></tr></thead><tbody>${w.work_allocations.map((a,i)=>`<tr><td><select style="min-width:130px" onchange="workSetAllocation('${ctx}','${d.dog_id}',${i},'groomer_id',this.value)">${workGroomerOptions(a.groomer_id)}</select></td>${WORK_COMPONENTS.map(k=>`<td><input type="number" aria-label="${k} share" min="0" max="100" step="0.01" value="${Number(a[k]||0)}" ${flags[k]?'':'disabled'} style="width:65px" onchange="workSetAllocation('${ctx}','${d.dog_id}',${i},'${k}',this.value)"/></td>`).join('')}<td><button type="button" class="btn btn-g btn-sm" onclick="workRemoveGroomer('${ctx}','${d.dog_id}',${i})">×</button></td></tr>`).join('')}</tbody></table></div>
    <button type="button" class="btn btn-g btn-sm" style="margin-top:8px" onclick="workAddGroomer('${ctx}','${d.dog_id}')">+ Split with another groomer</button>
-  </div>`;
+  </details>`;
  }).join('');
  const fee=(rec.extra_charges||[]).filter(c=>['transport fee','transport','biaya transport'].includes(String(c.label||'').trim().toLowerCase())).reduce((n,c)=>n+Number(c.amount||0),0);
  const ids=[...new Set(rec.dogs.flatMap(d=>state.lines[d.dog_id].work_allocations.map(a=>a.groomer_id)).filter(Boolean))];
@@ -9731,7 +9740,7 @@ function renderWorkEditor(ctx='form'){
  state.transport=state.transport.filter(a=>ids.includes(a.groomer_id));
  ids.forEach(id=>{if(!state.transport.some(a=>a.groomer_id===id))state.transport.push({groomer_id:id,share:0});});
  const summary=ids.map(id=>{const parts={basic:0,styling:0,botak:0};rec.dogs.forEach(d=>state.lines[d.dog_id].work_allocations.filter(a=>a.groomer_id===id).forEach(a=>Object.keys(parts).forEach(k=>parts[k]+=Number(a[k]||0)/100)));return `<div>${esc(groomers.find(g=>g.id===id)?.name||'?')}: ${parts.basic} Basic · ${parts.styling} Styling · ${parts.botak} Botak pay unit(s)</div>`;}).join('');
- el.innerHTML=`<div class="card" style="margin:12px 0;border-left:4px solid var(--primary)"><strong>Completed work & groomer credit</strong><p style="font-size:12px;color:var(--muted)">One customer invoice. Assign each pet's work to the actual groomer(s). Shares total 100% for each performed service. Basic/Styling/Botak pay uses saved rates; zero-priced covered visits still earn work credit.</p>${rows}<div style="padding:10px;margin-top:10px;background:var(--subtle);font-size:12px"><strong>Credit summary</strong>${summary}</div>${fee>0?`<div style="margin-top:12px"><strong>Staff transport pool: ${fmtRp(Math.round(fee/2))}</strong><p style="font-size:12px">One pool per invoice, shared once. Default shares are equal; check before saving.</p>${state.transport.map((a,i)=>`<div style="display:flex;gap:8px;margin-top:6px"><span style="flex:1">${esc(groomers.find(g=>g.id===a.groomer_id)?.name||'?')}</span><input aria-label="Transport share" type="number" min="0" max="100" step="0.01" value="${a.share}" style="width:80px" onchange="workTransportSet('${ctx}',${i},'share',this.value)"/>%</div>`).join('')}</div>`:''}</div>`;
+ el.innerHTML=`<div class="card" style="margin:12px 0;border-left:4px solid var(--primary)"><strong>Groomers from calendar</strong><p style="font-size:12px;color:var(--muted)">Each pet automatically uses its matching appointment. One household can have different groomers. Open a row only to correct a match or add an optional service split. Dog counts and Basic job pay follow calendar appointments.</p>${rows}${fee>0?`<details style="margin-top:12px"><summary>Transport: ${fmtRp(Math.round(fee/2))} shared once between groomers</summary>${state.transport.map((a,i)=>`<div style="display:flex;gap:8px;margin-top:6px"><span style="flex:1">${esc(groomers.find(g=>g.id===a.groomer_id)?.name||'?')}</span><input aria-label="Transport share" type="number" min="0" max="100" step="0.01" value="${a.share}" style="width:80px" onchange="workTransportSet('${ctx}',${i},'share',this.value)"/>%</div>`).join('')}</details>`:''}</div>`;
 }
 function decorateInvoiceWork(rec,state){
  const errors=[];lastInvoiceGuardError='';
@@ -9788,12 +9797,68 @@ async function saveWorkReview(){
   await reloadTables('invoices');cm('ov-work-review');renderPayroll();showToast('Work assignments verified.','success');
  }catch(e){document.getElementById('work-review-error').textContent=e.message;}finally{button.disabled=false;}
 }
+
+let workBulkShowMatched=false,workBulkMessage='';
+function workBulkKey(row){return row.invoice_id+'|'+(row.dog_id||'');}
+function workBulkRows(cycle){
+ const rows=new Map(workReview.filter(r=>r.invoice_date>=cycle.start&&r.invoice_date<=cycle.end).map(r=>[workBulkKey(r),r]));
+ if(workBulkShowMatched)invoices.filter(i=>isAfterVisitInvoice(i)&&i.invoice_date>=cycle.start&&i.invoice_date<=cycle.end).forEach(i=>(i.dogs||[]).forEach(d=>{
+  const row={invoice_id:i.id,invoice_number:i.invoice_number,owner_name:i.owner_name,invoice_date:i.invoice_date,dog_id:d.dog_id,reason:'Matched automatically'};
+  const job=workJobs.find(j=>j.invoice_id===i.id&&j.dog_id===d.dog_id);row.appointment_id=job?.appointment_id||d.appointment_id||'';
+  if(!rows.has(workBulkKey(row)))rows.set(workBulkKey(row),row);
+ }));
+ return [...rows.values()].sort((a,b)=>a.invoice_date.localeCompare(b.invoice_date)||String(a.invoice_number).localeCompare(String(b.invoice_number)));
+}
+function workBulkCandidates(row){return appts.filter(a=>a.dog_id===row.dog_id&&a.appt_date===row.invoice_date&&a.status!=='cancelled'&&!isApptPlaceholder(a));}
+function workBulkSeed(row){
+ const key=workBulkKey(row);if(workBulkDraft.has(key))return workBulkDraft.get(key);
+ const candidates=workBulkCandidates(row),a=candidates.find(a=>a.id===row.appointment_id)||(candidates.length===1?candidates[0]:null);
+ const draft={invoice_id:row.invoice_id,dog_id:row.dog_id,appointment_id:a?.id||'',groomer_id:a?.groomer_id||''};workBulkDraft.set(key,draft);return draft;
+}
+function workBulkSet(key,field,value){
+ const row=workBulkDraft.get(key);if(!row)return;row[field]=value;
+ if(field==='appointment_id')row.groomer_id=appts.find(a=>a.id===value)?.groomer_id||'';
+ workBulkSelected.add(key);renderWorkReviewQueue(getPayrollCycle(payrollCycleAnchor));
+}
+function workBulkToggle(key,on){if(on)workBulkSelected.add(key);else workBulkSelected.delete(key);}
+function workBulkSelectAll(on){workBulkRows(getPayrollCycle(payrollCycleAnchor)).slice(0,200).forEach(r=>{if(on)workBulkSelected.add(workBulkKey(r));else workBulkSelected.delete(workBulkKey(r));});renderWorkReviewQueue(getPayrollCycle(payrollCycleAnchor));}
+function workBulkAssign(){
+ const gid=document.getElementById('work-bulk-groomer')?.value;if(!gid){alert('Choose a groomer first.');return;}
+ const rows=workBulkRows(getPayrollCycle(payrollCycleAnchor)).slice(0,200).filter(r=>workBulkSelected.has(workBulkKey(r)));
+ if(!rows.length){alert('Select the rows to edit.');return;}
+ rows.forEach(r=>{
+  const draft=workBulkSeed(r);draft.groomer_id=gid;
+  if(!draft.appointment_id){const matches=workBulkCandidates(r).filter(a=>a.groomer_id===gid);if(matches.length===1)draft.appointment_id=matches[0].id;}
+ });renderWorkReviewQueue(getPayrollCycle(payrollCycleAnchor));
+}
+async function saveWorkBulk(){
+ if(workBulkBusy)return;
+ const rows=workBulkRows(getPayrollCycle(payrollCycleAnchor)).slice(0,200).filter(r=>workBulkSelected.has(workBulkKey(r)));
+ if(!rows.length){alert('Select the rows to save.');return;}
+ const changes=rows.map(workBulkSeed);
+ if(changes.some(c=>!c.dog_id||!c.appointment_id||!c.groomer_id)){alert('Each selected row needs an existing matching booking and a groomer. Deselect rows you cannot resolve yet.');return;}
+ const reassigned=changes.filter(c=>appts.find(a=>a.id===c.appointment_id)?.groomer_id!==c.groomer_id).length;
+ if(!confirm('Save '+changes.length+' invoice/pet booking link(s)?'+(reassigned?'\n'+reassigned+' calendar groomer assignment(s) will also change, so dog counts follow the correction.':'')+'\nCustomer prices and stored paid payroll amounts stay unchanged.'))return;
+ workBulkBusy=true;workBulkMessage='Saving selected rows…';renderWorkReviewQueue(getPayrollCycle(payrollCycleAnchor));
+ try{
+  const {data,error}=await db.rpc('hp_bulk_booking_links',{p_changes:changes});if(error)throw error;
+  if(!Array.isArray(data)||data.length!==changes.length)throw new Error('Invalid save response. Refresh before trying again.');
+  const failed=data.filter(r=>!r.ok);data.filter(r=>r.ok).forEach(r=>{workBulkDraft.delete(workBulkKey(r));workBulkSelected.delete(workBulkKey(r));});
+  workBulkMessage=(data.length-failed.length)+' saved'+(failed.length?'; '+failed.length+' need attention: '+failed.map(r=>(invoices.find(i=>i.id===r.invoice_id)?.invoice_number||'Invoice')+' — '+r.error).join('; '):'.');
+  await reloadTables('appointments','invoices');
+ }catch(e){workBulkMessage='Save failed: '+e.message;}finally{workBulkBusy=false;renderPayroll();}
+}
 function renderWorkReviewQueue(cycle){
  const el=document.getElementById('work-review-queue');if(!el)return;
- const pending=workReview.filter(r=>r.invoice_date>=cycle.start&&r.invoice_date<=cycle.end);
- const gaps=workGaps.filter(g=>g.service_date>=cycle.start&&g.service_date<=cycle.end);
- el.innerHTML=!workLedgerReady?`<div class="card" role="alert">${esc(workLedgerError||'Loading verified work…')}<button class="btn btn-g" onclick="loadWorkLedger().then(renderPayroll)">Retry</button></div>`:pending.length||gaps.length?`<div class="card" style="border-left:4px solid var(--red-solid);margin-bottom:16px"><strong>${pending.length} invoice(s) need review; ${gaps.length} recorded/completed appointment(s) lack verified invoice work. Reconcile before payout.</strong><p>Totals below include verified work only. Check actual visits and invoice assignments; do not guess from the calendar or invoice header.</p>${pending.map(r=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0"><span>${esc(r.invoice_number)} · ${esc(r.owner_name||'')} · ${esc(r.invoice_date)}</span><button class="btn btn-g btn-sm" onclick="openWorkReview('${r.invoice_id}')">Review work</button></div>`).join('')}${gaps.map(g=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0"><span>${esc(g.service_date)} · ${esc(dogs.find(d=>d.id===g.dog_id)?.name||'?')} · ${esc(groomers.find(x=>x.id===g.groomer_id)?.name||'?')}</span><button class="btn btn-g btn-sm" onclick="openApptEdit('${g.appointment_id}')">Open booking</button></div>`).join('')}</div>`:'<p style="font-size:12px;color:var(--green-dk)">Work reconciled for this cycle. Job pay uses verified visits + invoice allocations; calendar bookings alone are excluded.</p>';
+ if(!workLedgerReady){el.innerHTML='<div class="card" role="alert">'+esc(workLedgerError||'Loading payroll…')+' <button class="btn btn-g" onclick="loadWorkLedger().then(renderPayroll)">Retry</button></div>';return;}
+ const pending=workReview.filter(r=>r.invoice_date>=cycle.start&&r.invoice_date<=cycle.end),all=workBulkRows(cycle),rows=all.slice(0,200);
+ const table=rows.length?`<div style="overflow:auto;margin-top:12px"><table style="width:100%;min-width:780px"><thead><tr><th><input type="checkbox" aria-label="Select all shown rows" onchange="workBulkSelectAll(this.checked)" ${rows.every(r=>workBulkSelected.has(workBulkKey(r)))?'checked':''}/></th><th>Invoice / customer</th><th>Pet / date</th><th>Calendar booking</th><th>Groomer</th><th>Status</th></tr></thead><tbody>${rows.map(r=>{
+  const key=workBulkKey(r),draft=workBulkSeed(r),candidates=workBulkCandidates(r);
+  return `<tr><td><input type="checkbox" aria-label="Select ${esc(r.invoice_number)} ${esc(dogs.find(d=>d.id===r.dog_id)?.name||'pet')}" ${workBulkSelected.has(key)?'checked':''} onchange="workBulkToggle('${key}',this.checked)"/></td><td>${esc(r.invoice_number)}<br><small>${esc(r.owner_name||'')}</small></td><td>${esc(dogs.find(d=>d.id===r.dog_id)?.name||'?')}<br><small>${esc(r.invoice_date)}</small></td><td><select aria-label="Calendar booking" onchange="workBulkSet('${key}','appointment_id',this.value)"><option value="">Choose booking…</option>${candidates.map(a=>`<option value="${esc(a.id)}" ${draft.appointment_id===a.id?'selected':''}>${esc((a.appt_time||'').slice(0,5))} · ${esc(groomers.find(g=>g.id===a.groomer_id)?.name||'No groomer')} · ${esc(a.id.slice(0,6))}</option>`).join('')}</select></td><td><select aria-label="Groomer" onchange="workBulkSet('${key}','groomer_id',this.value)">${workGroomerOptions(draft.groomer_id)}</select></td><td style="font-size:12px">${esc(r.reason)}${candidates.length?'':`<br><button class="btn btn-g btn-sm" onclick="workOpenPet('${r.dog_id||''}')">Open pet</button>`}</td></tr>`;
+ }).join('')}</tbody></table></div>`:'';
+ el.innerHTML=`<div class="card" style="margin-bottom:16px"><strong>${pending.length?pending.length+' invoice/pet exception(s) need a match':'Invoices matched automatically for this cycle'}</strong><p style="font-size:12px">Dog counts and Basic job pay follow past/done calendar appointments. Normal invoices match each pet automatically, including households with two groomers. Only missing or ambiguous matches appear here.</p><label style="display:block;font-size:12px"><input type="checkbox" ${workBulkShowMatched?'checked':''} onchange="workBulkShowMatched=this.checked;renderWorkReviewQueue(getPayrollCycle(payrollCycleAnchor))"/> Show matched invoices too, for bulk corrections</label>${table}${rows.length?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><select id="work-bulk-groomer" aria-label="Groomer for selected rows">${workGroomerOptions('')}</select><button class="btn btn-g" ${workBulkBusy?'disabled':''} onclick="workBulkAssign()">Set groomer on selected rows</button><button class="btn btn-p" ${workBulkBusy?'disabled':''} onclick="saveWorkBulk()">${workBulkBusy?'Saving…':'Save selected rows'}</button></div><p style="font-size:11px;color:var(--muted)">Setting a groomer prepares the selected rows. Save applies the corrections to their calendar bookings. ${all.length>200?'Showing the first 200 rows; save this batch to work through the remaining exceptions.':''}</p>`:''}${workBulkMessage?`<p role="status" style="font-size:12px;white-space:pre-wrap">${esc(workBulkMessage)}</p>`:''}</div>`;
 }
+function workOpenPet(did){const dog=dogs.find(d=>d.id===did);if(dog?.customer_id)openCust360(dog.customer_id);else alert('Find this pet in Database and add or correct its actual calendar booking.');}
 
 function invoiceKind(inv){
  const lines=inv?.dogs||[];
@@ -14472,13 +14537,20 @@ function payrollNextCycle(){
 
 function computeGroomerDogsInCycle(groomerId,cycle){
  const t=verifiedWorkTotals(groomerId,cycle),sizes={XS:0,Small:0,Medium:0,Large:0,XL:0,Cat:0,Unknown:0};
- const counted=t.rows.filter(r=>Number(r.basic_share)>0).map(r=>{
-  const j=r.job,invoice=invoices.find(i=>i.id===j.invoice_id)||{},dog=(invoice.dogs||[]).find(d=>d.dog_id===j.dog_id)||dogs.find(d=>d.id===j.dog_id)||{};
-  const appointment={...(appts.find(a=>a.id===j.appointment_id)||{}),id:j.appointment_id,appt_date:j.service_date,groomer_id:groomerId,dog_id:j.dog_id};
-  const units=Number(r.basic_share)/100;sizes[j.dog_size||'Unknown']=(sizes[j.dog_size||'Unknown']||0)+units;
-  return {invoice,dog,appointment,jobKey:j.id,services:(j.services||[]).map(s=>s.name),amount:Number(r.basic_amount),units};
+ const counted=t.calendar.map(j=>{
+  const invoiceJob=workJobs.find(w=>w.appointment_id===j.id),invoice=invoices.find(i=>i.id===invoiceJob?.invoice_id)||{};
+  const dog={...(dogs.find(d=>d.id===j.dog_id)||{}),size:j.dog_size};
+  const appointment={...(appts.find(a=>a.id===j.id)||{}),id:j.id,appt_date:j.service_date,groomer_id:groomerId,dog_id:j.dog_id};
+  sizes[j.dog_size||'Unknown']=(sizes[j.dog_size||'Unknown']||0)+1;
+  return {invoice,dog,appointment,jobKey:j.id,services:String(j.service_base||'Basic Grooming').split(',').map(s=>s.trim()),amount:Number(j.basic_amount||0),units:j.basic?1:0,stylingAmount:0,botakAmount:0,transportAmount:0};
  });
- return {sizes,total:t.dogUnits,totalAmount:t.perDog,counted,allItems:verifiedWorkItems(groomerId,cycle),rate:payrollSettings.rate_per_dog||20000,botakCount:t.botakUnits,botakAmount:t.botak,transportTotal:t.transport,transportCount:new Set(t.rows.filter(r=>Number(r.transport_amount)>0).map(r=>r.job.invoice_id)).size};
+ const allItems=counted.map(i=>({...i}));
+ verifiedWorkItems(groomerId,cycle).forEach(i=>{
+  const match=allItems.find(c=>c.appointment.id===i.appointment.id);
+  if(match){match.stylingAmount+=i.stylingAmount;match.botakAmount+=i.botakAmount;match.transportAmount+=i.transportAmount;}
+  else allItems.push({...i,amount:0,units:0});
+ });
+ return {sizes,total:counted.length,totalAmount:t.perDog,counted,allItems,rate:payrollSettings.rate_per_dog??20000,botakCount:t.botakUnits,botakAmount:t.botak,transportTotal:t.transport,transportCount:new Set(t.rows.filter(r=>Number(r.transport_amount)>0).map(r=>r.job.invoice_id)).size};
 }
 
 // ===== Compensation engine (per-worker) =====
@@ -14645,13 +14717,13 @@ function renderPayroll(){
   const isPaid=payout&&payout.status==='paid';
   const pay=computeGroomerPay(g,cycle);
   const m=pay.meta;
-  const notes={basic:'',weekly:`${m.weeklyPaidDays} hari dibayar · ÷6/minggu`,noLate:`<button type="button" onclick="showPayrollLateList('${g.id}')" title="Lihat hari terlambat cycle ini" style="background:none;border:none;color:inherit;font:inherit;cursor:pointer;text-decoration:underline;padding:0">late: ${m.lateCount}</button>`,noSick:`sakit: ${m.sickDays} hari`,styling:`${m.stylingCount} verified units · saved rates`,botak:`${m.botakCount} verified units · saved rates`,transport:`${m.transportCount} shared pool(s)`,perDog:`${m.dogCount} verified units · saved rates`,daily:`${m.daysWorked} hari × ${fmtRp(pay.c.daily.amount)}`};
+  const notes={basic:'',weekly:`${m.weeklyPaidDays} hari dibayar · ÷6/minggu`,noLate:`<button type="button" onclick="showPayrollLateList('${g.id}')" title="Lihat hari terlambat cycle ini" style="background:none;border:none;color:inherit;font:inherit;cursor:pointer;text-decoration:underline;padding:0">late: ${m.lateCount}</button>`,noSick:`sakit: ${m.sickDays} hari`,styling:`${m.stylingCount} invoice units`,botak:`${m.botakCount} invoice units`,transport:`${m.transportCount} shared pool(s)`,perDog:`${m.dogCount} calendar appointments · Basic rate`,daily:`${m.daysWorked} hari × ${fmtRp(pay.c.daily.amount)}`};
   if(isPaid)Object.keys(notes).forEach(k=>notes[k]='saved paid snapshot');
   const stored=isPaid?(payout.breakdown||{}):null;
   const val=k=>stored?(stored[k]||0):pay.comp[k];
   const rows=COMP_LINES.map(([k,label])=>{
    const auto=pay.comp[k];
-   const input=isPaid?`<strong style="font-size:12px">${fmtRp(val(k))}</strong>`:`<input type="number" id="pay-${g.id}-${k}" value="${auto}" ${['perDog','styling','botak','transport'].includes(k)?'readonly title="Verified work amount; use named additional pay for adjustments"':''} oninput="recalcPayCard('${g.id}')" style="width:110px;text-align:right;padding:2px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>`;
+   const input=isPaid?`<strong style="font-size:12px">${fmtRp(val(k))}</strong>`:`<input type="number" id="pay-${g.id}-${k}" value="${auto}" ${['perDog','styling','botak','transport'].includes(k)?'readonly title="Calculated from calendar / matched invoices; use named additional pay for adjustments"':''} oninput="recalcPayCard('${g.id}')" style="width:110px;text-align:right;padding:2px 5px;border:1px solid var(--border);border-radius:4px;font-size:12px"/>`;
    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0"><span style="font-size:11px;color:var(--muted)">${label}${notes[k]?` <span style="opacity:.65">(${notes[k]})</span>`:''}</span>${input}</div>`;
   }).join('');
   const customRows=getPayrollCustomRows(g.id,cycle.start,payout);
@@ -14685,7 +14757,7 @@ function renderPayroll(){
     ${isPaid?`<span class="badge bs" title="Paid ${payout.paid_at?fmtD(payout.paid_at.slice(0,10)):''}">PAID</span>`:`<span class="badge bm">PENDING</span>`}
    </div>
     <div style="border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px 0;margin-bottom:8px">${rows}${customBlock}</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px;color:var(--muted);margin:8px 0">${Object.entries((isPaid?payout.dogs_counted:m.sizeCounts)||{}).filter(([,n])=>n>0).map(([s,n])=>`<span style="background:var(--subtle);padding:1px 6px;border-radius:8px">${esc(s)}: <strong>${n}</strong></span>`).join('')||'<span>Belum ada Basic Grooming yang eligible</span>'}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px;color:var(--muted);margin:8px 0">${Object.entries((isPaid?payout.dogs_counted:m.sizeCounts)||{}).filter(([,n])=>n>0).map(([s,n])=>`<span style="background:var(--subtle);padding:1px 6px;border-radius:8px">${esc(s)}: <strong>${n}</strong></span>`).join('')||'<span>Belum ada appointment kalender yang dihitung</span>'}</div>
    <div style="display:flex;justify-content:space-between;align-items:baseline">
     <span style="font-size:11px;color:var(--muted)">Take-home</span>
     <strong style="font-size:16px;color:#16a34a" id="pay-total-${g.id}">${fmtRp(total)}</strong>
@@ -14709,7 +14781,7 @@ async function markGroomerPaid(groomerId,cycleStart,cycleEnd){
  if(displayedWorkVersion!==workLedgerVersion){alert('Verified work changed since these payroll cards were shown. Review the refreshed payroll before paying.');renderPayroll();return;}
  const {data:workCheck,error:workCheckError}=await db.rpc('hp_work_preview',{p_groomer_id:groomerId,p_start:cycleStart,p_end:cycleEnd});
  if(workCheckError){alert(workCheckError.message);return;}
- if(workCheck.unresolved||workCheck.missing_evidence){alert('Reconcile unverified invoices and completed visits missing verified invoice work before paying.');renderPayroll();return;}
+ if(workCheck.unresolved||workCheck.missing_evidence){alert('Correct missing or ambiguous invoice/booking matches before paying.');renderPayroll();return;}
  const cycle={start:cycleStart,end:cycleEnd};
  const {sizes}=computeGroomerDogsInCycle(groomerId,cycle);
  const breakdown={}; let amount=0;
@@ -14754,7 +14826,7 @@ async function publishPaySnapshot(gid){
  await loadWorkLedger();
  if(!workLedgerReady){alert(workLedgerError);return;}
  const workCycle=getPayrollCycle(payrollCycleAnchor);
- if(workReview.some(r=>r.invoice_date>=workCycle.start&&r.invoice_date<=workCycle.end)){alert('Review incomplete invoice assignments before publishing payroll.');return;}
+ if(workReview.some(r=>r.invoice_date>=workCycle.start&&r.invoice_date<=workCycle.end)){alert('Correct missing or ambiguous invoice/booking matches before publishing payroll.');return;}
  const g=groomers.find(x=>x.id===gid); if(!g) return;
  const cycle=getPayrollCycle(payrollCycleAnchor);
  const payout=groomerPayouts.find(p=>p.groomer_id===gid&&p.cycle_start===cycle.start&&(p.payout_type||'salary')==='salary');
@@ -14928,7 +15000,7 @@ function showPayrollDetail(gid){
    <td style="padding:6px 8px;font-size:12px">${esc(it.dog.name||'?')}</td>
    <td style="padding:6px 8px;font-size:12px">${esc(it.dog.size||'')}</td>
    <td style="padding:6px 8px;font-size:11px;color:var(--muted)">${esc(it.services.join(', ')||'-')}</td>
-   <td style="padding:6px 8px;font-size:12px"><a href="#" onclick="event.preventDefault();cm('ov-payroll-detail');openInvoiceForEdit('${it.invoice.id}')" style="color:var(--green-dk);font-weight:600">${esc(it.invoice.invoice_number||'?')}</a></td>
+   <td style="padding:6px 8px;font-size:12px"><a href="#" onclick="event.preventDefault();cm('ov-payroll-detail');${it.invoice.id?`openInvoiceForEdit('${it.invoice.id}')`:`openApptEdit('${it.appointment.id}')`}" style="color:var(--green-dk);font-weight:600">${esc(it.invoice.invoice_number||'Calendar only')}</a></td>
    <td style="padding:6px 8px;font-size:11px">${it.units} Basic unit(s): ${fmtRp(it.amount)}<br>Styling: ${fmtRp(it.stylingAmount)} · Botak: ${fmtRp(it.botakAmount)}<br>Transport: ${fmtRp(it.transportAmount)}</td>
   </tr>`;}).join('')}</tbody></table></div>`:'';
  // B. Done tanpa invoice (tidak masuk payroll sama sekali)
@@ -14946,10 +15018,10 @@ function showPayrollDetail(gid){
  document.getElementById('payroll-detail-title').textContent=g.name+' — detail '+cycle.label;
  document.getElementById('payroll-detail-body').innerHTML=
   `<div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:8px 10px;background:var(--subtle);border-radius:6px;line-height:1.6">
-   Take-home cycle: <strong style="color:#16a34a">${fmtRp(pay.takeHome)}</strong> · ${m.dogCount} basic job · ${m.stylingCount} styling pay unit(s) · saved rate snapshots · ${m.botakCount} botak · late: ${m.lateCount}
+   Take-home cycle: <strong style="color:#16a34a">${fmtRp(pay.takeHome)}</strong> · ${m.dogCount} calendar appointments · ${m.stylingCount} styling pay unit(s) · saved rate snapshots · ${m.botakCount} botak · late: ${m.lateCount}
   </div>`
-  +sec('Job dihitung (appointment + invoice sumber)',jobs.length,jobTable,'Semua baris di sini adalah sumber uang: klik nomor invoice untuk buka invoice-nya.')
-  +sec('Done tapi tanpa invoice (hilang dari payroll)',miss.length,missTable,'Appointment done di cycle ini yang belum punya invoice — buat invoice-nya agar terhitung.');
+  +sec('Calendar dog pay + matched invoice add-ons',jobs.length,jobTable,'Calendar rows supply dog counts and eligible Basic pay. Invoice rows supply Styling, Botak and Transport.')
+  +sec('Calendar appointments without an invoice',miss.length,missTable,'Dog counts and eligible Basic pay already follow the calendar. Add an invoice when billing or invoice add-on evidence is needed.');
  om('ov-payroll-detail');
 }
 
@@ -15651,7 +15723,7 @@ function renderLeaderboard(){
    </table>
   </div>
   <div style="margin-top:14px;font-size:11px;color:var(--muted);padding:8px 12px;background:var(--subtle);border-radius:6px">
-   Metrik: <strong>Dogs</strong> = verified paid work units; shared work is fractional. Unreviewed invoices and package sales are excluded. <strong>Revenue</strong> = allocated after-visit invoice revenue from verified work. <strong>Take-home</strong> dari <code>computeGroomerPay</code> (basic + weekly + bonus + per-dog + styling %). Klik "Detail" untuk breakdown per groomer.
+   Metrik: <strong>Dogs</strong> = past/done calendar appointments, excluding cancelled bookings and explicit placeholders. Invoice approval is not required for dog counts. <strong>Revenue</strong> = after-visit invoice revenue matched per pet to its calendar groomer. <strong>Take-home</strong> dari <code>computeGroomerPay</code> (basic + weekly + bonus + per-dog + styling %). Klik "Detail" untuk breakdown per groomer.
   </div>
  `;
 }
@@ -15721,13 +15793,8 @@ function tallyCheck4_visitsApptsMismatch(cycle){
 function tallyCheck5_dogCountMismatch(cycle){
  const byGroomer={};
  groomers.forEach(g=>{if(g.active)byGroomer[g.id]={id:g.id,name:g.name,invoiced:0,done:0}});
- Object.values(byGroomer).forEach(g=>{g.invoiced=verifiedWorkTotals(g.id,cycle).dogUnits;});
- appts.forEach(a=>{
-  if(a.status!=='done') return;
-  if(a.appt_date<cycle.start||a.appt_date>cycle.end) return;
-  if(!a.groomer_id||!byGroomer[a.groomer_id]) return;
-  byGroomer[a.groomer_id].done++;
- });
+ Object.values(byGroomer).forEach(g=>{g.invoiced=new Set(verifiedWorkRows(g.id,cycle).map(r=>r.job.appointment_id)).size;});
+ Object.values(byGroomer).forEach(g=>{g.done=calendarWorkRows(g.id,cycle).length;});
  return Object.values(byGroomer).filter(r=>r.invoiced!==r.done);
 }
 
@@ -15844,7 +15911,7 @@ function renderTally(){
  const c5Rows=c5.map(r=>{
   const diff=r.invoiced-r.done;
   return `<div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">
-   <strong>${esc(r.name)}</strong> \u00B7 Invoice: ${r.invoiced} dogs \u00B7 Done appt: ${r.done} dogs \u00B7 <span style="color:${diff>0?'#dc2626':'#ca8a04'};font-weight:600">\u0394 ${diff>0?'+':''}${diff}</span>
+   <strong>${esc(r.name)}</strong> \u00B7 Invoice-linked: ${r.invoiced} appointments \u00B7 Counted calendar: ${r.done} appointments \u00B7 <span style="color:${diff>0?'#dc2626':'#ca8a04'};font-weight:600">\u0394 ${diff>0?'+':''}${diff}</span>
   </div>`;
  }).join('');
 
