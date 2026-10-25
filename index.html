@@ -9775,6 +9775,18 @@ function decorateInvoiceWork(rec,state){
  }
  lastInvoiceGuardError=[...new Set(errors)].join('\n');return errors.length?null:rec;
 }
+function buildInvoicePreviewRecord(){
+ // A draft preview is read-only. Missing visit/customer/allocation fields must
+ // not hide the invoice while the user fills them in; issuance stays guarded.
+ const rec=buildInvoiceRecordRaw();if(!rec)return null;
+ if(invoiceKind(rec)!=='package_sale'){
+  workSeed(rec,workFormState);
+  const ids=new Set((rec.dogs||[]).flatMap(d=>(workFormState.lines[d.dog_id]?.work_allocations||[]).map(a=>a.groomer_id)).filter(Boolean));
+  const names=[...ids].map(id=>groomers.find(g=>g.id===id)?.name).filter(Boolean);
+  if(names.length)rec.groomer_name=names.join(', ');
+ }
+ return rec;
+}
 function buildInvoiceRecord(options={}){
  const rec=buildInvoiceRecordRaw();if(!rec)return null;
  const checked=decorateInvoiceWork(rec,workFormState);
@@ -10928,9 +10940,8 @@ function _renderInvoicePreviewNow(){
   const hint=document.getElementById('inv-doc-mode-hint'); if(hint) hint.textContent='';
   return;
  }
- renderWorkEditor('form');
- const rec=buildInvoiceRecord({preview:true});
- if(!rec){el.innerHTML='<div role="status" style="padding:16px;color:var(--red-t);white-space:pre-wrap">'+esc(lastInvoiceGuardError)+'</div>';return}
+ const rec=buildInvoicePreviewRecord();
+ if(!rec){el.innerHTML='';return}
  // Batch O.16 — show detected mode hint
  const mode=detectInvoiceMode(rec);
  const explicit=rec.doc_mode&&rec.doc_mode!=='auto';
@@ -10946,6 +10957,12 @@ function _renderInvoicePreviewNow(){
  }
  const cust=custs.find(c=>c.id===rec.customer_id)||{};
  el.innerHTML=buildInvoiceHTML(rec,cust,bankSettings,false);
+ // Render the document first. Assignment-editor errors cannot blank its preview.
+ try{renderWorkEditor('form');}catch(e){
+  console.warn('Invoice assignment editor:',e.message);
+  const work=document.getElementById('inv-work-wrap');
+  if(work)work.innerHTML='<p role="alert" style="color:var(--red-t)">Groomer assignments could not be displayed. Refresh and try again before saving.</p>';
+ }
 }
 
 function downloadInvoicePDF(){
