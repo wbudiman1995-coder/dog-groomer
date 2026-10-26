@@ -1005,8 +1005,8 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <div id="inv-dogs-services"></div>
 <div id="inv-work-wrap"></div>
 
- <div class="card" style="padding:1rem;margin-bottom:1rem">
- <div class="det-lbl">3. Groomer & tanggal</div>
+ <div class="card" id="inv-details-card" style="padding:1rem;margin-bottom:1rem;display:none">
+ <div class="det-lbl">Detail paket</div>
  <div class="form-grid">
  <div class="fg"><label>Groomer</label>
  <select id="inv-groomer" onchange="renderInvoicePreview()"><option value="">Pilih groomer…</option></select>
@@ -1043,29 +1043,17 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 
  <div class="card" style="padding:1rem;margin-bottom:1rem">
  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
-  <div class="det-lbl" style="margin:0">5. Biaya tambahan (opsional)</div>
+  <div class="det-lbl" style="margin:0">Biaya tambahan (opsional)</div>
   <button type="button" class="btn btn-g btn-sm" onclick="addExtraCharge()">+ Tambah biaya</button>
  </div>
  <div id="inv-extra-charges" style="display:flex;flex-direction:column;gap:6px"></div>
  <div style="font-size:11px;color:var(--muted);margin-top:8px;font-style:italic">Contoh: parkir, transportasi, biaya khusus, dll. Ditampilkan sebagai baris terpisah di invoice.</div>
  </div>
 
- <div class="card" style="padding:1rem;margin-bottom:1rem">
- <div class="det-lbl">6. Discount keseluruhan</div>
- <div class="form-grid">
- <div class="fg"><label>Tipe</label>
- <select id="inv-disc-type" onchange="recalcInvoice()">
- <option value="">Tidak ada</option>
- <option value="percent" selected>Persen (%)</option>
- <option value="fixed">Nominal (Rp)</option>
- </select>
- </div>
- <div class="fg"><label>Nilai (%)</label><input type="number" id="inv-disc-value" value="0" min="0" max="100" oninput="recalcInvoice()"/></div>
- </div>
- <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
-  <input type="checkbox" id="inv-disc-base-only" onchange="recalcInvoice()" style="cursor:pointer"/>
-  <label for="inv-disc-base-only" style="font-size:12px;cursor:pointer;margin:0;color:var(--muted)">Discount hanya untuk Basic Grooming (tidak termasuk add-on seperti Styling, Dematting, dll)</label>
- </div>
+ <div hidden aria-hidden="true" id="inv-legacy-discount">
+  <input type="hidden" id="inv-disc-type" value=""/>
+  <input type="hidden" id="inv-disc-value" value="0"/>
+  <input type="checkbox" id="inv-disc-base-only" tabindex="-1"/>
  </div>
 
  <div class="card" id="inv-subs-billing-card" style="padding:1rem;margin-bottom:1rem">
@@ -1087,7 +1075,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  <!-- Session D item 1: 6c Jadwal rutin removed. Recurring scheduling moved to the calendar wizard. -->
 
  <div class="card" style="padding:1rem;margin-bottom:1rem">
- <div class="det-lbl">7. Catatan</div>
+ <div class="det-lbl">Catatan</div>
  <textarea id="inv-notes" placeholder="Catatan invoice (opsional)" style="width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:var(--r);font-size:var(--fs-body);background:var(--subtle);min-height:64px;font-family:inherit"></textarea>
  </div>
 
@@ -1104,7 +1092,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
  </div>
 
  <div class="form-actions" style="margin-top:1rem">
- <button class="btn btn-p" id="inv-save-btn" onclick="saveInvoice()">Simpan invoice</button>
+ <button class="btn btn-p" id="inv-save-btn" onclick="saveInvoice()">Selesaikan &amp; simpan invoice</button>
  <button class="btn btn-b" id="inv-save-appts-btn" onclick="saveInvoiceAndAppts()" style="display:none">Simpan invoice + kalender</button>
  <button class="btn btn-g" onclick="downloadInvoicePDF()">Download PDF</button>
  <button class="btn btn-wa" onclick="sendCurrentInvoiceToWA(event)">Kirim ke WhatsApp</button>
@@ -1713,7 +1701,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 <div class="overlay" id="ov-work-review"><div class="modal" style="max-width:850px">
  <button type="button" class="modal-close" onclick="cm('ov-work-review')">×</button>
  <div class="modal-title" id="work-review-title">Review work</div>
- <p style="font-size:12px;color:var(--muted)">Review completed visits and groomer shares. Customer charges remain as saved. Paid payroll cannot be rewritten.</p>
+ <p style="font-size:12px;color:var(--muted)">Groomer mengikuti kalender. Ubah hanya jika penugasannya berbeda. Harga dan payroll yang sudah dibayar tetap dilindungi.</p>
  <div id="work-review-body"></div><p id="work-review-error" role="alert" style="color:var(--red-t);white-space:pre-wrap"></p>
  <div class="form-actions"><button type="button" class="btn btn-p" id="work-review-save" onclick="saveWorkReview()">Verify assignments</button><button class="btn btn-g" onclick="cm('ov-work-review')">Cancel</button></div>
 </div></div>
@@ -9634,7 +9622,6 @@ let workJobs=[],workAllocations=[],workReview=[],workGaps=[],workCalendarJobs=[]
 let workLedgerRequestSeq=0,workSurfaceRefreshAt=0;
 const workBulkDraft=new Map(),workBulkSelected=new Set();let workBulkBusy=false;
 let workFormState={lines:{},transport:null},workReviewState=null,workReviewInvoice=null;
-const workVisitBusy=new Set();
 let lastInvoiceGuardError='';
 const WORK_COMPONENTS=['basic','styling','botak','other'];
 function workComponents(services){
@@ -9697,7 +9684,7 @@ function workSeed(rec,state){
    const v=visits.filter(v=>v.dog_id===d.dog_id&&v.visited_at===rec.invoice_date);
    const a=old?.appointment_id?candidates.find(a=>a.id===old.appointment_id):candidates.length===1?candidates[0]:null;
    const flags=workComponents(d.services);
-   current={date:rec.invoice_date,appointment_id:a?.id||'',visit_id:old?.visit_id|| (v.length===1?v[0].id:''),work_completed:old?.work_completed===true||!!(a&&v.length===1),work_allocations:old?.work_allocations?JSON.parse(JSON.stringify(old.work_allocations)):[{groomer_id:a?.groomer_id||'',...Object.fromEntries(WORK_COMPONENTS.map(k=>[k,flags[k]?100:0]))}]};
+   current={date:rec.invoice_date,appointment_id:a?.id||'',visit_id:old?.visit_id|| (v.length===1?v[0].id:''),work_completed:!!a,work_allocations:old?.work_allocations?JSON.parse(JSON.stringify(old.work_allocations)):[{groomer_id:a?.groomer_id||'',...Object.fromEntries(WORK_COMPONENTS.map(k=>[k,flags[k]?100:0]))}]};
    state.lines[d.dog_id]=current;
   }
   const flags=workComponents(d.services);
@@ -9710,7 +9697,8 @@ function workSeedTransport(rec,state){
  const ids=[...new Set((rec.dogs||[]).flatMap(d=>(state.lines[d.dog_id]?.work_allocations||[]).map(a=>a.groomer_id)).filter(Boolean))].sort();
  const key=ids.join('|'),changed=state.transportGroupKey!==undefined&&state.transportGroupKey!==key;
  const obsolete=(state.transport||[]).some(a=>!ids.includes(a.groomer_id));
- if(changed||obsolete||!state.transport?.length){
+ const invalid=(state.transport||[]).some(a=>!Number.isFinite(Number(a.share))||Number(a.share)<0||Number(a.share)>100)||new Set((state.transport||[]).map(a=>a.groomer_id)).size!==(state.transport||[]).length||Math.abs((state.transport||[]).reduce((n,a)=>n+Number(a.share||0),0)-100)>.00001;
+ if(changed||obsolete||invalid||!state.transport?.length){
   const share=ids.length?Math.floor(10000/ids.length)/100:0;
   state.transport=ids.map((id,i)=>({groomer_id:id,share:i===ids.length-1?Number((100-share*(ids.length-1)).toFixed(2)):share}));
  }else ids.forEach(id=>{if(!state.transport.some(a=>a.groomer_id===id))state.transport.push({groomer_id:id,share:0});});
@@ -9721,53 +9709,37 @@ function workSet(ctx,did,key,value){
  state.lines[did][key]=value;
  if(key==='appointment_id'){
   const a=appts.find(a=>a.id===value),line=state.lines[did];
-  line.work_completed=!!(a&&line.visit_id);
+  line.work_completed=!!a;
   if(a&&line.work_allocations.length===1)line.work_allocations[0].groomer_id=a.groomer_id||'';
  }
- if(key==='visit_id')state.lines[did].work_completed=!!(value&&state.lines[did].appointment_id);
- if(ctx==='form')renderInvoicePreview();
+ if(ctx==='form')renderInvoicePreview();else renderWorkEditor(ctx);
 }
-function workSetAllocation(ctx,did,index,key,value){const a=workState(ctx)?.lines[did]?.work_allocations[index];if(a)a[key]=key==='groomer_id'?value:Number(value);if(ctx==='form')renderInvoicePreview();}
+function workSetAllocation(ctx,did,index,key,value){const a=workState(ctx)?.lines[did]?.work_allocations[index];if(a)a[key]=key==='groomer_id'?value:Number(value);if(ctx==='form')renderInvoicePreview();else renderWorkEditor(ctx);}
 function workAddGroomer(ctx,did){workState(ctx).lines[did].work_allocations.push({groomer_id:'',basic:0,styling:0,botak:0,other:0});renderWorkEditor(ctx);}
 function workRemoveGroomer(ctx,did,index){const list=workState(ctx).lines[did].work_allocations;if(list.length>1)list.splice(index,1);renderWorkEditor(ctx);}
 function workTransportSet(ctx,index,key,value){const a=workState(ctx)?.transport[index];if(a)a[key]=key==='groomer_id'?value:Number(value);if(ctx==='form')renderInvoicePreview();}
-async function workRecordVisit(ctx,did){
- const key=ctx+'|'+did;if(workVisitBusy.has(key))return;
- const rec=workSource(ctx),d=rec?.dogs.find(d=>d.dog_id===did);if(!rec||!d)return;
- if(rec.invoice_date>taskTodayIso()){alert('Only record grooming that has actually happened.');return;}
- if(!d.services?.length){alert('Select the services actually performed before recording the visit.');return;}
- if(!confirm('Confirm grooming for '+d.name+' was actually completed on '+rec.invoice_date+'?\nThis records completion evidence. A calendar booking alone is not a visit.'))return;
- workVisitBusy.add(key);
- try{
- const {data,error}=await db.from('visits').insert({dog_id:did,visited_at:rec.invoice_date,service_type:(d.services||[]).map(s=>s.name).join(', '),note:'Completion explicitly confirmed by admin before invoice'}).select().single();
- if(error)throw error;if(!data)throw new Error('Visit was not saved. Refresh and try again.');visits.push(data);
- const w=workState(ctx).lines[did];w.visit_id=data?.id||'';w.work_completed=true;
- await logAudit('visit',data?.id,'create',{new:data,label:d.name+' completed '+rec.invoice_date});renderWorkEditor(ctx);
- }catch(e){alert(e.message);}finally{workVisitBusy.delete(key);}
-}
+
 function workGroomerOptions(selected){return '<option value="">Select groomer…</option>'+groomers.map(g=>`<option value="${esc(g.id)}" ${g.id===selected?'selected':''}>${esc(g.name)}${g.active?'':' (inactive)'}</option>`).join('');}
+function workEditAssignment(ctx,did){
+ const line=workState(ctx)?.lines[did];if(!line)return;
+ line.editAssignment=!line.editAssignment;renderWorkEditor(ctx);
+}
 function renderWorkEditor(ctx='form'){
  const el=document.getElementById(ctx==='review'?'work-review-body':'inv-work-wrap');if(!el)return;
  const rec=workSource(ctx);if(!rec||invoiceKind(rec)==='package_sale'){el.innerHTML='';return;}
  const state=workState(ctx);workSeed(rec,state);
  const rows=rec.dogs.map(d=>{
-  const w=state.lines[d.dog_id],flags=workComponents(d.services);
-  const aps=appts.filter(a=>a.dog_id===d.dog_id&&a.appt_date===rec.invoice_date&&a.status!=='cancelled'&&!isApptPlaceholder(a));
-  const vs=visits.filter(v=>v.dog_id===d.dog_id&&v.visited_at===rec.invoice_date);
-  const matched=w.appointment_id&&w.visit_id&&w.work_completed&&w.work_allocations.length===1&&w.work_allocations[0].groomer_id;
-  return `<details ${matched?'':'open'} style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-top:10px"><summary style="cursor:pointer"><strong>${esc(d.name||'?')}</strong> · ${matched?'Matched automatically: '+esc(groomers.find(g=>g.id===w.work_allocations[0].groomer_id)?.name||'?'):'Choose missing booking / visit / groomer'} · ${esc(rec.invoice_date)}</summary>
-   <div class="form-grid" style="margin-top:8px"><div class="fg"><label>Completed visit *</label><select onchange="workSet('${ctx}','${d.dog_id}','visit_id',this.value)"><option value="">Select visit…</option>${vs.map(v=>`<option value="${v.id}" ${w.visit_id===v.id?'selected':''}>${esc(v.visited_at)} · ${esc(v.service_type||'Recorded visit')} · ${esc(v.id.slice(0,8))}</option>`).join('')}</select>${vs.length?'':`<small style="color:var(--red-t)">No visit recorded.</small><button type="button" class="btn btn-g btn-sm" onclick="workRecordVisit('${ctx}','${d.dog_id}')">Record completed visit</button>`}</div>
-   <div class="fg"><label>Exact appointment *</label><select onchange="workSet('${ctx}','${d.dog_id}','appointment_id',this.value)"><option value="">Select appointment…</option>${aps.map(a=>`<option value="${a.id}" ${w.appointment_id===a.id?'selected':''}>${esc((a.appt_time||'').slice(0,5))} · ${esc(groomers.find(g=>g.id===a.groomer_id)?.name||'?')}</option>`).join('')}</select></div></div>
-   <p style="font-size:12px;color:var(--muted)">Existing visits match automatically. Use Record completed visit only when the visit is genuinely missing.</p>
-   <div style="overflow:auto"><table style="width:100%;min-width:450px"><thead><tr><th>Groomer</th>${WORK_COMPONENTS.map(k=>`<th>${k==='other'?'Other services':k} %</th>`).join('')}<th></th></tr></thead><tbody>${w.work_allocations.map((a,i)=>`<tr><td><select style="min-width:130px" onchange="workSetAllocation('${ctx}','${d.dog_id}',${i},'groomer_id',this.value)">${workGroomerOptions(a.groomer_id)}</select></td>${WORK_COMPONENTS.map(k=>`<td><input type="number" aria-label="${k} share" min="0" max="100" step="0.01" value="${Number(a[k]||0)}" ${flags[k]?'':'disabled'} style="width:65px" onchange="workSetAllocation('${ctx}','${d.dog_id}',${i},'${k}',this.value)"/></td>`).join('')}<td><button type="button" class="btn btn-g btn-sm" onclick="workRemoveGroomer('${ctx}','${d.dog_id}',${i})">×</button></td></tr>`).join('')}</tbody></table></div>
-   <button type="button" class="btn btn-g btn-sm" style="margin-top:8px" onclick="workAddGroomer('${ctx}','${d.dog_id}')">+ Split with another groomer</button>
-  </details>`;
+  const w=state.lines[d.dog_id],aps=appts.filter(a=>a.dog_id===d.dog_id&&a.appt_date===rec.invoice_date&&a.status!=='cancelled'&&!isApptPlaceholder(a));
+  const a=aps.find(a=>a.id===w.appointment_id),split=w.work_allocations.length>1;
+  const name=w.work_allocations.map(x=>groomers.find(g=>g.id===x.groomer_id)?.name).filter(Boolean).join(', ');
+  const edit=w.editAssignment||!a||!name;
+  const picker=aps.length>1?`<label>Jadwal<select aria-label="Jadwal ${esc(d.name)}" onchange="workSet('${ctx}','${d.dog_id}','appointment_id',this.value)"><option value="">Pilih jadwal…</option>${aps.map(x=>`<option value="${esc(x.id)}" ${w.appointment_id===x.id?'selected':''}>${esc((x.appt_time||'').slice(0,5))} · ${esc(groomers.find(g=>g.id===x.groomer_id)?.name||'Belum ada groomer')}</option>`).join('')}</select></label>`:'';
+  const shares=split?`<details style="margin-top:8px"><summary>Pembagian khusus tersimpan</summary>${w.work_allocations.map((x,i)=>`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><span>${esc(groomers.find(g=>g.id===x.groomer_id)?.name||'?')}</span>${WORK_COMPONENTS.filter(k=>workComponents(d.services)[k]).map(k=>`<label>${k}<input aria-label="${k} share" type="number" min="0" max="100" step="0.01" value="${Number(x[k]||0)}" onchange="workSetAllocation('${ctx}','${d.dog_id}',${i},'${k}',this.value)" style="width:70px"/></label>`).join('')}</div>`).join('')}</details>`:'';
+  return `<div style="padding:10px 0;border-top:1px solid var(--border)"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><strong>${esc(d.name||'?')}</strong><span style="font-size:12px;color:var(--muted)">${esc(rec.invoice_date)}${a?.appt_time?' · '+esc(a.appt_time.slice(0,5)):''}</span><span style="margin-left:auto">${esc(name||'Belum ada groomer')}</span><button type="button" class="btn btn-g btn-sm" onclick="workEditAssignment('${ctx}','${d.dog_id}')">${edit?'Tutup':'Ubah'}</button></div>${edit?`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">${picker}${!aps.length?'<span role="alert" style="color:var(--red-t)">Belum ada jadwal yang sesuai. Pilih dari kalender.</span><button type="button" class="btn btn-g btn-sm" onclick="openInvApptPicker()">Pilih jadwal</button>':''}${!split?`<label>Groomer<select aria-label="Groomer ${esc(d.name)}" onchange="workSetAllocation('${ctx}','${d.dog_id}',0,'groomer_id',this.value)">${workGroomerOptions(w.work_allocations[0]?.groomer_id||'')}</select></label>`:''}</div>${shares}`:''}</div>`;
  }).join('');
- const fee=(rec.extra_charges||[]).filter(c=>['transport fee','transport','biaya transport'].includes(String(c.label||'').trim().toLowerCase())).reduce((n,c)=>n+Number(c.amount||0),0);
- const ids=[...new Set(rec.dogs.flatMap(d=>state.lines[d.dog_id].work_allocations.map(a=>a.groomer_id)).filter(Boolean))];
- const summary=ids.map(id=>{const parts={basic:0,styling:0,botak:0};rec.dogs.forEach(d=>state.lines[d.dog_id].work_allocations.filter(a=>a.groomer_id===id).forEach(a=>Object.keys(parts).forEach(k=>parts[k]+=Number(a[k]||0)/100)));return `<div>${esc(groomers.find(g=>g.id===id)?.name||'?')}: ${parts.basic} Basic · ${parts.styling} Styling · ${parts.botak} Botak pay unit(s)</div>`;}).join('');
- el.innerHTML=`<div class="card" style="margin:12px 0;border-left:4px solid var(--primary)"><strong>Groomers from calendar</strong><p style="font-size:12px;color:var(--muted)">Each pet automatically uses its matching appointment. One household can have different groomers. Open a row only to correct a match or add an optional service split. Dog counts and Basic job pay follow calendar appointments.</p>${rows}${fee>0?`<details style="margin-top:12px"><summary>Transport: ${fmtRp(Math.round(fee/2))} shared once between groomers</summary>${state.transport.map((a,i)=>`<div style="display:flex;gap:8px;margin-top:6px"><span style="flex:1">${esc(groomers.find(g=>g.id===a.groomer_id)?.name||'?')}</span><input aria-label="Transport share" type="number" min="0" max="100" step="0.01" value="${a.share}" style="width:80px" onchange="workTransportSet('${ctx}',${i},'share',this.value)"/>%</div>`).join('')}</details>`:''}</div>`;
+ el.innerHTML=`<div class="card" style="margin:12px 0;padding:12px 16px"><strong>Groomer dari kalender</strong><p style="font-size:12px;color:var(--muted);margin:6px 0 10px">Saat invoice disimpan, jadwal otomatis ditandai selesai.</p>${rows}</div>`;
 }
+
 function decorateInvoiceWork(rec,state){
  const errors=[];lastInvoiceGuardError='';
  const c=custs.find(c=>c.id===rec.customer_id);
@@ -9783,20 +9755,21 @@ function decorateInvoiceWork(rec,state){
   rec.dogs=rec.dogs.map(d=>{
    const w=state.lines[d.dog_id],flags=workComponents(d.services),pet=dogs.find(x=>x.id===d.dog_id);
    if(!pet?.size||!pet?.name||pet.customer_id!==rec.customer_id)errors.push(`${d.name}: complete pet name, size and owner.`);
-   const v=visits.find(v=>v.id===w.visit_id&&v.dog_id===d.dog_id&&v.visited_at===rec.invoice_date);
    const a=appts.find(a=>a.id===w.appointment_id&&a.dog_id===d.dog_id&&a.appt_date===rec.invoice_date&&a.status!=='cancelled'&&!isApptPlaceholder(a));
-   if(!v||!a||!w.work_completed)errors.push(`${d.name}: choose a recorded visit, exact appointment, and confirm grooming completed.`);
+   if(!a)errors.push(`${d.name}: pilih jadwal grooming yang sesuai.`);
    if(!d.services?.length||d.services.some(s=>!Number.isFinite(Number(s.price))||Number(s.price)<0))errors.push(`${d.name}: select valid services and prices.`);
    if(!w.work_allocations.length||new Set(w.work_allocations.map(x=>x.groomer_id)).size!==w.work_allocations.length||w.work_allocations.some(x=>!groomers.some(g=>g.id===x.groomer_id)))errors.push(`${d.name}: choose distinct registered groomers.`);
    WORK_COMPONENTS.forEach(k=>{const vals=w.work_allocations.map(x=>Number(x[k]||0)),sum=vals.reduce((a,b)=>a+b,0);if(vals.some(n=>!Number.isFinite(n)||n<0||n>100||Math.abs(n*100-Math.round(n*100))>.00001)||Math.abs(sum-(flags[k]?100:0))>.00001)errors.push(`${d.name}: ${k} shares must total ${flags[k]?100:0}%.`);});
-   const duplicate=invoices.find(i=>i.id!==rec.id&&isAfterVisitInvoice(i)&&(i.dogs||[]).some(x=>x.visit_id===w.visit_id||x.appointment_id===w.appointment_id||(x.dog_id===d.dog_id&&i.invoice_date===rec.invoice_date)));
+   const duplicate=invoices.find(i=>i.id!==rec.id&&isAfterVisitInvoice(i)&&(i.dogs||[]).some(x=>(w.visit_id&&x.visit_id===w.visit_id)||(w.appointment_id&&x.appointment_id===w.appointment_id)||(x.dog_id===d.dog_id&&i.invoice_date===rec.invoice_date)));
    if(duplicate)errors.push(`${d.name}: already invoiced in ${duplicate.invoice_number}.`);
-   return {...d,...w,work_allocations:w.work_allocations.map(a=>({...a}))};
+   const {editAssignment,...savedWork}=w;
+   return {...d,...savedWork,work_completed:true,work_auto_complete:true,work_allocations:w.work_allocations.map(a=>({...a}))};
   });
   const fee=(rec.extra_charges||[]).filter(c=>['transport fee','transport','biaya transport'].includes(String(c.label||'').trim().toLowerCase())).reduce((n,c)=>n+Number(c.amount||0),0);
   const ids=new Set(rec.dogs.flatMap(d=>d.work_allocations.map(a=>a.groomer_id)));
   if(fee>0&&(Math.abs((state.transport||[]).reduce((n,a)=>n+Number(a.share),0)-100)>.00001||new Set((state.transport||[]).map(a=>a.groomer_id)).size!==state.transport.length||(state.transport||[]).some(a=>!ids.has(a.groomer_id)||!Number.isFinite(Number(a.share))||Number(a.share)<0)))errors.push('Allocate the one transport pool to working groomers; shares total 100%.');
   rec.work_schema_version=1;rec.work_transport_allocations=fee>0?state.transport:[];
+  rec.groomer_id=ids.size===1?[...ids][0]:null;
   rec.groomer_name=[...ids].map(id=>groomers.find(g=>g.id===id)?.name).filter(Boolean).join(', ');
  }
  lastInvoiceGuardError=[...new Set(errors)].join('\n');return errors.length?null:rec;
@@ -9940,6 +9913,10 @@ function setInvMode(mode){
  // Session C items 7 & 8A: hide entire advance booking + subs billing cards in visit mode
  const advCard=document.getElementById('inv-advance-card');
  if(advCard) advCard.style.display=isPackage?'':'none';
+ const detailCard=document.getElementById('inv-details-card');
+ if(detailCard)detailCard.style.display=isPackage?'':'none';
+ const saveButton=document.getElementById('inv-save-btn');
+ if(saveButton)saveButton.textContent=isPackage?'Simpan invoice':'Selesaikan & simpan invoice';
  const subsCard=document.getElementById('inv-subs-billing-card');
  if(subsCard) subsCard.style.display=isPackage?'':'none';
  // Also force-uncheck subs billing when leaving package mode so it doesn't persist into a visit invoice
@@ -10262,7 +10239,7 @@ function buildInvoiceRecordRaw(){
 }
 
 async function saveVisitsFromInvoice(rec){
- // Visits must pre-exist. The database validates and locks their exact IDs.
+ // Completion and visit creation are atomic in the invoice database triggers.
  return;
 }
 
@@ -10445,7 +10422,7 @@ async function saveInvoice(){
    // Session C item 5: flip to edit mode so any subsequent save clicks UPDATE the same record instead of creating duplicates
    if(inserted?.id){invEditId=inserted.id;updateInvoiceModeBanner();}
   }
-  await reloadTables('invoices','visits','tokens','subscriptions');
+  await reloadTables('appointments','invoices','visits','tokens','subscriptions');
  } finally {
   if(btn1){btn1.disabled=false;btn1.textContent=lbl1||'Simpan invoice';}
   if(btn2){btn2.disabled=false;btn2.textContent=lbl2||'Simpan invoice + kalender';}
