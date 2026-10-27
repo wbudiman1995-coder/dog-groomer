@@ -740,8 +740,8 @@ thead th[onclick]:hover{color:var(--primary-darker)}
      <div class="card pf-panel"><div class="pf-heading">Dari pendapatan ke laba</div><div id="pf-bridge"></div><div id="pf-job-profit" class="pf-small" style="margin-top:10px"></div></div>
     </div>
     <div class="card pf-panel" style="margin-top:14px">
-     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><div class="pf-heading">Pelanggan baru & kembali</div><div class="pf-small">Per rumah tangga · berdasarkan riwayat grooming selesai yang tersimpan</div></div><div class="fg" style="margin:0"><label>Sumber pelanggan</label><select id="pf-source" onchange="profitState.source=this.value;renderProfitCustomerSection()"></select></div></div>
-     <div class="pf-grid" style="margin-top:14px"><div><div id="pf-customer-stats" class="pf-customer-stats" aria-live="polite"></div><div id="pf-customer-chart" class="pf-chart"></div><div class="pf-legend"><span><span class="pf-swatch"></span>Baru</span><span><span class="pf-swatch pf-old"></span>Kembali</span></div><div class="pf-small">Unik per bucket; pelanggan yang sama bisa muncul di beberapa minggu.</div></div><div><div class="pf-table-wrap"><table class="pf-table"><thead><tr><th>Sumber</th><th>Baru</th><th>Kembali</th><th class="pf-num">Pendapatan</th></tr></thead><tbody id="pf-source-rows"></tbody></table></div><div id="pf-acquisition" class="pf-small" style="margin-top:12px"></div><div class="pf-small" style="margin-top:8px">Filter sumber hanya mengubah bagian pelanggan. Rasio pendapatan Ads / belanja bukan atribusi campaign.</div></div></div>
+     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><div class="pf-heading">Pelanggan baru & kembali</div><div class="pf-small">Per rumah tangga · berdasarkan kalender lewat / selesai dan riwayat sebelum periode</div></div><div class="fg" style="margin:0"><label>Sumber pelanggan</label><select id="pf-source" onchange="profitState.source=this.value;renderProfitCustomerSection()"></select></div></div>
+     <div class="pf-grid" style="margin-top:14px"><div><div id="pf-customer-stats" class="pf-customer-stats" aria-live="polite"></div><div id="pf-customer-basis" class="pf-small" style="margin-bottom:8px"></div><div id="pf-customer-chart" class="pf-chart"></div><div class="pf-legend"><span><span class="pf-swatch"></span>Baru</span><span><span class="pf-swatch pf-old"></span>Kembali</span></div><div class="pf-small">Unik per bucket; pelanggan yang sama bisa muncul di beberapa minggu.</div></div><div><div class="pf-table-wrap"><table class="pf-table"><thead><tr><th>Sumber</th><th>Baru</th><th>Kembali</th><th class="pf-num">Pendapatan</th></tr></thead><tbody id="pf-source-rows"></tbody></table></div><div id="pf-acquisition" class="pf-small" style="margin-top:12px"></div><div class="pf-small" style="margin-top:8px">Filter sumber hanya mengubah bagian pelanggan. Rasio pendapatan Ads / belanja bukan atribusi campaign.</div></div></div>
     </div>
     <details class="card pf-panel" style="margin-top:14px"><summary class="pf-heading">Budget, belanja & koreksi tersimpan</summary><div id="pf-entries"></div></details>
     <details class="card pf-panel" style="margin-top:14px"><summary class="pf-heading">Koreksi sumber awal pelanggan</summary><div class="pf-small">Sumber awal dipertahankan untuk laporan historis. Koreksi di sini juga memperbarui sumber di Database dan dicatat dalam histori.</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><select id="pf-source-customer" onchange="profitSourceCustomerChanged()" aria-label="Pelanggan untuk koreksi sumber"></select><select id="pf-source-correction" aria-label="Sumber awal yang benar"></select><button class="btn btn-g" id="pf-source-save" onclick="profitCorrectSource()">Simpan koreksi</button></div></details>
@@ -764,7 +764,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
    <div class="fg" id="pfe-budget-wrap"><label>Budget rencana (opsional, Rp)</label><input id="pfe-budget" type="number" min="0" step="1" placeholder="Biarkan kosong jika sudah dicatat"/></div>
    <div class="fg" id="pfe-groomer-wrap"><label>Groomer</label><select id="pfe-groomer"></select></div>
    <div class="fg full" id="pfe-expense-wrap"><label>Hubungkan pengeluaran yang sudah ada (opsional)</label><select id="pfe-expense" onchange="profitLinkExpense()"></select><small>Jika dihubungkan, jumlah harus sama dan tidak akan dihitung dua kali.</small></div>
-   <div class="fg full" id="pfe-appointment-wrap"><label>Appointment selesai</label><select id="pfe-appointment" onchange="profitValueAppointmentChanged()"></select><small>Nilai ini menggantikan total jasa appointment tersebut, termasuk nilai paket dan add-on. Tidak mengubah invoice pelanggan.</small></div>
+   <div class="fg full" id="pfe-appointment-wrap"><label>Appointment lewat / selesai</label><select id="pfe-appointment" onchange="profitValueAppointmentChanged()"></select><small>Nilai ini menggantikan total jasa appointment tersebut, termasuk nilai paket dan add-on. Tidak mengubah invoice pelanggan.</small></div>
    <div class="fg full"><label>Catatan</label><textarea id="pfe-note" maxlength="2000"></textarea></div>
   </div><div id="pfe-error" role="alert" style="color:var(--red-t);white-space:pre-wrap"></div><div class="form-actions"><button type="button" class="btn btn-p" id="pfe-save" onclick="saveProfitEntry()">Simpan</button><button type="button" class="btn btn-g" onclick="cm('ov-profit-entry')">Batal</button></div>
  </div></div>
@@ -16031,6 +16031,13 @@ const HPProfit=(()=>{
  const pkg=i=>(i.dogs||[]).some(d=>d.invoice_kind==='after_visit')?false:(i.dogs||[]).some(d=>d.invoice_kind==='package_sale'||d.advance);
  const placeholder=a=>a.status==='pending'&&String(a.admin_note||'').includes('[[HP_PLACEHOLDER:1]]');
  const completed=(a,today)=>a.status==='done'&&!placeholder(a)&&a.appt_date<=today;
+ function calendarEligible(a,data){
+  if(!a.appt_date||a.appt_date>data.today||a.status==='cancelled'||placeholder(a))return false;
+  if(a.status==='done')return true;
+  if(typeof a.calendar_eligible==='boolean')return a.calendar_eligible;
+  const time=String(a.appt_time||'00:00').slice(0,8),start=Date.parse(a.appt_date+'T'+(time.length===5?time+':00':time)+'+07:00'),duration=a.duration_mins==null?60:Number(a.duration_mins),asOf=Date.parse(data.as_of||'');
+  return Number.isFinite(start)&&Number.isFinite(duration)&&start+duration*60000<=(Number.isFinite(asOf)?asOf:Date.now());
+ }
  function cycle(day,startDay){const d=date(day),sd=Math.min(28,Math.max(1,num(startDay)||26));let s=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),sd));if(iso(s)>day)s=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()-1,sd));const end=new Date(Date.UTC(s.getUTCFullYear(),s.getUTCMonth()+1,sd-1));return {start:iso(s),end:iso(end)};}
  function sourceOf(a,data){
   const raw=String(a.admin_note||'').match(/\[\[HP_SUBS_SOURCE:([^\]]+)\]\]/);if(raw){try{return decodeURIComponent(raw[1]);}catch(_){return null;}}
@@ -16048,13 +16055,22 @@ const HPProfit=(()=>{
  }
  function build(data,engine){
   const issues=[],events=[],dogMap=new Map(data.dogs.map(d=>[d.id,d])),apptMap=new Map(data.appointments.map(a=>[a.id,a])),customerMap=new Map(data.customers.map(c=>[c.id,c]));
-  const actual=data.appointments.filter(a=>completed(a,data.today)),byDay=new Map(),first=new Map(),firstPaid=new Map(),served=new Set();
+  const calendar=data.appointments.filter(a=>calendarEligible(a,data)),calendarIds=new Set(calendar.map(a=>a.id)),byDay=new Map(),first=new Map(),firstPaid=new Map(),served=new Set();
+  const customerFor=a=>a.customer_id?(customerMap.has(a.customer_id)?a.customer_id:null):(customerMap.has(dogMap.get(a.dog_id)?.customer_id)?dogMap.get(a.dog_id).customer_id:null);
+  const billingEvidence=new Set();
+  data.invoices.filter(i=>!pkg(i)).forEach(i=>(i.dogs||[]).forEach(d=>{
+   const id=data.work.jobs.find(j=>j.invoice_id===i.id&&j.dog_id===d.dog_id)?.appointment_id||d.appointment_id;
+   const matches=id?[apptMap.get(id)].filter(Boolean):calendar.filter(a=>a.dog_id===d.dog_id&&a.appt_date===i.invoice_date);
+   if(matches.length===1&&calendarIds.has(matches[0].id)&&matches[0].dog_id===d.dog_id&&customerFor(matches[0])===i.customer_id)billingEvidence.add(matches[0].id);
+  }));
+  const actual=calendar.filter(a=>completed(a,data.today)||a.session_source==='free'||billingEvidence.has(a.id)||data.visits.some(v=>v.dog_id===a.dog_id&&v.visited_at===a.appt_date)||a.token_used===true||a.subs_deducted===true||data.entries.some(e=>e.kind==='service_value'&&e.appointment_id===a.id)),actualIds=new Set(actual.map(a=>a.id));
   function issue(day,label,extra={}){issues.push({day,label,...extra});}
   function event(day,customer_id,revenue,apptId,origin){if(day>data.today)return;events.push({date:day,customer_id,revenue:Math.round(revenue),appointment_id:apptId,origin});if(revenue>0&&customer_id&&(!firstPaid.has(customer_id)||day<firstPaid.get(customer_id)))firstPaid.set(customer_id,day);}
   const touch=(cid,day)=>{if(cid&&day&&(!first.has(cid)||day<first.get(cid)))first.set(cid,day);};
-  actual.forEach(a=>touch(dogMap.get(a.dog_id)?.customer_id,a.appt_date));
-  const legacyVisits=data.visits.filter(v=>{const ap=data.appointments.filter(a=>a.dog_id===v.dog_id&&a.appt_date===v.visited_at);return !ap.length||ap.some(a=>completed(a,data.today));});
-  legacyVisits.forEach(v=>{if(v.visited_at&&v.visited_at<=data.today)touch(dogMap.get(v.dog_id)?.customer_id,v.visited_at);});
+  calendar.forEach(a=>touch(customerFor(a),a.appt_date));
+  const legacyVisits=data.visits.filter(v=>{const ap=data.appointments.filter(a=>a.dog_id===v.dog_id&&a.appt_date===v.visited_at);return !ap.length||ap.some(a=>calendarIds.has(a.id));});
+  const orphanVisits=data.visits.filter(v=>!data.appointments.some(a=>a.dog_id===v.dog_id&&a.appt_date===v.visited_at));
+  orphanVisits.forEach(v=>{if(v.visited_at&&v.visited_at<=data.today)touch(dogMap.get(v.dog_id)?.customer_id,v.visited_at);});
   data.customers.forEach(c=>touch(c.id,c.history_first));
   const direct=new Map(),directLines=new Map();
   data.invoices.filter(i=>!pkg(i)).forEach(inv=>{
@@ -16064,14 +16080,14 @@ const HPProfit=(()=>{
    const match=lines.map(d=>{
     const override=(data.work.jobs||[]).find(j=>j.invoice_id===inv.id&&j.dog_id===d.dog_id)?.appointment_id;
     if(override||d.appointment_id)return apptMap.get(override||d.appointment_id);
-    const candidates=actual.filter(a=>a.dog_id===d.dog_id&&a.appt_date===inv.invoice_date);return candidates.length===1?candidates[0]:null;
+    const candidates=calendar.filter(a=>a.dog_id===d.dog_id&&a.appt_date===inv.invoice_date);return candidates.length===1?candidates[0]:null;
    });
    // Work revenue allocations already conserve discounts and household extras.
    const weights=lines.map(d=>{const job=(data.work.jobs||[]).find(j=>j.invoice_id===inv.id&&j.dog_id===d.dog_id);return job?(data.work.allocations||[]).filter(x=>x.job_id===job.id).reduce((n,x)=>n+num(x.revenue_amount),0):(d.services||[]).reduce((n,s)=>n+num(s.price),0);});
    const values=split(num(inv.total),weights);
    match.forEach((a,i)=>{
-    if(!a||a.dog_id!==lines[i].dog_id||dogMap.get(a.dog_id)?.customer_id!==inv.customer_id){issue(inv.invoice_date,'Invoice belum cocok dengan jadwal',{invoice_id:inv.id});return;}
-    if(!completed(a,data.today)){issue(a.appt_date,'Invoice belum memiliki grooming selesai',{appointment_id:a.id,invoice_id:inv.id});return;}
+    if(!a||a.dog_id!==lines[i].dog_id||customerFor(a)!==inv.customer_id){issue(inv.invoice_date,'Invoice belum cocok dengan jadwal',{invoice_id:inv.id});return;}
+    if(!actualIds.has(a.id)){issue(a.appt_date,'Invoice belum memiliki jadwal lewat / selesai yang valid',{appointment_id:a.id,invoice_id:inv.id});return;}
     if(direct.has(a.id)){issue(a.appt_date,'Jadwal terhubung ke beberapa invoice',{appointment_id:a.id});return;}
     direct.set(a.id,true);directLines.set(a.id,lines[i]);event(a.appt_date,inv.customer_id,values[i],a.id,'invoice');served.add(a.id);
    });
@@ -16079,7 +16095,7 @@ const HPProfit=(()=>{
   const sourceGroups=new Map();actual.forEach(a=>{const key=sourceOf(a,data);if(key){const k=key+'|'+a.dog_id;if(!sourceGroups.has(k))sourceGroups.set(k,[]);sourceGroups.get(k).push(a);}});
   sourceGroups.forEach(list=>list.sort((a,b)=>a.appt_date.localeCompare(b.appt_date)||String(a.appt_time||'').localeCompare(String(b.appt_time||''))||a.id.localeCompare(b.id)));
   actual.forEach(a=>{
-   const cid=dogMap.get(a.dog_id)?.customer_id,override=data.entries.find(e=>e.kind==='service_value'&&e.appointment_id===a.id);
+   const cid=customerFor(a),override=data.entries.find(e=>e.kind==='service_value'&&e.appointment_id===a.id);
    if(override){
     for(let i=events.length-1;i>=0;i--)if(events[i].appointment_id===a.id)events.splice(i,1);
     event(a.appt_date,cid,num(override.amount),a.id,'manual service value');served.add(a.id);return;
@@ -16098,6 +16114,7 @@ const HPProfit=(()=>{
    }else if(['subscription','advance'].includes(a.session_source))issue(a.appt_date,'Paket asal sesi belum terhubung',{appointment_id:a.id});
    if(!served.has(a.id))issue(a.appt_date,'Grooming selesai belum memiliki nilai jasa',{appointment_id:a.id});
   });
+  calendar.filter(a=>!actualIds.has(a.id)).forEach(a=>issue(a.appt_date,'Nilai jasa jadwal lewat belum tercatat',{appointment_id:a.id}));
   // Manual-billed visits are included exactly once; a linked invoice wins.
   legacyVisits.filter(v=>v.is_billed_manually).forEach(v=>{
    const matches=actual.filter(a=>a.dog_id===v.dog_id&&a.appt_date===v.visited_at);
@@ -16110,7 +16127,7 @@ const HPProfit=(()=>{
   // Recompute first paid dates after overrides so deleted/replaced values do not linger.
   firstPaid.clear();events.filter(e=>e.revenue>0&&e.customer_id).forEach(e=>{if(!firstPaid.has(e.customer_id)||e.date<firstPaid.get(e.customer_id))firstPaid.set(e.customer_id,e.date);});
   const loadFrom=add(cycle(add(data.from,-span(data.from,data.to)),data.rates.cycle_start_day).start,-1),dates=days(loadFrom,data.to);
-  dates.forEach(day=>byDay.set(day,{date:day,revenue:0,staff:0,operations:0,ads:0,budget:0,pets:actual.filter(a=>a.appt_date===day).length,adsKnown:false,operationsKnown:false}));
+  dates.forEach(day=>byDay.set(day,{date:day,revenue:0,staff:0,operations:0,ads:0,budget:0,pets:calendar.filter(a=>a.appt_date===day).length,adsKnown:false,operationsKnown:false}));
   events.forEach(e=>{if(byDay.has(e.date))byDay.get(e.date).revenue+=e.revenue;});
   const expenseLinks=new Set(data.entries.map(e=>e.expense_id).filter(Boolean));
   data.expenses.forEach(e=>{
@@ -16157,12 +16174,13 @@ const HPProfit=(()=>{
    });
   });
   (data.work.review||[]).forEach(r=>issue(r.invoice_date,'Penugasan invoice belum cocok untuk biaya add-on',{invoice_id:r.invoice_id}));
-  const activity=[];actual.forEach(a=>activity.push({date:a.appt_date,customer_id:dogMap.get(a.dog_id)?.customer_id,appointment_id:a.id}));
-  legacyVisits.forEach(v=>{const a=data.appointments.filter(a=>a.dog_id===v.dog_id&&a.appt_date===v.visited_at);if(!a.length&&v.visited_at<=data.today)activity.push({date:v.visited_at,customer_id:dogMap.get(v.dog_id)?.customer_id});});
+  const activity=[];calendar.forEach(a=>activity.push({date:a.appt_date,customer_id:customerFor(a),appointment_id:a.id}));
+  orphanVisits.forEach(v=>{if(v.visited_at<=data.today)activity.push({date:v.visited_at,customer_id:dogMap.get(v.dog_id)?.customer_id});});
   function customers(a,b,src='all'){
    const ids=new Set(activity.filter(e=>e.date>=a&&e.date<=b&&e.customer_id).map(e=>e.customer_id));
    const active=[...ids].map(id=>({id,source:customerMap.get(id)?.source||'_untagged',first:first.get(id)})).filter(c=>src==='all'||c.source===src);
-   return {active:active.length,new:active.filter(c=>c.first>=a).length,returning:active.filter(c=>c.first<a).length,newPayingAds:active.filter(c=>c.source==='ads'&&firstPaid.get(c.id)>=a&&firstPaid.get(c.id)<=b).length,revenue:events.filter(e=>e.date>=a&&e.date<=b&&(src==='all'||(customerMap.get(e.customer_id)?.source||'_untagged')===src)).reduce((n,e)=>n+e.revenue,0)};
+   const appointments=activity.filter(e=>e.appointment_id&&e.date>=a&&e.date<=b&&(src==='all'||(customerMap.get(e.customer_id)?.source||'_untagged')===src));
+   return {active:active.length,new:active.filter(c=>c.first>=a).length,returning:active.filter(c=>c.first<a).length,appointments:appointments.length,unlinked:appointments.filter(e=>!e.customer_id).length,newPayingAds:active.filter(c=>c.source==='ads'&&firstPaid.get(c.id)>=a&&firstPaid.get(c.id)<=b).length,revenue:events.filter(e=>e.date>=a&&e.date<=b&&(src==='all'||(customerMap.get(e.customer_id)?.source||'_untagged')===src)).reduce((n,e)=>n+e.revenue,0)};
   }
   function metrics(a,b){
    const rows=days(a,b).map(d=>byDay.get(d)||{date:d,revenue:0,staff:0,operations:0,ads:0,budget:0,pets:0,adsKnown:false,operationsKnown:false}),sum=k=>rows.reduce((n,r)=>n+num(r[k]),0),problems=issues.filter(i=>i.day>=a&&i.day<=b);
@@ -16170,9 +16188,9 @@ const HPProfit=(()=>{
    const revenue=sum('revenue'),staff=sum('staff'),operations=sum('operations'),ads=sum('ads'),cost=staff+operations+ads,profit=complete?revenue-cost:null;
    return {rows,revenue,staff,operations,ads,budget:sum('budget'),budgetKnown:data.entries.some(e=>e.kind==='budget'&&e.coverage_from<=b&&e.coverage_to>=a),pets:sum('pets'),cost,profit,margin:profit!==null&&revenue>0?profit/revenue:null,complete,adsKnown,opsKnown,issues:problems,customers:customers(a,b)};
   }
-  return {data,metrics,customers,events,issues,activity,first,byDay,actual};
+  return {data,metrics,customers,events,issues,activity,first,byDay,actual,calendar};
  }
- return {num,date,iso,add,span,days,valid,alloc,split,pkg,cycle,completed,packageValues,build};
+ return {num,date,iso,add,span,days,valid,alloc,split,pkg,cycle,completed,calendarEligible,packageValues,build};
 })();
 
 /* Canonical payroll functions extracted at build time; independent read-only scope. */
@@ -16514,7 +16532,7 @@ function profitPercent(n){return n==null?'—':(n*100).toLocaleString('id-ID',{m
 function profitBuckets(p){const n=HPProfit.span(p.start,p.end),step=n<=14?1:n<=100?7:30;return HPProfit.days(p.start,p.end).filter((_,i)=>i%step===0).map(a=>({start:a,end:HPProfit.add(a,step-1)<p.end?HPProfit.add(a,step-1):p.end}));}
 function profitChart(id,rows,type){
  const el=document.getElementById(id);if(!el)return;const w=Math.max(230,Math.round(el.getBoundingClientRect().width||520)),h=230,l=60,r=12,t=28,b=42,pw=w-l-r,ph=h-t-b;
- if(!rows.length||type==='customers'&&rows.every(x=>x.new+x.returning===0)){el.innerHTML='<p class="pf-small">Belum ada grooming selesai dalam periode ini.</p>';return;}
+ if(!rows.length||type==='customers'&&rows.every(x=>x.new+x.returning===0)){el.innerHTML='<p class="pf-small">Belum ada jadwal lewat / selesai yang terhubung ke pelanggan dalam periode ini.</p>';return;}
  const vals=rows.map(x=>type==='profit'?x.profit:x.new+x.returning),lo=Math.min(0,...vals),hi=Math.max(1,...vals),min=lo<0?lo-(hi-lo)*.08:0,max=hi+(hi-lo)*.18,y=v=>t+(max-v)/(max-min)*ph,zero=y(0),slot=pw/rows.length,bw=Math.min(42,slot*.58),tickStep=Math.max(1,Math.ceil(rows.length/(w<450?4:7)));
  const label=d=>d.slice(8,10)+'/'+d.slice(5,7),desc=rows.map(x=>`${x.start}–${x.end}: ${type==='profit'?fmtRp(x.profit):x.new+' baru, '+x.returning+' kembali'}`).join('; ');
  let svg=`<svg role="img" viewBox="0 0 ${w} ${h}" height="${h}" aria-label="${type==='profit'?'Tren laba operasional':'Pelanggan unik per bucket'}"><title>${type==='profit'?'Laba operasional':'Pelanggan baru dan kembali'}</title><desc>${esc(desc)}</desc><text x="${l}" y="12">${type==='profit'?'Rupiah':'Rumah tangga'}</text>`;
@@ -16530,7 +16548,7 @@ function renderProfitBody(){
  if(!profitOwner()||!profitState.report)return;const d=profitState.data,p=getDashboardPeriod(),report=profitState.report,m=report.metrics(p.start,p.end),n=HPProfit.span(p.start,p.end),prev=report.metrics(HPProfit.add(p.start,-n),HPProfit.add(p.start,-1));
  document.getElementById('pf-content').hidden=false;document.getElementById('pf-status').textContent='Diperbarui '+new Date(d.as_of).toLocaleString('id-ID',{timeZone:'Asia/Jakarta'})+' WIB · Gaji berjalan / alokasi periode merupakan estimasi';
  const text=(id,value)=>document.getElementById(id).textContent=value;
- text('pf-revenue',fmtRp(m.revenue));text('pf-revenue-note',`${m.pets} pet appointment selesai`);text('pf-cost',m.complete?fmtRp(m.cost):'Belum lengkap');text('pf-profit',m.profit===null?'Belum lengkap':fmtRp(m.profit));
+ text('pf-revenue',fmtRp(m.revenue));text('pf-revenue-note',`${m.pets} jadwal anjing lewat / selesai`);text('pf-cost',m.complete?fmtRp(m.cost):'Belum lengkap');text('pf-profit',m.profit===null?'Belum lengkap':fmtRp(m.profit));
  text('pf-margin',m.profit===null?'Lengkapi sumber biaya / nilai jasa':`Margin ${profitPercent(m.margin)}${prev.profit!==null?' · '+(m.profit-prev.profit>=0?'+':'−')+fmtRp(Math.abs(m.profit-prev.profit))+' vs periode lalu':''}`);
  text('pf-ads',m.adsKnown?fmtRp(m.ads):'Belum dicatat');text('pf-budget',m.budget>0?`Budget alokasi ${fmtRp(m.budget)} · ${Math.round(m.ads/m.budget*100)}%`:m.budgetKnown?'Budget Rp 0 · tanpa anggaran':'Budget belum ditentukan');document.getElementById('pf-budget-bar').style.width=(m.budget>0?Math.min(100,m.ads/m.budget*100):0)+'%';
  document.getElementById('pf-bridge').innerHTML=[['Pendapatan jasa',m.revenue],['Biaya groomer',-m.staff],['Operasional tercatat',-m.operations],['Iklan tercatat',-m.ads]].map(([label,value])=>`<div class="pf-row"><span>${label}</span><strong>${fmtRp(value)}</strong></div>`).join('')+`<div class="pf-row"><strong>Estimasi laba</strong><strong>${m.profit===null?'Belum lengkap':fmtRp(m.profit)}</strong></div>`;
@@ -16550,6 +16568,7 @@ function renderProfitCustomerSection(){
  document.getElementById('pf-source-customer').innerHTML='<option value="">Pilih pelanggan…</option>'+profitState.data.customers.filter(c=>profitState.report.first.has(c.id)).map(c=>`<option value="${c.id}" ${previousCustomer===c.id?'selected':''}>${esc(c.owner||c.id.slice(0,8))}</option>`).join('');
  document.getElementById('pf-source-correction').innerHTML=keys.map(k=>`<option value="${esc(k)}">${esc(labels[k]||k)}</option>`).join('');profitSourceCustomerChanged();
  const c=r.customers(p.start,p.end,profitState.source),m=r.metrics(p.start,p.end),a=r.customers(p.start,p.end,'ads');
+ document.getElementById('pf-customer-basis').textContent=`${c.appointments} jadwal anjing · ${c.active} rumah tangga unik${c.unlinked?' · '+c.unlinked+' jadwal belum terhubung ke customer':''}. Baru = pertama kali pada periode ini; kembali = sudah punya riwayat sebelum periode.`;
  document.getElementById('pf-customer-stats').innerHTML=[['Baru',c.new],['Kembali',c.returning],['Porsi kembali',profitPercent(c.active?c.returning/c.active:null)]].map(([label,value])=>`<div><span class="pf-small">${label}</span><strong>${value}</strong></div>`).join('');
  profitChart('pf-customer-chart',profitBuckets(p).map(b=>({...b,...r.customers(b.start,b.end,profitState.source)})),'customers');
  document.getElementById('pf-source-rows').innerHTML=keys.filter(k=>profitState.source==='all'||k===profitState.source).map(k=>({key:k,...r.customers(p.start,p.end,k)})).filter(x=>x.active||x.revenue).map(x=>`<tr><td>${esc(labels[x.key]||x.key)}</td><td>${x.new}</td><td>${x.returning}</td><td class="pf-num">${fmtRp(x.revenue)}</td></tr>`).join('')||'<tr><td colspan="4">Belum ada pelanggan pada periode ini.</td></tr>';
@@ -16582,7 +16601,7 @@ function openProfitEntry(kind='ads'){
  profitState.entry=null;const p=getDashboardPeriod(),set=(id,v)=>document.getElementById('pfe-'+id).value=v;
  set('kind',kind);set('amount','');set('budget','');set('from',p.start);set('to',p.end);set('platform','Meta Ads');set('campaign','');set('note','');document.getElementById('pfe-error').textContent='';
  document.getElementById('pfe-expense').innerHTML='<option value="">Tidak dihubungkan</option>'+profitState.data.expenses.map(e=>`<option value="${e.id}">${esc(e.expense_date+' · '+(e.item||'Pengeluaran')+' · '+fmtRp(e.amount))}</option>`).join('');
- document.getElementById('pfe-appointment').innerHTML='<option value="">Pilih appointment…</option>'+profitState.report.actual.map(a=>`<option value="${a.id}">${esc(a.appt_date+' '+(a.appt_time||'').slice(0,5)+' · '+(dogs.find(d=>d.id===a.dog_id)?.name||a.dog_id.slice(0,8))+' · '+(groomers.find(g=>g.id===a.groomer_id)?.name||''))}</option>`).join('');
+ document.getElementById('pfe-appointment').innerHTML='<option value="">Pilih appointment…</option>'+profitState.report.calendar.map(a=>`<option value="${a.id}">${esc(a.appt_date+' '+(a.appt_time||'').slice(0,5)+' · '+(dogs.find(d=>d.id===a.dog_id)?.name||String(a.dog_id||a.customer_id||a.id).slice(0,8))+' · '+(groomers.find(g=>g.id===a.groomer_id)?.name||''))}</option>`).join('');
  document.getElementById('pfe-groomer').innerHTML='<option value="">Biaya umum tim</option>'+profitState.data.groomers.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
  profitEntryKindChanged();om('ov-profit-entry');
 }
@@ -16599,9 +16618,9 @@ async function saveProfitEntry(){
  if(!profitOwner()||profitState.busy)return;const get=id=>document.getElementById('pfe-'+id).value,kind=get('kind'),amount=Number(get('amount')),from=get('from'),to=get('to'),err=document.getElementById('pfe-error');
  if(get('amount')===''||!Number.isSafeInteger(amount)||Math.abs(amount)>900000000000||amount<0&&kind!=='revenue_adjustment'||!HPProfit.valid(from,to,kind==='budget'?'9999-12-31':profitToday())){err.textContent='Isi jumlah rupiah bulat dan rentang yang valid (maksimal 366 hari). Tanggal biaya aktual tidak boleh di masa depan.';return;}
  const e=profitState.entry,entry={id:e?.id||null,revision:e?.revision||null,kind,amount,coverage_from:from,coverage_to:to,platform:['ads','budget'].includes(kind)?get('platform'):'Other',campaign:['ads','budget'].includes(kind)?get('campaign').trim():'',note:get('note').trim(),expense_id:['ads','operating'].includes(kind)?get('expense')||null:null,appointment_id:kind==='service_value'?get('appointment')||null:null};
- if(kind==='service_value'&&!entry.appointment_id){err.textContent='Pilih appointment selesai.';return;}
+ if(kind==='service_value'&&!entry.appointment_id){err.textContent='Pilih appointment lewat / selesai.';return;}
  entry.groomer_id=kind==='payroll_adjustment'?get('groomer')||null:null;
- if(kind==='service_value'){const a=profitState.data.appointments.find(a=>a.id===entry.appointment_id);entry.customer_id=profitState.data.dogs.find(d=>d.id===a?.dog_id)?.customer_id||null;}
+ if(kind==='service_value'){const a=profitState.data.appointments.find(a=>a.id===entry.appointment_id);entry.customer_id=a?.customer_id||profitState.data.dogs.find(d=>d.id===a?.dog_id)?.customer_id||null;}
  const entries=[entry],budget=get('budget');
  if(kind==='ads'&&!e&&budget!==''){const n=Number(budget);if(!Number.isSafeInteger(n)||n<0){err.textContent='Budget harus rupiah bulat dan tidak negatif.';return;}entries.push({...entry,id:null,revision:null,kind:'budget',amount:n,expense_id:null});}
  profitState.busy=true;document.getElementById('pfe-save').disabled=true;err.textContent='';
