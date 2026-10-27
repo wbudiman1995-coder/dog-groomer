@@ -726,7 +726,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
     <div class="fg"><label>Sampai</label><input type="date" id="pf-to" onchange="profitCustomChanged()"/></div>
     <button type="button" class="btn btn-p" onclick="document.getElementById('pf-ad-calendar').scrollIntoView({behavior:'smooth',block:'start'})">Kalender iklan</button><button type="button" class="btn btn-g" onclick="openProfitEntry('operating')">+ Biaya / koreksi</button>
    </div>
-   <div id="dash-period-lbl" class="pf-status"></div><div id="pf-status" class="pf-status" role="status"></div>
+   <div id="pf-entry-status" class="pf-status" role="status" aria-live="polite"></div><div id="dash-period-lbl" class="pf-status"></div><div id="pf-status" class="pf-status" role="status"></div>
    <div id="pf-content" hidden>
     <div class="pf-kpis" aria-live="polite">
      <div class="card pf-kpi"><div class="pf-small">Pendapatan jasa</div><div class="pf-value" id="pf-revenue"></div><div class="pf-small" id="pf-revenue-note"></div></div>
@@ -773,7 +773,7 @@ thead th[onclick]:hover{color:var(--primary-darker)}
    <div class="fg full" id="pfe-expense-wrap"><label>Hubungkan pengeluaran yang sudah ada (opsional)</label><select id="pfe-expense" onchange="profitLinkExpense()"></select><small>Jika dihubungkan, jumlah harus sama dan tidak akan dihitung dua kali.</small></div>
    <div class="fg full" id="pfe-appointment-wrap"><label>Appointment lewat / selesai</label><select id="pfe-appointment" onchange="profitValueAppointmentChanged()"></select><small>Nilai ini menggantikan total jasa appointment tersebut, termasuk nilai paket dan add-on. Tidak mengubah invoice pelanggan.</small></div>
    <div class="fg full"><label>Catatan</label><textarea id="pfe-note" maxlength="2000"></textarea></div>
-  </div><div id="pfe-error" role="alert" style="color:var(--red-t);white-space:pre-wrap"></div><div class="form-actions"><button type="button" class="btn btn-p" id="pfe-save" onclick="saveProfitEntry()">Simpan</button><button type="button" class="btn btn-g" onclick="cm('ov-profit-entry')">Batal</button></div>
+  </div><div id="pfe-error" role="alert" style="color:var(--red-t);white-space:pre-wrap"></div><div class="form-actions"><button type="button" class="btn btn-d" id="pfe-delete" hidden onclick="deleteOpenProfitEntry()">Hapus catatan</button><button type="button" class="btn btn-p" id="pfe-save" onclick="saveProfitEntry()">Simpan</button><button type="button" class="btn btn-g" onclick="cm('ov-profit-entry')">Batal</button></div>
  </div></div>
 
  <style>
@@ -16188,20 +16188,36 @@ const HPProfit=(()=>{
    });
   });
   (data.work.review||[]).forEach(r=>issue(r.invoice_date,'Penugasan invoice belum cocok untuk biaya add-on',{invoice_id:r.invoice_id}));
-  const activity=[];calendar.forEach(a=>activity.push({date:a.appt_date,customer_id:customerFor(a),dog_id:a.dog_id,appointment_id:a.id}));
+  const activity=[];calendar.forEach(a=>activity.push({date:a.appt_date,customer_id:customerFor(a),dog_id:a.dog_id,appointment_id:a.id,time:a.appt_time,duration:a.duration_mins}));
   orphanVisits.forEach(v=>{if(v.visited_at<=data.today)activity.push({date:v.visited_at,customer_id:dogMap.get(v.dog_id)?.customer_id,dog_id:v.dog_id});});
   // A dog has its own first date. A second pet in an existing household can be
   // new even when that household is returning. Its earliest known household
   // supplies acquisition source so transfers never count it in two sources.
   const dogFirst=new Map();[...activity].sort((a,b)=>a.date.localeCompare(b.date)||String(a.appointment_id||'').localeCompare(String(b.appointment_id||''))).forEach(e=>{if(e.dog_id&&dogMap.has(e.dog_id)&&!dogFirst.has(e.dog_id))dogFirst.set(e.dog_id,e);});
+  // Returning requires two actual retained grooming stops, never merely an old
+  // account/source date. Merge overlapping/consecutive pet slots in the same
+  // household/day across groomers, so a multi-pet first booking stays one stop.
+  const stopIndex={households:new Map(),dogs:new Map()};
+  for(const unit of ['households','dogs']){
+   const groups=new Map();activity.forEach(e=>{const id=unit==='dogs'?e.dog_id:e.customer_id;if(!id||(unit==='dogs'?!dogMap.has(id):!customerMap.has(id)))return;const key=id+'|'+e.date;if(!groups.has(key))groups.set(key,{id,date:e.date,rows:[]});groups.get(key).rows.push(e);});
+   groups.forEach(group=>{
+    const slots=group.rows.filter(e=>e.appointment_id).map(e=>{const [h,m]=String(e.time||'00:00').split(':').map(Number),start=h*60+m;return {start,end:start+(e.duration==null?60:Math.max(0,num(e.duration)))};}).sort((a,b)=>a.start-b.start||a.end-b.end);
+    let count=0,end=-Infinity;slots.forEach(s=>{if(s.start>end)count++;end=Math.max(end,s.end);});
+    // Date-only legacy visits supply one stop only when no timed calendar stop
+    // already represents that household/pet on this date.
+    if(!slots.length)count=1;
+    if(!stopIndex[unit].has(group.id))stopIndex[unit].set(group.id,[]);
+    for(let i=0;i<count;i++)stopIndex[unit].get(group.id).push(group.date);
+   });
+  }
   function subjects(a,b,src='all',unit='households'){
    const rows=activity.filter(e=>e.date>=a&&e.date<=b),isDog=unit==='dogs',ids=[...new Set(rows.map(e=>isDog?e.dog_id:e.customer_id).filter(Boolean))];
-   return ids.filter(id=>isDog?dogMap.has(id):customerMap.has(id)).map(id=>{const cid=isDog?dogFirst.get(id)?.customer_id:id,c=customerMap.get(cid),d=isDog?dogMap.get(id):null;return {id,customer_id:cid||null,label:isDog?(d.name||id.slice(0,8)):(c?.owner||id.slice(0,8)),source:c?.source||'_untagged',first:isDog?dogFirst.get(id)?.date:first.get(id)};}).filter(c=>src==='all'||c.source===src);
+   return ids.filter(id=>isDog?dogMap.has(id):customerMap.has(id)).map(id=>{const cid=isDog?dogFirst.get(id)?.customer_id:id,c=customerMap.get(cid),d=isDog?dogMap.get(id):null;return {id,customer_id:cid||null,label:isDog?(d.name||id.slice(0,8)):(c?.owner||id.slice(0,8)),source:c?.source||'_untagged',first:isDog?dogFirst.get(id)?.date:first.get(id),appointments:(stopIndex[isDog?'dogs':'households'].get(id)||[]).filter(day=>day<=b).length};}).filter(c=>src==='all'||c.source===src);
   }
   function customers(a,b,src='all',unit='households'){
    const active=subjects(a,b,src,unit),appointments=activity.filter(e=>e.appointment_id&&e.date>=a&&e.date<=b&&(src==='all'||(customerMap.get(e.customer_id)?.source||'_untagged')===src));
    const homes=subjects(a,b,src,'households');
-   return {unit,active:active.length,new:active.filter(c=>c.first>=a).length,returning:active.filter(c=>c.first<a).length,appointments:appointments.length,unlinked:appointments.filter(e=>!e.customer_id).length,missingDogs:appointments.filter(e=>!dogMap.has(e.dog_id)).length,newPayingAds:homes.filter(c=>c.source==='ads'&&firstPaid.get(c.id)>=a&&firstPaid.get(c.id)<=b).length,revenue:events.filter(e=>e.date>=a&&e.date<=b&&(src==='all'||(customerMap.get(e.customer_id)?.source||'_untagged')===src)).reduce((n,e)=>n+e.revenue,0)};
+   return {unit,active:active.length,new:active.filter(c=>c.appointments===1).length,returning:active.filter(c=>c.appointments>=2).length,appointments:appointments.length,unlinked:appointments.filter(e=>!e.customer_id).length,missingDogs:appointments.filter(e=>!dogMap.has(e.dog_id)).length,newPayingAds:homes.filter(c=>c.source==='ads'&&firstPaid.get(c.id)>=a&&firstPaid.get(c.id)<=b).length,revenue:events.filter(e=>e.date>=a&&e.date<=b&&(src==='all'||(customerMap.get(e.customer_id)?.source||'_untagged')===src)).reduce((n,e)=>n+e.revenue,0)};
   }
   function metrics(a,b){
    const rows=days(a,b).map(d=>byDay.get(d)||{date:d,revenue:0,staff:0,operations:0,ads:0,budget:0,pets:0,adsKnown:false,operationsKnown:false}),sum=k=>rows.reduce((n,r)=>n+num(r[k]),0),problems=issues.filter(i=>i.day>=a&&i.day<=b);
@@ -16594,7 +16610,7 @@ function renderProfitCustomerSection(){
  const c=r.customers(p.start,p.end,profitState.source,unit),m=r.metrics(p.start,p.end),a=r.customers(p.start,p.end,'ads'),adDogs=r.customers(p.start,p.end,'ads','dogs');
  document.getElementById('pf-customer-heading').textContent=isDog?'Anjing baru & kembali':'Pelanggan baru & kembali';
  document.getElementById('pf-customer-subtitle').textContent=isDog?'Per anjing unik · kunjungan berulang dihitung satu kali · sumber dari rumah tangga pertama yang tercatat':'Per rumah tangga · berdasarkan kalender lewat / selesai dan riwayat sebelum periode';
- document.getElementById('pf-customer-basis').textContent=isDog?`${c.active} anjing unik${c.missingDogs?' · '+c.missingDogs+' jadwal belum memiliki pet terdaftar':''}. Baru = riwayat pertama anjing pada periode ini; kembali = punya riwayat sebelumnya.`:`${c.appointments} jadwal anjing · ${c.active} rumah tangga unik${c.unlinked?' · '+c.unlinked+' jadwal belum terhubung ke customer':''}. Baru = pertama kali pada periode ini; kembali = sudah punya riwayat sebelum periode.`;
+ document.getElementById('pf-customer-basis').textContent=isDog?`${c.active} anjing unik${c.missingDogs?' · '+c.missingDogs+' jadwal belum memiliki pet terdaftar':''}. Baru = baru 1 appointment grooming; kembali = minimal 2 appointment sampai akhir periode.`:`${c.appointments} jadwal anjing · ${c.active} rumah tangga unik${c.unlinked?' · '+c.unlinked+' jadwal belum terhubung ke customer':''}. Baru = baru 1 appointment; kembali = minimal 2 appointment sampai akhir periode. Beberapa pet dalam satu booking tetap 1 appointment.`;
  document.getElementById('pf-customer-stats').innerHTML=[['Baru',c.new],['Kembali',c.returning],['Porsi kembali',profitPercent(c.active?c.returning/c.active:null)]].map(([label,value])=>`<div><span class="pf-small">${label}</span><strong>${value}</strong></div>`).join('');
  profitChart('pf-customer-chart',profitBuckets(p).map(b=>({...b,...r.customers(b.start,b.end,profitState.source,unit)})),isDog?'dogs':'customers');
  document.getElementById('pf-source-rows').innerHTML=keys.filter(k=>profitState.source==='all'||k===profitState.source).map(k=>({key:k,...r.customers(p.start,p.end,k,unit)})).filter(x=>x.active||x.revenue).map(x=>`<tr><td><button type="button" class="pf-source-link" onclick="openProfitCustomerSource(${keys.indexOf(x.key)})" aria-label="Edit sumber pelanggan ${esc(labels[x.key]||x.key)}">${esc(labels[x.key]||x.key)} ↗</button></td><td>${x.new}</td><td>${x.returning}</td><td class="pf-num">${fmtRp(x.revenue)}</td></tr>`).join('')||'<tr><td colspan="4">Belum ada pelanggan pada periode ini.</td></tr>';
@@ -16621,7 +16637,7 @@ async function profitCorrectSource(){
 }
 function renderProfitEntries(){
  const p=getDashboardPeriod(),rows=profitState.data.entries.filter(e=>e.coverage_to>=p.start&&e.coverage_from<=p.end);
- document.getElementById('pf-entries').innerHTML=rows.length?`<div class="pf-table-wrap"><table class="pf-table"><thead><tr><th>Jenis / label</th><th>Periode</th><th>Jumlah</th><th></th></tr></thead><tbody>${rows.map(e=>`<tr><td>${esc(PF_KINDS[e.kind])}<br><small>${esc(e.platform)} ${esc(e.campaign||'')}</small></td><td>${esc(e.coverage_from)}<br>${esc(e.coverage_to)}</td><td class="pf-num">${fmtRp(e.amount)}</td><td><button type="button" class="btn btn-g btn-sm" onclick="editProfitEntry('${e.id}')">Edit</button> <button type="button" class="btn btn-d btn-sm" onclick="deleteProfitEntry('${e.id}')">Hapus</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="pf-small">Belum ada catatan manual. Budget dan belanja dicatat terpisah.</p>';
+ document.getElementById('pf-entries').innerHTML=rows.length?`<div class="pf-table-wrap"><table class="pf-table"><thead><tr><th>Jenis / label</th><th>Periode</th><th>Jumlah</th><th></th></tr></thead><tbody>${rows.map(e=>`<tr><td>${esc(PF_KINDS[e.kind])}<br><small>${esc(e.platform)} ${esc(e.campaign||'')}</small></td><td>${esc(e.coverage_from)}<br>${esc(e.coverage_to)}</td><td class="pf-num">${fmtRp(e.amount)}</td><td><button type="button" data-pf-entry-action class="btn btn-g btn-sm" onclick="editProfitEntry('${e.id}')">Edit</button> <button type="button" data-pf-entry-action class="btn btn-d btn-sm" onclick="deleteProfitEntry('${e.id}')">Hapus</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="pf-small">Belum ada catatan manual. Budget dan belanja dicatat terpisah.</p>';
 }
 function profitExpenseRows(){const p=getDashboardPeriod();return profitState.data.expenses.filter(e=>{const t=profitState.data.expense_tags.find(t=>t.expense_id===e.id);return (t?.coverage_to||e.expense_date)>=p.start&&(t?.coverage_from||e.expense_date)<=p.end;}).sort((a,b)=>Number(!!profitState.data.expense_tags.find(t=>t.expense_id===a.id))-Number(!!profitState.data.expense_tags.find(t=>t.expense_id===b.id))||a.expense_date.localeCompare(b.expense_date));}
 function renderProfitExpenses(){
@@ -16646,6 +16662,7 @@ function openProfitEntry(kind='ads'){
 }
 function profitEntryKindChanged(){
  const k=document.getElementById('pfe-kind').value;
+ document.getElementById('pfe-delete').hidden=!profitState.entry?.id;document.getElementById('pfe-delete').disabled=profitState.busy;
  document.getElementById('pfe-groomer-wrap').hidden=k!=='payroll_adjustment';
  document.getElementById('pfe-platform-wrap').hidden=!['ads','budget'].includes(k);document.getElementById('pfe-campaign-wrap').hidden=!['ads','budget'].includes(k);document.getElementById('pfe-budget-wrap').hidden=k!=='ads'||!!profitState.entry;document.getElementById('pfe-expense-wrap').hidden=!['ads','operating'].includes(k);document.getElementById('pfe-appointment-wrap').hidden=k!=='service_value';document.getElementById('pfe-amount').min=k==='revenue_adjustment'?'-900000000000':'0';
 }
@@ -16663,13 +16680,33 @@ async function saveProfitEntry(){
  if(kind==='service_value'){const a=profitState.data.appointments.find(a=>a.id===entry.appointment_id);entry.customer_id=a?.customer_id||profitState.data.dogs.find(d=>d.id===a?.dog_id)?.customer_id||null;}
  const entries=[entry],budget=get('budget');
  if(kind==='ads'&&!e&&budget!==''){const n=Number(budget);if(!Number.isSafeInteger(n)||n<0){err.textContent='Budget harus rupiah bulat dan tidak negatif.';return;}entries.push({...entry,id:null,revision:null,kind:'budget',amount:n,expense_id:null});}
- profitState.busy=true;document.getElementById('pfe-save').disabled=true;err.textContent='';
+ profitState.busy=true;profitEntryControls(true);err.textContent='';
  try{const {data,error}=await db.rpc('hp_profit_save_entries',{p_entries:entries});if(error)throw error;if(!Array.isArray(data)||data.length!==entries.length)throw new Error('Respons simpan tidak sesuai. Refresh dan periksa catatan.');cm('ov-profit-entry');await loadProfitability(true);}
- catch(e){err.textContent='Gagal menyimpan: '+e.message;}finally{profitState.busy=false;document.getElementById('pfe-save').disabled=false;}
+ catch(e){err.textContent='Gagal menyimpan: '+e.message;}finally{profitState.busy=false;profitEntryControls(false);}
 }
-async function deleteProfitEntry(id){
- if(!profitOwner()||profitState.busy)return;const e=profitState.data?.entries.find(x=>x.id===id);if(!e||!confirm('Hapus catatan '+PF_KINDS[e.kind]+' '+fmtRp(e.amount)+'?'))return;
- profitState.busy=true;try{const {data,error}=await db.from('hp_profit_entries').delete().eq('id',id).eq('revision',e.revision).select('id');if(error)throw error;if(data?.length!==1)throw new Error('Catatan berubah. Refresh sebelum mencoba lagi.');await loadProfitability(true);}catch(e){alert('Gagal menghapus: '+e.message);}finally{profitState.busy=false;}
+function profitEntryControls(disabled){
+ document.querySelectorAll('[data-pf-entry-action]').forEach(b=>b.disabled=disabled);
+ document.getElementById('pfe-save').disabled=disabled;document.getElementById('pfe-delete').disabled=disabled;
+}
+function deleteOpenProfitEntry(){if(profitState.entry?.id)return deleteProfitEntry(profitState.entry.id,'editor');}
+async function deleteProfitEntry(id,origin='list'){
+ if(!profitOwner()||profitState.busy)return;
+ const e=origin==='editor'?(profitState.entry?.id===id?profitState.entry:null):origin==='calendar'?profitAds.data?.entries.find(x=>x.id===id):profitState.data?.entries.find(x=>x.id===id);
+ const status=document.getElementById('pf-entry-status'),err=document.getElementById('pfe-error');
+ if(!e){const msg='Catatan tidak lagi tersedia. Refresh daftar sebelum menghapus.';if(origin==='editor')err.textContent=msg;else status.textContent=msg;return;}
+ const detail=[PF_KINDS[e.kind]||e.kind,fmtRp(e.amount),e.platform,e.campaign].filter(Boolean).join(' · ');
+ if(!confirm('Hapus seluruh catatan ini?\n'+detail+'\n'+e.coverage_from+' — '+e.coverage_to+'\n'+(e.expense_id?'Pengeluaran Financial aslinya tetap ada dan dapat kembali terhitung sesuai kategorinya.':'Hanya catatan ini yang dihapus. Catatan lain tetap ada.')))return;
+ profitState.busy=true;profitEntryControls(true);status.textContent='Menghapus catatan…';if(origin==='editor')err.textContent='';
+ try{
+  const {data,error}=await db.from('hp_profit_entries').delete().eq('id',id).eq('revision',e.revision).select('id');if(error)throw error;
+  if(data?.length!==1||data[0].id!==id)throw new Error('Catatan berubah atau tidak lagi tersedia. Refresh sebelum mencoba lagi.');
+  if(profitState.data)profitState.data.entries=profitState.data.entries.filter(x=>x.id!==id);
+  if(profitAds.data)profitAds.data.entries=profitAds.data.entries.filter(x=>x.id!==id);
+  if(profitState.entry?.id===id){profitState.entry=null;cm('ov-profit-entry');document.getElementById('pfe-delete').hidden=true;}
+  await loadProfitability(true);await loadProfitAdsCalendar(true);
+  status.textContent='Catatan dihapus.'+(profitState.report?' Grafik dan total diperbarui.':' Refresh dashboard untuk memuat ulang total.');
+ }catch(e){const msg='Gagal menghapus: '+e.message;status.textContent=msg;if(origin==='editor')err.textContent=msg;else alert(msg);}
+ finally{profitState.busy=false;profitEntryControls(false);}
 }
 if(typeof window!=='undefined'){
  let timer=null;
@@ -16736,7 +16773,7 @@ function paintProfitAdsCalendar(){
  document.getElementById('pf-ad-add-budget').disabled=!ready||!from;document.getElementById('pf-ad-add-spend').disabled=!ready||!from||to>today;
  document.getElementById('pf-ad-future').textContent=to>today?'Tanggal mendatang: isi budget rencana; belanja aktual dicatat sampai hari ini.':'';
  const entries=ready&&from?profitAds.data.entries.filter(e=>e.coverage_from<=to&&e.coverage_to>=from):[];
- document.getElementById('pf-ad-records').innerHTML=!ready?'':entries.length?entries.map(e=>`<div class="pf-ad-record"><div><strong>${esc(PF_KINDS[e.kind])} · ${fmtRp(e.amount)}</strong><div class="pf-small">${esc(e.platform)}${e.campaign?' · '+esc(e.campaign):''} · ${esc(e.coverage_from)} — ${esc(e.coverage_to)}</div></div><button type="button" class="btn btn-g btn-sm" onclick="editProfitAdEntry('${e.id}')">Edit</button></div>`).join(''):'<p class="pf-small">Belum ada catatan manual pada tanggal pilihan.</p>';
+ document.getElementById('pf-ad-records').innerHTML=!ready?'':entries.length?entries.map(e=>`<div class="pf-ad-record"><div><strong>${esc(PF_KINDS[e.kind])} · ${fmtRp(e.amount)}</strong><div class="pf-small">${esc(e.platform)}${e.campaign?' · '+esc(e.campaign):''} · ${esc(e.coverage_from)} — ${esc(e.coverage_to)}</div></div><div class="pf-ad-controls"><button type="button" data-pf-entry-action class="btn btn-g btn-sm" onclick="editProfitAdEntry('${e.id}')">Edit</button><button type="button" data-pf-entry-action class="btn btn-d btn-sm" onclick="deleteProfitEntry('${e.id}','calendar')">Hapus</button></div></div>`).join(''):'<p class="pf-small">Belum ada catatan manual pada tanggal pilihan.</p>';
 }
 function openProfitAdEntry(kind){
  if(!profitOwner()||!profitAds.data||!profitAds.from||profitState.busy)return;
