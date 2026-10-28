@@ -714,74 +714,184 @@ thead th[onclick]:hover{color:var(--primary-darker)}
 
 <div class="page">
  <div class="sec active" id="sec-dashboard">
-  <style>
-   #sec-dashboard .pf-top{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin:0 0 16px}#sec-dashboard .pf-top .fg{margin:0;min-width:130px;flex:0 1 180px}#sec-dashboard .pf-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}#sec-dashboard .pf-kpi{padding:16px;min-width:0}#sec-dashboard .pf-value{font-size:24px;font-weight:700;letter-spacing:-.5px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}#sec-dashboard .pf-small{font-size:12px;color:var(--muted)}#sec-dashboard .pf-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:14px}#sec-dashboard .pf-panel{padding:16px;min-width:0}#sec-dashboard .pf-heading{font-size:15px;font-weight:650;margin:0 0 10px}#sec-dashboard .pf-chart svg{width:100%;display:block}#sec-dashboard .pf-chart text{font:11px system-ui;fill:var(--text-2)}#sec-dashboard .pf-chart .pf-axis{stroke:var(--border);stroke-width:1}#sec-dashboard .pf-chart .pf-pos{fill:#35825b}#sec-dashboard .pf-chart .pf-neg{fill:#bc593d}#sec-dashboard .pf-chart .pf-return{fill:#b48a60}#sec-dashboard .pf-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}#sec-dashboard .pf-customer-stats{display:flex;gap:24px;flex-wrap:wrap;margin-bottom:10px}#sec-dashboard .pf-customer-stats strong{font-size:22px;display:block}#sec-dashboard .pf-table{border-collapse:collapse;width:100%;font-size:12px}#sec-dashboard .pf-table th,#sec-dashboard .pf-table td{padding:9px 7px;border-bottom:1px solid var(--border);text-align:left}#sec-dashboard .pf-table th{color:var(--muted);font-weight:500}#sec-dashboard .pf-table .pf-num{text-align:right;font-variant-numeric:tabular-nums}#sec-dashboard .pf-table-wrap{overflow:auto}#sec-dashboard .pf-alert{padding:12px 14px;background:var(--amber);color:var(--amb-t);border-radius:8px;margin:12px 0;font-size:13px}#sec-dashboard .pf-budgetbar{height:5px;background:var(--subtle);border-radius:4px;margin-top:8px;overflow:hidden}#sec-dashboard .pf-budgetbar span{display:block;height:100%;background:var(--primary)}#sec-dashboard .pf-status{font-size:12px;color:var(--muted);margin:6px 0 12px}#sec-dashboard .pf-legend{display:flex;gap:15px;font-size:12px;color:var(--muted);margin:8px 0}#sec-dashboard .pf-swatch{display:inline-block;width:9px;height:9px;background:#35825b;margin-right:5px}#sec-dashboard .pf-legend .pf-old{background:#b48a60}#sec-dashboard [hidden]{display:none!important}
-   @media(max-width:900px){#sec-dashboard .pf-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}#sec-dashboard .pf-grid{grid-template-columns:1fr}}@media(max-width:480px){#sec-dashboard .pf-kpi{padding:12px}#sec-dashboard .pf-value{font-size:21px}#sec-dashboard .pf-top .fg{flex:1 1 130px}#sec-dashboard .pf-panel{padding:12px}#sec-dashboard .pf-table{min-width:440px}}
-  </style>
-  <div class="toolbar"><span class="toolbar-title">Dashboard</span><button type="button" class="btn btn-g" onclick="loadProfitability(true)" id="pf-refresh">Refresh</button></div>
+  <style>#sec-dashboard{--pf-forest:#245c45;--pf-forest-ink:#fffefa;--pf-soft:#e9f1e7;--pf-line:#e2e6dc;--pf-page:#f7f5f0;--pf-paper:#fffefa;--pf-ink:#263c32;--pf-muted:#687568;--pf-blue:#4a6c87;--pf-rust:#a34233;color:var(--pf-ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding-top:22px}
+#sec-dashboard [hidden],#ov-profit-entry [hidden]{display:none!important}
+#sec-dashboard .pf-header{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin:0 0 12px}
+#sec-dashboard .pf-header h1{font-size:28px;line-height:1.25;letter-spacing:-.75px;font-weight:650;margin:0 0 5px}
+#sec-dashboard .pf-small{font-size:12px;color:var(--pf-muted);line-height:1.5}
+#sec-dashboard .pf-header-actions,#sec-dashboard .pf-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#sec-dashboard .btn{font-family:inherit;min-height:36px;border-radius:8px;font-weight:500;display:inline-flex;justify-content:center;align-items:center;gap:7px;max-width:100%;white-space:normal}
+#sec-dashboard .btn-p{background:var(--pf-forest);border-color:var(--pf-forest);color:var(--pf-forest-ink)}
+#sec-dashboard .btn-g{background:var(--pf-paper);border-color:var(--pf-line);color:var(--pf-ink)}
+#sec-dashboard .btn-d{background:transparent;color:var(--pf-rust);border-color:var(--pf-line)}
+#sec-dashboard button:focus-visible{outline:2px solid var(--pf-forest);outline-offset:3px}
+#sec-dashboard .pf-period-button{font-variant-numeric:tabular-nums}
+#sec-dashboard .pf-top{display:flex;gap:12px;align-items:end;flex-wrap:wrap;border:1px solid var(--pf-line);background:var(--pf-paper);border-radius:12px;padding:16px;margin:14px 0}
+#sec-dashboard .pf-top .fg{margin:0;min-width:140px;flex:1 1 170px}
+#sec-dashboard .pf-status{font-size:12px;color:var(--pf-muted);margin:8px 0;min-height:0}
+#sec-dashboard .pf-tabs{display:flex;gap:26px;border-bottom:1px solid var(--pf-line);margin:18px 0 20px}
+#sec-dashboard .pf-tab{border:0;border-bottom:2px solid transparent;background:transparent;padding:11px 0;font-family:inherit;font-size:14px;line-height:1.4;font-weight:500;color:var(--pf-muted);min-height:42px}
+#sec-dashboard .pf-tab[aria-selected="true"]{color:var(--pf-forest);border-bottom-color:var(--pf-forest);font-weight:650}
+#sec-dashboard .pf-kpis{display:grid;grid-template-columns:1.25fr repeat(3,minmax(0,1fr));gap:12px;margin:16px 0 22px}
+#sec-dashboard .pf-kpi{padding:19px 18px;border:1px solid var(--pf-line);background:var(--pf-paper);border-radius:12px;min-width:0;box-shadow:none}
+#sec-dashboard .pf-kpi-label{font-size:12px;color:var(--pf-muted)}
+#sec-dashboard .pf-value{font-size:clamp(23px,2.15vw,32px);font-weight:650;line-height:1.3;letter-spacing:-.65px;margin:9px 0 6px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+#sec-dashboard .pf-kpi-featured{background:var(--pf-forest);border-color:var(--pf-forest);color:var(--pf-forest-ink)}
+#sec-dashboard .pf-kpi-featured .pf-small,#sec-dashboard .pf-kpi-featured .pf-kpi-label{color:var(--pf-forest-ink);opacity:.86}
+#sec-dashboard .pf-panel{padding:22px;background:var(--pf-paper);border:1px solid var(--pf-line);border-radius:12px;min-width:0;box-shadow:0 3px 12px #25342b06}
+#sec-dashboard .pf-panel-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+#sec-dashboard .pf-heading{font-size:15px;font-weight:650;letter-spacing:-.15px;margin:0 0 4px}
+#sec-dashboard .pf-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(255px,1fr);gap:16px;align-items:start}
+#sec-dashboard .pf-chart svg{width:100%;display:block}
+#sec-dashboard .pf-chart text{font:11px system-ui;fill:var(--pf-muted)}
+#sec-dashboard .pf-chart .pf-axis{stroke:var(--pf-line);stroke-width:1}
+#sec-dashboard .pf-chart .pf-pos{fill:var(--pf-forest)}
+#sec-dashboard .pf-chart .pf-neg{fill:var(--pf-rust)}
+#sec-dashboard .pf-chart .pf-return{fill:#a68d6d}
+#sec-dashboard .pf-row{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--pf-line);font-variant-numeric:tabular-nums;font-size:13px}
+#sec-dashboard .pf-costbar{height:7px;display:flex;border-radius:5px;overflow:hidden;background:var(--pf-soft);margin:14px 0 6px}
+#sec-dashboard .pf-costbar span:nth-child(1){background:var(--pf-forest)}
+#sec-dashboard .pf-costbar span:nth-child(2){background:var(--pf-blue)}
+#sec-dashboard .pf-costbar span:nth-child(3){background:#a68d6d}
+#sec-dashboard .pf-customer-panel{margin-top:18px}
+#sec-dashboard .pf-customer-stats{display:flex;gap:32px;flex-wrap:wrap;margin:4px 0 14px}
+#sec-dashboard .pf-customer-stats strong{font-size:26px;font-weight:650;letter-spacing:-.4px;display:block;font-variant-numeric:tabular-nums}
+#sec-dashboard .pf-table{border-collapse:collapse;width:100%;font-size:12px}
+#sec-dashboard .pf-table th,#sec-dashboard .pf-table td{padding:12px 8px;border-bottom:1px solid var(--pf-line);text-align:left;vertical-align:middle;overflow-wrap:anywhere}
+#sec-dashboard .pf-table th{color:var(--pf-muted);font-weight:500;background:transparent}
+#sec-dashboard .pf-table .pf-num{text-align:right;font-variant-numeric:tabular-nums}
+#sec-dashboard .pf-table-wrap{overflow-x:auto;max-width:100%}
+#sec-dashboard .pf-segment{display:flex;padding:3px;background:#f0ede3;border-radius:8px;gap:2px;flex-wrap:wrap}
+#sec-dashboard .pf-segment button{border:0;background:transparent;padding:7px 12px;border-radius:6px;font-family:inherit;font-size:12px;line-height:1.4;font-weight:500;color:var(--pf-muted);min-height:32px}
+#sec-dashboard .pf-segment button[aria-pressed="true"]{background:var(--pf-paper);color:var(--pf-ink);box-shadow:0 1px 3px #25342b0a}
+#sec-dashboard .pf-source-link{color:var(--pf-forest);border:0;background:none;padding:3px 0;font:inherit;text-decoration:underline;text-underline-offset:3px;text-align:left;min-height:30px}
+#sec-dashboard .pf-notes{padding:10px 0;margin:12px 0 18px;font-size:12px;color:var(--pf-muted)}
+#sec-dashboard .pf-notes summary{font-weight:500}
+#sec-dashboard .pf-notes li{margin:6px 0}
+#sec-dashboard .pf-legend{display:flex;gap:15px;font-size:12px;color:var(--pf-muted);margin:8px 0}
+#sec-dashboard .pf-swatch{display:inline-block;width:9px;height:9px;background:var(--pf-forest);margin-right:5px}
+#sec-dashboard .pf-legend .pf-old{background:#a68d6d}
+#sec-dashboard .pf-budgetbar{height:5px;background:var(--pf-soft);border-radius:4px;margin-top:8px;overflow:hidden}
+#sec-dashboard .pf-budgetbar span{display:block;height:100%;background:var(--pf-forest)}
+#sec-dashboard .pf-ad-layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr);gap:18px;align-items:start}
+#sec-dashboard .pf-ad-toolbar,#sec-dashboard .pf-ad-month-head,#sec-dashboard .pf-ad-record{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+#sec-dashboard .pf-ad-month-head{margin-bottom:18px}
+#sec-dashboard .pf-ad-month-title{font-size:18px;letter-spacing:-.3px;text-transform:capitalize;margin:0}
+#sec-dashboard .pf-ad-controls{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#sec-dashboard .pf-ad-controls input,#sec-dashboard select{padding:8px;border:1px solid var(--pf-line);border-radius:8px;background:var(--pf-paper);color:var(--pf-ink);max-width:100%}
+#sec-dashboard .pf-ad-controls input[type="month"]{width:155px}
+#sec-dashboard .pf-ad-months{margin-top:16px}
+#sec-dashboard .pf-ad-week,#sec-dashboard .pf-ad-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+#sec-dashboard .pf-ad-week span{text-align:center;font-size:12px;color:var(--pf-muted);padding:4px 0 12px}
+#sec-dashboard .pf-ad-day{border:0;background:transparent;color:var(--pf-ink);font:inherit;min-width:0;min-height:82px;padding:10px 2px;display:flex;flex-direction:column;gap:7px;align-items:center;justify-content:center;border-radius:0;font-variant-numeric:tabular-nums;touch-action:manipulation}
+#sec-dashboard .pf-ad-day:hover{background:#f0ede3}
+#sec-dashboard .pf-ad-day.is-range{background:var(--pf-soft)}
+#sec-dashboard .pf-ad-day.is-edge{background:var(--pf-forest);color:var(--pf-forest-ink);border-radius:9px}
+#sec-dashboard .pf-ad-day.is-edge .pf-ad-amount{color:var(--pf-forest-ink);opacity:.9}
+#sec-dashboard .pf-ad-day.is-today .pf-ad-date{text-decoration:underline;text-underline-offset:4px}
+#sec-dashboard .pf-ad-date{font-size:14px;font-weight:600}
+#sec-dashboard .pf-ad-amount{font-size:12px;color:var(--pf-muted)}
+#sec-dashboard .pf-ad-month-totals{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--pf-line);padding-top:16px;margin-top:16px;font-size:12px}
+#sec-dashboard .pf-ad-selected{background:var(--pf-soft);border-radius:9px;padding:14px;margin-bottom:18px}
+#sec-dashboard #pf-ad-selection{display:block;font-size:16px;font-weight:650;margin-bottom:7px;letter-spacing:-.2px}
+#sec-dashboard .pf-ad-record{border-bottom:1px solid var(--pf-line);padding:14px 0;font-size:12px;min-width:0}
+#sec-dashboard .pf-ad-record>div:first-child{flex:1 1 190px;min-width:0;overflow-wrap:anywhere}
+#sec-dashboard .pf-ad-record .pf-ad-controls{flex:0 1 auto}
+#sec-dashboard .pf-ad-record .btn{font-size:12px;min-height:32px;padding:5px 8px}
+#sec-dashboard .pf-ad-record strong{font-size:13px;font-weight:600}
+#sec-dashboard .pf-ad-record-heading{margin:22px 0 0;font-size:13px;font-weight:650}
+#sec-dashboard .pf-records-tools{margin-top:18px}
+#sec-dashboard .pf-records-tools>details{margin:12px 0;padding:15px 18px;border:1px solid var(--pf-line);border-radius:10px;background:var(--pf-paper)}
+#sec-dashboard .pf-records-tools summary{font-weight:600;font-size:13px}
+#sec-dashboard .pf-inline-editor{padding:0 0 16px;border-bottom:1px solid var(--pf-line);margin:16px 0}
+#sec-dashboard .pf-inline-editor .modal-title{font-family:inherit;font-size:15px;line-height:1.4;font-weight:650;letter-spacing:0;margin:0 0 15px}
+#sec-dashboard .pf-inline-editor .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#sec-dashboard .pf-inline-editor .fg{min-width:0;margin:0}
+#sec-dashboard .pf-inline-editor label{font-size:12px;color:var(--pf-muted)}
+#sec-dashboard .pf-inline-editor input,#sec-dashboard .pf-inline-editor select,#sec-dashboard .pf-inline-editor textarea{max-width:100%;width:100%;min-width:0;border:1px solid var(--pf-line);border-radius:8px;padding:9px;background:var(--pf-paper);color:var(--pf-ink)}
+#sec-dashboard .pf-inline-editor .form-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:16px}
+#sec-dashboard .pf-inline-editor small{font-size:11px;color:var(--pf-muted)}
+#sec-dashboard .pf-inline-editor #pfe-amount-wrap,#sec-dashboard .pf-inline-editor #pfe-basis-wrap{grid-column:1/-1}
+#sec-dashboard .pf-inline-editor .pf-entry-extra{margin-top:12px;border-top:1px solid var(--pf-line);padding-top:12px}
+#sec-dashboard .pf-entry-total{font-size:12px;color:var(--pf-forest);margin:12px 0}
+#sec-dashboard .pf-footer-note{font-size:12px;color:var(--pf-muted);margin:18px 0}
+#ov-profit-entry .pf-entry-extra{margin:16px 0}
+#ov-profit-entry .pf-entry-total{color:#245c45;font-size:12px;margin:12px 0}
+#ov-profit-customers .pf-cl-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,170px) auto;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}
+#ov-profit-customers .pf-small{font-size:12px;color:var(--muted)}
+#ov-profit-customers select{max-width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface)}
+@media(max-width:1050px){#sec-dashboard .pf-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}#sec-dashboard .pf-grid{grid-template-columns:minmax(0,1.4fr) minmax(245px,1fr)}#sec-dashboard .pf-ad-layout{grid-template-columns:minmax(0,1.3fr) minmax(300px,1fr)}}
+@media(max-width:780px){#sec-dashboard .pf-ad-layout,#sec-dashboard .pf-grid{grid-template-columns:1fr}#sec-dashboard .pf-ad-day{min-height:76px}#sec-dashboard .pf-panel{padding:18px}#sec-dashboard .pf-header h1{font-size:25px}}
+@media(max-width:480px){#sec-dashboard .pf-kpi{padding:15px 12px}#sec-dashboard .pf-value{font-size:23px}#sec-dashboard .pf-panel{padding:14px}#sec-dashboard .pf-header-actions{width:100%}#sec-dashboard .pf-header-actions .pf-period-button{flex:1 1 auto}#sec-dashboard .pf-ad-toolbar{align-items:stretch}#sec-dashboard .pf-ad-day{min-height:66px}#sec-dashboard .pf-ad-amount{font-size:11px}#sec-dashboard .pf-segment button{padding:7px 9px}#sec-dashboard .pf-customer-stats{gap:20px}#sec-dashboard .pf-inline-editor .form-grid{grid-template-columns:1fr}#sec-dashboard .pf-inline-editor input,#sec-dashboard .pf-inline-editor select,#sec-dashboard .pf-inline-editor textarea{font-size:16px}#ov-profit-customers .pf-cl-row{grid-template-columns:1fr auto}#ov-profit-customers .pf-cl-row>div{grid-column:1/-1}}
+@media(pointer:coarse){#sec-dashboard .pf-ad-day,#sec-dashboard .pf-segment button,#sec-dashboard .pf-tab,#sec-dashboard .pf-source-link,#sec-dashboard .btn{min-height:44px}}
+</style>
+  <div class="pf-header"><div><h1 id="pf-page-title">Dashboard</h1><div class="pf-small" id="pf-page-subtitle">Ringkasan usaha dan aktivitas hari ini.</div></div><div class="pf-header-actions" id="pf-header-actions"><button type="button" class="btn btn-g pf-period-button" id="pf-period-button" aria-expanded="false" aria-controls="pf-period-controls" onclick="profitTogglePeriod()">Periode laporan</button><button type="button" class="btn btn-g" onclick="loadProfitability(true)" id="pf-refresh">Refresh</button></div></div>
   <div id="pf-owner-only">
-   <div class="pf-top">
-    <div class="fg"><label>Periode</label><select id="dash-period" onchange="profitPresetChanged()"><option value="this_month">Bulan ini</option><option value="last_month">Bulan lalu</option><option value="last_7">7 hari terakhir</option><option value="last_30">30 hari terakhir</option><option value="last_90">90 hari terakhir</option><option value="cycle">Siklus gaji ini</option><option value="prev_cycle">Siklus sebelumnya</option><option value="custom">Custom</option></select></div>
-    <div class="fg"><label>Dari</label><input type="date" id="pf-from" onchange="profitCustomChanged()"/></div>
-    <div class="fg"><label>Sampai</label><input type="date" id="pf-to" onchange="profitCustomChanged()"/></div>
-    <button type="button" class="btn btn-p" onclick="document.getElementById('pf-ad-calendar').scrollIntoView({behavior:'smooth',block:'start'})">Kalender iklan</button><button type="button" class="btn btn-g" onclick="openProfitEntry('operating')">+ Biaya / koreksi</button>
+   <div class="pf-top" id="pf-period-controls" hidden>
+    <div class="fg"><label for="dash-period">Periode laporan</label><select id="dash-period" onchange="profitPresetChanged()"><option value="this_month">Bulan ini</option><option value="last_month">Bulan lalu</option><option value="last_7">7 hari terakhir</option><option value="last_30">30 hari terakhir</option><option value="last_90">90 hari terakhir</option><option value="cycle">Siklus gaji ini</option><option value="prev_cycle">Siklus sebelumnya</option><option value="custom">Custom</option></select></div>
+    <div class="fg"><label for="pf-from">Dari</label><input type="date" id="pf-from" onchange="profitCustomChanged()"/></div><div class="fg"><label for="pf-to">Sampai</label><input type="date" id="pf-to" onchange="profitCustomChanged()"/></div><button type="button" class="btn btn-g" onclick="profitTogglePeriod(false)">Tutup</button>
    </div>
    <div id="pf-entry-status" class="pf-status" role="status" aria-live="polite"></div><div id="dash-period-lbl" class="pf-status"></div><div id="pf-status" class="pf-status" role="status"></div>
    <div id="pf-content" hidden>
+    <div class="pf-tabs" onkeydown="profitTabKey(event)" role="tablist" aria-label="Tampilan dashboard"><button type="button" class="pf-tab" id="pf-tab-overview" role="tab" aria-selected="false" aria-controls="pf-view-overview" onclick="profitSetView('overview')">Ringkasan</button><button type="button" class="pf-tab" id="pf-tab-ads" role="tab" aria-selected="true" aria-controls="pf-view-ads" onclick="profitSetView('ads')">Iklan & budget</button></div>
     <div class="pf-kpis" aria-live="polite">
-     <div class="card pf-kpi"><div class="pf-small">Pendapatan jasa</div><div class="pf-value" id="pf-revenue"></div><div class="pf-small" id="pf-revenue-note"></div></div>
-     <div class="card pf-kpi"><div class="pf-small">Total biaya tercatat</div><div class="pf-value" id="pf-cost"></div><div class="pf-small">Groomer + operasional + iklan</div></div>
-     <div class="card pf-kpi"><div class="pf-small">Estimasi laba</div><div class="pf-value" id="pf-profit"></div><div class="pf-small" id="pf-margin"></div></div>
-     <div class="card pf-kpi"><div class="pf-small">Belanja iklan aktual</div><div class="pf-value" id="pf-ads"></div><div class="pf-small" id="pf-budget"></div><div class="pf-budgetbar"><span id="pf-budget-bar"></span></div></div>
+     <div class="pf-kpi pf-kpi-featured"><div class="pf-kpi-label">Estimasi laba</div><div class="pf-value" id="pf-profit"></div><div class="pf-small" id="pf-margin"></div></div>
+     <div class="pf-kpi"><div class="pf-kpi-label">Pendapatan jasa</div><div class="pf-value" id="pf-revenue"></div><div class="pf-small" id="pf-revenue-note"></div></div>
+     <div class="pf-kpi"><div class="pf-kpi-label">Biaya tercatat</div><div class="pf-value" id="pf-cost"></div><div class="pf-small">Groomer + operasional + iklan</div></div>
+     <div class="pf-kpi"><div class="pf-kpi-label">Belanja iklan aktual</div><div class="pf-value" id="pf-ads"></div><div class="pf-small" id="pf-budget"></div><div class="pf-budgetbar"><span id="pf-budget-bar"></span></div></div>
     </div>
-    <div class="pf-grid">
-     <div class="card pf-panel"><div class="pf-heading">Tren estimasi laba</div><div id="pf-profit-chart" class="pf-chart"></div><div class="pf-small">Pendapatan − groomer − iklan aktual − operasional yang sudah tercatat. Biaya yang belum diisi belum dikurangi. Budget bukan biaya.</div></div>
-     <div class="card pf-panel"><div class="pf-heading">Dari pendapatan ke laba</div><div id="pf-bridge"></div><div id="pf-job-profit" class="pf-small" style="margin-top:10px"></div></div>
-    </div>
+    <section id="pf-view-ads" role="tabpanel" aria-labelledby="pf-tab-ads">
+     <div id="pf-ad-calendar" class="pf-ad-layout">
+      <div class="pf-panel">
+       <div class="pf-ad-month-head"><h2 id="pf-ad-month-title" class="pf-ad-month-title">Kalender iklan</h2><div class="pf-ad-controls"><button type="button" class="btn btn-g" onclick="profitAdsMoveMonth(-1)" aria-label="Bulan sebelumnya">‹</button><button type="button" class="btn btn-g" onclick="profitAdsMoveMonth(1)" aria-label="Bulan berikutnya">›</button><button type="button" class="btn btn-g" onclick="profitAdsToday()">Hari ini</button></div></div>
+       <div class="pf-ad-toolbar"><div class="pf-segment" aria-label="Angka dalam kalender"><button type="button" id="pf-ad-measure-ads" aria-pressed="true" onclick="profitAdsSetMeasure('ads')">Belanja aktual</button><button type="button" id="pf-ad-measure-budget" aria-pressed="false" onclick="profitAdsSetMeasure('budget')">Budget</button></div><div class="pf-segment" aria-label="Pilihan tanggal"><button type="button" id="pf-ad-range-day" aria-pressed="true" onclick="profitAdsSetRangeMode('day')">Satu hari</button><button type="button" id="pf-ad-range-range" aria-pressed="false" onclick="profitAdsSetRangeMode('range')">Rentang</button></div></div>
+       <div class="pf-ad-controls" style="margin-top:14px"><input type="month" id="pf-ad-month" min="1900-01" max="2199-12" aria-label="Lompat ke bulan" onchange="profitAdsGoMonth(this.value)"/><button type="button" class="btn btn-g btn-sm" onclick="loadProfitAdsCalendar(true)">Refresh kalender</button></div>
+       <div class="pf-status" id="pf-ad-status" role="status"></div><div id="pf-ad-months" class="pf-ad-months"></div>
+       <div id="pf-ad-month-totals" class="pf-ad-month-totals"></div><div class="pf-small" style="margin-top:8px" id="pf-ad-calendar-help">Rupiah per hari · — belum dicatat · 0 sudah dicatat</div>
+      </div>
+      <aside class="pf-panel" aria-label="Catatan tanggal pilihan">
+       <div class="pf-panel-head"><h2 class="pf-heading">Tanggal pilihan</h2></div><div class="pf-ad-selected"><strong id="pf-ad-selection"></strong><div id="pf-ad-totals" class="pf-small"></div><div id="pf-ad-future" class="pf-small"></div></div>
+       <div class="pf-ad-controls"><button type="button" class="btn btn-p" id="pf-ad-add-budget" onclick="openProfitAdEntry('budget')">+ Budget</button><button type="button" class="btn btn-g" id="pf-ad-add-spend" onclick="openProfitAdEntry('ads')">+ Belanja aktual</button></div>
+       <div id="pf-ad-editor" class="pf-inline-editor" hidden></div><h3 class="pf-ad-record-heading">Catatan pada tanggal ini</h3><div id="pf-ad-records"></div><div class="pf-small" style="margin-top:12px">Edit dan Hapus berlaku untuk periode asli catatan. Tambah catatan membuat alokasi tambahan.</div>
+      </aside>
+     </div>
+    </section>
+    <section id="pf-view-overview" role="tabpanel" aria-labelledby="pf-tab-overview" hidden>
+     <div class="pf-grid"><div class="pf-panel"><div class="pf-panel-head"><h2 class="pf-heading">Tren estimasi laba</h2><span class="pf-small">Rupiah</span></div><div id="pf-profit-chart" class="pf-chart"></div><div class="pf-small" style="margin-top:10px">Berdasarkan pendapatan dan biaya yang sudah tercatat.</div></div><div class="pf-panel"><h2 class="pf-heading">Biaya usaha</h2><div class="pf-costbar" id="pf-cost-bar" role="img" aria-label="Komposisi biaya tercatat"></div><div id="pf-bridge"></div><div id="pf-job-profit" class="pf-small" style="margin-top:14px"></div><button type="button" class="btn btn-g" style="margin-top:16px" onclick="profitSetView('ads')">Kelola iklan</button></div></div>
+     <div class="pf-panel pf-customer-panel">
+      <div class="pf-panel-head"><div><h2 class="pf-heading" id="pf-customer-heading">Pelanggan baru & kembali</h2><div class="pf-small" id="pf-customer-subtitle">Returning setelah minimal 2 appointment</div></div><div class="pf-actions"><select id="pf-unit" hidden aria-label="Hitung berdasarkan"><option value="households">Rumah tangga</option><option value="dogs">Anjing unik</option></select><div class="pf-segment" aria-label="Hitung berdasarkan"><button type="button" id="pf-unit-households" aria-pressed="true" onclick="profitSetUnit('households')">Rumah tangga</button><button type="button" id="pf-unit-dogs" aria-pressed="false" onclick="profitSetUnit('dogs')">Anjing unik</button></div><select id="pf-source" aria-label="Sumber pelanggan" onchange="profitState.source=this.value;renderProfitCustomerSection()"></select></div></div>
+      <div id="pf-customer-stats" class="pf-customer-stats" aria-live="polite"></div><div id="pf-customer-basis" class="pf-small" style="margin-bottom:16px"></div>
+      <div class="pf-grid"><div><div id="pf-customer-chart" class="pf-chart"></div><div class="pf-legend"><span><span class="pf-swatch"></span>Baru</span><span><span class="pf-swatch pf-old"></span>Kembali</span></div><div class="pf-small">Unik per bucket; tidak dijumlahkan menjadi total periode.</div></div><div><div class="pf-table-wrap"><table class="pf-table"><thead><tr><th>Sumber</th><th class="pf-num">Baru</th><th class="pf-num">Kembali</th><th class="pf-num">Total</th><th class="pf-num">Pendapatan</th></tr></thead><tbody id="pf-source-rows"></tbody></table></div><div id="pf-acquisition" class="pf-small" style="margin-top:14px"></div><div class="pf-small" style="margin-top:10px">Klik nama sumber, termasuk Belum ditandai, untuk mengedit pelanggan. Pendapatan dan CAC tetap per rumah tangga.</div></div></div>
+     </div>
+    </section>
     <div id="pf-issues"></div>
-    <div class="card pf-panel" id="pf-ad-calendar" style="margin-top:14px;scroll-margin-top:80px">
-     <div class="pf-ad-toolbar"><div><div class="pf-heading">Kalender budget & belanja iklan</div><div class="pf-small">Pilih tanggal awal dan akhir, lalu tambah catatan atau Edit catatan tersimpan. Bisa untuk tanggal lampau.</div></div><div class="pf-ad-controls"><button type="button" class="btn btn-g" onclick="profitAdsMoveMonth(-1)" aria-label="Bulan sebelumnya">‹</button><input type="month" id="pf-ad-month" min="1900-01" max="2199-12" aria-label="Lompat ke bulan" onchange="profitAdsGoMonth(this.value)"/><button type="button" class="btn btn-g" onclick="profitAdsMoveMonth(1)" aria-label="Bulan berikutnya">›</button><button type="button" class="btn btn-g" onclick="profitAdsToday()">Hari ini</button></div></div>
-     <div class="pf-status" id="pf-ad-status" role="status"></div><button type="button" class="btn btn-g btn-sm" onclick="loadProfitAdsCalendar(true)">Refresh kalender</button>
-     <div id="pf-ad-months" class="pf-ad-months"></div><div class="pf-small" style="margin:10px 0">B = budget rencana · A = belanja aktual · — = belum dicatat. Nilai harian adalah alokasi rata dari total periode, bukan tagihan per hari.</div>
-     <div class="pf-ad-selected"><div><strong id="pf-ad-selection"></strong><div id="pf-ad-totals" class="pf-small"></div><div id="pf-ad-future" class="pf-small"></div></div><div class="pf-ad-controls"><button type="button" class="btn btn-p" id="pf-ad-add-budget" onclick="openProfitAdEntry('budget')">+ Budget</button><button type="button" class="btn btn-g" id="pf-ad-add-spend" onclick="openProfitAdEntry('ads')">+ Belanja aktual</button></div></div>
-     <div class="pf-small" style="margin:10px 0">Untuk mengubah angka lama, klik Edit di bawah. Tambah catatan membuat alokasi tambahan. Edit mengubah total dan tanggal asli catatan tersebut.</div><div id="pf-ad-records"></div>
+    <div class="pf-records-tools">
+     <div class="pf-actions"><button type="button" class="btn btn-g" onclick="openProfitEntry('operating')">+ Biaya / koreksi</button></div>
+     <details><summary>Semua catatan manual & koreksi</summary><div id="pf-entries"></div></details>
+     <details><summary>Koreksi sumber awal pelanggan</summary><div class="pf-small" style="margin-top:10px">Perubahan memperbarui sumber di Database dan dicatat dalam histori.</div><div class="pf-actions" style="margin-top:12px"><select id="pf-source-customer" onchange="profitSourceCustomerChanged()" aria-label="Pelanggan untuk koreksi sumber"></select><select id="pf-source-correction" aria-label="Sumber awal yang benar"></select><button class="btn btn-g" id="pf-source-save" onclick="profitCorrectSource()">Simpan koreksi</button></div></details>
+     <details id="pf-expense-details"><summary id="pf-expense-summary">Klasifikasi pengeluaran</summary><div class="pf-small" style="margin-top:10px">Gaji yang sudah dihitung Payroll tidak dikurangi lagi. Aset dan transfer dikecualikan.</div><div class="pf-actions" style="margin:12px 0"><select id="pf-expense-category" aria-label="Kategori pengeluaran"><option value="operating">Operasional</option><option value="advertising">Iklan aktual</option><option value="payroll">Sudah dihitung Payroll</option><option value="capital">Aset / modal</option><option value="excluded">Transfer / bukan biaya</option></select><button type="button" class="btn btn-g" id="pf-tag-save" onclick="profitTagExpenses()">Terapkan ke yang dicentang</button></div><div id="pf-expenses"></div></details>
     </div>
-    <div class="card pf-panel" style="margin-top:14px">
-     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><div class="pf-heading" id="pf-customer-heading">Pelanggan baru & kembali</div><div class="pf-small" id="pf-customer-subtitle">Per rumah tangga · berdasarkan kalender lewat / selesai dan riwayat sebelum periode</div></div><div style="display:flex;gap:10px;flex-wrap:wrap"><div class="fg" style="margin:0"><label>Hitung berdasarkan</label><select id="pf-unit" onchange="profitState.unit=this.value;renderProfitCustomerSection()"><option value="households">Rumah tangga</option><option value="dogs">Anjing unik</option></select></div><div class="fg" style="margin:0"><label>Sumber pelanggan</label><select id="pf-source" onchange="profitState.source=this.value;renderProfitCustomerSection()"></select></div></div></div>
-     <div class="pf-grid" style="margin-top:14px"><div><div id="pf-customer-stats" class="pf-customer-stats" aria-live="polite"></div><div id="pf-customer-basis" class="pf-small" style="margin-bottom:8px"></div><div id="pf-customer-chart" class="pf-chart"></div><div class="pf-legend"><span><span class="pf-swatch"></span>Baru</span><span><span class="pf-swatch pf-old"></span>Kembali</span></div><div class="pf-small">Unik per bucket; pelanggan yang sama bisa muncul di beberapa minggu.</div></div><div><div class="pf-table-wrap"><table class="pf-table"><thead><tr><th>Sumber</th><th>Baru</th><th>Kembali</th><th class="pf-num">Pendapatan</th></tr></thead><tbody id="pf-source-rows"></tbody></table></div><div id="pf-acquisition" class="pf-small" style="margin-top:12px"></div><div class="pf-small" style="margin-top:8px">Klik nama sumber (termasuk Belum ditandai) untuk edit sumber pelanggan. Pendapatan tetap per rumah tangga; pilihan Anjing unik hanya mengubah jumlah. Rasio Ads bukan atribusi campaign.</div></div></div>
-    </div>
-    <details class="card pf-panel" style="margin-top:14px"><summary class="pf-heading">Budget, belanja & koreksi tersimpan</summary><div id="pf-entries"></div></details>
-    <details class="card pf-panel" style="margin-top:14px"><summary class="pf-heading">Koreksi sumber awal pelanggan</summary><div class="pf-small">Sumber awal dipertahankan untuk laporan historis. Koreksi di sini juga memperbarui sumber di Database dan dicatat dalam histori.</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><select id="pf-source-customer" onchange="profitSourceCustomerChanged()" aria-label="Pelanggan untuk koreksi sumber"></select><select id="pf-source-correction" aria-label="Sumber awal yang benar"></select><button class="btn btn-g" id="pf-source-save" onclick="profitCorrectSource()">Simpan koreksi</button></div></details>
-    <details class="card pf-panel" style="margin-top:14px" id="pf-expense-details"><summary class="pf-heading" id="pf-expense-summary">Klasifikasi pengeluaran</summary><div class="pf-small">Gaji yang sudah dihitung Payroll tidak dikurangi lagi. Capital / transfer dikecualikan dari biaya operasional.</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><select id="pf-expense-category"><option value="operating">Operasional</option><option value="advertising">Iklan aktual</option><option value="payroll">Sudah dihitung Payroll</option><option value="capital">Aset / modal</option><option value="excluded">Transfer / bukan biaya</option></select><button type="button" class="btn btn-p" id="pf-tag-save" onclick="profitTagExpenses()">Terapkan ke yang dicentang</button></div><div id="pf-expenses"></div></details>
-    <div class="pf-small" style="margin:14px 0">Laba langsung ditampilkan dari nilai yang sudah tercatat; biaya / nilai jasa yang belum diketahui belum masuk perhitungan. Ini estimasi, bukan saldo bank. Pembayaran paket diakui saat sesi diberikan. Gaji dibayar memakai nilai tersimpan; alokasi sebagian periode dan bonus berjalan merupakan estimasi.</div>
+    <div class="pf-footer-note">Laba langsung tampil dari angka tercatat. Biaya yang belum diisi belum dikurangi; budget bukan biaya. Gaji dibayar memakai nilai tersimpan. Estimasi ini bukan saldo bank.</div>
    </div>
   </div>
-  <div id="dash-tasks" aria-live="polite" style="margin-top:18px"></div><div id="dash-actions"></div>
+  <div id="dash-tasks" aria-live="polite" style="margin-top:22px"></div><div id="dash-actions"></div>
  </div>
 
- <style>#ov-profit-entry [hidden]{display:none!important}</style>
- <div class="overlay" id="ov-profit-entry"><div class="modal" style="max-width:650px">
-  <button type="button" class="modal-close" onclick="cm('ov-profit-entry')">×</button><div class="modal-title">Catatan profitabilitas</div>
+ <div class="overlay" id="ov-profit-entry"><div class="modal" style="max-width:650px"><button type="button" class="modal-close" aria-label="Tutup catatan" onclick="closeProfitEntry()">×</button><div id="pf-entry-modal-slot"><div id="pf-entry-form">
+  <div class="modal-title" id="pfe-title">Catatan profitabilitas</div>
   <div class="form-grid">
-   <div class="fg"><label>Jenis</label><select id="pfe-kind" onchange="profitEntryKindChanged()"><option value="ads">Belanja iklan aktual</option><option value="budget">Budget iklan (rencana)</option><option value="operating">Biaya operasional</option><option value="payroll_adjustment">Tambahan biaya groomer / retensi</option><option value="revenue_adjustment">Koreksi pendapatan / refund</option><option value="service_value">Nilai total jasa per appointment (koreksi)</option></select></div>
-   <div class="fg"><label>Jumlah total periode (Rp)</label><input id="pfe-amount" type="number" step="1"/><small>Total ini dibagi rata ke tanggal Dari–Sampai.</small></div>
-   <div class="fg"><label>Dari</label><input id="pfe-from" type="date"/></div><div class="fg"><label>Sampai</label><input id="pfe-to" type="date"/></div>
-   <div class="fg" id="pfe-platform-wrap"><label>Platform</label><select id="pfe-platform"><option>Meta Ads</option><option>Google Ads</option><option>TikTok Ads</option><option>Other</option></select></div>
-   <div class="fg" id="pfe-campaign-wrap"><label>Campaign / label</label><input id="pfe-campaign" maxlength="120"/></div>
-   <div class="fg" id="pfe-budget-wrap"><label>Budget rencana (opsional, Rp)</label><input id="pfe-budget" type="number" min="0" step="1" placeholder="Biarkan kosong jika sudah dicatat"/></div>
-   <div class="fg" id="pfe-groomer-wrap"><label>Groomer</label><select id="pfe-groomer"></select></div>
-   <div class="fg full" id="pfe-expense-wrap"><label>Hubungkan pengeluaran yang sudah ada (opsional)</label><select id="pfe-expense" onchange="profitLinkExpense()"></select><small>Jika dihubungkan, jumlah harus sama dan tidak akan dihitung dua kali.</small></div>
-   <div class="fg full" id="pfe-appointment-wrap"><label>Appointment lewat / selesai</label><select id="pfe-appointment" onchange="profitValueAppointmentChanged()"></select><small>Nilai ini menggantikan total jasa appointment tersebut, termasuk nilai paket dan add-on. Tidak mengubah invoice pelanggan.</small></div>
-   <div class="fg full"><label>Catatan</label><textarea id="pfe-note" maxlength="2000"></textarea></div>
-  </div><div id="pfe-error" role="alert" style="color:var(--red-t);white-space:pre-wrap"></div><div class="form-actions"><button type="button" class="btn btn-d" id="pfe-delete" hidden onclick="deleteOpenProfitEntry()">Hapus catatan</button><button type="button" class="btn btn-p" id="pfe-save" onclick="saveProfitEntry()">Simpan</button><button type="button" class="btn btn-g" onclick="cm('ov-profit-entry')">Batal</button></div>
- </div></div>
-
- <style>
-  #sec-dashboard .pf-notes{padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin:14px 0;font-size:12px;color:var(--text-2)}#sec-dashboard .pf-notes summary{cursor:pointer;font-weight:600}#sec-dashboard .pf-notes li{margin:6px 0}#sec-dashboard .pf-source-link{color:var(--primary);border:0;background:none;padding:0;font:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer;text-align:left}
-  #sec-dashboard .pf-ad-toolbar,#sec-dashboard .pf-ad-selected,#sec-dashboard .pf-ad-record{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}#sec-dashboard .pf-ad-controls{display:flex;gap:6px;align-items:center;flex-wrap:wrap}#sec-dashboard .pf-ad-controls input{padding:7px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)}#sec-dashboard .pf-ad-months{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:26px;margin-top:14px}#sec-dashboard .pf-ad-month h4{font-size:15px;text-transform:capitalize;margin:0 0 14px}#sec-dashboard .pf-ad-week,#sec-dashboard .pf-ad-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}#sec-dashboard .pf-ad-week span{text-align:center;font-size:11px;color:var(--muted);padding-bottom:10px}#sec-dashboard .pf-ad-day{border:1px solid transparent;background:transparent;color:var(--text);font:inherit;min-height:74px;padding:6px 2px;cursor:pointer;display:flex;flex-direction:column;gap:3px;align-items:center;border-radius:9px;font-variant-numeric:tabular-nums}#sec-dashboard .pf-ad-day:hover{background:var(--subtle);border-color:var(--primary)}#sec-dashboard .pf-ad-day:focus-visible{outline:2px solid var(--primary);outline-offset:1px}#sec-dashboard .pf-ad-day.is-range{background:#edf4ef;border-radius:0}#sec-dashboard .pf-ad-day.is-edge{background:#d4e8da;border:1px solid #7cab8b;border-radius:9px}#sec-dashboard .pf-ad-day.is-today .pf-ad-date{text-decoration:underline;text-underline-offset:3px}#sec-dashboard .pf-ad-date{font-size:13px;font-weight:600}#sec-dashboard .pf-ad-plan{font-size:10px;color:#376a9f}#sec-dashboard .pf-ad-spend{font-size:10px;color:#327854}#sec-dashboard .pf-ad-selected{background:var(--subtle);border-radius:10px;padding:12px}#sec-dashboard .pf-ad-record{border-top:1px solid var(--border);padding:10px 0;font-size:12px}
-  #ov-profit-customers .pf-cl-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,170px) auto;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}#ov-profit-customers .pf-small{font-size:12px;color:var(--muted)}#ov-profit-customers select{max-width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface)}@media(max-width:650px){#sec-dashboard .pf-ad-months{grid-template-columns:1fr;gap:24px}#sec-dashboard .pf-ad-day{min-height:65px}#ov-profit-customers .pf-cl-row{grid-template-columns:1fr auto}#ov-profit-customers .pf-cl-row>div{grid-column:1/-1}}
- </style>
- <div class="overlay" id="ov-profit-customers"><div class="modal" style="max-width:760px"><button type="button" class="modal-close" onclick="closeProfitCustomerList()">×</button><div class="modal-title" id="pf-cl-title">Edit sumber pelanggan</div><p style="font-size:12px;color:var(--muted)">Pilih sumber lalu Simpan. Perubahan memperbarui Database dan grafik, serta dicatat dalam histori. Daftar mengikuti periode dan pilihan Rumah tangga / Anjing unik.</p><div id="pf-cl-error" role="status" style="margin:10px 0"></div><div id="pf-cl-list" style="max-height:60vh;overflow:auto"></div></div></div>
+   <div class="fg full"><label for="pfe-kind">Jenis catatan</label><select id="pfe-kind" onchange="profitEntryKindChanged()"><option value="ads">Belanja iklan aktual</option><option value="budget">Budget iklan (rencana)</option><option value="operating">Biaya operasional</option><option value="payroll_adjustment">Tambahan biaya groomer / retensi</option><option value="revenue_adjustment">Koreksi pendapatan / refund</option><option value="service_value">Nilai total jasa per appointment (koreksi)</option></select></div>
+   <div class="fg" id="pfe-amount-wrap"><label for="pfe-amount" id="pfe-amount-label">Jumlah total periode (Rp)</label><input id="pfe-amount" type="number" step="1" oninput="profitEntryTotalChanged()"/></div>
+   <div class="fg" id="pfe-basis-wrap"><label for="pfe-basis">Cara mengisi jumlah</label><select id="pfe-basis" onchange="profitEntryTotalChanged()"><option value="total">Total periode</option><option value="daily">Per hari</option></select></div>
+   <div class="fg"><label for="pfe-from">Dari</label><input id="pfe-from" type="date" onchange="profitEntryTotalChanged()"/></div><div class="fg"><label for="pfe-to">Sampai</label><input id="pfe-to" type="date" onchange="profitEntryTotalChanged()"/></div>
+   <div class="fg" id="pfe-budget-wrap"><label for="pfe-budget">Budget rencana (opsional, Rp)</label><input id="pfe-budget" type="number" min="0" step="1" placeholder="Biarkan kosong jika sudah dicatat"/></div>
+   <div class="fg" id="pfe-groomer-wrap"><label for="pfe-groomer">Groomer</label><select id="pfe-groomer"></select></div>
+   <div class="fg full" id="pfe-appointment-wrap"><label for="pfe-appointment">Appointment lewat / selesai</label><select id="pfe-appointment" onchange="profitValueAppointmentChanged()"></select><small>Nilai ini menggantikan total jasa appointment, termasuk paket dan add-on. Invoice pelanggan tetap.</small></div>
+  </div>
+  <div class="pf-entry-total" id="pfe-total" aria-live="polite"></div><details class="pf-entry-extra"><summary>Detail catatan</summary><div class="form-grid" style="margin-top:12px"><div class="fg" id="pfe-platform-wrap"><label for="pfe-platform">Platform</label><select id="pfe-platform"><option>Meta Ads</option><option>Google Ads</option><option>TikTok Ads</option><option>Other</option></select></div><div class="fg" id="pfe-campaign-wrap"><label for="pfe-campaign">Campaign / label</label><input id="pfe-campaign" maxlength="120"/></div><div class="fg full" id="pfe-expense-wrap"><label for="pfe-expense">Hubungkan pengeluaran yang sudah ada (opsional)</label><select id="pfe-expense" onchange="profitLinkExpense()"></select><small>Jumlah harus sama. Pengeluaran tidak dihitung dua kali.</small></div><div class="fg full"><label for="pfe-note">Catatan</label><textarea id="pfe-note" maxlength="2000"></textarea></div></div></details>
+  <div id="pfe-error" role="alert" style="color:var(--red-t);white-space:pre-wrap"></div><div class="form-actions"><button type="button" class="btn btn-d" id="pfe-delete" hidden onclick="deleteOpenProfitEntry()">Hapus catatan</button><button type="button" class="btn btn-p" id="pfe-save" onclick="saveProfitEntry()">Simpan catatan</button><button type="button" class="btn btn-g" onclick="closeProfitEntry()">Batal</button></div>
+ </div></div></div></div>
+ <div class="overlay" id="ov-profit-customers"><div class="modal" style="max-width:760px"><button type="button" class="modal-close" onclick="closeProfitCustomerList()">×</button><div class="modal-title" id="pf-cl-title">Edit sumber pelanggan</div><p style="font-size:12px;color:var(--muted)">Pilih sumber lalu Simpan. Database dan grafik ikut diperbarui. Daftar mengikuti periode dan pilihan Rumah tangga / Anjing unik.</p><div id="pf-cl-error" role="status" style="margin:10px 0"></div><div id="pf-cl-list" style="max-height:60vh;overflow:auto"></div></div></div>
 
 
  <div class="sec" id="sec-tasks">
@@ -16508,10 +16618,21 @@ return (g,cycle)=>computeGroomerPay(g,cycle);
 }
 
 /* HomePaw owner dashboard. All source data comes from one owner-authorized RPC. */
-let profitState={key:'',data:null,report:null,source:'all',unit:'households',customerListSource:null,customerList:[],seq:0,busy:false,error:'',expensePage:0,entry:null,user:null};
+let profitState={key:'',data:null,report:null,view:'ads',source:'all',unit:'households',customerListSource:null,customerList:[],seq:0,busy:false,error:'',expensePage:0,entry:null,entryInline:false,user:null};
 const PF_KINDS={budget:'Budget iklan',ads:'Belanja iklan',operating:'Operasional',payroll_adjustment:'Tambahan groomer',revenue_adjustment:'Koreksi pendapatan',service_value:'Nilai jasa appointment'};
 function profitToday(){const p=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()),v=k=>p.find(x=>x.type===k).value;return `${v('year')}-${v('month')}-${v('day')}`;}
 function profitOwner(){return typeof isOwner==='function'&&isOwner();}
+function profitTogglePeriod(open){if(!profitOwner())return;const el=document.getElementById('pf-period-controls');el.hidden=typeof open==='boolean'?!open:!el.hidden;document.getElementById('pf-period-button').setAttribute?.('aria-expanded',String(!el.hidden));}
+function profitPaintView(){
+ const view=profitState.view==='overview'?'overview':'ads';
+ for(const name of ['overview','ads']){document.getElementById('pf-view-'+name).hidden=name!==view;document.getElementById('pf-tab-'+name).setAttribute?.('aria-selected',String(name===view));}
+ document.getElementById('pf-page-title').textContent=view==='ads'?'Iklan & budget':'Kinerja bisnis';
+ document.getElementById('pf-page-subtitle').textContent=view==='ads'?'Rencana dan pengeluaran, jelas per tanggal.':'Angka penting usaha, dalam satu pandangan.';
+}
+function profitSetView(view){if(!profitOwner()||profitState.busy||!['ads','overview'].includes(view))return;profitState.view=view;profitPaintView();if(profitState.report)renderProfitBody();}
+function profitTabKey(event){const map={ArrowLeft:'overview',ArrowRight:'ads',Home:'overview',End:'ads'};if(!map[event.key])return;event.preventDefault();profitSetView(map[event.key]);document.getElementById('pf-tab-'+map[event.key]).focus?.();}
+function profitSetUnit(unit){if(!profitOwner()||!['households','dogs'].includes(unit))return;profitState.unit=unit;renderProfitCustomerSection();}
+function profitMoney(value){return Math.abs(value)>=1000000?'Rp '+profitShort(value):fmtRp(value);}
 function getDashboardPeriod(){
  const today=profitToday(),sel=document.getElementById('dash-period')?.value||'this_month';let start,end=today;
  if(sel==='custom'){start=document.getElementById('pf-from')?.value;end=document.getElementById('pf-to')?.value;}
@@ -16537,10 +16658,13 @@ function renderDashboard(){
  renderDashboardTasks();renderProfitActions(getDashboardPeriod());const wrap=document.getElementById('pf-owner-only'),refresh=document.getElementById('pf-refresh');
  if(!wrap)return;
  wrap.style.display=profitOwner()?'':'none';if(refresh)refresh.style.display=profitOwner()?'':'none';
- if(!profitOwner()){profitState.data=null;profitState.report=null;profitState.key='';profitState.customerList=[];profitState.customerListSource=null;cm('ov-profit-customers');profitAdsReset();return;}
+ document.getElementById('pf-header-actions').hidden=!profitOwner();
+ if(!profitOwner()){profitState.data=null;profitState.report=null;profitState.key='';profitState.customerList=[];profitState.customerListSource=null;cm('ov-profit-customers');closeProfitEntry(true);profitAdsReset();document.getElementById('pf-page-title').textContent='Dashboard';document.getElementById('pf-page-subtitle').textContent='Ringkasan aktivitas hari ini.';return;}
+ profitPaintView();
  const today=profitToday();['pf-from','pf-to'].forEach(id=>{const e=document.getElementById(id);if(e)e.max=today;});
  const p=getDashboardPeriod();if(document.getElementById('dash-period').value!=='custom'){document.getElementById('pf-from').value=p.start;document.getElementById('pf-to').value=p.end;}
  document.getElementById('dash-period-lbl').textContent=`${p.start} — ${p.end} · WIB · Estimasi berdasarkan sumber keuangan tersimpan`;
+ document.getElementById('pf-period-button').textContent=profitPeriodLabel(p.start,p.end);
  const key=p.start+'|'+p.end+'|'+(currentUser?.id||currentAdminRow?.id||'');
  if(!HPProfit.valid(p.start,p.end,today)){profitState.seq++;profitState.key='';profitState.data=null;profitState.report=null;document.getElementById('pf-status').textContent='Pilih tanggal yang valid, maksimal 366 hari, sampai hari ini.';document.getElementById('pf-content').hidden=true;return;}
  if(profitState.data&&Date.now()-new Date(profitState.data.as_of).getTime()>60000)profitState.key='';
@@ -16566,6 +16690,7 @@ async function loadProfitability(force=false){
 }
 function profitShort(n){return Math.abs(n)>=1e6?(n/1e6).toLocaleString('id-ID',{maximumFractionDigits:2})+' jt':Math.abs(n)>=1000?(n/1000).toLocaleString('id-ID',{maximumFractionDigits:0})+' rb':Math.round(n).toLocaleString('id-ID');}
 function profitPercent(n){return n==null?'—':(n*100).toLocaleString('id-ID',{maximumFractionDigits:1})+'%';}
+function profitPeriodLabel(from,to){if(!/^\d{4}-\d{2}-\d{2}$/.test(from||'')||!/^\d{4}-\d{2}-\d{2}$/.test(to||''))return 'Pilih periode';const f=d=>new Intl.DateTimeFormat('id-ID',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(HPProfit.date(d));return f(from)+' — '+f(to);}
 function profitBuckets(p){const n=HPProfit.span(p.start,p.end),step=n<=14?1:n<=100?7:30;return HPProfit.days(p.start,p.end).filter((_,i)=>i%step===0).map(a=>({start:a,end:HPProfit.add(a,step-1)<p.end?HPProfit.add(a,step-1):p.end}));}
 function profitChart(id,rows,type){
  const el=document.getElementById(id);if(!el)return;const w=Math.max(230,Math.round(el.getBoundingClientRect().width||520)),h=230,l=60,r=12,t=28,b=42,pw=w-l-r,ph=h-t-b;
@@ -16583,12 +16708,15 @@ function profitChart(id,rows,type){
 }
 function renderProfitBody(){
  if(!profitOwner()||!profitState.report)return;const d=profitState.data,p=getDashboardPeriod(),report=profitState.report,m=report.metrics(p.start,p.end),n=HPProfit.span(p.start,p.end),prev=report.metrics(HPProfit.add(p.start,-n),HPProfit.add(p.start,-1));
- document.getElementById('pf-content').hidden=false;document.getElementById('pf-status').textContent='Diperbarui '+new Date(d.as_of).toLocaleString('id-ID',{timeZone:'Asia/Jakarta'})+' WIB · Gaji berjalan / alokasi periode merupakan estimasi';
+ document.getElementById('pf-content').hidden=false;profitPaintView();document.getElementById('pf-period-button').textContent=profitPeriodLabel(p.start,p.end);document.getElementById('pf-status').textContent='Diperbarui '+new Date(d.as_of).toLocaleString('id-ID',{timeZone:'Asia/Jakarta'})+' WIB · Alokasi periode merupakan estimasi';
  const text=(id,value)=>document.getElementById(id).textContent=value;
- text('pf-revenue',fmtRp(m.revenue));text('pf-revenue-note',`${m.pets} jadwal anjing lewat / selesai`);text('pf-cost',fmtRp(m.cost));text('pf-profit',fmtRp(m.profit));
+ text('pf-revenue',profitMoney(m.revenue));text('pf-revenue-note',`${m.pets} jadwal anjing lewat / selesai`);text('pf-cost',profitMoney(m.cost));text('pf-profit',profitMoney(m.profit));
  text('pf-margin',`Margin ${profitPercent(m.margin)}${m.complete&&prev.complete?' · '+(m.profit-prev.profit>=0?'+':'−')+fmtRp(Math.abs(m.profit-prev.profit))+' vs periode lalu':''}${!m.complete?' · dari angka yang sudah tercatat':''}`);
- text('pf-ads',fmtRp(m.ads));text('pf-budget',m.budget>0?`Budget alokasi ${fmtRp(m.budget)} · ${Math.round(m.ads/m.budget*100)}%`:m.budgetKnown?'Budget Rp 0 · tanpa anggaran':'Budget belum ditentukan');document.getElementById('pf-budget-bar').style.width=(m.budget>0?Math.min(100,m.ads/m.budget*100):0)+'%';
- document.getElementById('pf-bridge').innerHTML=[['Pendapatan jasa tercatat',m.revenue],['Biaya groomer',-m.staff],['Operasional tercatat',-m.operations],['Iklan tercatat',-m.ads]].map(([label,value])=>`<div class="pf-row"><span>${label}</span><strong>${fmtRp(value)}</strong></div>`).join('')+`<div class="pf-row"><strong>Estimasi laba</strong><strong>${fmtRp(m.profit)}</strong></div>`;
+ text('pf-ads',profitMoney(m.ads));text('pf-budget',m.budget>0?`Budget alokasi ${fmtRp(m.budget)} · ${Math.round(m.ads/m.budget*100)}%`:m.budgetKnown?'Budget Rp 0 · tanpa anggaran':'Budget belum ditentukan');document.getElementById('pf-budget-bar').style.width=(m.budget>0?Math.min(100,m.ads/m.budget*100):0)+'%';
+ for(const [id,value] of [['profit',m.profit],['revenue',m.revenue],['cost',m.cost],['ads',m.ads]]){const el=document.getElementById('pf-'+id);el.title=fmtRp(value);el.setAttribute?.('aria-label',fmtRp(value));}
+ document.getElementById('pf-cost-bar').innerHTML=[m.staff,m.ads,m.operations].map(value=>`<span style="width:${m.cost?Math.max(0,value/m.cost*100):0}%"></span>`).join('');
+ document.getElementById('pf-cost-bar').setAttribute?.('aria-label',`Groomer ${fmtRp(m.staff)}, iklan ${fmtRp(m.ads)}, operasional ${fmtRp(m.operations)}`);
+ document.getElementById('pf-bridge').innerHTML=[['Groomer & gaji',m.staff],['Iklan aktual',m.ads],['Operasional tercatat',m.operations]].map(([label,value])=>`<div class="pf-row"><span>${label}</span><strong>${fmtRp(value)}</strong></div>`).join('')+`<div class="pf-row"><strong>Total biaya</strong><strong>${fmtRp(m.cost)}</strong></div>`;
  text('pf-job-profit',m.pets?fmtRp(Math.round(m.profit/m.pets))+' estimasi laba per pet appointment':'Belum ada appointment pada periode ini.');
  const explain=s=>s.includes('Nilai sesi paket')?'Ada sesi paket yang belum memiliki nilai dari penjualan paket asal. Pendapatan sesi ini belum masuk estimasi.':s.includes('Harga Basic sesi paket')?'Ada sesi paket yang masih ditagih Basic. Periksa invoice agar pelanggan tidak ditagih dua kali.':s.includes('Biaya retensi')?s.replace('Biaya retensi perlu dicatat sebagai penyesuaian gaji:','Biaya retensi belum masuk estimasi. Isi Tambahan groomer bila sudah diketahui:'):s;
  const messages=[...new Set(m.issues.map(i=>explain(i.label)))];if(!m.adsKnown)messages.unshift('Belanja iklan belum tercatat untuk semua hari; estimasi hanya mengurangi belanja yang sudah diisi.');if(!m.opsKnown)messages.unshift('Biaya operasional yang belum diisi belum dikurangi dari estimasi laba.');
@@ -16602,6 +16730,7 @@ function profitSourceKeys(){return [...new Set([...Object.keys(profitSourceLabel
 function renderProfitCustomerSection(){
  if(!profitState.report||!profitOwner())return;const p=getDashboardPeriod(),r=profitState.report,select=document.getElementById('pf-source');
  const labels=profitSourceLabels(),keys=profitSourceKeys(),unit=profitState.unit,isDog=unit==='dogs';document.getElementById('pf-unit').value=unit;
+ for(const name of ['households','dogs'])document.getElementById('pf-unit-'+name).setAttribute?.('aria-pressed',String(name===unit));
  if(profitState.source!=='all'&&!keys.includes(profitState.source))profitState.source='all';
  select.innerHTML='<option value="all">Semua sumber</option>'+keys.map(k=>`<option value="${esc(k)}" ${profitState.source===k?'selected':''}>${esc(labels[k]||k)}</option>`).join('');
  const previousCustomer=document.getElementById('pf-source-customer').value;
@@ -16611,9 +16740,9 @@ function renderProfitCustomerSection(){
  document.getElementById('pf-customer-heading').textContent=isDog?'Anjing baru & kembali':'Pelanggan baru & kembali';
  document.getElementById('pf-customer-subtitle').textContent=isDog?'Per anjing unik · kunjungan berulang dihitung satu kali · sumber dari rumah tangga pertama yang tercatat':'Per rumah tangga · berdasarkan kalender lewat / selesai dan riwayat sebelum periode';
  document.getElementById('pf-customer-basis').textContent=isDog?`${c.active} anjing unik${c.missingDogs?' · '+c.missingDogs+' jadwal belum memiliki pet terdaftar':''}. Baru = baru 1 appointment grooming; kembali = minimal 2 appointment sampai akhir periode.`:`${c.appointments} jadwal anjing · ${c.active} rumah tangga unik${c.unlinked?' · '+c.unlinked+' jadwal belum terhubung ke customer':''}. Baru = baru 1 appointment; kembali = minimal 2 appointment sampai akhir periode. Beberapa pet dalam satu booking tetap 1 appointment.`;
- document.getElementById('pf-customer-stats').innerHTML=[['Baru',c.new],['Kembali',c.returning],['Porsi kembali',profitPercent(c.active?c.returning/c.active:null)]].map(([label,value])=>`<div><span class="pf-small">${label}</span><strong>${value}</strong></div>`).join('');
+ document.getElementById('pf-customer-stats').innerHTML=[[isDog?'Anjing unik':'Rumah tangga unik',c.active],['Baru · 1 appointment',c.new],['Kembali · 2+ appointment',c.returning]].map(([label,value])=>`<div><strong>${value}</strong><span class="pf-small">${label}</span></div>`).join('');
  profitChart('pf-customer-chart',profitBuckets(p).map(b=>({...b,...r.customers(b.start,b.end,profitState.source,unit)})),isDog?'dogs':'customers');
- document.getElementById('pf-source-rows').innerHTML=keys.filter(k=>profitState.source==='all'||k===profitState.source).map(k=>({key:k,...r.customers(p.start,p.end,k,unit)})).filter(x=>x.active||x.revenue).map(x=>`<tr><td><button type="button" class="pf-source-link" onclick="openProfitCustomerSource(${keys.indexOf(x.key)})" aria-label="Edit sumber pelanggan ${esc(labels[x.key]||x.key)}">${esc(labels[x.key]||x.key)} ↗</button></td><td>${x.new}</td><td>${x.returning}</td><td class="pf-num">${fmtRp(x.revenue)}</td></tr>`).join('')||'<tr><td colspan="4">Belum ada pelanggan pada periode ini.</td></tr>';
+ document.getElementById('pf-source-rows').innerHTML=keys.filter(k=>profitState.source==='all'||k===profitState.source).map(k=>({key:k,...r.customers(p.start,p.end,k,unit)})).filter(x=>x.active||x.revenue).map(x=>`<tr><td><button type="button" class="pf-source-link" onclick="openProfitCustomerSource(${keys.indexOf(x.key)})" aria-label="Edit sumber pelanggan ${esc(labels[x.key]||x.key)}">${esc(labels[x.key]||x.key)} ↗</button></td><td class="pf-num">${x.new}</td><td class="pf-num">${x.returning}</td><td class="pf-num">${x.active}</td><td class="pf-num">${fmtRp(x.revenue)}</td></tr>`).join('')||'<tr><td colspan="5">Belum ada pelanggan pada periode ini.</td></tr>';
  document.getElementById('pf-acquisition').textContent=profitState.source==='all'||profitState.source==='ads'?`Ads: ${adDogs.active} anjing unik (${adDogs.new} baru) · CAC / rumah tangga (blended): ${m.adsKnown&&a.newPayingAds>0?fmtRp(Math.round(m.ads/a.newPayingAds)):'—'} · Pendapatan Ads / belanja: ${m.adsKnown&&m.ads>0?(a.revenue/m.ads).toLocaleString('id-ID',{maximumFractionDigits:2})+'×':'—'}`:'';
 }
 function openProfitCustomerSource(index){if(!profitOwner()||!profitState.report)return;const key=profitSourceKeys()[index];if(!key)return;profitState.customerListSource=key;document.getElementById('pf-cl-error').textContent='';renderProfitCustomerList();om('ov-profit-customers');}
@@ -16652,41 +16781,60 @@ async function profitTagExpenses(){
  try{const {data,error}=await db.rpc('hp_profit_tag_expenses',{p_ids:ids,p_category:document.getElementById('pf-expense-category').value});if(error)throw error;if(data!==ids.length)throw new Error('Jumlah tersimpan tidak sesuai. Refresh dan periksa.');await loadProfitability(true);}catch(e){alert('Gagal menyimpan kategori: '+e.message);}finally{profitState.busy=false;document.getElementById('pf-tag-save').disabled=false;}
 }
 function openProfitEntry(kind='ads'){
- if(!profitOwner()||!profitState.data){alert('Tunggu data dashboard selesai dimuat.');return;}
+ if(!profitOwner()||profitState.busy)return;if(!profitState.data){alert('Tunggu data dashboard selesai dimuat.');return;}
  profitState.entry=null;const p=getDashboardPeriod(),set=(id,v)=>document.getElementById('pfe-'+id).value=v;
- set('kind',kind);set('amount','');set('budget','');set('from',p.start);set('to',p.end);set('platform','Meta Ads');set('campaign','');set('note','');document.getElementById('pfe-error').textContent='';
+ set('kind',kind);set('amount','');set('basis','total');set('budget','');set('from',p.start);set('to',p.end);set('platform','Meta Ads');set('campaign','');set('note','');document.getElementById('pfe-error').textContent='';
  document.getElementById('pfe-expense').innerHTML='<option value="">Tidak dihubungkan</option>'+profitState.data.expenses.map(e=>`<option value="${e.id}">${esc(e.expense_date+' · '+(e.item||'Pengeluaran')+' · '+fmtRp(e.amount))}</option>`).join('');
  document.getElementById('pfe-appointment').innerHTML='<option value="">Pilih appointment…</option>'+profitState.report.calendar.map(a=>`<option value="${a.id}">${esc(a.appt_date+' '+(a.appt_time||'').slice(0,5)+' · '+(dogs.find(d=>d.id===a.dog_id)?.name||String(a.dog_id||a.customer_id||a.id).slice(0,8))+' · '+(groomers.find(g=>g.id===a.groomer_id)?.name||''))}</option>`).join('');
  document.getElementById('pfe-groomer').innerHTML='<option value="">Biaya umum tim</option>'+profitState.data.groomers.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
- profitEntryKindChanged();om('ov-profit-entry');
+ profitEntryKindChanged();
+}
+function profitPresentEntry(kind){
+ const inline=['ads','budget'].includes(kind),form=document.getElementById('pf-entry-form'),target=document.getElementById(inline?'pf-ad-editor':'pf-entry-modal-slot');
+ if(form&&target&&typeof target.appendChild==='function'&&form.parentElement!==target)target.appendChild(form);
+ profitState.entryInline=inline;document.getElementById('pf-ad-editor').hidden=!inline;
+ document.getElementById('pfe-title').textContent=(profitState.entry?'Edit ':'Tambah ')+(PF_KINDS[kind]||'catatan');
+ if(inline){profitState.view='ads';profitPaintView();cm('ov-profit-entry');}else om('ov-profit-entry');
+}
+function closeProfitEntry(force=false){
+ if(profitState.busy&&!force)return;profitState.entry=null;profitState.entryInline=false;document.getElementById('pf-ad-editor').hidden=true;document.getElementById('pfe-delete').hidden=true;
+ const form=document.getElementById('pf-entry-form'),slot=document.getElementById('pf-entry-modal-slot');if(form&&slot&&typeof slot.appendChild==='function'&&form.parentElement!==slot)slot.appendChild(form);cm('ov-profit-entry');
+}
+function profitEntryTotalChanged(){
+ const kind=document.getElementById('pfe-kind').value,isAd=['ads','budget'].includes(kind),basis=isAd?document.getElementById('pfe-basis').value:'total',raw=document.getElementById('pfe-amount').value,from=document.getElementById('pfe-from').value,to=document.getElementById('pfe-to').value;
+ document.getElementById('pfe-amount-label').textContent=basis==='daily'?'Jumlah per hari (Rp)':'Jumlah total periode (Rp)';
+ let text='';if(raw!==''&&Number.isSafeInteger(Number(raw))&&HPProfit.valid(from,to,kind==='budget'?'9999-12-31':profitToday())){const n=HPProfit.span(from,to),total=Number(raw)*(basis==='daily'?n:1);if(Number.isSafeInteger(total)&&Math.abs(total)<=900000000000)text=`Total ${fmtRp(total)} untuk ${n} hari`+(profitState.entry?' · periode asli catatan':'');}
+ document.getElementById('pfe-total').textContent=text;
 }
 function profitEntryKindChanged(){
  const k=document.getElementById('pfe-kind').value;
+ profitPresentEntry(k);document.getElementById('pfe-basis-wrap').hidden=!['ads','budget'].includes(k);
  document.getElementById('pfe-delete').hidden=!profitState.entry?.id;document.getElementById('pfe-delete').disabled=profitState.busy;
  document.getElementById('pfe-groomer-wrap').hidden=k!=='payroll_adjustment';
- document.getElementById('pfe-platform-wrap').hidden=!['ads','budget'].includes(k);document.getElementById('pfe-campaign-wrap').hidden=!['ads','budget'].includes(k);document.getElementById('pfe-budget-wrap').hidden=k!=='ads'||!!profitState.entry;document.getElementById('pfe-expense-wrap').hidden=!['ads','operating'].includes(k);document.getElementById('pfe-appointment-wrap').hidden=k!=='service_value';document.getElementById('pfe-amount').min=k==='revenue_adjustment'?'-900000000000':'0';
+ document.getElementById('pfe-platform-wrap').hidden=!['ads','budget'].includes(k);document.getElementById('pfe-campaign-wrap').hidden=!['ads','budget'].includes(k);document.getElementById('pfe-budget-wrap').hidden=k!=='ads'||!!profitState.entry||profitState.entryInline;document.getElementById('pfe-expense-wrap').hidden=!['ads','operating'].includes(k);document.getElementById('pfe-appointment-wrap').hidden=k!=='service_value';document.getElementById('pfe-amount').min=k==='revenue_adjustment'?'-900000000000':'0';profitEntryTotalChanged();
 }
-function profitLinkExpense(){const e=profitState.data.expenses.find(e=>e.id===document.getElementById('pfe-expense').value);if(e){document.getElementById('pfe-amount').value=e.amount;document.getElementById('pfe-from').value=e.expense_date;document.getElementById('pfe-to').value=e.expense_date;}}
-function profitValueAppointmentChanged(){const a=profitState.data.appointments.find(a=>a.id===document.getElementById('pfe-appointment').value);if(a){document.getElementById('pfe-from').value=a.appt_date;document.getElementById('pfe-to').value=a.appt_date;}}
+function profitLinkExpense(){const e=profitState.data.expenses.find(e=>e.id===document.getElementById('pfe-expense').value);if(e){document.getElementById('pfe-amount').value=e.amount;document.getElementById('pfe-basis').value='total';document.getElementById('pfe-from').value=e.expense_date;document.getElementById('pfe-to').value=e.expense_date;profitEntryTotalChanged();}}
+function profitValueAppointmentChanged(){const a=profitState.data.appointments.find(a=>a.id===document.getElementById('pfe-appointment').value);if(a){document.getElementById('pfe-from').value=a.appt_date;document.getElementById('pfe-to').value=a.appt_date;profitEntryTotalChanged();}}
 function openProfitServiceValue(id){const existing=profitState.data?.entries.find(e=>e.kind==='service_value'&&e.appointment_id===id);if(existing){fillProfitEntry(existing);return;}openProfitEntry('service_value');document.getElementById('pfe-appointment').value=id;profitValueAppointmentChanged();}
 function fillProfitEntry(e){if(!profitOwner()||profitState.busy)return;openProfitEntry(e.kind);profitState.entry=e;const map={kind:'kind',amount:'amount',from:'coverage_from',to:'coverage_to',platform:'platform',campaign:'campaign',note:'note',expense:'expense_id',appointment:'appointment_id',groomer:'groomer_id'};Object.entries(map).forEach(([id,key])=>document.getElementById('pfe-'+id).value=e[key]??'');profitEntryKindChanged();}
 function editProfitEntry(id){const e=profitState.data?.entries.find(e=>e.id===id);if(e)fillProfitEntry(e);}
 async function saveProfitEntry(){
- if(!profitOwner()||profitState.busy)return;const get=id=>document.getElementById('pfe-'+id).value,kind=get('kind'),amount=Number(get('amount')),from=get('from'),to=get('to'),err=document.getElementById('pfe-error');
- if(get('amount')===''||!Number.isSafeInteger(amount)||Math.abs(amount)>900000000000||amount<0&&kind!=='revenue_adjustment'||!HPProfit.valid(from,to,kind==='budget'?'9999-12-31':profitToday())){err.textContent='Isi jumlah rupiah bulat dan rentang yang valid (maksimal 366 hari). Tanggal biaya aktual tidak boleh di masa depan.';return;}
+ if(!profitOwner()||profitState.busy)return;const get=id=>document.getElementById('pfe-'+id).value,kind=get('kind'),from=get('from'),to=get('to'),err=document.getElementById('pfe-error'),factor=['ads','budget'].includes(kind)&&get('basis')==='daily'&&from<=to?HPProfit.span(from,to):1,amount=Number(get('amount'))*factor;
+ if(get('amount')===''||!Number.isSafeInteger(Number(get('amount')))||!Number.isSafeInteger(amount)||Math.abs(amount)>900000000000||amount<0&&kind!=='revenue_adjustment'||!HPProfit.valid(from,to,kind==='budget'?'9999-12-31':profitToday())){err.textContent='Isi jumlah rupiah bulat dan rentang yang valid (maksimal 366 hari). Tanggal biaya aktual tidak boleh di masa depan.';return;}
  const e=profitState.entry,entry={id:e?.id||null,revision:e?.revision||null,kind,amount,coverage_from:from,coverage_to:to,platform:['ads','budget'].includes(kind)?get('platform'):'Other',campaign:['ads','budget'].includes(kind)?get('campaign').trim():'',note:get('note').trim(),expense_id:['ads','operating'].includes(kind)?get('expense')||null:null,appointment_id:kind==='service_value'?get('appointment')||null:null};
  if(kind==='service_value'&&!entry.appointment_id){err.textContent='Pilih appointment lewat / selesai.';return;}
  entry.groomer_id=kind==='payroll_adjustment'?get('groomer')||null:null;
  if(kind==='service_value'){const a=profitState.data.appointments.find(a=>a.id===entry.appointment_id);entry.customer_id=a?.customer_id||profitState.data.dogs.find(d=>d.id===a?.dog_id)?.customer_id||null;}
  const entries=[entry],budget=get('budget');
- if(kind==='ads'&&!e&&budget!==''){const n=Number(budget);if(!Number.isSafeInteger(n)||n<0){err.textContent='Budget harus rupiah bulat dan tidak negatif.';return;}entries.push({...entry,id:null,revision:null,kind:'budget',amount:n,expense_id:null});}
+ if(kind==='ads'&&!e&&budget!==''){const n=Number(budget)*factor;if(!Number.isSafeInteger(n)||n<0||n>900000000000){err.textContent='Budget harus rupiah bulat dan tidak negatif.';return;}entries.push({...entry,id:null,revision:null,kind:'budget',amount:n,expense_id:null});}
  profitState.busy=true;profitEntryControls(true);err.textContent='';
- try{const {data,error}=await db.rpc('hp_profit_save_entries',{p_entries:entries});if(error)throw error;if(!Array.isArray(data)||data.length!==entries.length)throw new Error('Respons simpan tidak sesuai. Refresh dan periksa catatan.');cm('ov-profit-entry');await loadProfitability(true);}
+ try{const {data,error}=await db.rpc('hp_profit_save_entries',{p_entries:entries});if(error)throw error;if(!Array.isArray(data)||data.length!==entries.length)throw new Error('Respons simpan tidak sesuai. Refresh dan periksa catatan.');closeProfitEntry(true);await loadProfitability(true);}
  catch(e){err.textContent='Gagal menyimpan: '+e.message;}finally{profitState.busy=false;profitEntryControls(false);}
 }
 function profitEntryControls(disabled){
  document.querySelectorAll('[data-pf-entry-action]').forEach(b=>b.disabled=disabled);
  document.getElementById('pfe-save').disabled=disabled;document.getElementById('pfe-delete').disabled=disabled;
+ if(!disabled)paintProfitAdsCalendar();
 }
 function deleteOpenProfitEntry(){if(profitState.entry?.id)return deleteProfitEntry(profitState.entry.id,'editor');}
 async function deleteProfitEntry(id,origin='list'){
@@ -16702,7 +16850,7 @@ async function deleteProfitEntry(id,origin='list'){
   if(data?.length!==1||data[0].id!==id)throw new Error('Catatan berubah atau tidak lagi tersedia. Refresh sebelum mencoba lagi.');
   if(profitState.data)profitState.data.entries=profitState.data.entries.filter(x=>x.id!==id);
   if(profitAds.data)profitAds.data.entries=profitAds.data.entries.filter(x=>x.id!==id);
-  if(profitState.entry?.id===id){profitState.entry=null;cm('ov-profit-entry');document.getElementById('pfe-delete').hidden=true;}
+  if(profitState.entry?.id===id)closeProfitEntry(true);
   await loadProfitability(true);await loadProfitAdsCalendar(true);
   status.textContent='Catatan dihapus.'+(profitState.report?' Grafik dan total diperbarui.':' Refresh dashboard untuk memuat ulang total.');
  }catch(e){const msg='Gagal menghapus: '+e.message;status.textContent=msg;if(origin==='editor')err.textContent=msg;else alert(msg);}
@@ -16715,14 +16863,14 @@ if(typeof window!=='undefined'){
  document.addEventListener?.('visibilitychange',()=>{if(!document.hidden&&profitOwner()&&profitState.data&&Date.now()-new Date(profitState.data.as_of).getTime()>60000&&document.getElementById('sec-dashboard')?.classList.contains('active'))loadProfitability(true);});
 }
 
-/* Independent owner-only ad calendar; historical/future plans are not limited
-   to the currently selected profit-report period. All writes use audited RPCs. */
-let profitAds={month:'',period:'',from:'',to:'',picking:false,key:'',data:null,error:'',seq:0};
+/* Owner-only live ad calendar. One readable month, named money view and inline
+   revision-safe editing; database values remain original whole-period totals. */
+let profitAds={month:'',period:'',from:'',to:'',measure:'ads',rangeMode:'day',picking:false,key:'',data:null,error:'',seq:0};
 function profitAdsMonthShift(month,n){const [y,m]=month.split('-').map(Number),d=new Date(Date.UTC(y,m-1+n,1));return d.toISOString().slice(0,7);}
 function profitAdsMonthEnd(month){return HPProfit.add(profitAdsMonthShift(month,1)+'-01',-1);}
-function profitAdsReset(){profitAds.seq++;profitAds.key='';profitAds.data=null;profitAds.error='';profitAds.period='';}
-function profitAdsPeriod(p){const key=p.start+'|'+p.end;if(profitAds.period!==key){profitAds.period=key;profitAds.month=p.start.slice(0,7);profitAds.from=p.start;profitAds.to=p.end;profitAds.picking=false;}renderProfitAdsCalendar();}
-function profitAdsBounds(){const start=profitAds.month+'-01',end=profitAdsMonthEnd(profitAdsMonthShift(profitAds.month,1));return {start:profitAds.from&&profitAds.from<start?profitAds.from:start,end:profitAds.to&&profitAds.to>end?profitAds.to:end};}
+function profitAdsReset(){profitAds.seq++;profitAds.key='';profitAds.data=null;profitAds.error='';profitAds.period='';profitAds.measure='ads';profitAds.rangeMode='day';}
+function profitAdsPeriod(p){const key=p.start+'|'+p.end;if(profitAds.period!==key){profitAds.period=key;profitAds.month=p.end.slice(0,7);profitAds.from=p.end;profitAds.to=p.end;profitAds.picking=false;}renderProfitAdsCalendar();}
+function profitAdsBounds(){const start=profitAds.month+'-01',end=profitAdsMonthEnd(profitAds.month);return {start:profitAds.from&&profitAds.from<start?profitAds.from:start,end:profitAds.to&&profitAds.to>end?profitAds.to:end};}
 async function loadProfitAdsCalendar(force=false){
  if(!profitOwner()||!profitAds.month)return;const {start,end}=profitAdsBounds(),uid=currentUser?.id||currentAdminRow?.id||'',key=start+'|'+end+'|'+uid;
  if(!force&&profitAds.key===key)return;
@@ -16737,17 +16885,20 @@ async function loadProfitAdsCalendar(force=false){
  }catch(e){if(seq!==profitAds.seq)return;profitAds.error=e.message||'Tidak dapat memuat kalender';profitAds.data=null;paintProfitAdsCalendar();}finally{clearTimeout(timer);}
 }
 function renderProfitAdsCalendar(){if(!profitOwner())return;paintProfitAdsCalendar();loadProfitAdsCalendar();}
-function profitAdsMoveMonth(n){profitAdsGoMonth(profitAdsMonthShift(profitAds.month,n),false);}
+function profitAdsMoveMonth(n){profitAdsGoMonth(profitAdsMonthShift(profitAds.month,n),profitAds.rangeMode==='day');}
 function profitAdsToday(){const day=profitToday();profitAds.month=day.slice(0,7);profitAds.from=day;profitAds.to=day;profitAds.picking=false;renderProfitAdsCalendar();}
 function profitAdsGoMonth(month,reset=true){
- if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)||month<'1900-01'||month>'2199-12')return;
+ if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)||month<'1900-01'||month>'2199-12'||profitState.busy)return;
  profitAds.month=month;
  if(reset||profitAds.from&&Math.abs(HPProfit.span(profitAds.from,month+'-01'))>365){profitAds.from=month+'-01';profitAds.to=profitAds.from;profitAds.picking=false;}
  renderProfitAdsCalendar();
 }
+function profitAdsSetMeasure(measure){if(!profitOwner()||!['ads','budget'].includes(measure)||profitState.busy)return;profitAds.measure=measure;paintProfitAdsCalendar();}
+function profitAdsSetRangeMode(mode){if(!profitOwner()||!['day','range'].includes(mode)||profitState.busy)return;profitAds.rangeMode=mode;profitAds.picking=false;if(mode==='day')profitAds.to=profitAds.from;renderProfitAdsCalendar();}
 function profitAdsChoose(day){
  if(!profitOwner()||profitState.busy)return;
- if(!profitAds.picking){profitAds.from=day;profitAds.to=day;profitAds.picking=true;}
+ if(profitAds.rangeMode==='day'){profitAds.from=day;profitAds.to=day;profitAds.picking=false;}
+ else if(!profitAds.picking){profitAds.from=day;profitAds.to=day;profitAds.picking=true;}
  else{const a=day<profitAds.from?day:profitAds.from,b=day>profitAds.from?day:profitAds.from;if(HPProfit.span(a,b)>366){alert('Pilih maksimal 366 hari.');return;}profitAds.from=a;profitAds.to=b;profitAds.picking=false;}
  renderProfitAdsCalendar();
 }
@@ -16760,27 +16911,36 @@ function profitAdsDay(day){
 function paintProfitAdsCalendar(){
  const grid=document.getElementById('pf-ad-months');if(!grid||!profitOwner()||!profitAds.month)return;
  const ready=!!profitAds.data,today=profitToday(),label=d=>new Intl.DateTimeFormat('id-ID',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(HPProfit.date(d));
- document.getElementById('pf-ad-month').value=profitAds.month;
- document.getElementById('pf-ad-status').textContent=profitAds.error?'Kalender belum dimuat: '+profitAds.error:!ready?'Memuat budget dan belanja…':profitAds.picking?'Pilih tanggal akhir, atau gunakan satu hari yang sudah dipilih.':'Klik tanggal awal lalu tanggal akhir. Tanggal lampau juga bisa diedit.';
- grid.innerHTML=[profitAds.month,profitAdsMonthShift(profitAds.month,1)].map(month=>{
-  const first=month+'-01',offset=(HPProfit.date(first).getUTCDay()+6)%7,title=new Intl.DateTimeFormat('id-ID',{month:'long',year:'numeric',timeZone:'UTC'}).format(HPProfit.date(first));
-  return `<section class="pf-ad-month"><h4>${esc(title)}</h4><div class="pf-ad-week">${['Sen','Sel','Rab','Kam','Jum','Sab','Min'].map(x=>`<span>${x}</span>`).join('')}</div><div class="pf-ad-days">${'<span class="pf-ad-empty"></span>'.repeat(offset)}${HPProfit.days(first,profitAdsMonthEnd(month)).map(day=>{const x=profitAdsDay(day),selected=day>=profitAds.from&&day<=profitAds.to,edge=day===profitAds.from||day===profitAds.to,b=x?.hasBudget?fmtRp(x.budget):'belum dicatat',a=x?.unknownActual?'sebagian nilai belum valid':x?.hasActual?fmtRp(x.actual):'belum dicatat';return `<button type="button" class="pf-ad-day${selected?' is-range':''}${edge?' is-edge':''}${day===today?' is-today':''}" aria-pressed="${selected}" aria-label="${esc(label(day)+'; budget '+(ready?b:'memuat')+'; belanja '+(ready?a:'memuat'))}" onclick="profitAdsChoose('${day}')"><span class="pf-ad-date">${Number(day.slice(-2))}</span><span class="pf-ad-plan">B ${ready?(x.hasBudget?profitShort(x.budget):'—'):'…'}</span><span class="pf-ad-spend">A ${ready?(x.unknownActual?'?':x.hasActual?profitShort(x.actual):'—'):'…'}</span></button>`;}).join('')}</div></section>`;
- }).join('');
+ const month=profitAds.month,first=month+'-01',last=profitAdsMonthEnd(month),offset=(HPProfit.date(first).getUTCDay()+6)%7,actual=profitAds.measure==='ads';
+ document.getElementById('pf-ad-month').value=month;document.getElementById('pf-ad-month-title').textContent=new Intl.DateTimeFormat('id-ID',{month:'long',year:'numeric',timeZone:'UTC'}).format(HPProfit.date(first));
+ for(const name of ['ads','budget'])document.getElementById('pf-ad-measure-'+name).setAttribute?.('aria-pressed',String(name===profitAds.measure));
+ for(const name of ['day','range'])document.getElementById('pf-ad-range-'+name).setAttribute?.('aria-pressed',String(name===profitAds.rangeMode));
+ document.getElementById('pf-ad-status').textContent=profitAds.error?'Kalender belum dimuat: '+profitAds.error:!ready?'Memuat budget dan belanja…':profitAds.picking?'Pilih tanggal akhir.':profitAds.rangeMode==='day'?'Klik tanggal untuk melihat atau mengedit catatan.':'Klik tanggal awal, lalu tanggal akhir.';
+ const allDays=HPProfit.days(first,last);
+ grid.innerHTML=`<div class="pf-ad-week">${['Sen','Sel','Rab','Kam','Jum','Sab','Min'].map(x=>`<span>${x}</span>`).join('')}</div><div class="pf-ad-days">${'<span class="pf-ad-empty" aria-hidden="true"></span>'.repeat(offset)}${allDays.map(day=>{
+  const x=profitAdsDay(day),selected=day>=profitAds.from&&day<=profitAds.to,edge=day===profitAds.from||day===profitAds.to,b=x?.hasBudget?fmtRp(x.budget):'belum dicatat',a=x?.unknownActual?'sebagian nilai belum valid':x?.hasActual?fmtRp(x.actual):'belum dicatat';
+  const value=!ready?'…':actual?(x.unknownActual?'?':x.hasActual?profitShort(x.actual):'—'):(x.hasBudget?profitShort(x.budget):'—');
+  return `<button type="button" class="pf-ad-day${selected?' is-range':''}${edge?' is-edge':''}${day===today?' is-today':''}" aria-pressed="${selected}" aria-label="${esc(label(day)+'; budget '+(ready?b:'memuat')+'; belanja '+(ready?a:'memuat'))}" onclick="profitAdsChoose('${day}')"><span class="pf-ad-date">${Number(day.slice(-2))}</span><span class="pf-ad-amount">${value}</span></button>`;
+ }).join('')}${'<span class="pf-ad-empty" aria-hidden="true"></span>'.repeat((7-(offset+allDays.length)%7)%7)}</div>`;
+ let monthBudget=0,monthActual=0;allDays.forEach(day=>{const x=profitAdsDay(day);if(x){monthBudget+=x.budget;monthActual+=x.actual;}});
+ document.getElementById('pf-ad-month-totals').innerHTML=ready?`<span>Budget bulan ini <strong>${fmtRp(monthBudget)}</strong></span><span>Aktual tercatat <strong>${fmtRp(monthActual)}</strong></span>`:'<span>Menunggu data kalender.</span>';
+ document.getElementById('pf-ad-calendar-help').textContent=(actual?'Belanja aktual':'Budget rencana')+' · rupiah per hari · — belum dicatat · 0 sudah dicatat';
  const from=profitAds.from,to=profitAds.to;
  document.getElementById('pf-ad-selection').textContent=from?label(from)+(to!==from?' — '+label(to):'')+' · '+HPProfit.span(from,to)+' hari':'Pilih tanggal';
- let budget=0,actual=0;const selected=from?HPProfit.days(from,to):[];selected.forEach(day=>{const v=profitAdsDay(day);if(v){budget+=v.budget;actual+=v.actual;}});
- document.getElementById('pf-ad-totals').textContent=ready?`Budget ${fmtRp(budget)} · Belanja tercatat ${fmtRp(actual)}${selected.some(day=>profitAdsDay(day)?.unknownActual)?' · ada nilai belanja yang belum valid':''}`:'Jumlah menunggu data kalender.';
- document.getElementById('pf-ad-add-budget').disabled=!ready||!from;document.getElementById('pf-ad-add-spend').disabled=!ready||!from||to>today;
+ let budget=0,spend=0;const selected=from?HPProfit.days(from,to):[];selected.forEach(day=>{const v=profitAdsDay(day);if(v){budget+=v.budget;spend+=v.actual;}});
+ document.getElementById('pf-ad-totals').textContent=ready?`Budget ${fmtRp(budget)} · Belanja tercatat ${fmtRp(spend)}${selected.some(day=>profitAdsDay(day)?.unknownActual)?' · ada nilai belanja yang belum valid':''}`:'Jumlah menunggu data kalender.';
+ document.getElementById('pf-ad-add-budget').disabled=!ready||!from||profitState.busy;document.getElementById('pf-ad-add-spend').disabled=!ready||!from||to>today||profitState.busy;
  document.getElementById('pf-ad-future').textContent=to>today?'Tanggal mendatang: isi budget rencana; belanja aktual dicatat sampai hari ini.':'';
  const entries=ready&&from?profitAds.data.entries.filter(e=>e.coverage_from<=to&&e.coverage_to>=from):[];
- document.getElementById('pf-ad-records').innerHTML=!ready?'':entries.length?entries.map(e=>`<div class="pf-ad-record"><div><strong>${esc(PF_KINDS[e.kind])} · ${fmtRp(e.amount)}</strong><div class="pf-small">${esc(e.platform)}${e.campaign?' · '+esc(e.campaign):''} · ${esc(e.coverage_from)} — ${esc(e.coverage_to)}</div></div><div class="pf-ad-controls"><button type="button" data-pf-entry-action class="btn btn-g btn-sm" onclick="editProfitAdEntry('${e.id}')">Edit</button><button type="button" data-pf-entry-action class="btn btn-d btn-sm" onclick="deleteProfitEntry('${e.id}','calendar')">Hapus</button></div></div>`).join(''):'<p class="pf-small">Belum ada catatan manual pada tanggal pilihan.</p>';
+ document.getElementById('pf-ad-records').innerHTML=!ready?'':entries.length?entries.map(e=>`<div class="pf-ad-record"><div><strong>${esc(PF_KINDS[e.kind])} · ${fmtRp(e.amount)}</strong><div class="pf-small">${esc(e.platform)}${e.campaign?' · '+esc(e.campaign):''}<br>${esc(e.coverage_from)} — ${esc(e.coverage_to)}</div></div><div class="pf-ad-controls"><button type="button" data-pf-entry-action class="btn btn-g btn-sm" onclick="editProfitAdEntry('${e.id}')">Edit</button><button type="button" data-pf-entry-action class="btn btn-d btn-sm" onclick="deleteProfitEntry('${e.id}','calendar')">Hapus</button></div></div>`).join(''):'<p class="pf-small" style="margin-top:14px">Belum ada catatan manual pada tanggal pilihan.</p>';
 }
 function openProfitAdEntry(kind){
  if(!profitOwner()||!profitAds.data||!profitAds.from||profitState.busy)return;
  if(kind==='ads'&&profitAds.to>profitToday()){alert('Belanja aktual hanya sampai hari ini.');return;}
- openProfitEntry(kind);document.getElementById('pfe-from').value=profitAds.from;document.getElementById('pfe-to').value=profitAds.to;
+ openProfitEntry(kind);document.getElementById('pfe-from').value=profitAds.from;document.getElementById('pfe-to').value=profitAds.to;profitEntryTotalChanged();
+ document.getElementById('pfe-amount').focus?.();
 }
-function editProfitAdEntry(id){const e=profitAds.data?.entries.find(e=>e.id===id);if(!e||!profitOwner()||profitState.busy)return;fillProfitEntry(e);}
+function editProfitAdEntry(id){const e=profitAds.data?.entries.find(e=>e.id===id);if(!e||!profitOwner()||profitState.busy)return;fillProfitEntry(e);document.getElementById('pfe-amount').focus?.();}
 
 
 // Dogs not groomed for STALE_DAYS+ days. WA reminder per customer. (Reminders tab)
